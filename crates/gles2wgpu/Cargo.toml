@@ -1,0 +1,19 @@
+[package]
+name = "gles2wgpu"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+wgpu = { workspace = true }
+naga = { workspace = true }
+bytemuck = { workspace = true }
+pollster = { workspace = true }
+thiserror = { workspace = true }
+log = { workspace = true }
+serde = { workspace = true }
+metrics_overlay = { path = "../metrics_overlay" }
+
+[dev-dependencies]
+webgpu_compositor = { path = "../webgpu_compositor" }
+webgpu_swapchain = { path = "../webgpu_swapchain" }
+virtio_gpu_bridge = { path = "../virtio_gpu_bridge" }

@@ -1,0 +1,40 @@
+// Android Blueprint for Virtio-GPU WebGPU HAL Modules
+cc_library_shared {
+    name: "gralloc.virtio_gpu",
+    relative_install_path: "hw",
+    vendor: true,
+    srcs: ["gralloc.virtio_gpu.cpp"],
+    shared_libs: [
+        "libcutils",
+        "liblog",
+        "libhardware",
+    ],
+    cflags: ["-Wall", "-Werror", "-Wno-unused-parameter"],
+}
+
+cc_library_shared {
+    name: "hwcomposer.virtio_gpu",
+    relative_install_path: "hw",
+    vendor: true,
+    srcs: ["hwcomposer.virtio_gpu.cpp"],
+    shared_libs: [
+        "libcutils",
+        "liblog",
+        "libhardware",
+        "libutils",
+    ],
+    cflags: ["-Wall", "-Werror", "-Wno-unused-parameter"],
+}
+
+cc_library_shared {
+    name: "egl.virtio_gpu",
+    relative_install_path: "egl",
+    vendor: true,
+    srcs: ["egl_webgpu.cpp"],
+    shared_libs: [
+        "libcutils",
+        "liblog",
+        "libdrm",
+    ],
+    cflags: ["-Wall", "-Werror", "-Wno-unused-parameter"],
+}

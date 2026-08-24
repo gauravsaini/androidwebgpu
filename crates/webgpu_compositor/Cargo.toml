@@ -1,0 +1,12 @@
+[package]
+name = "webgpu_compositor"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+wgpu = { workspace = true }
+bytemuck = { workspace = true }
+pollster = { workspace = true }
+thiserror = { workspace = true }
+serde = { workspace = true }
+log = { workspace = true }

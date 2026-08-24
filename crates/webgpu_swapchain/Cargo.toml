@@ -1,0 +1,10 @@
+[package]
+name = "webgpu_swapchain"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+wgpu = { workspace = true }
+pollster = { workspace = true }
+thiserror = { workspace = true }
+log = { workspace = true }

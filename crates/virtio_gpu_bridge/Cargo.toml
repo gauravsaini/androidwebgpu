@@ -1,0 +1,19 @@
+[package]
+name = "virtio_gpu_bridge"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+gles2wgpu = { path = "../gles2wgpu" }
+wgpu = { workspace = true }
+bytemuck = { workspace = true }
+pollster = { workspace = true }
+thiserror = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+log = { workspace = true }
+wasm-bindgen = { workspace = true, optional = true }
+
+[features]
+default = []
+wasm = ["dep:wasm-bindgen"]
