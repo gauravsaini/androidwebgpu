@@ -16,7 +16,7 @@ fn test_vulkan_device_and_resource_creation() {
         assert!(buf_id > 0);
 
         // 2. Allocate & Bind Memory
-        let mem_id = vk_device.vk_allocate_memory(1024, 0, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT);
+        let mem_id = vk_device.vk_allocate_memory(1024, 0, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT).unwrap();
         assert!(mem_id > 0);
         vk_device.vk_bind_buffer_memory(buf_id, mem_id, 0);
 
@@ -188,7 +188,7 @@ fn test_vulkan_indexed_draw_with_depth_stencil() {
 
         // Vertex Buffer (Quad: 4 vertices)
         let vbuf_id = vk_device.vk_create_buffer(1024, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT);
-        let vmem_id = vk_device.vk_allocate_memory(1024, 0, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT);
+        let vmem_id = vk_device.vk_allocate_memory(1024, 0, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT).unwrap();
         vk_device.vk_bind_buffer_memory(vbuf_id, vmem_id, 0);
 
         let quad_vertices: [f32; 12] = [
@@ -203,7 +203,7 @@ fn test_vulkan_indexed_draw_with_depth_stencil() {
 
         // Index Buffer (6 indices for 2 triangles)
         let ibuf_id = vk_device.vk_create_buffer(512, VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT);
-        let imem_id = vk_device.vk_allocate_memory(512, 0, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT);
+        let imem_id = vk_device.vk_allocate_memory(512, 0, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT).unwrap();
         vk_device.vk_bind_buffer_memory(ibuf_id, imem_id, 0);
 
         let indices: [u16; 6] = [0, 1, 2, 0, 2, 3];
@@ -306,7 +306,7 @@ fn test_vulkan_push_constants_and_descriptors() {
 
         // Create uniform buffer
         let ubuf_id = vk_device.vk_create_buffer(256, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT);
-        let umem_id = vk_device.vk_allocate_memory(256, 0, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT);
+        let umem_id = vk_device.vk_allocate_memory(256, 0, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT).unwrap();
         vk_device.vk_bind_buffer_memory(ubuf_id, umem_id, 0);
 
         let dsl_id = vk_device.vk_create_descriptor_set_layout(vec![
@@ -349,5 +349,84 @@ fn test_vulkan_push_constants_and_descriptors() {
         }
 
         vk_device.vk_queue_submit(&[cb_id]);
+    });
+}
+
+#[test]
+fn test_vulkan_multi_binding_vertex_layout() {
+    pollster::block_on(async {
+        let mut vk_device = match VkDevice::new().await {
+            Ok(d) => d,
+            Err(_) => return,
+        };
+
+        let layout_id = vk_device.vk_create_pipeline_layout(vec![], vec![]);
+
+        let vs_wgsl = r#"
+            @vertex
+            fn main(
+                @location(0) pos: vec3<f32>,
+                @location(1) instance_pos: vec2<f32>,
+            ) -> @builtin(position) vec4<f32> {
+                return vec4<f32>(pos.xy + instance_pos, pos.z, 1.0);
+            }
+        "#;
+        let fs_wgsl = r#"
+            @fragment
+            fn main() -> @location(0) vec4<f32> {
+                return vec4<f32>(1.0, 1.0, 1.0, 1.0);
+            }
+        "#;
+
+        let pipe_id = vk_device.vk_create_graphics_pipeline(&VkGraphicsPipelineCreateInfo {
+            layout_id,
+            vertex_shader_wgsl: vs_wgsl.to_string(),
+            fragment_shader_wgsl: Some(fs_wgsl.to_string()),
+            vertex_bindings: vec![
+                VkVertexBindingDescription {
+                    binding: 0,
+                    stride: 12,
+                    input_rate: 0, // Vertex
+                },
+                VkVertexBindingDescription {
+                    binding: 1,
+                    stride: 8,
+                    input_rate: 1, // Instance
+                },
+            ],
+            vertex_attributes: vec![
+                VkVertexAttributeDescription {
+                    location: 0,
+                    binding: 0,
+                    format: VK_FORMAT_R32G32B32_SFLOAT,
+                    offset: 0,
+                },
+                VkVertexAttributeDescription {
+                    location: 1,
+                    binding: 1,
+                    format: VK_FORMAT_R32G32_SFLOAT,
+                    offset: 0,
+                },
+            ],
+            topology: VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
+            color_formats: vec![VK_FORMAT_R8G8B8A8_UNORM],
+            depth_format: None,
+        }).expect("Multi-binding pipeline creation failed");
+
+        assert!(pipe_id > 0);
+    });
+}
+
+#[test]
+fn test_vulkan_oversized_allocation_protection() {
+    pollster::block_on(async {
+        let mut vk_device = match VkDevice::new().await {
+            Ok(d) => d,
+            Err(_) => return,
+        };
+
+        // 1 GB request exceeds MAX_SAFE_BUFFER_SIZE (256 MB) -> must return Err
+        let res = vk_device.vk_allocate_memory(1 << 30, 0, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT);
+        assert_eq!(res, Err(VK_ERROR_OUT_OF_DEVICE_MEMORY));
     });
 }

@@ -104,11 +104,11 @@ impl VkDevice {
         id
     }
 
-    pub fn vk_allocate_memory(&mut self, size: u64, memory_type_index: u32, property_flags: u32) -> u64 {
+    pub fn vk_allocate_memory(&mut self, size: u64, memory_type_index: u32, property_flags: u32) -> Result<u64, i32> {
         let id = self.gen_id();
-        let mem = VkDeviceMemory::new(id, size, memory_type_index, property_flags);
+        let mem = VkDeviceMemory::try_new(id, size, memory_type_index, property_flags)?;
         self.memories.insert(id, mem);
-        id
+        Ok(id)
     }
 
     pub fn vk_create_buffer(&mut self, size: u64, usage: u32) -> u64 {
@@ -227,43 +227,42 @@ impl VkDevice {
             .and_then(|l| l.wgpu_layout.as_ref())
             .ok_or_else(|| "Invalid or missing pipeline layout".to_string())?;
 
-        // Construct Vertex Buffer Layouts
-        let mut attr_storage = [wgpu::VertexAttribute {
-            offset: 0,
-            shader_location: 0,
-            format: wgpu::VertexFormat::Float32x3,
-        }; 16];
-
-        let num_attrs = info.vertex_attributes.len().min(16);
-        for (i, attr) in info.vertex_attributes.iter().take(num_attrs).enumerate() {
-            let format = match attr.format {
-                VK_FORMAT_R32_SFLOAT => wgpu::VertexFormat::Float32,
-                VK_FORMAT_R32G32_SFLOAT => wgpu::VertexFormat::Float32x2,
-                VK_FORMAT_R32G32B32_SFLOAT => wgpu::VertexFormat::Float32x3,
-                VK_FORMAT_R32G32B32A32_SFLOAT => wgpu::VertexFormat::Float32x4,
-                VK_FORMAT_R8G8B8A8_UNORM => wgpu::VertexFormat::Unorm8x4,
-                _ => wgpu::VertexFormat::Float32x3,
-            };
-            attr_storage[i] = wgpu::VertexAttribute {
-                offset: attr.offset as u64,
-                shader_location: attr.location,
-                format,
-            };
+        // Construct Vertex Buffer Layouts mapped per binding index
+        let mut binding_attrs: Vec<Vec<wgpu::VertexAttribute>> = Vec::new();
+        for binding in &info.vertex_bindings {
+            let mut attrs = Vec::new();
+            for attr in &info.vertex_attributes {
+                if attr.binding == binding.binding {
+                    let format = match attr.format {
+                        VK_FORMAT_R32_SFLOAT => wgpu::VertexFormat::Float32,
+                        VK_FORMAT_R32G32_SFLOAT => wgpu::VertexFormat::Float32x2,
+                        VK_FORMAT_R32G32B32_SFLOAT => wgpu::VertexFormat::Float32x3,
+                        VK_FORMAT_R32G32B32A32_SFLOAT => wgpu::VertexFormat::Float32x4,
+                        VK_FORMAT_R8G8B8A8_UNORM => wgpu::VertexFormat::Unorm8x4,
+                        _ => wgpu::VertexFormat::Float32x3,
+                    };
+                    attrs.push(wgpu::VertexAttribute {
+                        offset: attr.offset as u64,
+                        shader_location: attr.location,
+                        format,
+                    });
+                }
+            }
+            binding_attrs.push(attrs);
         }
 
         let mut vbls = Vec::new();
-        for binding in &info.vertex_bindings {
+        for (i, binding) in info.vertex_bindings.iter().enumerate() {
             let step_mode = if binding.input_rate == 1 {
                 wgpu::VertexStepMode::Instance
             } else {
                 wgpu::VertexStepMode::Vertex
             };
 
-            let bound_attrs = &attr_storage[0..num_attrs];
             vbls.push(wgpu::VertexBufferLayout {
                 array_stride: binding.stride as u64,
                 step_mode,
-                attributes: bound_attrs,
+                attributes: &binding_attrs[i],
             });
         }
 

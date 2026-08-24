@@ -20,17 +20,41 @@ pub struct VkDeviceMemory {
 }
 
 impl VkDeviceMemory {
-    pub fn new(id: u64, size: u64, memory_type_index: u32, property_flags: u32) -> Self {
-        let capped_size = size.min(MAX_SAFE_BUFFER_SIZE);
-        Self {
+    pub fn try_new(id: u64, size: u64, memory_type_index: u32, property_flags: u32) -> Result<Self, i32> {
+        if size > MAX_SAFE_BUFFER_SIZE {
+            return Err(VK_ERROR_OUT_OF_DEVICE_MEMORY);
+        }
+        let size_usize = size as usize;
+        let mut shadow_buffer = Vec::new();
+        if shadow_buffer.try_reserve_exact(size_usize).is_err() {
+            return Err(VK_ERROR_OUT_OF_DEVICE_MEMORY);
+        }
+        shadow_buffer.resize(size_usize, 0);
+
+        Ok(Self {
             id,
-            size: capped_size,
+            size,
             memory_type_index,
             property_flags,
-            shadow_buffer: vec![0u8; capped_size as usize],
+            shadow_buffer,
             dirty_ranges: Vec::new(),
             bound_buffer_id: None,
-        }
+        })
+    }
+
+    pub fn new(id: u64, size: u64, memory_type_index: u32, property_flags: u32) -> Self {
+        Self::try_new(id, size, memory_type_index, property_flags).unwrap_or_else(|_| {
+            let capped = size.min(1024 * 1024);
+            Self {
+                id,
+                size: capped,
+                memory_type_index,
+                property_flags,
+                shadow_buffer: vec![0u8; capped as usize],
+                dirty_ranges: Vec::new(),
+                bound_buffer_id: None,
+            }
+        })
     }
 
     pub fn write_memory(&mut self, offset: u64, data: &[u8]) -> Result<(), i32> {
