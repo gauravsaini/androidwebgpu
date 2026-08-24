@@ -146,6 +146,24 @@ impl VkDevice {
         id
     }
 
+    pub fn vk_create_image_with_type(
+        &mut self,
+        image_type: u32,
+        width: u32,
+        height: u32,
+        depth: u32,
+        mip_levels: u32,
+        array_layers: u32,
+        format: u32,
+        usage: u32,
+    ) -> u64 {
+        let id = self.gen_id();
+        let mut img = VkImage::new_with_type(id, image_type, width, height, depth, mip_levels, array_layers, format, usage);
+        img.create_wgpu_texture(&self.device);
+        self.images.insert(id, img);
+        id
+    }
+
     pub fn vk_create_image_view(&mut self, image_id: u64, format: u32) -> u64 {
         let id = self.gen_id();
         let mut view = VkImageView::new(id, image_id, format);

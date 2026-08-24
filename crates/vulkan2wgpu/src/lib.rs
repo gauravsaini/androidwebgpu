@@ -62,4 +62,19 @@ mod tests {
         assert_eq!(read_slice.len(), 128);
         assert_eq!(read_slice[0], 0xAA);
     }
+
+    #[test]
+    fn test_vulkan_image_dimension_mapping() {
+        // 1D Image (height = 1, array_layers = 1, depth = 1)
+        let img_1d = VkImage::new(1, 256, 1, 1, 1, 1, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_USAGE_SAMPLED_BIT);
+        assert_eq!(img_1d.image_type, VK_IMAGE_TYPE_1D);
+
+        // 2D Array Image (height = 1, array_layers = 6)
+        let img_2d_arr = VkImage::new(2, 256, 1, 1, 1, 6, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_USAGE_SAMPLED_BIT);
+        assert_eq!(img_2d_arr.image_type, VK_IMAGE_TYPE_2D);
+
+        // 3D Image (depth = 4)
+        let img_3d = VkImage::new(3, 64, 64, 4, 1, 1, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_USAGE_SAMPLED_BIT);
+        assert_eq!(img_3d.image_type, VK_IMAGE_TYPE_3D);
+    }
 }

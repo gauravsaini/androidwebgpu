@@ -2,6 +2,7 @@ use crate::types::*;
 
 pub struct VkImage {
     pub id: u64,
+    pub image_type: u32,
     pub width: u32,
     pub height: u32,
     pub depth: u32,
@@ -23,8 +24,42 @@ impl VkImage {
         format: u32,
         usage: u32,
     ) -> Self {
+        let image_type = if depth > 1 {
+            VK_IMAGE_TYPE_3D
+        } else if height == 1 && array_layers <= 1 {
+            VK_IMAGE_TYPE_1D
+        } else {
+            VK_IMAGE_TYPE_2D
+        };
+
         Self {
             id,
+            image_type,
+            width,
+            height,
+            depth,
+            mip_levels,
+            array_layers,
+            format,
+            usage,
+            wgpu_texture: None,
+        }
+    }
+
+    pub fn new_with_type(
+        id: u64,
+        image_type: u32,
+        width: u32,
+        height: u32,
+        depth: u32,
+        mip_levels: u32,
+        array_layers: u32,
+        format: u32,
+        usage: u32,
+    ) -> Self {
+        Self {
+            id,
+            image_type,
             width,
             height,
             depth,
@@ -50,12 +85,12 @@ impl VkImage {
             w_usage |= wgpu::TextureUsages::RENDER_ATTACHMENT;
         }
 
-        let (dimension, depth_or_array_layers) = if self.depth > 1 {
-            (wgpu::TextureDimension::D3, self.depth)
-        } else if self.height > 1 || self.array_layers > 1 {
-            (wgpu::TextureDimension::D2, self.array_layers.max(1))
-        } else {
+        let (dimension, depth_or_array_layers) = if self.image_type == VK_IMAGE_TYPE_3D || self.depth > 1 {
+            (wgpu::TextureDimension::D3, self.depth.max(1))
+        } else if self.image_type == VK_IMAGE_TYPE_1D && self.array_layers <= 1 && self.height <= 1 {
             (wgpu::TextureDimension::D1, 1)
+        } else {
+            (wgpu::TextureDimension::D2, self.array_layers.max(1))
         };
 
         let texture = device.create_texture(&wgpu::TextureDescriptor {
