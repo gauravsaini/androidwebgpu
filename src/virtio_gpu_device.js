@@ -113,22 +113,19 @@ export class VirtioGpuDevice {
         const width = this.canvas.width;
         const height = this.canvas.height;
 
+        if (!this.cachedImageData || this.cachedImageData.width !== width || this.cachedImageData.height !== height) {
+            this.cachedImageData = this.ctx2d.createImageData(width, height);
+        }
+
+        if (fb.length >= width * height * 4) {
+            this.cachedImageData.data.set(fb.subarray(0, width * height * 4));
+        }
+
         if (damage && damage.length === 4) {
             const [dx, dy, dw, dh] = damage;
             if (dw > 0 && dh > 0 && dx < width && dy < height) {
                 const subW = Math.min(dw, width - dx);
                 const subH = Math.min(dh, height - dy);
-                const subPixels = new Uint8ClampedArray(subW * subH * 4);
-                const bpp = 4;
-
-                for (let r = 0; r < subH; r++) {
-                    const srcOff = ((dy + r) * width + dx) * bpp;
-                    const dstOff = (r * subW) * bpp;
-                    const rowLen = subW * bpp;
-                    if (srcOff + rowLen <= fb.length && dstOff + rowLen <= subPixels.length) {
-                        subPixels.set(fb.subarray(srcOff, srcOff + rowLen), dstOff);
-                    }
-                }
 
                 if (this.worker) {
                     this.worker.postMessage({
@@ -137,12 +134,10 @@ export class VirtioGpuDevice {
                         y: dy,
                         width: subW,
                         height: subH,
-                        pixels: subPixels
+                        pixels: fb.subarray(0, width * height * 4)
                     });
                 } else {
-                    const imgData = this.ctx2d.createImageData(subW, subH);
-                    imgData.data.set(subPixels);
-                    this.ctx2d.putImageData(imgData, dx, dy);
+                    this.ctx2d.putImageData(this.cachedImageData, 0, 0, dx, dy, subW, subH);
                 }
 
                 this.damage_rects_count++;
@@ -155,9 +150,7 @@ export class VirtioGpuDevice {
 
         // Full blit fallback
         if (fb.length >= width * height * 4) {
-            const imgData = this.ctx2d.createImageData(width, height);
-            imgData.data.set(fb.subarray(0, width * height * 4));
-            this.ctx2d.putImageData(imgData, 0, 0);
+            this.ctx2d.putImageData(this.cachedImageData, 0, 0);
         }
     }
 

@@ -124,11 +124,16 @@ impl GlContext {
             .ok_or_else(|| "Failed to find an appropriate GPU adapter (WebGPU disabled or unavailable)".to_string())?;
 
         let limits = adapter.limits();
+        let mut required_features = wgpu::Features::empty();
+        if adapter.features().contains(wgpu::Features::TIMESTAMP_QUERY) {
+            required_features |= wgpu::Features::TIMESTAMP_QUERY;
+        }
+
         let (device, queue) = adapter
             .request_device(
                 &wgpu::DeviceDescriptor {
                     label: Some("GLES2WGPU Device"),
-                    required_features: wgpu::Features::empty(),
+                    required_features,
                     required_limits: limits,
                     memory_hints: wgpu::MemoryHints::default(),
                 },

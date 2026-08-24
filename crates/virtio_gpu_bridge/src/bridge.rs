@@ -395,7 +395,7 @@ impl VirtioGpuBridge {
                     // DRAW_ELEMENTS (mode: u32, count: u32, type: u32, offset: u32)
                     if cmd_payload.len() >= 16 {
                         let mode = u32::from_le_bytes(cmd_payload[0..4].try_into().unwrap());
-                        let count = u32::from_le_bytes(cmd_payload[8..12].try_into().unwrap());
+                        let count = u32::from_le_bytes(cmd_payload[4..8].try_into().unwrap());
                         let type_ = u32::from_le_bytes(cmd_payload[8..12].try_into().unwrap());
                         let offset = u32::from_le_bytes(cmd_payload[12..16].try_into().unwrap()) as usize;
                         self.gl_context.gl_draw_elements(mode, count, type_, offset);
@@ -528,12 +528,40 @@ impl VirtioGpuBridge {
                 }
             }
 
-            GpuCommand::ResourceFlush { resource_id, .. } => {
+            GpuCommand::ResourceFlush {
+                resource_id,
+                x,
+                y,
+                width,
+                height,
+            } => {
                 if let Some(res) = self.resources.get(&resource_id) {
+                    let bpp = 4;
+                    let res_w = res.width as usize;
+                    let flush_x = x as usize;
+                    let flush_y = y as usize;
+                    let flush_w = width as usize;
+                    let flush_h = height as usize;
+
                     for scanout in self.scanouts.values_mut() {
                         if scanout.resource_id == resource_id {
-                            let min_len = scanout.fb_data.len().min(res.backing_data.len());
-                            scanout.fb_data[0..min_len].copy_from_slice(&res.backing_data[0..min_len]);
+                            let scan_w = scanout.width as usize;
+                            let scan_h = scanout.height as usize;
+                            let max_h = flush_h.min(scan_h.saturating_sub(flush_y));
+                            let max_w = flush_w.min(scan_w.saturating_sub(flush_x));
+
+                            for row in 0..max_h {
+                                let src_off = ((flush_y + row) * res_w + flush_x) * bpp;
+                                let dst_off = ((flush_y + row) * scan_w + flush_x) * bpp;
+                                let row_bytes = max_w * bpp;
+                                if src_off + row_bytes <= res.backing_data.len()
+                                    && dst_off + row_bytes <= scanout.fb_data.len()
+                                {
+                                    scanout.fb_data[dst_off..dst_off + row_bytes]
+                                        .copy_from_slice(&res.backing_data[src_off..src_off + row_bytes]);
+                                }
+                            }
+                            scanout.damage_rect = Some([x, y, width, height]);
                         }
                     }
                     CommandResponse {

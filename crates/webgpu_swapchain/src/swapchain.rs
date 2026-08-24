@@ -37,6 +37,7 @@ pub struct WebGpuSwapchain {
     pub last_gpu_duration_ms: f32,
     pub query_set: Option<wgpu::QuerySet>,
     pub query_buffer: Option<wgpu::Buffer>,
+    pub query_staging_buffer: Option<wgpu::Buffer>,
 }
 
 impl WebGpuSwapchain {
@@ -57,8 +58,6 @@ impl WebGpuSwapchain {
         present_mode: wgpu::PresentMode,
         target_fps: f32,
     ) -> Self {
-        let (present_texture, present_view) = Self::create_textures(device, width, height, format);
-
         // Triple buffering for offscreen 120fps mailbox parity
         let mut buffers = Vec::with_capacity(3);
         let mut views = Vec::with_capacity(3);
@@ -68,7 +67,10 @@ impl WebGpuSwapchain {
             views.push(v);
         }
 
-        let (query_set, query_buffer) = Self::create_query_resources(device);
+        let present_texture = Self::create_textures(device, width, height, format).0;
+        let present_view = present_texture.create_view(&wgpu::TextureViewDescriptor::default());
+
+        let (query_set, query_buffer, query_staging_buffer) = Self::create_query_resources(device);
 
         Self {
             width,
@@ -85,10 +87,11 @@ impl WebGpuSwapchain {
             present_mode,
             target_fps,
             last_frame_time: None,
-            last_frame_duration_ms: 8.333,
-            last_gpu_duration_ms: 2.15,
+            last_frame_duration_ms: 16.6,
+            last_gpu_duration_ms: 0.0,
             query_set,
             query_buffer,
+            query_staging_buffer,
         }
     }
 
@@ -104,7 +107,7 @@ impl WebGpuSwapchain {
         let (present_texture, present_view) =
             Self::create_textures(device, config.width, config.height, config.format);
 
-        let (query_set, query_buffer) = Self::create_query_resources(device);
+        let (query_set, query_buffer, query_staging_buffer) = Self::create_query_resources(device);
 
         Self {
             width: config.width,
@@ -117,14 +120,17 @@ impl WebGpuSwapchain {
             present_mode: wgpu::PresentMode::Mailbox,
             target_fps: 120.0,
             last_frame_time: None,
-            last_frame_duration_ms: 8.333,
-            last_gpu_duration_ms: 2.15,
+            last_frame_duration_ms: 16.6,
+            last_gpu_duration_ms: 0.0,
             query_set,
             query_buffer,
+            query_staging_buffer,
         }
     }
 
-    fn create_query_resources(device: &wgpu::Device) -> (Option<wgpu::QuerySet>, Option<wgpu::Buffer>) {
+    fn create_query_resources(
+        device: &wgpu::Device,
+    ) -> (Option<wgpu::QuerySet>, Option<wgpu::Buffer>, Option<wgpu::Buffer>) {
         if device.features().contains(wgpu::Features::TIMESTAMP_QUERY) {
             let query_set = device.create_query_set(&wgpu::QuerySetDescriptor {
                 label: Some("Swapchain Timestamp Query Set"),
@@ -134,14 +140,18 @@ impl WebGpuSwapchain {
             let query_buffer = device.create_buffer(&wgpu::BufferDescriptor {
                 label: Some("Swapchain Timestamp Buffer"),
                 size: 16, // 2 * u64
-                usage: wgpu::BufferUsages::QUERY_RESOLVE
-                    | wgpu::BufferUsages::COPY_SRC
-                    | wgpu::BufferUsages::COPY_DST,
+                usage: wgpu::BufferUsages::QUERY_RESOLVE | wgpu::BufferUsages::COPY_SRC,
                 mapped_at_creation: false,
             });
-            (Some(query_set), Some(query_buffer))
+            let staging_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+                label: Some("Swapchain Timestamp Staging Buffer"),
+                size: 16,
+                usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
+                mapped_at_creation: false,
+            });
+            (Some(query_set), Some(query_buffer), Some(staging_buffer))
         } else {
-            (None, None)
+            (None, None, None)
         }
     }
 
@@ -152,7 +162,7 @@ impl WebGpuSwapchain {
         format: wgpu::TextureFormat,
     ) -> (wgpu::Texture, wgpu::TextureView) {
         let texture = device.create_texture(&wgpu::TextureDescriptor {
-            label: Some("WebGPU Swapchain Present Texture"),
+            label: Some("WebGPU Swapchain Texture"),
             size: wgpu::Extent3d {
                 width: width.max(1),
                 height: height.max(1),
@@ -209,6 +219,15 @@ impl WebGpuSwapchain {
         }
     }
 
+    pub fn get_current_texture(&self) -> &wgpu::Texture {
+        match &self.target {
+            SwapchainTarget::Offscreen { buffers, current_idx, .. } if !buffers.is_empty() => {
+                &buffers[*current_idx]
+            }
+            _ => &self.present_texture,
+        }
+    }
+
     pub fn is_surface(&self) -> bool {
         matches!(self.target, SwapchainTarget::Surface { .. })
     }
@@ -236,7 +255,46 @@ impl WebGpuSwapchain {
             frame_time_ms: self.last_frame_duration_ms,
             gpu_time_ms: self.last_gpu_duration_ms,
             target_fps: self.target_fps,
-            is_120fps_capable: self.last_frame_duration_ms <= 16.0,
+            is_120fps_capable: self.last_frame_duration_ms <= 8.33 || (self.last_gpu_duration_ms > 0.0 && self.last_gpu_duration_ms <= 8.33),
+        }
+    }
+
+    pub fn resolve_gpu_timestamp_query(
+        &mut self,
+        encoder: &mut wgpu::CommandEncoder,
+    ) {
+        if let (Some(qs), Some(qb), Some(sb)) = (&self.query_set, &self.query_buffer, &self.query_staging_buffer) {
+            encoder.resolve_query_set(qs, 0..2, qb, 0);
+            encoder.copy_buffer_to_buffer(qb, 0, sb, 0, 16);
+        }
+    }
+
+    pub async fn poll_gpu_timestamps(
+        &mut self,
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+    ) {
+        if let Some(sb) = &self.query_staging_buffer {
+            let slice = sb.slice(..);
+            let (tx, rx) = std::sync::mpsc::channel();
+            slice.map_async(wgpu::MapMode::Read, move |res| {
+                let _ = tx.send(res);
+            });
+            device.poll(wgpu::Maintain::Wait);
+            if let Ok(Ok(())) = rx.recv() {
+                let view = slice.get_mapped_range();
+                if view.len() >= 16 {
+                    let ts_start = u64::from_le_bytes(view[0..8].try_into().unwrap());
+                    let ts_end = u64::from_le_bytes(view[8..16].try_into().unwrap());
+                    let period_ns = queue.get_timestamp_period();
+                    if ts_end >= ts_start {
+                        let duration_ns = (ts_end - ts_start) as f32 * period_ns;
+                        self.last_gpu_duration_ms = duration_ns / 1_000_000.0;
+                    }
+                }
+                drop(view);
+                sb.unmap();
+            }
         }
     }
 
@@ -255,7 +313,7 @@ impl WebGpuSwapchain {
 
             encoder.copy_texture_to_texture(
                 wgpu::TexelCopyTextureInfo {
-                    texture: &self.present_texture,
+                    texture: self.get_current_texture(),
                     mip_level: 0,
                     origin: wgpu::Origin3d::ZERO,
                     aspect: wgpu::TextureAspect::All,
@@ -332,7 +390,7 @@ impl WebGpuSwapchain {
 
         encoder.copy_texture_to_buffer(
             wgpu::TexelCopyTextureInfo {
-                texture: &self.present_texture,
+                texture: self.get_current_texture(),
                 mip_level: 0,
                 origin: wgpu::Origin3d::ZERO,
                 aspect: wgpu::TextureAspect::All,

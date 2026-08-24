@@ -42,8 +42,21 @@ impl VkDevice {
             .await
             .ok_or_else(|| "Failed to find suitable GPU adapter".to_string())?;
 
+        let mut required_features = wgpu::Features::empty();
+        if adapter.features().contains(wgpu::Features::TIMESTAMP_QUERY) {
+            required_features |= wgpu::Features::TIMESTAMP_QUERY;
+        }
+
         let (device, queue) = adapter
-            .request_device(&wgpu::DeviceDescriptor::default(), None)
+            .request_device(
+                &wgpu::DeviceDescriptor {
+                    label: Some("Vulkan2WGPU Device"),
+                    required_features,
+                    required_limits: adapter.limits(),
+                    memory_hints: wgpu::MemoryHints::default(),
+                },
+                None,
+            )
             .await
             .map_err(|e| format!("Failed to create device: {:?}", e))?;
 

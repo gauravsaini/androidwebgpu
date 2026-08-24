@@ -471,6 +471,7 @@
         <div class="nav-tabs">
             <button class="tab-btn active" id="tab-arcade">🎮 3D Arcade Mode</button>
             <button class="tab-btn" id="tab-gates">🧪 Verification Gates</button>
+            <button class="tab-btn" id="tab-vulkan">🌋 Vulkan E2E Pipeline</button>
         </div>
 
         <div class="header-stats">
@@ -614,6 +615,67 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
                 </div>
             </div>
 
+            <!-- Vulkan E2E Pipeline Card (Hidden in arcade/gates tab, visible in vulkan tab) -->
+            <div class="results-card" id="vulkan-card" style="display: none;">
+                <div class="card-title" style="color: #f97316;">🌋 Vulkan WebGPU Pipeline & E2E Validation</div>
+                <div class="btn-group" style="margin-bottom: 1rem;">
+                    <button class="btn btn-primary" id="btn-run-vulkan" style="background: linear-gradient(135deg, #ef4444, #f97316); box-shadow: 0 0 20px rgba(249, 115, 22, 0.4);">
+                        ⚡ Run All 7 Vulkan E2E Tests
+                    </button>
+                </div>
+                <div class="gate-list">
+                    <div class="gate-item">
+                        <div class="gate-info">
+                            <div class="gate-title">VK-1: Vulkan Device & Host Memory Allocator</div>
+                            <div class="gate-desc">VkDeviceMemory mapping, dirty tracking, and safe OOM bounds</div>
+                        </div>
+                        <span class="badge badge-passed" id="badge-vk1">READY</span>
+                    </div>
+                    <div class="gate-item">
+                        <div class="gate-info">
+                            <div class="gate-title">VK-2: Dynamic Render Pass & Pixel Readback</div>
+                            <div class="gate-desc">vkCmdBeginRendering / vkCmdEndRendering + triangle pixel assert</div>
+                        </div>
+                        <span class="badge badge-passed" id="badge-vk2">READY</span>
+                    </div>
+                    <div class="gate-item">
+                        <div class="gate-info">
+                            <div class="gate-title">VK-3: Multi-Binding Vertex Layouts</div>
+                            <div class="gate-desc">Per-binding vertex & instanced buffer attribute routing</div>
+                        </div>
+                        <span class="badge badge-passed" id="badge-vk3">READY</span>
+                    </div>
+                    <div class="gate-item">
+                        <div class="gate-info">
+                            <div class="gate-title">VK-4: Indexed Draw & Depth/Stencil State</div>
+                            <div class="gate-desc">vkCmdDrawIndexed + Depth24PlusStencil8 depth comparison</div>
+                        </div>
+                        <span class="badge badge-passed" id="badge-vk4">READY</span>
+                    </div>
+                    <div class="gate-item">
+                        <div class="gate-info">
+                            <div class="gate-title">VK-5: Push Constants & Descriptor Sets</div>
+                            <div class="gate-desc">1024-byte push constant ring buffer & uniform binding groups</div>
+                        </div>
+                        <span class="badge badge-passed" id="badge-vk5">READY</span>
+                    </div>
+                    <div class="gate-item">
+                        <div class="gate-info">
+                            <div class="gate-title">VK-6: SPIR-V Shader Binary & WGSL Translation</div>
+                            <div class="gate-desc">SPIR-V 0x07230203 binary magic verification + Naga WGSL emit</div>
+                        </div>
+                        <span class="badge badge-passed" id="badge-vk6">READY</span>
+                    </div>
+                    <div class="gate-item">
+                        <div class="gate-info">
+                            <div class="gate-title">VK-7: Vulkan Textures & ASTC/ETC2 Formats</div>
+                            <div class="gate-desc">1D/2DArray/3D dimension mapping & compressed ASTC/ETC2 validation</div>
+                        </div>
+                        <span class="badge badge-passed" id="badge-vk7">READY</span>
+                    </div>
+                </div>
+            </div>
+
             <div class="log-card">
                 <div class="card-title">📟 Execution Logs</div>
                 <div class="log-terminal" id="log-term"></div>
@@ -625,7 +687,7 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
         import init, { WasmVirtioGpuBridge } from './pkg/virtio_gpu_bridge.js';
         import { VirtioGpuDevice } from './src/virtio_gpu_device.js';
         import { VirtioPacketBuilder } from './src/virtio_packet_builder.js';
-        import { VisualTestSuite } from './src/test_suite.js';
+        import { VisualTestSuite, VulkanTestSuite } from './src/test_suite.js';
         import { Arcade3DScene } from './src/arcade_demo.js';
 
         const logTerm = document.getElementById('log-term');
@@ -635,12 +697,15 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
         const cursorPos = document.getElementById('cursor-pos');
         const pixelColor = document.getElementById('pixel-color');
         const btnRunAll = document.getElementById('btn-run-all');
+        const btnRunVulkan = document.getElementById('btn-run-vulkan');
         const btnActionPulse = document.getElementById('btn-action-pulse');
         const btnToggleAutoRotate = document.getElementById('btn-toggle-autorotate');
         const tabArcade = document.getElementById('tab-arcade');
         const tabGates = document.getElementById('tab-gates');
+        const tabVulkan = document.getElementById('tab-vulkan');
         const arcadeControls = document.getElementById('arcade-controls');
         const gatesCard = document.getElementById('gates-card');
+        const vulkanCard = document.getElementById('vulkan-card');
         const shaderCodeView = document.getElementById('shader-code');
 
         function appendLog(msg, type = 'info') {
@@ -654,6 +719,7 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
         let bridge = null;
         let gpuDev = null;
         let suite = null;
+        let vulkanSuite = null;
         let arcade = null;
 
         const WGSL_SHADERS = {
@@ -689,16 +755,30 @@ fn fs_normals(in: VertexOutput) -> @location(0) vec4<f32> {
         tabArcade.addEventListener('click', () => {
             tabArcade.classList.add('active');
             tabGates.classList.remove('active');
+            tabVulkan.classList.remove('active');
             arcadeControls.style.display = 'block';
             gatesCard.style.display = 'none';
+            vulkanCard.style.display = 'none';
             if (arcade) arcade.start();
         });
 
         tabGates.addEventListener('click', () => {
             tabGates.classList.add('active');
             tabArcade.classList.remove('active');
+            tabVulkan.classList.remove('active');
             arcadeControls.style.display = 'none';
             gatesCard.style.display = 'block';
+            vulkanCard.style.display = 'none';
+            if (arcade) arcade.stop();
+        });
+
+        tabVulkan.addEventListener('click', () => {
+            tabVulkan.classList.add('active');
+            tabArcade.classList.remove('active');
+            tabGates.classList.remove('active');
+            arcadeControls.style.display = 'none';
+            gatesCard.style.display = 'none';
+            vulkanCard.style.display = 'block';
             if (arcade) arcade.stop();
         });
 
@@ -784,6 +864,7 @@ fn fs_normals(in: VertexOutput) -> @location(0) vec4<f32> {
 
                 gpuDev = new VirtioGpuDevice(null, bridge, canvas);
                 suite = new VisualTestSuite(gpuDev, canvas, appendLog);
+                vulkanSuite = new VulkanTestSuite(canvas, appendLog);
 
                 statusPill.textContent = 'ONLINE';
                 statusPill.style.color = 'var(--success)';
@@ -827,6 +908,28 @@ fn fs_normals(in: VertexOutput) -> @location(0) vec4<f32> {
             window.__TEST_RESULTS__ = results;
             appendLog(`Verification complete: ${results.passed}/${results.total} passed.`, results.failed === 0 ? 'success' : 'error');
             btnRunAll.disabled = false;
+        });
+
+        btnRunVulkan.addEventListener('click', async () => {
+            if (!vulkanSuite) return;
+            if (arcade) arcade.stop();
+            btnRunVulkan.disabled = true;
+            appendLog('Starting Vulkan WebGPU E2E pipeline verification...', 'info');
+            const results = await vulkanSuite.runAllVulkanTests();
+            for (let i = 1; i <= 7; i++) {
+                const badge = document.getElementById(`badge-vk${i}`);
+                const res = results.results[`vk${i}`];
+                if (res && res.status === 'PASSED') {
+                    badge.className = 'badge badge-passed';
+                    badge.textContent = 'PASSED';
+                } else {
+                    badge.className = 'badge badge-failed';
+                    badge.textContent = 'FAILED';
+                }
+            }
+            window.__VK_TEST_RESULTS__ = results;
+            appendLog(`Vulkan E2E Verification complete: ${results.passed}/${results.total} passed.`, results.failed === 0 ? 'success' : 'error');
+            btnRunVulkan.disabled = false;
         });
 
         bootstrap();

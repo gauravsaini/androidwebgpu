@@ -22,12 +22,13 @@ pub struct WebGpuCompositor {
     pub resource_cache: HashMap<u64, CachedLayerResources>,
     pub query_set: Option<wgpu::QuerySet>,
     pub query_buffer: Option<wgpu::Buffer>,
+    pub query_staging_buffer: Option<wgpu::Buffer>,
     pub last_gpu_duration_ms: f32,
 }
 
 impl WebGpuCompositor {
     pub fn new(device: &wgpu::Device, target_format: wgpu::TextureFormat) -> Self {
-        let (query_set, query_buffer) = if device.features().contains(wgpu::Features::TIMESTAMP_QUERY) {
+        let (query_set, query_buffer, query_staging_buffer) = if device.features().contains(wgpu::Features::TIMESTAMP_QUERY) {
             let qs = device.create_query_set(&wgpu::QuerySetDescriptor {
                 label: Some("Compositor Timestamp Query Set"),
                 count: 2,
@@ -36,14 +37,18 @@ impl WebGpuCompositor {
             let qb = device.create_buffer(&wgpu::BufferDescriptor {
                 label: Some("Compositor Timestamp Buffer"),
                 size: 16,
-                usage: wgpu::BufferUsages::QUERY_RESOLVE
-                    | wgpu::BufferUsages::COPY_SRC
-                    | wgpu::BufferUsages::COPY_DST,
+                usage: wgpu::BufferUsages::QUERY_RESOLVE | wgpu::BufferUsages::COPY_SRC,
                 mapped_at_creation: false,
             });
-            (Some(qs), Some(qb))
+            let sb = device.create_buffer(&wgpu::BufferDescriptor {
+                label: Some("Compositor Timestamp Staging Buffer"),
+                size: 16,
+                usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
+                mapped_at_creation: false,
+            });
+            (Some(qs), Some(qb), Some(sb))
         } else {
-            (None, None)
+            (None, None, None)
         };
 
         Self {
@@ -52,7 +57,8 @@ impl WebGpuCompositor {
             resource_cache: HashMap::new(),
             query_set,
             query_buffer,
-            last_gpu_duration_ms: 1.85,
+            query_staging_buffer,
+            last_gpu_duration_ms: 0.0,
         }
     }
 
@@ -273,11 +279,37 @@ impl WebGpuCompositor {
             }
         }
 
-        if let (Some(qs), Some(qb)) = (&self.query_set, &self.query_buffer) {
+        if let (Some(qs), Some(qb), Some(sb)) = (&self.query_set, &self.query_buffer, &self.query_staging_buffer) {
             encoder.resolve_query_set(qs, 0..2, qb, 0);
+            encoder.copy_buffer_to_buffer(qb, 0, sb, 0, 16);
         }
 
         queue.submit(Some(encoder.finish()));
+    }
+
+    pub async fn poll_gpu_duration(&mut self, device: &wgpu::Device, queue: &wgpu::Queue) {
+        if let Some(sb) = &self.query_staging_buffer {
+            let slice = sb.slice(..);
+            let (tx, rx) = std::sync::mpsc::channel();
+            slice.map_async(wgpu::MapMode::Read, move |res| {
+                let _ = tx.send(res);
+            });
+            device.poll(wgpu::Maintain::Wait);
+            if let Ok(Ok(())) = rx.recv() {
+                let view = slice.get_mapped_range();
+                if view.len() >= 16 {
+                    let ts_start = u64::from_le_bytes(view[0..8].try_into().unwrap());
+                    let ts_end = u64::from_le_bytes(view[8..16].try_into().unwrap());
+                    let period_ns = queue.get_timestamp_period();
+                    if ts_end >= ts_start {
+                        let duration_ns = (ts_end - ts_start) as f32 * period_ns;
+                        self.last_gpu_duration_ms = duration_ns / 1_000_000.0;
+                    }
+                }
+                drop(view);
+                sb.unmap();
+            }
+        }
     }
 }
 
