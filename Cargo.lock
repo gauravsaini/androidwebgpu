@@ -9,6 +9,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "320119579fcad9c21884f5c4861d16174d0e06250625266f50fe6898340abefa"
 
 [[package]]
+name = "aidl_compat"
+version = "0.1.0"
+dependencies = [
+ "binder_rt",
+ "log",
+ "thiserror 2.0.20",
+]
+
+[[package]]
 name = "android_system_properties"
 version = "0.1.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -60,6 +69,36 @@ name = "autocfg"
 version = "1.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f2032f911046de80f0a198e0901378627c33f59ea0ac00e363d481118bd70a53"
+
+[[package]]
+name = "binder_handle_bridge"
+version = "0.1.0"
+dependencies = [
+ "aidl_compat",
+ "binder_rt",
+ "log",
+ "thiserror 2.0.20",
+]
+
+[[package]]
+name = "binder_routing"
+version = "0.1.0"
+dependencies = [
+ "log",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.20",
+]
+
+[[package]]
+name = "binder_rt"
+version = "0.1.0"
+dependencies = [
+ "bytemuck",
+ "log",
+ "serde",
+ "thiserror 2.0.20",
+]
 
 [[package]]
 name = "bit-set"
@@ -908,6 +947,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "surfaceflinger_gpu_service"
+version = "0.1.0"
+dependencies = [
+ "aidl_compat",
+ "binder_handle_bridge",
+ "binder_rt",
+ "bytemuck",
+ "log",
+ "pollster",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.20",
+ "webgpu_compositor",
+ "webgpu_swapchain",
+ "wgpu",
+]
+
+[[package]]
 name = "syn"
 version = "2.0.119"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -936,6 +993,26 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "06794f8f6c5c898b3275aebefa6b8a1cb24cd2c6c79397ab15774837a0bc5755"
 dependencies = [
  "winapi-util",
+]
+
+[[package]]
+name = "tests_e2e_binder"
+version = "0.1.0"
+dependencies = [
+ "aidl_compat",
+ "binder_handle_bridge",
+ "binder_routing",
+ "binder_rt",
+ "bytemuck",
+ "pollster",
+ "serde",
+ "serde_json",
+ "surfaceflinger_gpu_service",
+ "thiserror 2.0.20",
+ "virtio_binder",
+ "webgpu_compositor",
+ "webgpu_swapchain",
+ "wgpu",
 ]
 
 [[package]]
@@ -1003,6 +1080,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0b928f33d975fc6ad9f86c8f283853ad26bdd5b10b7f1542aa2fa15e2289105a"
 
 [[package]]
+name = "virtio_binder"
+version = "0.1.0"
+dependencies = [
+ "aidl_compat",
+ "binder_rt",
+ "bytemuck",
+ "log",
+ "thiserror 2.0.20",
+]
+
+[[package]]
 name = "virtio_gpu_bridge"
 version = "0.1.0"
 dependencies = [
@@ -1014,6 +1102,7 @@ dependencies = [
  "serde",
  "serde_json",
  "thiserror 2.0.20",
+ "vulkan2wgpu",
  "wasm-bindgen",
  "wasm-bindgen-futures",
  "wgpu",

@@ -31,6 +31,17 @@ pub enum GpuCommand {
         offset: u64,
         data: Vec<u8>,
     },
+    TransferToHost3D {
+        resource_id: u32,
+        x: u32,
+        y: u32,
+        z: u32,
+        width: u32,
+        height: u32,
+        depth: u32,
+        offset: u64,
+        data: Vec<u8>,
+    },
     SetScanout {
         scanout_id: u32,
         resource_id: u32,
@@ -49,6 +60,9 @@ pub enum GpuCommand {
     Submit3D {
         ctx_id: u32,
         commands: Vec<u8>,
+    },
+    SubmitVulkan {
+        command_buffer_ids: Vec<u64>,
     },
     Present {
         scanout_id: u32,

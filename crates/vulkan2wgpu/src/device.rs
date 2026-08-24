@@ -365,9 +365,214 @@ impl VkDevice {
 
     pub fn vk_create_command_buffer(&mut self) -> u64 {
         let id = self.gen_id();
-        let cb = VkCommandBuffer::new(id);
+        let mut cb = VkCommandBuffer::new(id);
+        cb.begin();
         self.command_buffers.insert(id, cb);
         id
+    }
+
+    pub fn vk_cmd_begin_rendering(
+        &mut self,
+        command_buffer_id: u64,
+        color_image_view: Option<u64>,
+        depth_image_view: Option<u64>,
+        clear_color: [f32; 4],
+        clear_depth: f32,
+    ) {
+        if let Some(cb) = self.command_buffers.get_mut(&command_buffer_id) {
+            let mut color_atts = Vec::new();
+            if let Some(view_id) = color_image_view {
+                color_atts.push(VkRenderingAttachmentInfo {
+                    image_view_id: view_id,
+                    load_op: 1, // Clear
+                    store_op: 0, // Store
+                    clear_value: Some(VkClearValue::Color(VkClearColorValue { float32: clear_color })),
+                });
+            }
+            let depth_att = depth_image_view.map(|view_id| VkRenderingAttachmentInfo {
+                image_view_id: view_id,
+                load_op: 1, // Clear
+                store_op: 0, // Store
+                clear_value: Some(VkClearValue::DepthStencil(VkClearDepthStencilValue {
+                    depth: clear_depth,
+                    stencil: 0,
+                })),
+            });
+            cb.record(VkCommand::BeginRendering {
+                color_attachments: color_atts,
+                depth_attachment: depth_att,
+            });
+        }
+    }
+
+    pub fn vk_cmd_end_rendering(&mut self, command_buffer_id: u64) {
+        if let Some(cb) = self.command_buffers.get_mut(&command_buffer_id) {
+            cb.record(VkCommand::EndRendering);
+        }
+    }
+
+    pub fn vk_cmd_bind_pipeline(&mut self, command_buffer_id: u64, pipeline_id: u64) {
+        if let Some(cb) = self.command_buffers.get_mut(&command_buffer_id) {
+            cb.record(VkCommand::BindPipeline { pipeline_id });
+        }
+    }
+
+    pub fn vk_cmd_bind_vertex_buffers(
+        &mut self,
+        command_buffer_id: u64,
+        first_binding: u32,
+        buffer_ids: Vec<u64>,
+        offsets: Vec<u64>,
+    ) {
+        if let Some(cb) = self.command_buffers.get_mut(&command_buffer_id) {
+            cb.record(VkCommand::BindVertexBuffers {
+                first_binding,
+                buffer_ids,
+                offsets,
+            });
+        }
+    }
+
+    pub fn vk_cmd_bind_index_buffer(
+        &mut self,
+        command_buffer_id: u64,
+        buffer_id: u64,
+        offset: u64,
+        index_type: u32,
+    ) {
+        if let Some(cb) = self.command_buffers.get_mut(&command_buffer_id) {
+            cb.record(VkCommand::BindIndexBuffer {
+                buffer_id,
+                offset,
+                index_type,
+            });
+        }
+    }
+
+    pub fn vk_cmd_draw(
+        &mut self,
+        command_buffer_id: u64,
+        vertex_count: u32,
+        instance_count: u32,
+        first_vertex: u32,
+        first_instance: u32,
+    ) {
+        if let Some(cb) = self.command_buffers.get_mut(&command_buffer_id) {
+            cb.record(VkCommand::Draw {
+                vertex_count,
+                instance_count,
+                first_vertex,
+                first_instance,
+            });
+        }
+    }
+
+    pub fn vk_cmd_draw_indexed(
+        &mut self,
+        command_buffer_id: u64,
+        index_count: u32,
+        instance_count: u32,
+        first_index: u32,
+        vertex_offset: i32,
+        first_instance: u32,
+    ) {
+        if let Some(cb) = self.command_buffers.get_mut(&command_buffer_id) {
+            cb.record(VkCommand::DrawIndexed {
+                index_count,
+                instance_count,
+                first_index,
+                vertex_offset,
+                first_instance,
+            });
+        }
+    }
+
+    pub fn vk_cmd_set_viewport(
+        &mut self,
+        command_buffer_id: u64,
+        x: f32,
+        y: f32,
+        width: f32,
+        height: f32,
+        min_depth: f32,
+        max_depth: f32,
+    ) {
+        if let Some(cb) = self.command_buffers.get_mut(&command_buffer_id) {
+            cb.record(VkCommand::SetViewport {
+                x,
+                y,
+                width,
+                height,
+                min_depth,
+                max_depth,
+            });
+        }
+    }
+
+    pub fn vk_cmd_set_scissor(
+        &mut self,
+        command_buffer_id: u64,
+        x: i32,
+        y: i32,
+        width: u32,
+        height: u32,
+    ) {
+        if let Some(cb) = self.command_buffers.get_mut(&command_buffer_id) {
+            cb.record(VkCommand::SetScissor {
+                x,
+                y,
+                width,
+                height,
+            });
+        }
+    }
+
+    pub fn vk_cmd_bind_descriptor_sets(
+        &mut self,
+        command_buffer_id: u64,
+        _pipeline_layout_id: u64,
+        first_set: u32,
+        descriptor_set_ids: &[u64],
+    ) {
+        if let Some(cb) = self.command_buffers.get_mut(&command_buffer_id) {
+            cb.record(VkCommand::BindDescriptorSets {
+                first_set,
+                descriptor_set_ids: descriptor_set_ids.to_vec(),
+                dynamic_offsets: Vec::new(),
+            });
+        }
+    }
+
+    pub fn vk_cmd_push_constants(
+        &mut self,
+        command_buffer_id: u64,
+        offset: u32,
+        data: &[u8],
+    ) {
+        if let Some(cb) = self.command_buffers.get_mut(&command_buffer_id) {
+            cb.record(VkCommand::PushConstants {
+                offset,
+                data: data.to_vec(),
+            });
+        }
+    }
+
+    pub fn vk_cmd_copy_image_to_buffer(
+        &mut self,
+        command_buffer_id: u64,
+        image_id: u64,
+        buffer_id: u64,
+        width: u32,
+        height: u32,
+    ) {
+        if let Some(cb) = self.command_buffers.get_mut(&command_buffer_id) {
+            cb.record(VkCommand::CopyImageToBuffer {
+                image_id,
+                buffer_id,
+                width,
+                height,
+            });
+        }
     }
 
     pub fn flush_dirty_memories(&mut self) {

@@ -1,0 +1,13 @@
+[package]
+name = "binder_handle_bridge"
+version = "0.1.0"
+edition = "2021"
+description = "Cross-Boundary Handle Bridge and Lifecycle Management for AndroidWebGPU"
+
+[dependencies]
+binder_rt = { path = "../binder_rt" }
+aidl_compat = { path = "../aidl_compat" }
+thiserror = { workspace = true }
+log = { workspace = true }
+
+[dev-dependencies]

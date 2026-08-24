@@ -6,8 +6,15 @@ members = [
     "crates/webgpu_compositor",
     "crates/webgpu_swapchain",
     "crates/apk_gpu_analyzer",
+    "crates/binder_rt",
+    "crates/aidl_compat",
     "crates/metrics_overlay",
     "crates/vulkan2wgpu",
+    "crates/virtio_binder",
+    "crates/binder_handle_bridge",
+    "crates/binder_routing",
+    "crates/surfaceflinger_gpu_service",
+    "crates/tests_e2e_binder",
 ]
 
 [workspace.dependencies]

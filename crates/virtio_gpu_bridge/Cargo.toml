@@ -8,6 +8,7 @@ crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 gles2wgpu = { path = "../gles2wgpu" }
+vulkan2wgpu = { path = "../vulkan2wgpu" }
 wgpu = { workspace = true }
 bytemuck = { workspace = true }
 pollster = { workspace = true }

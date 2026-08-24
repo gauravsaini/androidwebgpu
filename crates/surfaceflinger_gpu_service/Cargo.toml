@@ -1,0 +1,21 @@
+[package]
+name = "surfaceflinger_gpu_service"
+version = "0.1.0"
+edition = "2021"
+description = "Host-side offloaded SurfaceFlinger and Compositor Service for AndroidWebGPU"
+
+[dependencies]
+binder_rt = { path = "../binder_rt" }
+aidl_compat = { path = "../aidl_compat" }
+binder_handle_bridge = { path = "../binder_handle_bridge" }
+webgpu_compositor = { path = "../webgpu_compositor" }
+webgpu_swapchain = { path = "../webgpu_swapchain" }
+wgpu = { workspace = true }
+pollster = { workspace = true }
+bytemuck = { workspace = true }
+thiserror = { workspace = true }
+log = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+
+[dev-dependencies]

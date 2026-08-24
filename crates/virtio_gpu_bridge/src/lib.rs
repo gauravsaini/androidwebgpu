@@ -153,4 +153,121 @@ mod tests {
             assert_eq!(fb[pixel_off + 3], 255, "A must be 255");
         });
     }
+
+    #[test]
+    fn test_virtio_submit3d_vulkan_pipeline_and_transfer_to_host_3d() {
+        pollster::block_on(async {
+            let mut bridge = match VirtioGpuBridge::new(64, 64).await {
+                Ok(b) => b,
+                Err(_) => return,
+            };
+
+            // 1. Create 3D resource
+            let create_3d_cmd = VirtioGpuResourceCreate3d {
+                hdr: VirtioGpuCtrlHdr {
+                    type_: VIRTIO_GPU_CMD_RESOURCE_CREATE_3D,
+                    flags: 0,
+                    fence_id: 10,
+                    ctx_id: 1,
+                    padding: 0,
+                },
+                resource_id: 8,
+                target: 2,
+                format: VIRTIO_GPU_FORMAT_R8G8B8A8_UNORM,
+                bind: 0,
+                width: 32,
+                height: 32,
+                depth: 1,
+                array_size: 1,
+                last_level: 0,
+                nr_samples: 0,
+                flags: 0,
+                padding: 0,
+            };
+            let resp = bridge.process_binary_wire_command(bytemuck::bytes_of(&create_3d_cmd));
+            let hdr: &VirtioGpuCtrlHdr = bytemuck::try_from_bytes(&resp).unwrap();
+            assert_eq!(hdr.type_, VIRTIO_GPU_RESP_OK_NODATA);
+
+            // 2. TransferToHost3D
+            let transfer_3d = VirtioGpuTransferToHost3d {
+                hdr: VirtioGpuCtrlHdr {
+                    type_: VIRTIO_GPU_CMD_TRANSFER_TO_HOST_3D,
+                    flags: 0,
+                    fence_id: 11,
+                    ctx_id: 1,
+                    padding: 0,
+                },
+                box_: VirtioGpuBox {
+                    x: 0,
+                    y: 0,
+                    z: 0,
+                    w: 8,
+                    h: 8,
+                    d: 1,
+                },
+                offset: 0,
+                resource_id: 8,
+                level: 0,
+                stride: 32,
+                layer_stride: 0,
+            };
+            let test_pattern = vec![0x33, 0x66, 0x99, 0xFF].repeat(64);
+            let mut xfer_pkt = bytemuck::bytes_of(&transfer_3d).to_vec();
+            xfer_pkt.extend_from_slice(&test_pattern);
+            let xfer_resp = bridge.process_binary_wire_command(&xfer_pkt);
+            let xfer_hdr: &VirtioGpuCtrlHdr = bytemuck::try_from_bytes(&xfer_resp).unwrap();
+            assert_eq!(xfer_hdr.type_, VIRTIO_GPU_RESP_OK_NODATA);
+
+            // 3. Submit3D with Vulkan Stream
+            if let Some(vk) = &mut bridge.vk_device {
+                let cb_id = vk.vk_create_command_buffer();
+                let img_id = vk.vk_create_image(64, 64, 1, 1, 1, 0, 0x00000010);
+                let view_id = vk.vk_create_image_view(img_id, 0);
+
+                let mut stream: Vec<u8> = Vec::new();
+
+                // Opcode 0x0021: BeginRendering
+                stream.extend_from_slice(&VIRTGPU_VK_CMD_BEGIN_RENDERING.to_le_bytes());
+                stream.extend_from_slice(&44u32.to_le_bytes()); // len
+                stream.extend_from_slice(&cb_id.to_le_bytes());
+                stream.extend_from_slice(&view_id.to_le_bytes());
+                stream.extend_from_slice(&0u64.to_le_bytes()); // depth_view
+                stream.extend_from_slice(&0.1f32.to_le_bytes());
+                stream.extend_from_slice(&0.2f32.to_le_bytes());
+                stream.extend_from_slice(&0.3f32.to_le_bytes());
+                stream.extend_from_slice(&1.0f32.to_le_bytes());
+                stream.extend_from_slice(&1.0f32.to_le_bytes());
+
+                // Opcode 0x0022: EndRendering
+                stream.extend_from_slice(&VIRTGPU_VK_CMD_END_RENDERING.to_le_bytes());
+                stream.extend_from_slice(&8u32.to_le_bytes()); // len
+                stream.extend_from_slice(&cb_id.to_le_bytes());
+
+                // Opcode 0x0020: QueueSubmit
+                stream.extend_from_slice(&VIRTGPU_VK_CMD_QUEUE_SUBMIT.to_le_bytes());
+                stream.extend_from_slice(&12u32.to_le_bytes()); // len = 4 + 8
+                stream.extend_from_slice(&1u32.to_le_bytes()); // count
+                stream.extend_from_slice(&cb_id.to_le_bytes());
+
+                let submit_hdr = VirtioGpuSubmit3d {
+                    hdr: VirtioGpuCtrlHdr {
+                        type_: VIRTIO_GPU_CMD_SUBMIT_3D,
+                        flags: VIRTIO_GPU_FLAG_FENCE,
+                        fence_id: 12,
+                        ctx_id: 1,
+                        padding: 0,
+                    },
+                    size: stream.len() as u32,
+                    padding: 0,
+                };
+                let mut submit_pkt = bytemuck::bytes_of(&submit_hdr).to_vec();
+                submit_pkt.extend_from_slice(&stream);
+
+                let submit_resp = bridge.process_binary_wire_command(&submit_pkt);
+                let sub_hdr: &VirtioGpuCtrlHdr = bytemuck::try_from_bytes(&submit_resp).unwrap();
+                assert_eq!(sub_hdr.type_, VIRTIO_GPU_RESP_OK_NODATA);
+                assert_eq!(sub_hdr.fence_id, 12);
+            }
+        });
+    }
 }

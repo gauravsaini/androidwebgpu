@@ -1,0 +1,14 @@
+[package]
+name = "virtio_binder"
+version = "0.1.0"
+edition = "2021"
+description = "Paravirtualized Virtio-Binder Transport Device and Guest Shim for AndroidWebGPU"
+
+[dependencies]
+binder_rt = { path = "../binder_rt" }
+aidl_compat = { path = "../aidl_compat" }
+bytemuck = { workspace = true }
+thiserror = { workspace = true }
+log = { workspace = true }
+
+[dev-dependencies]

@@ -1,0 +1,21 @@
+[package]
+name = "tests_e2e_binder"
+version = "0.1.0"
+edition = "2021"
+description = "Comprehensive E2E Integration and Adversarial Test Suite for AndroidWebGPU Binder Subsystem"
+
+[dependencies]
+binder_rt = { path = "../binder_rt" }
+aidl_compat = { path = "../aidl_compat" }
+virtio_binder = { path = "../virtio_binder" }
+binder_handle_bridge = { path = "../binder_handle_bridge" }
+binder_routing = { path = "../binder_routing" }
+surfaceflinger_gpu_service = { path = "../surfaceflinger_gpu_service" }
+webgpu_compositor = { path = "../webgpu_compositor" }
+webgpu_swapchain = { path = "../webgpu_swapchain" }
+wgpu = { workspace = true }
+pollster = { workspace = true }
+bytemuck = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
