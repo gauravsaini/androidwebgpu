@@ -109,6 +109,9 @@ pub struct SurfaceComposerService {
     frame_count: AtomicU64,
 }
 
+unsafe impl Send for SurfaceComposerService {}
+unsafe impl Sync for SurfaceComposerService {}
+
 impl SurfaceComposerService {
     /// Canonical AIDL interface descriptor for SurfaceComposer.
     pub const DESCRIPTOR: &'static str = "android.gui.ISurfaceComposer";

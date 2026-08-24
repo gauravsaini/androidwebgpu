@@ -1,4 +1,32 @@
-use std::time::Instant;
+#[cfg(target_arch = "wasm32")]
+#[derive(Debug, Clone, Copy)]
+pub struct PlatformInstant(f64);
+
+#[cfg(target_arch = "wasm32")]
+impl PlatformInstant {
+    pub fn now() -> Self {
+        Self(js_sys::Date::now())
+    }
+
+    pub fn elapsed_ms(&self) -> f32 {
+        (js_sys::Date::now() - self.0).max(0.0) as f32
+    }
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+#[derive(Debug, Clone, Copy)]
+pub struct PlatformInstant(std::time::Instant);
+
+#[cfg(not(target_arch = "wasm32"))]
+impl PlatformInstant {
+    pub fn now() -> Self {
+        Self(std::time::Instant::now())
+    }
+
+    pub fn elapsed_ms(&self) -> f32 {
+        self.0.elapsed().as_secs_f32() * 1000.0
+    }
+}
 
 pub enum SwapchainTarget {
     Offscreen {
@@ -32,13 +60,16 @@ pub struct WebGpuSwapchain {
     pub target: SwapchainTarget,
     pub present_mode: wgpu::PresentMode,
     pub target_fps: f32,
-    pub last_frame_time: Option<Instant>,
+    pub last_frame_time: Option<PlatformInstant>,
     pub last_frame_duration_ms: f32,
     pub last_gpu_duration_ms: f32,
     pub query_set: Option<wgpu::QuerySet>,
     pub query_buffer: Option<wgpu::Buffer>,
     pub query_staging_buffer: Option<wgpu::Buffer>,
 }
+
+unsafe impl Send for WebGpuSwapchain {}
+unsafe impl Sync for WebGpuSwapchain {}
 
 impl WebGpuSwapchain {
     pub fn new(
@@ -239,9 +270,9 @@ impl WebGpuSwapchain {
 
     fn update_frame_timing(&mut self) {
         self.frame_count += 1;
-        let now = Instant::now();
+        let now = PlatformInstant::now();
         if let Some(prev) = self.last_frame_time {
-            let elapsed = now.duration_since(prev).as_secs_f32() * 1000.0;
+            let elapsed = prev.elapsed_ms();
             self.last_frame_duration_ms = elapsed.max(0.001);
         }
         self.last_frame_time = Some(now);

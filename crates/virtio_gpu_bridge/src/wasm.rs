@@ -38,6 +38,15 @@ impl WasmVirtioGpuBridge {
     }
 
     #[wasm_bindgen]
+    pub fn process_binder_packet(&self, packet: &[u8]) -> Vec<u8> {
+        if let Some(bridge) = &self.bridge {
+            bridge.process_binder_packet(packet)
+        } else {
+            Vec::new()
+        }
+    }
+
+    #[wasm_bindgen]
     pub fn get_scanout_framebuffer(&self, scanout_id: u32) -> Vec<u8> {
         if let Some(bridge) = &self.bridge {
             bridge.get_scanout_framebuffer(scanout_id).unwrap_or_default()
@@ -61,6 +70,51 @@ impl WasmVirtioGpuBridge {
             bridge.clear_scanout_damage(scanout_id);
         }
     }
+
+    #[wasm_bindgen]
+    pub fn compose_and_present(&mut self) -> Result<u64, JsValue> {
+        if let Some(bridge) = &self.bridge {
+            if let Some(sf) = &bridge.surface_composer {
+                sf.compose_and_present()
+                    .map_err(|e| JsValue::from_str(&e.to_string()))
+            } else {
+                Err(JsValue::from_str("SurfaceComposer service not initialized"))
+            }
+        } else {
+            Err(JsValue::from_str("Bridge not initialized"))
+        }
+    }
+
+    #[wasm_bindgen]
+    pub fn is_boot_finished(&self) -> bool {
+        if let Some(bridge) = &self.bridge {
+            if let Some(sf) = &bridge.surface_composer {
+                sf.is_boot_finished()
+            } else {
+                false
+            }
+        } else {
+            false
+        }
+    }
+
+    #[wasm_bindgen]
+    pub fn set_boot_finished(&mut self, finished: bool) {
+        if let Some(bridge) = &mut self.bridge {
+            if let Some(sf) = &bridge.surface_composer {
+                sf.set_boot_finished(finished);
+            }
+        }
+    }
+
+    #[wasm_bindgen]
+    pub fn has_surface_composer(&self) -> bool {
+        self.bridge
+            .as_ref()
+            .and_then(|b| b.surface_composer.as_ref())
+            .is_some()
+    }
 }
+
 
 

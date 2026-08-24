@@ -9,6 +9,12 @@ crate-type = ["cdylib", "rlib"]
 [dependencies]
 gles2wgpu = { path = "../gles2wgpu" }
 vulkan2wgpu = { path = "../vulkan2wgpu" }
+virtio_binder = { path = "../virtio_binder" }
+binder_rt = { path = "../binder_rt" }
+aidl_compat = { path = "../aidl_compat" }
+binder_handle_bridge = { path = "../binder_handle_bridge" }
+binder_routing = { path = "../binder_routing" }
+surfaceflinger_gpu_service = { path = "../surfaceflinger_gpu_service" }
 wgpu = { workspace = true }
 bytemuck = { workspace = true }
 pollster = { workspace = true }

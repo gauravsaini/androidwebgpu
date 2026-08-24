@@ -73,6 +73,9 @@ pub struct GraphicBufferProducerService {
     generation_counter: AtomicU32,
 }
 
+unsafe impl Send for GraphicBufferProducerService {}
+unsafe impl Sync for GraphicBufferProducerService {}
+
 impl GraphicBufferProducerService {
     /// Canonical AIDL interface descriptor.
     pub const DESCRIPTOR: &'static str = "android.gui.IGraphicBufferProducer";

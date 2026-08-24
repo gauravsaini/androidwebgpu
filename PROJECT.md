@@ -1,36 +1,24 @@
-# Project: AndroidWebGPU Binder Subsystem Offloading
+# Project: AndroidWebGPU Binder Subsystem Offloading & Browser Verification
 
 ## Architecture
-Paravirtualized Binder IPC offloading pipeline routing selective Android IPC transactions across the VM boundary from Android-x86 guest into host Rust runtime and WebGPU compositor.
+Paravirtualized Binder IPC offloading pipeline routing selective Android IPC transactions across the VM boundary from Android-x86 guest into host Rust runtime and WebGPU compositor, verified in-browser via WASM, HTML5 WebGPU Test Bench, and Chrome DevTools MCP.
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────┐
-│                           Android-x86 Guest                             │
+│                    Browser Test Bench (index.html)                      │
 │                                                                         │
-│  [Guest App / HAL] ────► [Guest Interception / Routing Filter]          │
-│                                │                                        │
-│                 Default: Local │ Match: Offload                         │
-│                                ▼                                        │
-│                   [Guest /dev/binder Kernel]   [Virtio-Binder Driver]   │
-└────────────────────────────────────────────────────────┬────────────────┘
-                                                         │ Virtio Ring Descriptors
-┌────────────────────────────────────────────────────────┼────────────────┐
-│ Host Runtime                                           ▼                │
-│                                            [Virtio-Binder Device]       │
-│                                                        │                │
-│                                              [binder-rt Codec]          │
-│                                                        │                │
-│                                              [aidl-compat Runtime]      │
-│                                                        │                │
-│                                              [Handle Bridge]            │
-│                                                        │                │
-│                                          [SurfaceFlinger GPU Service]   │
-│                                                        │                │
-│                                             [webgpu_compositor]         │
-│                                                        │                │
-│                                             [webgpu_swapchain]          │
-│                                                        │                │
-│                                               [WebGPU Device]           │
+│  [Tab: Binder Subsystem] ──► [src/binder_test_suite.js (Phases 0,2,3,4,5)]│
+│                                           │                             │
+│                                           ▼                             │
+│                         [pkg/virtio_gpu_bridge_bg.wasm]                 │
+│                                           │                             │
+│                 ┌─────────────────────────┴────────────────────────┐    │
+│                 ▼                                                  ▼    │
+│  [Virtio-Binder Device / Bridge]                        [WebGPU Canvas] │
+│                 │                                                  ▲    │
+│  [binder_rt / aidl_compat / handle_bridge]                         │    │
+│                 │                                                  │    │
+│  [surfaceflinger_gpu_service] ─────────────────────────────────────┘    │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -65,6 +53,16 @@ Paravirtualized Binder IPC offloading pipeline routing selective Android IPC tra
 | 26 | WebGPU Frame Presentation | Frame compositing and submission to `webgpu_swapchain` Mailbox target | M5 | Survey Compositor |
 | 27 | E2E Integration Test Suite | Automated verification of Tiers 1-4 covering all features across VM boundary | M6 | Survey Codebase |
 | 28 | Adversarial Coverage Hardening | White-box stress tests, race condition validation, and fuzzing (Tier 5) | M6 | Survey Codebase |
+| 29 | WASM Virtio-Binder Bridge | WASM exports for Virtio-Binder request/reply dispatch and buffer extraction in `crates/virtio_gpu_bridge` | M7 | R2 Spec |
+| 30 | Rebuilt WASM Artifact | Recompiled `pkg/` containing `WasmVirtioGpuBridge` binder bindings | M7 | R2 Spec |
+| 31 | Browser Test Bench Extension | `index.html` `#tab-binder`, `#binder-card`, `#btn-run-binder`, and 5 phase badges | M8 | R1 Spec |
+| 32 | Phase 0 Guest Baseline Check | In-browser test fixture verifying `/dev/binder` driver and `servicemanager` | M9 | R3 Spec |
+| 33 | Phase 2 TestPing Roundtrip | In-browser test fixture verifying `TestPing` IPC roundtrip and byte equality | M9 | R3 Spec |
+| 34 | Phase 3 Handles & Concurrency | In-browser test fixture verifying handle transfer, refcounting, and thread stress | M9 | R3 Spec |
+| 35 | Phase 4 TestInput Forwarding | In-browser test fixture verifying Android input subsystem event forwarding | M9 | R3 Spec |
+| 36 | Phase 5 SurfaceFlinger Compositor | In-browser test fixture verifying APK frame rendering to WebGPU canvas | M9 | R3, R4 Spec |
+| 37 | WebGPU Pixel Color Assertions | Canvas readback asserting non-zero rendered pixels from SurfaceFlinger | M9 | R4 Spec |
+| 38 | Chrome DevTools MCP E2E Execution | Automated test runner execution and badge state assertion against `http://localhost:8000` | M10 | R5 Spec |
 
 ## Milestones
 | # | Name | Scope | Dependencies | Status |
@@ -75,101 +73,49 @@ Paravirtualized Binder IPC offloading pipeline routing selective Android IPC tra
 | M4 | `binder_handle_bridge` | Cross-Boundary Handle Bridge & Lifecycle Management | M1, M2 | DONE |
 | M5 | `binder_routing_compositor` | Selective Routing Policy & Offloaded Compositor Service | M1, M2, M4 | DONE |
 | M6 | `e2e_verification_hardening` | Full E2E Test Suite (Tiers 1-4) & Adversarial Hardening (Tier 5) | M1, M2, M3, M4, M5 | DONE |
+| M7 | `wasm_binder_bridge` | Expose Virtio-Binder in WASM bridge and rebuild `pkg/` | M1-M6 | DONE |
+| M8 | `browser_test_bench_ui` | Add "Binder Subsystem" tab, card, and badges to `index.html` | none | DONE |
+| M9 | `binder_test_suite_js` | Implement 5-phase test suite (`src/binder_test_suite.js`) + pixel assertions | M7, M8 | DONE |
+| M10 | `chrome_devtools_e2e` | Automated Chrome DevTools MCP execution against `http://localhost:8000` | M7, M8, M9 | DONE |
 
 ## Interface Contracts
 
-### `binder_rt` ↔ `aidl_compat`
-- `binder_rt::Parcel`:
-  - `pub fn write_i32(&mut self, val: i32) -> Result<()>`
-  - `pub fn read_i32(&self, offset: &mut usize) -> Result<i32>`
-  - `pub fn write_utf8(&mut self, val: Option<&str>) -> Result<()>`
-  - `pub fn read_utf8(&self, offset: &mut usize) -> Result<Option<String>>`
-  - `pub fn write_utf16(&mut self, val: Option<&str>) -> Result<()>`
-  - `pub fn read_utf16(&self, offset: &mut usize) -> Result<Option<String>>`
-  - `pub fn write_binder(&mut self, handle: u32, cookie: u64) -> Result<()>`
-  - `pub fn read_binder(&self, offset: &mut usize) -> Result<flat_binder_object>`
-- `binder_rt::Status`:
-  - `pub fn new_service_specific_error(err: i32, msg: Option<&str>) -> Self`
-  - `pub fn new_exception(code: ExceptionCode, msg: Option<&str>) -> Self`
+### WASM Bridge ↔ JavaScript Runtime
+- `WasmVirtioGpuBridge`:
+  - `process_binder_packet(&self, packet: &[u8]) -> Vec<u8>`
+  - `compose_and_present(&mut self) -> bool`
+  - `get_scanout_framebuffer(&self, scanout_id: u32) -> Vec<u8>`
+  - `get_scanout_damage(&self, scanout_id: u32) -> Vec<u32>`
+  - `clear_scanout_damage(&mut self, scanout_id: u32)`
 
-### `binder_rt` ↔ `virtio_binder`
-- `VirtioBinderReqHdr`:
-  - `msg_id: u64`, `cmd: u32`, `target_handle: u32`, `code: u32`, `flags: u32`, `cookie: u64`, `data_size: u32`, `offsets_size: u32`
-- `VirtioBinderRespHdr`:
-  - `msg_id: u64`, `status: i32`, `result_code: i32`, `data_size: u32`, `offsets_size: u32`, `flags: u32`
-
-### `aidl_compat` ↔ `binder_handle_bridge`
-- `HandleBridge`:
-  - `register_service(client_id: u32, descriptor: &str, service: Arc<dyn IBinder>) -> u32`
-  - `get_service(client_id: u32, handle: u32) -> Option<Arc<dyn IBinder>>`
-  - `acquire_ref(client_id: u32, handle: u32, count: usize) -> Result<()>`
-  - `release_ref(client_id: u32, handle: u32, count: usize) -> Result<bool>`
-  - `register_death_recipient(client_id: u32, handle: u32, cookie: u64) -> Result<()>`
-  - `on_client_died(client_id: u32) -> Vec<(u32, u64)>`
-
-### `binder_routing` ↔ `surfaceflinger_gpu_service`
-- `RoutingPolicy`:
-  - `route(descriptor: &str, code: u32) -> RouteAction`
-- `SurfaceFlingerGpuService`:
-  - Implements `android.gui.ISurfaceComposer` AIDL interface
-  - Translates `setTransactionState` into `webgpu_compositor::CompositionLayer` updates
-  - Submits composition to `webgpu_swapchain`
+### JavaScript Test Suite ↔ DOM UI
+- Container: `#binder-card`
+- Tab Button: `#tab-binder`
+- Trigger Button: `#btn-run-binder`
+- Badges: `#badge-phase0`, `#badge-phase2`, `#badge-phase3`, `#badge-phase4`, `#badge-phase5`
+- Global Result: `window.__BINDER_TEST_RESULTS__`
 
 ## Code Layout
 ```
 crates/
 ├── binder_rt/                   # M1: Parcel codec and wire protocol
-│   ├── Cargo.toml
-│   └── src/
-│       ├── lib.rs
-│       ├── parcel.rs
-│       ├── wire.rs
-│       ├── status.rs
-│       └── types.rs
 ├── aidl_compat/                 # M2: AIDL Rust compatibility crate
-│   ├── Cargo.toml
-│   └── src/
-│       ├── lib.rs
-│       ├── traits.rs
-│       ├── pointer.rs
-│       ├── status.rs
-│       ├── proxy.rs
-│       ├── stub.rs
-│       └── macros.rs
 ├── virtio_binder/               # M3: Virtio transport device & shim
-│   ├── Cargo.toml
-│   └── src/
-│       ├── lib.rs
-│       ├── device.rs
-│       ├── queue.rs
-│       ├── protocol.rs
-│       └── guest_shim.rs
 ├── binder_handle_bridge/        # M4: Cross-boundary handle translation & lifecycle
-│   ├── Cargo.toml
-│   └── src/
-│       ├── lib.rs
-│       ├── bridge.rs
-│       ├── table.rs
-│       └── death.rs
 ├── binder_routing/              # M5: Selective routing policy engine
-│   ├── Cargo.toml
-│   └── src/
-│       ├── lib.rs
-│       ├── policy.rs
-│       └── matcher.rs
 ├── surfaceflinger_gpu_service/  # M5: Offloaded SurfaceFlinger service
-│   ├── Cargo.toml
-│   └── src/
-│       ├── lib.rs
-│       ├── service.rs
-│       ├── layer_translator.rs
-│       └── buffer_queue.rs
-└── tests_e2e_binder/            # M6 / E2E Track: Comprehensive test suite
+├── tests_e2e_binder/            # M6: Rust native E2E test suite
+└── virtio_gpu_bridge/           # M7: WASM bridge cdylib
     ├── Cargo.toml
-    └── tests/
-        ├── tier1_feature_coverage.rs
-        ├── tier2_boundary_corner.rs
-        ├── tier3_pairwise_combinations.rs
-        ├── tier4_realworld_applications.rs
-        └── tier5_adversarial_hardening.rs
+    └── src/
+        ├── lib.rs
+        ├── bridge.rs
+        └── wasm.rs
+pkg/                             # M7: Compiled WebAssembly artifacts
+index.html                       # M8: HTML5 test bench UI
+src/
+├── binder_test_suite.js         # M9: 5-Phase Guest Payload Test Suite
+├── test_suite.js                # Existing Virtio-GPU / Vulkan suites
+├── arcade_demo.js               # 3D arcade demo
+└── virtio_gpu_device.js         # Virtqueue device emulation
 ```

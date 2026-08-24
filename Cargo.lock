@@ -1094,6 +1094,10 @@ dependencies = [
 name = "virtio_gpu_bridge"
 version = "0.1.0"
 dependencies = [
+ "aidl_compat",
+ "binder_handle_bridge",
+ "binder_routing",
+ "binder_rt",
  "bytemuck",
  "console_error_panic_hook",
  "gles2wgpu",
@@ -1101,7 +1105,9 @@ dependencies = [
  "pollster",
  "serde",
  "serde_json",
+ "surfaceflinger_gpu_service",
  "thiserror 2.0.20",
+ "virtio_binder",
  "vulkan2wgpu",
  "wasm-bindgen",
  "wasm-bindgen-futures",
@@ -1203,6 +1209,7 @@ dependencies = [
 name = "webgpu_swapchain"
 version = "0.1.0"
 dependencies = [
+ "js-sys",
  "log",
  "pollster",
  "thiserror 2.0.20",

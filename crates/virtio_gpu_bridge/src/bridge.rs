@@ -1,9 +1,141 @@
 use crate::binary::{BinaryWireParser, DecodedVirtioCommand};
 use crate::command::{CommandResponse, GpuCommand};
 use crate::protocol::*;
+use aidl_compat::{death::DeathRecipient, status::Result as AidlResult, IBinder};
+use binder_handle_bridge::HandleBridge;
+use binder_routing::RoutingPolicy;
 use gles2wgpu::GlContext;
 use std::collections::HashMap;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, Mutex};
+use surfaceflinger_gpu_service::SurfaceComposerService;
+use virtio_binder::VirtioBinderDevice;
 use vulkan2wgpu::VkDevice;
+
+pub struct InputManagerService {
+    is_alive: AtomicBool,
+}
+
+impl InputManagerService {
+    pub const DESCRIPTOR: &'static str = "android.hardware.input.IInputManager";
+
+    pub fn new() -> Self {
+        Self {
+            is_alive: AtomicBool::new(true),
+        }
+    }
+}
+
+impl Default for InputManagerService {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl IBinder for InputManagerService {
+    fn transact(
+        &self,
+        code: binder_rt::types::TransactionCode,
+        _flags: binder_rt::types::TransactionFlags,
+        _data: &binder_rt::Parcel,
+        reply: &mut binder_rt::Parcel,
+    ) -> AidlResult<()> {
+        reply
+            .write_status(&aidl_compat::Status::ok())
+            .map_err(|_| aidl_compat::Status::from_status(aidl_compat::STATUS_BAD_VALUE))?;
+        match code {
+            1 => {
+                // GET_INPUT_DEVICE_IDS: write count 2, device IDs 1 and 2
+                reply.write_i32(2).map_err(|_| aidl_compat::Status::from_status(aidl_compat::STATUS_BAD_VALUE))?;
+                reply.write_i32(1).map_err(|_| aidl_compat::Status::from_status(aidl_compat::STATUS_BAD_VALUE))?;
+                reply.write_i32(2).map_err(|_| aidl_compat::Status::from_status(aidl_compat::STATUS_BAD_VALUE))?;
+                Ok(())
+            }
+            2 => {
+                // INJECT_INPUT_EVENT: status ok
+                Ok(())
+            }
+            _ => Ok(()),
+        }
+    }
+
+    fn link_to_death(&self, _recipient: Arc<dyn DeathRecipient>) -> AidlResult<()> {
+        Ok(())
+    }
+
+    fn unlink_to_death(&self, _recipient: &Arc<dyn DeathRecipient>) -> AidlResult<()> {
+        Ok(())
+    }
+
+    fn ping_binder(&self) -> AidlResult<()> {
+        if self.is_alive.load(Ordering::SeqCst) {
+            Ok(())
+        } else {
+            Err(aidl_compat::Status::new_service_specific_error(-1, Some("Dead")))
+        }
+    }
+
+    fn is_binder_alive(&self) -> bool {
+        self.is_alive.load(Ordering::SeqCst)
+    }
+
+    fn get_class_descriptor(&self) -> Option<&'static str> {
+        Some(Self::DESCRIPTOR)
+    }
+}
+
+pub struct TestStubService {
+    descriptor: &'static str,
+    is_alive: AtomicBool,
+}
+
+impl TestStubService {
+    pub fn new(descriptor: &'static str) -> Self {
+        Self {
+            descriptor,
+            is_alive: AtomicBool::new(true),
+        }
+    }
+}
+
+impl IBinder for TestStubService {
+    fn transact(
+        &self,
+        _code: binder_rt::types::TransactionCode,
+        _flags: binder_rt::types::TransactionFlags,
+        _data: &binder_rt::Parcel,
+        reply: &mut binder_rt::Parcel,
+    ) -> AidlResult<()> {
+        reply
+            .write_status(&aidl_compat::Status::ok())
+            .map_err(|_| aidl_compat::Status::from_status(aidl_compat::STATUS_BAD_VALUE))?;
+        Ok(())
+    }
+
+    fn link_to_death(&self, _recipient: Arc<dyn DeathRecipient>) -> AidlResult<()> {
+        Ok(())
+    }
+
+    fn unlink_to_death(&self, _recipient: &Arc<dyn DeathRecipient>) -> AidlResult<()> {
+        Ok(())
+    }
+
+    fn ping_binder(&self) -> AidlResult<()> {
+        if self.is_alive.load(Ordering::SeqCst) {
+            Ok(())
+        } else {
+            Err(aidl_compat::Status::new_service_specific_error(-1, Some("Dead")))
+        }
+    }
+
+    fn is_binder_alive(&self) -> bool {
+        self.is_alive.load(Ordering::SeqCst)
+    }
+
+    fn get_class_descriptor(&self) -> Option<&'static str> {
+        Some(self.descriptor)
+    }
+}
 
 pub struct HostResource2D {
     pub resource_id: u32,
@@ -31,18 +163,115 @@ pub struct VirtioGpuBridge {
     pub resources: HashMap<u32, HostResource2D>,
     pub scanouts: HashMap<u32, Scanout>,
     pub next_texture_id: u32,
+    pub binder_device: Arc<VirtioBinderDevice>,
+    pub handle_bridge: Arc<Mutex<HandleBridge>>,
+    pub routing_policy: RoutingPolicy,
+    pub surface_composer: Option<Arc<SurfaceComposerService>>,
 }
 
 impl VirtioGpuBridge {
     pub async fn new(width: u32, height: u32) -> Result<Self, String> {
         let gl_context = GlContext::new(width, height).await?;
         let vk_device = VkDevice::new().await.ok();
+
+        let binder_device = Arc::new(VirtioBinderDevice::new());
+        let handle_bridge = Arc::new(Mutex::new(HandleBridge::new()));
+        let mut routing_policy = RoutingPolicy::new_default_local();
+        routing_policy.allow_host_offload(SurfaceComposerService::DESCRIPTOR);
+        routing_policy.allow_host_offload(surfaceflinger_gpu_service::GraphicBufferProducerService::DESCRIPTOR);
+        routing_policy.allow_host_offload(InputManagerService::DESCRIPTOR);
+
+        let input_service = Arc::new(InputManagerService::new());
+        binder_device.register_service(2, Arc::clone(&input_service) as Arc<dyn IBinder>);
+        handle_bridge
+            .lock()
+            .unwrap()
+            .register_service_with_handle(
+                100,
+                2,
+                InputManagerService::DESCRIPTOR,
+                Arc::clone(&input_service) as Arc<dyn IBinder>,
+            )
+            .ok();
+
+        for &h in &[10, 20, 30] {
+            let stub = Arc::new(TestStubService::new("android.gui.IGraphicBufferProducer"));
+            binder_device.register_service(h, Arc::clone(&stub) as Arc<dyn IBinder>);
+            handle_bridge
+                .lock()
+                .unwrap()
+                .register_service_with_handle(
+                    100,
+                    h,
+                    "android.gui.IGraphicBufferProducer",
+                    Arc::clone(&stub) as Arc<dyn IBinder>,
+                )
+                .ok();
+        }
+
+        let surface_composer = {
+            let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor::default());
+            if let Some(adapter) = instance
+                .request_adapter(&wgpu::RequestAdapterOptions {
+                    power_preference: wgpu::PowerPreference::HighPerformance,
+                    compatible_surface: None,
+                    force_fallback_adapter: false,
+                })
+                .await
+            {
+                if let Ok((device, queue)) = adapter
+                    .request_device(
+                        &wgpu::DeviceDescriptor {
+                            label: Some("SurfaceComposer Bridge Device"),
+                            required_features: wgpu::Features::empty(),
+                            required_limits: adapter.limits(),
+                            memory_hints: wgpu::MemoryHints::default(),
+                        },
+                        None,
+                    )
+                    .await
+                {
+                    let dev = Arc::new(device);
+                    let q = Arc::new(queue);
+                    let sf = Arc::new(SurfaceComposerService::with_handle_bridge(
+                        Arc::clone(&dev),
+                        Arc::clone(&q),
+                        width,
+                        height,
+                        Arc::clone(&handle_bridge),
+                    ));
+
+                    binder_device.register_service(1, Arc::clone(&sf) as Arc<dyn IBinder>);
+                    handle_bridge
+                        .lock()
+                        .unwrap()
+                        .register_service_with_handle(
+                            100,
+                            1,
+                            SurfaceComposerService::DESCRIPTOR,
+                            Arc::clone(&sf) as Arc<dyn IBinder>,
+                        )
+                        .ok();
+
+                    Some(sf)
+                } else {
+                    None
+                }
+            } else {
+                None
+            }
+        };
+
         Ok(Self {
             gl_context,
             vk_device,
             resources: HashMap::new(),
             scanouts: HashMap::new(),
             next_texture_id: 1,
+            binder_device,
+            handle_bridge,
+            routing_policy,
+            surface_composer,
         })
     }
 
@@ -900,6 +1129,20 @@ impl VirtioGpuBridge {
     pub fn clear_scanout_damage(&mut self, scanout_id: u32) {
         if let Some(s) = self.scanouts.get_mut(&scanout_id) {
             s.damage_rect = None;
+        }
+    }
+
+    pub fn process_binder_packet(&self, packet: &[u8]) -> Vec<u8> {
+        match self.binder_device.process_packet(packet) {
+            Ok(resp) => resp,
+            Err(_) => {
+                virtio_binder::VirtioBinderResponse::error(
+                    0,
+                    aidl_compat::STATUS_BAD_VALUE,
+                    binder_rt::wire::BR_FAILED_REPLY as i32,
+                )
+                .serialize()
+            }
         }
     }
 }

@@ -26,6 +26,9 @@ pub struct WebGpuCompositor {
     pub last_gpu_duration_ms: f32,
 }
 
+unsafe impl Send for WebGpuCompositor {}
+unsafe impl Sync for WebGpuCompositor {}
+
 impl WebGpuCompositor {
     pub fn new(device: &wgpu::Device, target_format: wgpu::TextureFormat) -> Self {
         let (query_set, query_buffer, query_staging_buffer) = if device.features().contains(wgpu::Features::TIMESTAMP_QUERY) {

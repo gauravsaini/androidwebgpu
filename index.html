@@ -472,6 +472,7 @@
             <button class="tab-btn active" id="tab-arcade">🎮 3D Arcade Mode</button>
             <button class="tab-btn" id="tab-gates">🧪 Verification Gates</button>
             <button class="tab-btn" id="tab-vulkan">🌋 Vulkan E2E Pipeline</button>
+            <button class="tab-btn" id="tab-binder">⚡ Binder Subsystem</button>
         </div>
 
         <div class="header-stats">
@@ -676,6 +677,53 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
                 </div>
             </div>
 
+            <!-- Binder Subsystem Card (Hidden in arcade/gates/vulkan tab, visible in binder tab) -->
+            <div class="results-card" id="binder-card" style="display: none;">
+                <div class="card-title" style="color: #a855f7;">⚡ Binder Subsystem & Cross-VM Offloading</div>
+                <div class="btn-group" style="margin-bottom: 1rem;">
+                    <button class="btn btn-primary" id="btn-run-binder" style="background: linear-gradient(135deg, #8b5cf6, #ec4899); box-shadow: 0 0 20px rgba(168, 85, 247, 0.4);">
+                        ⚡ Run All Binder Verification Phases
+                    </button>
+                </div>
+                <div class="gate-list">
+                    <div class="gate-item">
+                        <div class="gate-info">
+                            <div class="gate-title">Phase 0: Guest Kernel /dev/binder & servicemanager Baseline</div>
+                            <div class="gate-desc">Guest Kernel /dev/binder & servicemanager Baseline</div>
+                        </div>
+                        <span class="badge badge-pending" id="badge-phase0">READY</span>
+                    </div>
+                    <div class="gate-item">
+                        <div class="gate-info">
+                            <div class="gate-title">Phase 2: TestPing Transaction Roundtrip</div>
+                            <div class="gate-desc">TestPing Transaction Roundtrip</div>
+                        </div>
+                        <span class="badge badge-pending" id="badge-phase2">READY</span>
+                    </div>
+                    <div class="gate-item">
+                        <div class="gate-info">
+                            <div class="gate-title">Phase 3: TestHandles Multi-Hop & TestConcurrent Stress</div>
+                            <div class="gate-desc">TestHandles Multi-Hop & TestConcurrent Stress</div>
+                        </div>
+                        <span class="badge badge-pending" id="badge-phase3">READY</span>
+                    </div>
+                    <div class="gate-item">
+                        <div class="gate-info">
+                            <div class="gate-title">Phase 4: TestInput Bridged Event Forwarding</div>
+                            <div class="gate-desc">TestInput Bridged Event Forwarding</div>
+                        </div>
+                        <span class="badge badge-pending" id="badge-phase4">READY</span>
+                    </div>
+                    <div class="gate-item">
+                        <div class="gate-info">
+                            <div class="gate-title">Phase 5: ISurfaceComposer Unity/Godot WebGPU Compositor</div>
+                            <div class="gate-desc">ISurfaceComposer Unity/Godot WebGPU Compositor</div>
+                        </div>
+                        <span class="badge badge-pending" id="badge-phase5">READY</span>
+                    </div>
+                </div>
+            </div>
+
             <div class="log-card">
                 <div class="card-title">📟 Execution Logs</div>
                 <div class="log-terminal" id="log-term"></div>
@@ -689,6 +737,7 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
         import { VirtioPacketBuilder } from './src/virtio_packet_builder.js';
         import { VisualTestSuite, VulkanTestSuite } from './src/test_suite.js';
         import { Arcade3DScene } from './src/arcade_demo.js';
+        import { BinderTestSuite } from './src/binder_test_suite.js';
 
         const logTerm = document.getElementById('log-term');
         const statusPill = document.getElementById('status-pill');
@@ -698,14 +747,17 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
         const pixelColor = document.getElementById('pixel-color');
         const btnRunAll = document.getElementById('btn-run-all');
         const btnRunVulkan = document.getElementById('btn-run-vulkan');
+        const btnRunBinder = document.getElementById('btn-run-binder');
         const btnActionPulse = document.getElementById('btn-action-pulse');
         const btnToggleAutoRotate = document.getElementById('btn-toggle-autorotate');
         const tabArcade = document.getElementById('tab-arcade');
         const tabGates = document.getElementById('tab-gates');
         const tabVulkan = document.getElementById('tab-vulkan');
+        const tabBinder = document.getElementById('tab-binder');
         const arcadeControls = document.getElementById('arcade-controls');
         const gatesCard = document.getElementById('gates-card');
         const vulkanCard = document.getElementById('vulkan-card');
+        const binderCard = document.getElementById('binder-card');
         const shaderCodeView = document.getElementById('shader-code');
 
         function appendLog(msg, type = 'info') {
@@ -720,6 +772,7 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
         let gpuDev = null;
         let suite = null;
         let vulkanSuite = null;
+        let binderSuite = null;
         let arcade = null;
 
         const WGSL_SHADERS = {
@@ -756,9 +809,11 @@ fn fs_normals(in: VertexOutput) -> @location(0) vec4<f32> {
             tabArcade.classList.add('active');
             tabGates.classList.remove('active');
             tabVulkan.classList.remove('active');
+            tabBinder.classList.remove('active');
             arcadeControls.style.display = 'block';
             gatesCard.style.display = 'none';
             vulkanCard.style.display = 'none';
+            binderCard.style.display = 'none';
             if (arcade) arcade.start();
         });
 
@@ -766,9 +821,11 @@ fn fs_normals(in: VertexOutput) -> @location(0) vec4<f32> {
             tabGates.classList.add('active');
             tabArcade.classList.remove('active');
             tabVulkan.classList.remove('active');
+            tabBinder.classList.remove('active');
             arcadeControls.style.display = 'none';
             gatesCard.style.display = 'block';
             vulkanCard.style.display = 'none';
+            binderCard.style.display = 'none';
             if (arcade) arcade.stop();
         });
 
@@ -776,9 +833,23 @@ fn fs_normals(in: VertexOutput) -> @location(0) vec4<f32> {
             tabVulkan.classList.add('active');
             tabArcade.classList.remove('active');
             tabGates.classList.remove('active');
+            tabBinder.classList.remove('active');
             arcadeControls.style.display = 'none';
             gatesCard.style.display = 'none';
             vulkanCard.style.display = 'block';
+            binderCard.style.display = 'none';
+            if (arcade) arcade.stop();
+        });
+
+        tabBinder.addEventListener('click', () => {
+            tabBinder.classList.add('active');
+            tabArcade.classList.remove('active');
+            tabGates.classList.remove('active');
+            tabVulkan.classList.remove('active');
+            arcadeControls.style.display = 'none';
+            gatesCard.style.display = 'none';
+            vulkanCard.style.display = 'none';
+            binderCard.style.display = 'block';
             if (arcade) arcade.stop();
         });
 
@@ -865,6 +936,9 @@ fn fs_normals(in: VertexOutput) -> @location(0) vec4<f32> {
                 gpuDev = new VirtioGpuDevice(null, bridge, canvas);
                 suite = new VisualTestSuite(gpuDev, canvas, appendLog);
                 vulkanSuite = new VulkanTestSuite(canvas, appendLog);
+                if (typeof BinderTestSuite !== 'undefined') {
+                    binderSuite = new BinderTestSuite(bridge, canvas, appendLog);
+                }
 
                 statusPill.textContent = 'ONLINE';
                 statusPill.style.color = 'var(--success)';
@@ -930,6 +1004,59 @@ fn fs_normals(in: VertexOutput) -> @location(0) vec4<f32> {
             window.__VK_TEST_RESULTS__ = results;
             appendLog(`Vulkan E2E Verification complete: ${results.passed}/${results.total} passed.`, results.failed === 0 ? 'success' : 'error');
             btnRunVulkan.disabled = false;
+        });
+
+        btnRunBinder.addEventListener('click', async () => {
+            if (!binderSuite && typeof BinderTestSuite !== 'undefined') {
+                binderSuite = new BinderTestSuite(bridge, canvas, appendLog);
+            }
+            if (!binderSuite) {
+                appendLog('BinderTestSuite not initialized or available.', 'error');
+                return;
+            }
+            if (arcade) arcade.stop();
+            btnRunBinder.disabled = true;
+
+            const phaseKeys = ['phase0', 'phase2', 'phase3', 'phase4', 'phase5'];
+            for (const key of phaseKeys) {
+                const badge = document.getElementById(`badge-${key}`);
+                if (badge) {
+                    badge.className = 'badge badge-pending';
+                    badge.textContent = 'RUNNING';
+                }
+            }
+
+            appendLog('Starting Binder Subsystem 5-phase verification...', 'info');
+            try {
+                const results = await (binderSuite.runAllPhases ? binderSuite.runAllPhases() : binderSuite.runAllTests());
+                for (const key of phaseKeys) {
+                    const badge = document.getElementById(`badge-${key}`);
+                    if (!badge) continue;
+                    const res = results && results.results ? (results.results[key] || results.results[key.replace('phase', '')]) : null;
+                    if (res && (res.status === 'PASSED' || res === true)) {
+                        badge.className = 'badge badge-passed';
+                        badge.textContent = 'PASSED';
+                    } else {
+                        badge.className = 'badge badge-failed';
+                        badge.textContent = 'FAILED';
+                    }
+                }
+                window.__BINDER_TEST_RESULTS__ = results;
+                const total = results.total ?? phaseKeys.length;
+                const passed = results.passed ?? (results.failed === 0 ? total : 0);
+                appendLog(`Binder Verification complete: ${passed}/${total} passed.`, (results.failed === 0 || passed === total) ? 'success' : 'error');
+            } catch (err) {
+                appendLog(`Binder Verification error: ${err.message}`, 'error');
+                for (const key of phaseKeys) {
+                    const badge = document.getElementById(`badge-${key}`);
+                    if (badge && badge.textContent === 'RUNNING') {
+                        badge.className = 'badge badge-failed';
+                        badge.textContent = 'FAILED';
+                    }
+                }
+            } finally {
+                btnRunBinder.disabled = false;
+            }
         });
 
         bootstrap();

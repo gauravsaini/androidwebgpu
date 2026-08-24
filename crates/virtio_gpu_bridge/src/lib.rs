@@ -270,4 +270,81 @@ mod tests {
             }
         });
     }
+
+    #[test]
+    fn test_virtio_binder_process_packet_ping() {
+        pollster::block_on(async {
+            let bridge = match VirtioGpuBridge::new(64, 64).await {
+                Ok(b) => b,
+                Err(_) => return,
+            };
+
+            let req = virtio_binder::VirtioBinderRequest::new_ping(1001, 0);
+            let req_bytes = req.serialize();
+
+            let resp_bytes = bridge.process_binder_packet(&req_bytes);
+            let resp = virtio_binder::VirtioBinderResponse::deserialize(&resp_bytes)
+                .expect("Failed to deserialize response");
+
+            assert_eq!(resp.hdr.msg_id, 1001);
+            assert!(resp.hdr.is_success());
+            assert_eq!(resp.hdr.status, binder_rt::status::STATUS_OK);
+        });
+    }
+
+    #[test]
+    fn test_virtio_binder_process_packet_surface_composer_transact() {
+        pollster::block_on(async {
+            let bridge = match VirtioGpuBridge::new(64, 64).await {
+                Ok(b) => b,
+                Err(_) => return,
+            };
+
+            if bridge.surface_composer.is_none() {
+                return;
+            }
+
+            // BOOT_FINISHED transaction (code 1025) to handle 1
+            let req = virtio_binder::VirtioBinderRequest::new_transact(
+                1002,
+                1,
+                surfaceflinger_gpu_service::isurfacecomposer_codes::BOOT_FINISHED,
+                0,
+                0,
+                Vec::new(),
+                Vec::new(),
+            );
+            let req_bytes = req.serialize();
+
+            let resp_bytes = bridge.process_binder_packet(&req_bytes);
+            let resp = virtio_binder::VirtioBinderResponse::deserialize(&resp_bytes)
+                .expect("Failed to deserialize response");
+
+            assert_eq!(resp.hdr.msg_id, 1002);
+            assert!(resp.hdr.is_success());
+
+            // Check that boot is finished
+            if let Some(sf) = &bridge.surface_composer {
+                assert!(sf.is_boot_finished());
+            }
+        });
+    }
+
+    #[test]
+    fn test_virtio_binder_process_packet_malformed() {
+        pollster::block_on(async {
+            let bridge = match VirtioGpuBridge::new(64, 64).await {
+                Ok(b) => b,
+                Err(_) => return,
+            };
+
+            let malformed_bytes = vec![0xFF; 10];
+            let resp_bytes = bridge.process_binder_packet(&malformed_bytes);
+            let resp = virtio_binder::VirtioBinderResponse::deserialize(&resp_bytes)
+                .expect("Deserializing error response should succeed");
+
+            assert!(!resp.hdr.is_success());
+            assert_eq!(resp.hdr.status, aidl_compat::STATUS_BAD_VALUE);
+        });
+    }
 }
