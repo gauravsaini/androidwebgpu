@@ -1,0 +1,575 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Android-x86 WebGPU Virtio-GPU Test Bench</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600&family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg: #07090e;
+            --surface: #0f1422;
+            --surface-border: #1e263d;
+            --surface-hover: #161d31;
+            --primary: #6366f1;
+            --primary-glow: rgba(99, 102, 241, 0.35);
+            --success: #10b981;
+            --success-glow: rgba(16, 185, 129, 0.3);
+            --error: #ef4444;
+            --warning: #f59e0b;
+            --text-main: #f8fafc;
+            --text-muted: #94a3b8;
+            --font-ui: 'Outfit', -apple-system, BlinkMacSystemFont, sans-serif;
+            --font-mono: 'Fira Code', monospace;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            background-color: var(--bg);
+            color: var(--text-main);
+            font-family: var(--font-ui);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow-x: hidden;
+            background-image: 
+                radial-gradient(circle at 15% 15%, rgba(99, 102, 241, 0.08) 0%, transparent 40%),
+                radial-gradient(circle at 85% 85%, rgba(16, 185, 129, 0.06) 0%, transparent 40%);
+        }
+
+        header {
+            padding: 1.25rem 2rem;
+            background: rgba(15, 20, 34, 0.8);
+            backdrop-filter: blur(12px);
+            border-bottom: 1px solid var(--surface-border);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .brand {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .logo-badge {
+            background: linear-gradient(135deg, #6366f1, #3b82f6);
+            width: 38px;
+            height: 38px;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 800;
+            font-size: 1.2rem;
+            color: white;
+            box-shadow: 0 0 15px var(--primary-glow);
+        }
+
+        h1 {
+            font-size: 1.25rem;
+            font-weight: 700;
+            letter-spacing: -0.02em;
+        }
+
+        .subtitle {
+            font-size: 0.8rem;
+            color: var(--text-muted);
+            font-weight: 400;
+        }
+
+        .header-stats {
+            display: flex;
+            gap: 1.5rem;
+            align-items: center;
+        }
+
+        .stat-item {
+            text-align: right;
+        }
+
+        .stat-value {
+            font-family: var(--font-mono);
+            font-size: 0.95rem;
+            font-weight: 600;
+            color: var(--success);
+        }
+
+        .stat-label {
+            font-size: 0.7rem;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        main {
+            padding: 1.75rem 2rem;
+            display: grid;
+            grid-template-columns: 1fr 420px;
+            gap: 1.75rem;
+            max-width: 1440px;
+            width: 100%;
+            margin: 0 auto;
+            flex: 1;
+        }
+
+        .viewport-card {
+            background: var(--surface);
+            border: 1px solid var(--surface-border);
+            border-radius: 16px;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
+        }
+
+        .card-header {
+            padding: 1rem 1.25rem;
+            background: rgba(255, 255, 255, 0.02);
+            border-bottom: 1px solid var(--surface-border);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .card-title {
+            font-size: 0.95rem;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .live-dot {
+            width: 8px;
+            height: 8px;
+            background: var(--success);
+            border-radius: 50%;
+            box-shadow: 0 0 8px var(--success);
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.5; transform: scale(0.85); }
+        }
+
+        .screen-container {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: #000;
+            padding: 1.5rem;
+            position: relative;
+        }
+
+        canvas#screen {
+            background: #050505;
+            border-radius: 8px;
+            box-shadow: 0 0 25px rgba(0, 0, 0, 0.8), 0 0 0 1px rgba(255, 255, 255, 0.05);
+            max-width: 100%;
+            height: auto;
+            image-rendering: pixelated;
+        }
+
+        .screen-footer {
+            padding: 0.75rem 1.25rem;
+            background: rgba(255, 255, 255, 0.02);
+            border-top: 1px solid var(--surface-border);
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.8rem;
+            font-family: var(--font-mono);
+            color: var(--text-muted);
+        }
+
+        .sidebar {
+            display: flex;
+            flex-direction: column;
+            gap: 1.25rem;
+        }
+
+        .controls-card, .results-card, .log-card {
+            background: var(--surface);
+            border: 1px solid var(--surface-border);
+            border-radius: 16px;
+            padding: 1.25rem;
+        }
+
+        .btn-group {
+            display: flex;
+            flex-direction: column;
+            gap: 0.6rem;
+            margin-top: 1rem;
+        }
+
+        .btn {
+            padding: 0.75rem 1rem;
+            border-radius: 10px;
+            font-family: var(--font-ui);
+            font-size: 0.9rem;
+            font-weight: 600;
+            cursor: pointer;
+            border: 1px solid transparent;
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #6366f1, #4f46e5);
+            color: white;
+            box-shadow: 0 4px 14px var(--primary-glow);
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 6px 20px var(--primary-glow);
+        }
+
+        .btn-secondary {
+            background: var(--surface-hover);
+            color: var(--text-main);
+            border-color: var(--surface-border);
+        }
+
+        .btn-secondary:hover {
+            background: #202942;
+            border-color: #334155;
+        }
+
+        .gate-list {
+            display: flex;
+            flex-direction: column;
+            gap: 0.6rem;
+            margin-top: 0.8rem;
+        }
+
+        .gate-item {
+            padding: 0.75rem 1rem;
+            background: rgba(0, 0, 0, 0.2);
+            border: 1px solid var(--surface-border);
+            border-radius: 10px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .gate-info {
+            display: flex;
+            flex-direction: column;
+            gap: 0.15rem;
+        }
+
+        .gate-title {
+            font-size: 0.85rem;
+            font-weight: 600;
+        }
+
+        .gate-desc {
+            font-size: 0.7rem;
+            color: var(--text-muted);
+        }
+
+        .badge {
+            padding: 0.25rem 0.6rem;
+            border-radius: 20px;
+            font-size: 0.7rem;
+            font-weight: 700;
+            font-family: var(--font-mono);
+            letter-spacing: 0.03em;
+        }
+
+        .badge-pending {
+            background: rgba(148, 163, 184, 0.15);
+            color: #94a3b8;
+        }
+
+        .badge-passed {
+            background: var(--success-glow);
+            color: var(--success);
+            border: 1px solid rgba(16, 185, 129, 0.4);
+        }
+
+        .badge-failed {
+            background: rgba(239, 68, 68, 0.2);
+            color: var(--error);
+            border: 1px solid rgba(239, 68, 68, 0.4);
+        }
+
+        .log-terminal {
+            background: #05070d;
+            border: 1px solid #141b2d;
+            border-radius: 10px;
+            padding: 0.75rem;
+            font-family: var(--font-mono);
+            font-size: 0.75rem;
+            color: #cbd5e1;
+            height: 160px;
+            overflow-y: auto;
+            line-height: 1.5;
+            margin-top: 0.75rem;
+        }
+
+        .log-line {
+            margin-bottom: 0.25rem;
+            word-break: break-word;
+        }
+
+        .log-line.success { color: var(--success); }
+        .log-line.error { color: var(--error); }
+        .log-line.info { color: #38bdf8; }
+    </style>
+</head>
+<body>
+    <header>
+        <div class="brand">
+            <div class="logo-badge">W</div>
+            <div>
+                <h1>Android-x86 WebGPU Stack</h1>
+                <div class="subtitle">Virtio-GPU Wire Protocol & GLES2/3 Emulation Harness</div>
+            </div>
+        </div>
+        <div class="header-stats">
+            <div class="stat-item">
+                <div class="stat-value" id="fps-counter">60.0 FPS</div>
+                <div class="stat-label">Frame Rate</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-value" id="status-pill">INITIALIZING</div>
+                <div class="stat-label">Stack Status</div>
+            </div>
+        </div>
+    </header>
+
+    <main>
+        <div class="viewport-card">
+            <div class="card-header">
+                <div class="card-title">
+                    <span class="live-dot"></span>
+                    <span>Virtio-GPU Scanout Canvas (640x480)</span>
+                </div>
+                <span style="font-size: 0.75rem; color: var(--text-muted); font-family: var(--font-mono);">
+                    FORMAT: R8G8B8A8_UNORM
+                </span>
+            </div>
+            <div class="screen-container">
+                <canvas id="screen" width="640" height="480"></canvas>
+            </div>
+            <div class="screen-footer">
+                <span id="cursor-pos">X: 0, Y: 0</span>
+                <span id="pixel-color">RGB: [0, 0, 0]</span>
+                <span id="pipeline-status">Pipeline: Ready</span>
+            </div>
+        </div>
+
+        <div class="sidebar">
+            <div class="controls-card">
+                <div class="card-title">🎮 Verification Controls</div>
+                <div class="btn-group">
+                    <button class="btn btn-primary" id="btn-run-all">
+                        ⚡ Run All Verification Gates
+                    </button>
+                    <button class="btn btn-secondary" id="btn-anim-loop">
+                        ▶ Start Real-Time 60 FPS Loop
+                    </button>
+                </div>
+            </div>
+
+            <div class="results-card">
+                <div class="card-title">🧪 End-to-End Gates</div>
+                <div class="gate-list">
+                    <div class="gate-item">
+                        <div class="gate-info">
+                            <div class="gate-title">Gate 1: 2D Scanout & Flush</div>
+                            <div class="gate-desc">ResourceCreate2D + Transfer + Flush</div>
+                        </div>
+                        <span class="badge badge-pending" id="badge-gate1">PENDING</span>
+                    </div>
+                    <div class="gate-item">
+                        <div class="gate-info">
+                            <div class="gate-title">Gate 2: 3D Submit GLES</div>
+                            <div class="gate-desc">GLES Clear + Viewport stream</div>
+                        </div>
+                        <span class="badge badge-pending" id="badge-gate2">PENDING</span>
+                    </div>
+                    <div class="gate-item">
+                        <div class="gate-info">
+                            <div class="gate-title">Gate 3: Compositor & HUD</div>
+                            <div class="gate-desc">Multi-layer quad composition</div>
+                        </div>
+                        <span class="badge badge-pending" id="badge-gate3">PENDING</span>
+                    </div>
+                    <div class="gate-item">
+                        <div class="gate-info">
+                            <div class="gate-title">Gate 4: Real APK Flight</div>
+                            <div class="gate-desc">Unity Cube / Godot GLES2 frame stream</div>
+                        </div>
+                        <span class="badge badge-pending" id="badge-gate4">PENDING</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="log-card">
+                <div class="card-title">📟 Execution Logs</div>
+                <div class="log-terminal" id="log-term"></div>
+            </div>
+        </div>
+    </main>
+
+    <script type="module">
+        import init, { WasmVirtioGpuBridge } from './pkg/virtio_gpu_bridge.js';
+        import { VirtioGpuDevice } from './src/virtio_gpu_device.js';
+        import { VirtioPacketBuilder } from './src/virtio_packet_builder.js';
+        import { VisualTestSuite } from './src/test_suite.js';
+
+        const logTerm = document.getElementById('log-term');
+        const statusPill = document.getElementById('status-pill');
+        const canvas = document.getElementById('screen');
+        const cursorPos = document.getElementById('cursor-pos');
+        const pixelColor = document.getElementById('pixel-color');
+        const btnRunAll = document.getElementById('btn-run-all');
+        const btnAnimLoop = document.getElementById('btn-anim-loop');
+
+        function appendLog(msg, type = 'info') {
+            const line = document.createElement('div');
+            line.className = `log-line ${type}`;
+            line.textContent = `[${new Date().toISOString().substring(11, 19)}] ${msg}`;
+            logTerm.appendChild(line);
+            logTerm.scrollTop = logTerm.scrollHeight;
+        }
+
+        let animRunning = false;
+        let animFrameId = null;
+        let suite = null;
+        let gpuDev = null;
+        let bridge = null;
+
+        // Pixel inspector on mouse move
+        canvas.addEventListener('mousemove', (e) => {
+            const rect = canvas.getBoundingClientRect();
+            const scaleX = canvas.width / rect.width;
+            const scaleY = canvas.height / rect.height;
+            const x = Math.floor((e.clientX - rect.left) * scaleX);
+            const y = Math.floor((e.clientY - rect.top) * scaleY);
+            
+            cursorPos.textContent = `X: ${x}, Y: ${y}`;
+            const ctx = canvas.getContext('2d');
+            const p = ctx.getImageData(x, y, 1, 1).data;
+            pixelColor.textContent = `RGB: [${p[0]}, ${p[1]}, ${p[2]}]`;
+        });
+
+        async function bootstrap() {
+            try {
+                appendLog('Initializing Wasm Virtio-GPU Bridge...', 'info');
+                await init();
+                bridge = new WasmVirtioGpuBridge();
+                await bridge.initialize(640, 480);
+
+                gpuDev = new VirtioGpuDevice(null, bridge, canvas);
+                suite = new VisualTestSuite(gpuDev, canvas, appendLog);
+
+                statusPill.textContent = 'ONLINE';
+                statusPill.style.color = 'var(--success)';
+                appendLog('Virtio-GPU Stack online and bound to HTML5 canvas.', 'success');
+
+                // Auto-run test suite
+                await executeAllTests();
+            } catch (err) {
+                statusPill.textContent = 'ERROR';
+                statusPill.style.color = 'var(--error)';
+                appendLog(`Bootstrap failed: ${err.message}`, 'error');
+            }
+        }
+
+        async function executeAllTests() {
+            if (!suite) return;
+            btnRunAll.disabled = true;
+            appendLog('Starting automated verification run...', 'info');
+
+            const results = await suite.runAllGates();
+            
+            // Update badges
+            for (let i = 1; i <= 4; i++) {
+                const badge = document.getElementById(`badge-gate${i}`);
+                const res = results.results[`gate${i}`];
+                if (res && res.status === 'PASSED') {
+                    badge.className = 'badge badge-passed';
+                    badge.textContent = 'PASSED';
+                } else {
+                    badge.className = 'badge badge-failed';
+                    badge.textContent = 'FAILED';
+                }
+            }
+
+            window.__TEST_RESULTS__ = results;
+            appendLog(`Verification complete: ${results.passed}/${results.total} passed.`, results.failed === 0 ? 'success' : 'error');
+            btnRunAll.disabled = false;
+        }
+
+        btnRunAll.addEventListener('click', executeAllTests);
+
+        btnAnimLoop.addEventListener('click', () => {
+            if (animRunning) {
+                animRunning = false;
+                cancelAnimationFrame(animFrameId);
+                btnAnimLoop.textContent = '▶ Start Real-Time 60 FPS Loop';
+                appendLog('Animation loop stopped.', 'info');
+            } else {
+                animRunning = true;
+                btnAnimLoop.textContent = '⏹ Stop 60 FPS Loop';
+                appendLog('Running live 60 FPS Virtio-GPU stream loop...', 'info');
+                let t = 0;
+
+                function loop() {
+                    if (!animRunning) return;
+                    t += 0.05;
+                    const w = canvas.width;
+                    const h = canvas.height;
+                    const frameData = new Uint8Array(w * h * 4);
+
+                    for (let y = 0; y < h; y += 4) {
+                        for (let x = 0; x < w; x += 4) {
+                            const r = Math.floor((Math.sin(t + x * 0.01) * 0.5 + 0.5) * 255);
+                            const g = Math.floor((Math.cos(t + y * 0.01) * 0.5 + 0.5) * 255);
+                            const b = Math.floor((Math.sin(t + (x + y) * 0.005) * 0.5 + 0.5) * 255);
+
+                            for (let dy = 0; dy < 4; dy++) {
+                                for (let dx = 0; dx < 4; dx++) {
+                                    const idx = ((y + dy) * w + (x + dx)) * 4;
+                                    frameData[idx] = r;
+                                    frameData[idx + 1] = g;
+                                    frameData[idx + 2] = b;
+                                    frameData[idx + 3] = 255;
+                                }
+                            }
+                        }
+                    }
+
+                    // Feed through Virtio Transfer & Flush
+                    const transfer = VirtioPacketBuilder.transferToHost2d(100, w, h, 0, 0, frameData);
+                    gpuDev.processControlQueue(transfer);
+                    const flush = VirtioPacketBuilder.resourceFlush(100, w, h);
+                    gpuDev.processControlQueue(flush);
+
+                    animFrameId = requestAnimationFrame(loop);
+                }
+                loop();
+            }
+        });
+
+        bootstrap();
+    </script>
+</body>
+</html>

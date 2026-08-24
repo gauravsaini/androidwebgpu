@@ -3,6 +3,9 @@ name = "virtio_gpu_bridge"
 version = "0.1.0"
 edition = "2021"
 
+[lib]
+crate-type = ["cdylib", "rlib"]
+
 [dependencies]
 gles2wgpu = { path = "../gles2wgpu" }
 wgpu = { workspace = true }
@@ -13,7 +16,10 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 log = { workspace = true }
 wasm-bindgen = { workspace = true, optional = true }
+wasm-bindgen-futures = { workspace = true, optional = true }
+console_error_panic_hook = { workspace = true, optional = true }
 
 [features]
 default = []
-wasm = ["dep:wasm-bindgen"]
+wasm = ["dep:wasm-bindgen", "dep:wasm-bindgen-futures", "dep:console_error_panic_hook"]
+

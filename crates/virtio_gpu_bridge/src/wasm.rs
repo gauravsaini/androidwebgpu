@@ -12,11 +12,15 @@ pub struct WasmVirtioGpuBridge {
 impl WasmVirtioGpuBridge {
     #[wasm_bindgen(constructor)]
     pub fn new() -> Self {
+        #[cfg(feature = "wasm")]
+        console_error_panic_hook::set_once();
         Self { bridge: None }
     }
 
     #[wasm_bindgen]
     pub async fn initialize(&mut self, width: u32, height: u32) -> Result<(), JsValue> {
+        #[cfg(feature = "wasm")]
+        console_error_panic_hook::set_once();
         let bridge = crate::bridge::VirtioGpuBridge::new(width, height)
             .await
             .map_err(|e| JsValue::from_str(&e))?;
@@ -42,3 +46,4 @@ impl WasmVirtioGpuBridge {
         }
     }
 }
+

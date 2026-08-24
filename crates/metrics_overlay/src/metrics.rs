@@ -1,5 +1,34 @@
 use serde::{Deserialize, Serialize};
-use std::time::Instant;
+
+#[cfg(target_arch = "wasm32")]
+#[derive(Debug, Clone, Copy)]
+pub struct PlatformInstant(f64);
+
+#[cfg(target_arch = "wasm32")]
+impl PlatformInstant {
+    pub fn now() -> Self {
+        Self(js_sys::Date::now())
+    }
+
+    pub fn elapsed_ms(&self) -> f32 {
+        (js_sys::Date::now() - self.0).max(0.0) as f32
+    }
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+#[derive(Debug, Clone, Copy)]
+pub struct PlatformInstant(std::time::Instant);
+
+#[cfg(not(target_arch = "wasm32"))]
+impl PlatformInstant {
+    pub fn now() -> Self {
+        Self(std::time::Instant::now())
+    }
+
+    pub fn elapsed_ms(&self) -> f32 {
+        self.0.elapsed().as_secs_f32() * 1000.0
+    }
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FrameMetrics {
@@ -12,7 +41,7 @@ pub struct FrameMetrics {
 }
 
 pub struct MetricsTracker {
-    last_instant: Instant,
+    last_instant: PlatformInstant,
     frame_count: u32,
     accumulated_time_ms: f32,
     pub current_metrics: FrameMetrics,
@@ -25,7 +54,7 @@ pub struct MetricsTracker {
 impl MetricsTracker {
     pub fn new() -> Self {
         Self {
-            last_instant: Instant::now(),
+            last_instant: PlatformInstant::now(),
             frame_count: 0,
             accumulated_time_ms: 0.0,
             current_metrics: FrameMetrics {
@@ -54,12 +83,12 @@ impl MetricsTracker {
     }
 
     pub fn end_frame(&mut self) -> FrameMetrics {
-        let now = Instant::now();
-        let duration = now.duration_since(self.last_instant).as_secs_f32() * 1000.0;
-        self.last_instant = now;
+        let duration = self.last_instant.elapsed_ms();
+        self.last_instant = PlatformInstant::now();
 
         self.accumulated_time_ms += duration;
         self.frame_count += 1;
+
 
         if self.accumulated_time_ms >= 500.0 {
             let avg_fps = (self.frame_count as f32 * 1000.0) / self.accumulated_time_ms;

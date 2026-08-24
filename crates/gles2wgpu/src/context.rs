@@ -121,20 +121,21 @@ impl GlContext {
                 force_fallback_adapter: false,
             })
             .await
-            .ok_or_else(|| "Failed to find an appropriate adapter".to_string())?;
+            .ok_or_else(|| "Failed to find an appropriate GPU adapter (WebGPU disabled or unavailable)".to_string())?;
 
+        let limits = adapter.limits();
         let (device, queue) = adapter
             .request_device(
                 &wgpu::DeviceDescriptor {
                     label: Some("GLES2WGPU Device"),
                     required_features: wgpu::Features::empty(),
-                    required_limits: wgpu::Limits::default(),
-                    memory_hints: wgpu::MemoryHints::Performance,
+                    required_limits: limits,
+                    memory_hints: wgpu::MemoryHints::default(),
                 },
                 None,
             )
             .await
-            .map_err(|e| format!("Failed to create device: {:?}", e))?;
+            .map_err(|e| format!("Failed to create WebGPU device: {:?}", e))?;
 
         let surface_format = wgpu::TextureFormat::Rgba8UnormSrgb;
         let mut default_render_target = GlTexture::new(0, 0x0DE1); // GL_TEXTURE_2D
