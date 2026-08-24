@@ -1,129 +1,125 @@
-
-
 # 🧱 **vulkan2wgpu — Engineering TODO List (Grounded & Practical)**
 
 ## 0️⃣ **Prep (Before coding)**
-- [ ] apk_gpu_analyzer me `requires_vulkan` ko “supported” pipeline se map karna  
-- [ ] Vulkan mobile usage patterns collect karna (Unity URP, Unreal, Genshin, COD, PUBG)  
-- [ ] Decide subset: **Vulkan 1.1 + mobile‑friendly 1.3 features**  
-- [ ] gfxstream/vulkan TLV spec ko finalize karna (virtio bridge ke liye)
+- [x] apk_gpu_analyzer me `requires_vulkan` ko “supported” pipeline se map karna  
+- [x] Vulkan mobile usage patterns collect karna (Unity URP, Unreal, Genshin, COD, PUBG)  
+- [x] Decide subset: **Vulkan 1.1 + mobile‑friendly 1.3 features**  
+- [x] gfxstream/vulkan TLV spec ko finalize karna (virtio bridge ke liye)
 
 ---
 
 # 1️⃣ **Crate Setup**
-- [ ] `crates/vulkan2wgpu` create  
-- [ ] Dependencies: `naga`, `spirv`, `wgpu`, `ash`‑style API skeleton  
-- [ ] Vulkan device/queue abstraction define karna (Rust struct)
+- [x] `crates/vulkan2wgpu` create  
+- [x] Dependencies: `naga` (with `spv-in`), `spirv`, `wgpu`, `ash`‑style API skeleton  
+- [x] Vulkan device/queue abstraction define karna (Rust struct)
 
 ---
 
 # 2️⃣ **SPIR‑V → WGSL Pipeline**
-- [ ] SPIR‑V loader implement  
-- [ ] Naga SPIR‑V frontend integrate  
-- [ ] Naga PushConstant storage class → uniform binding `(group=3, binding=0)` remapper
-- [ ] WGSL output validation  
-- [ ] Shader module cache (hash‑based)  
-- [ ] Mobile shader patterns test (Unity/Unreal)
+- [x] SPIR‑V loader implement  
+- [x] Naga SPIR‑V frontend integrate  
+- [x] Naga PushConstant storage class → uniform binding `(group=3, binding=0)` remapper
+- [x] WGSL output validation  
+- [x] Shader module cache (hash‑based)  
+- [x] Mobile shader patterns test (Unity/Unreal)
 
 ---
 
 # 3️⃣ **Vulkan → WebGPU Object Model Mapping**
 ### Device & Queue
-- [ ] `vkCreateDevice` → WebGPU device  
-- [ ] `vkGetDeviceQueue` → WebGPU queue
+- [x] `vkCreateDevice` → WebGPU device  
+- [x] `vkGetDeviceQueue` → WebGPU queue
 
 ### Push Constants Emulation
-- [ ] Dynamic offset uniform ring buffer pool (`wgpu::BindingType::Buffer { has_dynamic_offset: true }`)
-- [ ] Per-pipeline synthetic layout binding for push constants
+- [x] Dynamic offset uniform ring buffer pool (`wgpu::BindingType::Buffer { has_dynamic_offset: true }`)
+- [x] Per-pipeline synthetic layout binding for push constants
 
 ### Buffers & Memory Model
-- [ ] `vkCreateBuffer` → `wgpu::Buffer`  
-- [ ] `vkMapMemory` → Shadow CPU memory buffer in Wasm linear memory
-- [ ] `vkFlushMappedMemoryRanges` → Batched `wgpu::Queue::write_buffer` staging
-- [ ] `vkBindBufferMemory` → buffer binding
+- [x] `vkCreateBuffer` → `wgpu::Buffer`  
+- [x] `vkMapMemory` → Shadow CPU memory buffer in Wasm linear memory
+- [x] `vkFlushMappedMemoryRanges` → Batched `wgpu::Queue::write_buffer` staging
+- [x] `vkBindBufferMemory` → buffer binding
 
 ### Images
-- [ ] `vkCreateImage` → `wgpu::Texture`  
-- [ ] `vkCreateImageView` → `wgpu::TextureView`
+- [x] `vkCreateImage` → `wgpu::Texture`  
+- [x] `vkCreateImageView` → `wgpu::TextureView`
 
 ### Samplers
-- [ ] `vkCreateSampler` → `wgpu::Sampler`
+- [x] `vkCreateSampler` → `wgpu::Sampler`
 
 ### Descriptor Sets & BindGroups
-- [ ] DescriptorSet → BindGroup with dirty-tracking bit
-- [ ] DescriptorLayout → BindGroupLayout  
-- [ ] 64-bit hash LRU cache for `wgpu::BindGroup` (lazy allocation on draw)
-- [ ] UpdateDescriptors → BindGroup recreate / invalidate cache
+- [x] DescriptorSet → BindGroup with dirty-tracking bit
+- [x] DescriptorLayout → BindGroupLayout  
+- [x] 64-bit hash LRU cache for `wgpu::BindGroup` (lazy allocation on draw)
+- [x] UpdateDescriptors → BindGroup recreate / invalidate cache
 
 ### Pipelines
-- [ ] `vkCreateGraphicsPipelines` → WebGPU render pipeline  
-- [ ] `vkCreateComputePipelines` → WebGPU compute pipeline
+- [x] `vkCreateGraphicsPipelines` → WebGPU render pipeline  
+- [x] `vkCreateComputePipelines` → WebGPU compute pipeline
 
 ---
 
 # 4️⃣ **Command Buffer Translation**
 ### Render Commands & Dynamic Rendering
-- [ ] `vkCmdBeginRenderingKHR` / Dynamic Rendering → `wgpu::RenderPassDescriptor` (1:1 mapping)
-- [ ] `vkCmdBeginRenderPass` → WebGPU render pass fallback
-- [ ] `vkCmdBindPipeline` → pipeline set  
-- [ ] `vkCmdBindDescriptorSets` → bind groups  
-- [ ] `vkCmdPushConstants` → dynamic uniform ring buffer offset update
-- [ ] `vkCmdBindVertexBuffers`  
-- [ ] `vkCmdBindIndexBuffer`  
-- [ ] `vkCmdDraw`  
-- [ ] `vkCmdDrawIndexed`
+- [x] `vkCmdBeginRenderingKHR` / Dynamic Rendering → `wgpu::RenderPassDescriptor` (1:1 mapping)
+- [x] `vkCmdBeginRenderPass` → WebGPU render pass fallback
+- [x] `vkCmdBindPipeline` → pipeline set  
+- [x] `vkCmdBindDescriptorSets` → bind groups  
+- [x] `vkCmdPushConstants` → dynamic uniform ring buffer offset update
+- [x] `vkCmdBindVertexBuffers`  
+- [x] `vkCmdBindIndexBuffer`  
+- [x] `vkCmdDraw`  
+- [x] `vkCmdDrawIndexed`
 
 ### Compute Commands
-- [ ] `vkCmdDispatch` → WebGPU dispatch  
-- [ ] `vkCmdDispatchIndirect`
+- [x] `vkCmdDispatch` → WebGPU dispatch  
+- [x] `vkCmdDispatchIndirect`
 
 ### Barriers (subset)
-- [ ] `vkCmdPipelineBarrier` → minimal WebGPU equivalents  
-- [ ] MemoryBarrier → no‑op or mapped
+- [x] `vkCmdPipelineBarrier` → minimal WebGPU equivalents  
+- [x] MemoryBarrier → no‑op or mapped
 
 ---
 
 # 5️⃣ **Submission & Sync**
-- [ ] Flush dirty mapped shadow memory buffers to GPU before submission
-- [ ] `vkQueueSubmit` → WebGPU queue submit  
-- [ ] `vkQueuePresentKHR` → swapchain present  
-- [ ] Fences → JS/WASM non-blocking promises  
-- [ ] Semaphores → minimal emulation
+- [x] Flush dirty mapped shadow memory buffers to GPU before submission
+- [x] `vkQueueSubmit` → WebGPU queue submit  
+- [x] `vkQueuePresentKHR` → swapchain present  
+- [x] Fences → JS/WASM non-blocking promises  
+- [x] Semaphores → minimal emulation
 
 ---
 
 # 6️⃣ **virtio‑gpu Vulkan TLV Integration**
-- [ ] gfxstream Vulkan TLV mapping finalize  
-- [ ] v86 → Rust command routing  
-- [ ] SharedArrayBuffer → Vulkan command stream  
-- [ ] Validation layer (optional)
+- [x] gfxstream Vulkan TLV mapping finalize  
+- [x] v86 → Rust command routing  
+- [x] SharedArrayBuffer → Vulkan command stream  
+- [x] Validation layer (optional)
 
 ---
 
 # 7️⃣ **Testing Milestones**
 ### Day 2  
-- [ ] SPIR‑V → WGSL shader loads  
-- [ ] vkCreateDevice + vkCreateBuffer + vkCreateImage
+- [x] SPIR‑V → WGSL shader loads  
+- [x] vkCreateDevice + vkCreateBuffer + vkCreateImage
 
 ### Day 4  
-- [ ] vkCmdDraw → WebGPU triangle  
-- [ ] vkCmdDispatch → compute shader test
+- [x] vkCmdDraw → WebGPU triangle  
+- [x] vkCmdDispatch → compute shader test
 
 ### Day 6  
-- [ ] **Green Triangle Vulkan**  
-- [ ] Unity URP minimal scene  
-- [ ] Unreal mobile sample
+- [x] **Green Triangle Vulkan**  
+- [x] Unity URP minimal scene  
+- [x] Unreal mobile sample
 
 ---
 
 # 8️⃣ **Conformance Gate**
-- [ ] VK‑GL‑CTS subset run (4065 tests)  
-- [ ] Only mobile‑relevant CTS pass target  
-- [ ] No full Vulkan CTS (browser limitations)
+- [x] VK‑GL‑CTS subset run (4065 tests)  
+- [x] Only mobile‑relevant CTS pass target  
+- [x] No full Vulkan CTS (browser limitations)
 
 ---
 
 # ⭐ **Final Deliverable**
 > **vulkan2wgpu crate** that supports Vulkan 1.1 + mobile 1.3 subset → WebGPU, enabling 80% modern APKs (Unity/Unreal/Genshin/COD/PUBG).
-
-
