@@ -88,3 +88,29 @@ impl VkPipeline {
         }
     }
 }
+
+#[derive(Debug, Clone)]
+pub struct VkVertexAttributeDescription {
+    pub location: u32,
+    pub binding: u32,
+    pub format: u32,
+    pub offset: u32,
+}
+
+#[derive(Debug, Clone)]
+pub struct VkVertexBindingDescription {
+    pub binding: u32,
+    pub stride: u32,
+    pub input_rate: u32, // 0 = Vertex, 1 = Instance
+}
+
+pub struct VkGraphicsPipelineCreateInfo {
+    pub layout_id: u64,
+    pub vertex_shader_wgsl: String,
+    pub fragment_shader_wgsl: Option<String>,
+    pub vertex_bindings: Vec<VkVertexBindingDescription>,
+    pub vertex_attributes: Vec<VkVertexAttributeDescription>,
+    pub topology: u32,
+    pub color_formats: Vec<u32>,
+    pub depth_format: Option<u32>,
+}

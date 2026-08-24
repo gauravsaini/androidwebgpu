@@ -45,5 +45,22 @@ impl WasmVirtioGpuBridge {
             Vec::new()
         }
     }
+
+    #[wasm_bindgen]
+    pub fn get_scanout_damage(&self, scanout_id: u32) -> Option<Vec<u32>> {
+        if let Some(bridge) = &self.bridge {
+            bridge.get_scanout_damage(scanout_id).map(|d| d.to_vec())
+        } else {
+            None
+        }
+    }
+
+    #[wasm_bindgen]
+    pub fn clear_scanout_damage(&mut self, scanout_id: u32) {
+        if let Some(bridge) = &mut self.bridge {
+            bridge.clear_scanout_damage(scanout_id);
+        }
+    }
 }
+
 

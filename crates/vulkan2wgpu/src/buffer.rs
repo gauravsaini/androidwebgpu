@@ -1,6 +1,8 @@
 use crate::types::*;
 use wgpu::util::DeviceExt;
 
+const MAX_SAFE_BUFFER_SIZE: u64 = 256 * 1024 * 1024; // 256 MB safety cap
+
 #[derive(Debug, Clone)]
 pub struct VkMemoryRange {
     pub offset: u64,
@@ -13,39 +15,45 @@ pub struct VkDeviceMemory {
     pub memory_type_index: u32,
     pub property_flags: u32,
     pub shadow_buffer: Vec<u8>,
-    pub mapped_ptr: Option<*mut u8>,
     pub dirty_ranges: Vec<VkMemoryRange>,
     pub bound_buffer_id: Option<u64>,
 }
 
-unsafe impl Send for VkDeviceMemory {}
-unsafe impl Sync for VkDeviceMemory {}
-
 impl VkDeviceMemory {
     pub fn new(id: u64, size: u64, memory_type_index: u32, property_flags: u32) -> Self {
+        let capped_size = size.min(MAX_SAFE_BUFFER_SIZE);
         Self {
             id,
-            size,
+            size: capped_size,
             memory_type_index,
             property_flags,
-            shadow_buffer: vec![0u8; size as usize],
-            mapped_ptr: None,
+            shadow_buffer: vec![0u8; capped_size as usize],
             dirty_ranges: Vec::new(),
             bound_buffer_id: None,
         }
     }
 
-    pub fn map_memory(&mut self, offset: u64, size: u64) -> Result<*mut u8, i32> {
-        if offset + size > self.size {
+    pub fn write_memory(&mut self, offset: u64, data: &[u8]) -> Result<(), i32> {
+        let start = offset as usize;
+        let end = start + data.len();
+        if end > self.shadow_buffer.len() {
             return Err(VK_ERROR_OUT_OF_DEVICE_MEMORY);
         }
-        let ptr = unsafe { self.shadow_buffer.as_mut_ptr().add(offset as usize) };
-        self.mapped_ptr = Some(ptr);
-        Ok(ptr)
+        self.shadow_buffer[start..end].copy_from_slice(data);
+        self.dirty_ranges.push(VkMemoryRange {
+            offset,
+            size: data.len() as u64,
+        });
+        Ok(())
     }
 
-    pub fn unmap_memory(&mut self) {
-        self.mapped_ptr = None;
+    pub fn read_memory(&self, offset: u64, size: u64) -> Result<&[u8], i32> {
+        let start = offset as usize;
+        let end = start + size as usize;
+        if end > self.shadow_buffer.len() {
+            return Err(VK_ERROR_OUT_OF_DEVICE_MEMORY);
+        }
+        Ok(&self.shadow_buffer[start..end])
     }
 
     pub fn flush_range(&mut self, offset: u64, size: u64) {
@@ -64,9 +72,10 @@ pub struct VkBuffer {
 
 impl VkBuffer {
     pub fn new(id: u64, size: u64, usage: u32) -> Self {
+        let capped_size = size.min(MAX_SAFE_BUFFER_SIZE);
         Self {
             id,
-            size,
+            size: capped_size,
             usage,
             memory_id: None,
             memory_offset: 0,
@@ -75,7 +84,11 @@ impl VkBuffer {
     }
 
     pub fn create_wgpu_buffer(&mut self, device: &wgpu::Device, initial_data: Option<&[u8]>) {
-        let mut wgpu_usage = wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::COPY_SRC;
+        let mut wgpu_usage = if self.usage == VK_BUFFER_USAGE_TRANSFER_DST_BIT {
+            wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST
+        } else {
+            wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::COPY_SRC
+        };
 
         if (self.usage & VK_BUFFER_USAGE_VERTEX_BUFFER_BIT) != 0 {
             wgpu_usage |= wgpu::BufferUsages::VERTEX;

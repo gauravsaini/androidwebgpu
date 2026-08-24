@@ -50,12 +50,12 @@ impl VkImage {
             w_usage |= wgpu::TextureUsages::RENDER_ATTACHMENT;
         }
 
-        let dimension = if self.depth > 1 {
-            wgpu::TextureDimension::D3
-        } else if self.height > 1 {
-            wgpu::TextureDimension::D2
+        let (dimension, depth_or_array_layers) = if self.depth > 1 {
+            (wgpu::TextureDimension::D3, self.depth)
+        } else if self.height > 1 || self.array_layers > 1 {
+            (wgpu::TextureDimension::D2, self.array_layers.max(1))
         } else {
-            wgpu::TextureDimension::D1
+            (wgpu::TextureDimension::D1, 1)
         };
 
         let texture = device.create_texture(&wgpu::TextureDescriptor {
@@ -63,7 +63,7 @@ impl VkImage {
             size: wgpu::Extent3d {
                 width: self.width.max(1),
                 height: self.height.max(1),
-                depth_or_array_layers: self.depth.max(self.array_layers).max(1),
+                depth_or_array_layers,
             },
             mip_level_count: self.mip_levels.max(1),
             sample_count: 1,
@@ -146,9 +146,9 @@ impl VkSampler {
 
         let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
             label: Some(&format!("VkSampler_{}", self.id)),
-            address_mode_u: wgpu::AddressMode::ClampToEdge,
-            address_mode_v: wgpu::AddressMode::ClampToEdge,
-            address_mode_w: wgpu::AddressMode::ClampToEdge,
+            address_mode_u: vk_address_mode_to_wgpu(self.address_mode_u),
+            address_mode_v: vk_address_mode_to_wgpu(self.address_mode_v),
+            address_mode_w: vk_address_mode_to_wgpu(self.address_mode_w),
             mag_filter: mag,
             min_filter: min,
             mipmap_filter: wgpu::FilterMode::Nearest,

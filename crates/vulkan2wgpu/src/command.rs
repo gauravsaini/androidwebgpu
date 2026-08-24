@@ -1,25 +1,29 @@
-
+#[derive(Clone, Debug)]
 pub struct VkClearColorValue {
     pub float32: [f32; 4],
 }
 
+#[derive(Clone, Debug)]
 pub struct VkClearDepthStencilValue {
     pub depth: f32,
     pub stencil: u32,
 }
 
+#[derive(Clone, Debug)]
 pub enum VkClearValue {
     Color(VkClearColorValue),
     DepthStencil(VkClearDepthStencilValue),
 }
 
+#[derive(Clone, Debug)]
 pub struct VkRenderingAttachmentInfo {
     pub image_view_id: u64,
-    pub load_op: u32, // 0 = Load, 1 = Clear, 2 = DontCare
+    pub load_op: u32,  // 0 = Load, 1 = Clear, 2 = DontCare
     pub store_op: u32, // 0 = Store, 1 = DontCare
     pub clear_value: Option<VkClearValue>,
 }
 
+#[derive(Clone, Debug)]
 pub enum VkCommand {
     BeginRendering {
         color_attachments: Vec<VkRenderingAttachmentInfo>,
@@ -80,8 +84,16 @@ pub enum VkCommand {
         width: u32,
         height: u32,
     },
+    CopyImageToBuffer {
+        image_id: u64,
+        buffer_id: u64,
+        width: u32,
+        height: u32,
+    },
+    PipelineBarrier,
 }
 
+#[derive(Clone, Debug)]
 pub struct VkCommandBuffer {
     pub id: u64,
     pub is_recording: bool,

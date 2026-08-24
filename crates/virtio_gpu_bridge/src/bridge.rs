@@ -21,6 +21,7 @@ pub struct Scanout {
     pub width: u32,
     pub height: u32,
     pub fb_data: Vec<u8>,
+    pub damage_rect: Option<[u32; 4]>,
 }
 
 pub struct VirtioGpuBridge {
@@ -142,6 +143,7 @@ impl VirtioGpuBridge {
                         width: cmd.r.width,
                         height: cmd.r.height,
                         fb_data: vec![0u8; fb_size],
+                        damage_rect: Some([cmd.r.x, cmd.r.y, cmd.r.width, cmd.r.height]),
                     },
                 );
                 BinaryWireParser::encode_header_response(
@@ -177,6 +179,7 @@ impl VirtioGpuBridge {
                                         .copy_from_slice(&res.backing_data[src_off..src_off + row_bytes]);
                                 }
                             }
+                            scanout.damage_rect = Some([cmd.r.x, cmd.r.y, cmd.r.width, cmd.r.height]);
                         }
                     }
                 }
@@ -515,6 +518,7 @@ impl VirtioGpuBridge {
                         width,
                         height,
                         fb_data: vec![0u8; (width * height * 4) as usize],
+                        damage_rect: Some([x, y, width, height]),
                     },
                 );
                 CommandResponse {
@@ -573,5 +577,15 @@ impl VirtioGpuBridge {
 
     pub fn get_scanout_framebuffer(&self, scanout_id: u32) -> Option<Vec<u8>> {
         self.scanouts.get(&scanout_id).map(|s| s.fb_data.clone())
+    }
+
+    pub fn get_scanout_damage(&self, scanout_id: u32) -> Option<[u32; 4]> {
+        self.scanouts.get(&scanout_id).and_then(|s| s.damage_rect)
+    }
+
+    pub fn clear_scanout_damage(&mut self, scanout_id: u32) {
+        if let Some(s) = self.scanouts.get_mut(&scanout_id) {
+            s.damage_rect = None;
+        }
     }
 }

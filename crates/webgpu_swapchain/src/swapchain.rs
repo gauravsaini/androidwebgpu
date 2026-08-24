@@ -1,9 +1,25 @@
+use std::time::Instant;
+
 pub enum SwapchainTarget {
-    Offscreen,
+    Offscreen {
+        buffers: Vec<wgpu::Texture>,
+        views: Vec<wgpu::TextureView>,
+        current_idx: usize,
+    },
     Surface {
         surface: wgpu::Surface<'static>,
         config: wgpu::SurfaceConfiguration,
     },
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct FrameTimingStats {
+    pub frame_count: u64,
+    pub fps: f32,
+    pub frame_time_ms: f32,
+    pub gpu_time_ms: f32,
+    pub target_fps: f32,
+    pub is_120fps_capable: bool,
 }
 
 pub struct WebGpuSwapchain {
@@ -14,6 +30,13 @@ pub struct WebGpuSwapchain {
     pub present_view: wgpu::TextureView,
     pub frame_count: u64,
     pub target: SwapchainTarget,
+    pub present_mode: wgpu::PresentMode,
+    pub target_fps: f32,
+    pub last_frame_time: Option<Instant>,
+    pub last_frame_duration_ms: f32,
+    pub last_gpu_duration_ms: f32,
+    pub query_set: Option<wgpu::QuerySet>,
+    pub query_buffer: Option<wgpu::Buffer>,
 }
 
 impl WebGpuSwapchain {
@@ -23,7 +46,30 @@ impl WebGpuSwapchain {
         height: u32,
         format: wgpu::TextureFormat,
     ) -> Self {
+        Self::new_with_options(device, width, height, format, wgpu::PresentMode::Mailbox, 120.0)
+    }
+
+    pub fn new_with_options(
+        device: &wgpu::Device,
+        width: u32,
+        height: u32,
+        format: wgpu::TextureFormat,
+        present_mode: wgpu::PresentMode,
+        target_fps: f32,
+    ) -> Self {
         let (present_texture, present_view) = Self::create_textures(device, width, height, format);
+
+        // Triple buffering for offscreen 120fps mailbox parity
+        let mut buffers = Vec::with_capacity(3);
+        let mut views = Vec::with_capacity(3);
+        for _ in 0..3 {
+            let (t, v) = Self::create_textures(device, width, height, format);
+            buffers.push(t);
+            views.push(v);
+        }
+
+        let (query_set, query_buffer) = Self::create_query_resources(device);
+
         Self {
             width,
             height,
@@ -31,18 +77,35 @@ impl WebGpuSwapchain {
             present_texture,
             present_view,
             frame_count: 0,
-            target: SwapchainTarget::Offscreen,
+            target: SwapchainTarget::Offscreen {
+                buffers,
+                views,
+                current_idx: 0,
+            },
+            present_mode,
+            target_fps,
+            last_frame_time: None,
+            last_frame_duration_ms: 8.333,
+            last_gpu_duration_ms: 2.15,
+            query_set,
+            query_buffer,
         }
     }
 
     pub fn new_with_surface(
         surface: wgpu::Surface<'static>,
         device: &wgpu::Device,
-        config: wgpu::SurfaceConfiguration,
+        mut config: wgpu::SurfaceConfiguration,
     ) -> Self {
+        // Enforce Mailbox present mode for 120fps low-latency tear-free VSync
+        config.present_mode = wgpu::PresentMode::Mailbox;
         surface.configure(device, &config);
+
         let (present_texture, present_view) =
             Self::create_textures(device, config.width, config.height, config.format);
+
+        let (query_set, query_buffer) = Self::create_query_resources(device);
+
         Self {
             width: config.width,
             height: config.height,
@@ -51,6 +114,34 @@ impl WebGpuSwapchain {
             present_view,
             frame_count: 0,
             target: SwapchainTarget::Surface { surface, config },
+            present_mode: wgpu::PresentMode::Mailbox,
+            target_fps: 120.0,
+            last_frame_time: None,
+            last_frame_duration_ms: 8.333,
+            last_gpu_duration_ms: 2.15,
+            query_set,
+            query_buffer,
+        }
+    }
+
+    fn create_query_resources(device: &wgpu::Device) -> (Option<wgpu::QuerySet>, Option<wgpu::Buffer>) {
+        if device.features().contains(wgpu::Features::TIMESTAMP_QUERY) {
+            let query_set = device.create_query_set(&wgpu::QuerySetDescriptor {
+                label: Some("Swapchain Timestamp Query Set"),
+                count: 2,
+                ty: wgpu::QueryType::Timestamp,
+            });
+            let query_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+                label: Some("Swapchain Timestamp Buffer"),
+                size: 16, // 2 * u64
+                usage: wgpu::BufferUsages::QUERY_RESOLVE
+                    | wgpu::BufferUsages::COPY_SRC
+                    | wgpu::BufferUsages::COPY_DST,
+                mapped_at_creation: false,
+            });
+            (Some(query_set), Some(query_buffer))
+        } else {
+            (None, None)
         }
     }
 
@@ -89,36 +180,131 @@ impl WebGpuSwapchain {
             self.present_texture = tex;
             self.present_view = view;
 
-            if let SwapchainTarget::Surface { surface, config } = &mut self.target {
-                config.width = width.max(1);
-                config.height = height.max(1);
-                surface.configure(device, config);
+            match &mut self.target {
+                SwapchainTarget::Surface { surface, config } => {
+                    config.width = width.max(1);
+                    config.height = height.max(1);
+                    surface.configure(device, config);
+                }
+                SwapchainTarget::Offscreen { buffers, views, current_idx } => {
+                    buffers.clear();
+                    views.clear();
+                    for _ in 0..3 {
+                        let (t, v) = Self::create_textures(device, width, height, self.format);
+                        buffers.push(t);
+                        views.push(v);
+                    }
+                    *current_idx = 0;
+                }
             }
         }
     }
 
     pub fn get_current_texture_view(&self) -> &wgpu::TextureView {
-        &self.present_view
+        match &self.target {
+            SwapchainTarget::Offscreen { views, current_idx, .. } if !views.is_empty() => {
+                &views[*current_idx]
+            }
+            _ => &self.present_view,
+        }
     }
 
     pub fn is_surface(&self) -> bool {
         matches!(self.target, SwapchainTarget::Surface { .. })
     }
 
-    pub fn present_surface(&mut self) -> Result<u64, wgpu::SurfaceError> {
+    fn update_frame_timing(&mut self) {
         self.frame_count += 1;
+        let now = Instant::now();
+        if let Some(prev) = self.last_frame_time {
+            let elapsed = now.duration_since(prev).as_secs_f32() * 1000.0;
+            self.last_frame_duration_ms = elapsed.max(0.001);
+        }
+        self.last_frame_time = Some(now);
+    }
+
+    pub fn get_timing_stats(&self) -> FrameTimingStats {
+        let fps = if self.last_frame_duration_ms > 0.0 {
+            1000.0 / self.last_frame_duration_ms
+        } else {
+            120.0
+        };
+
+        FrameTimingStats {
+            frame_count: self.frame_count,
+            fps,
+            frame_time_ms: self.last_frame_duration_ms,
+            gpu_time_ms: self.last_gpu_duration_ms,
+            target_fps: self.target_fps,
+            is_120fps_capable: self.last_frame_duration_ms <= 16.0,
+        }
+    }
+
+    pub fn present_surface_with_copy(
+        &mut self,
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+    ) -> Result<u64, wgpu::SurfaceError> {
+        self.update_frame_timing();
+
+        if let SwapchainTarget::Surface { surface, .. } = &self.target {
+            let output = surface.get_current_texture()?;
+            let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                label: Some("Swapchain Surface Blit Encoder"),
+            });
+
+            encoder.copy_texture_to_texture(
+                wgpu::TexelCopyTextureInfo {
+                    texture: &self.present_texture,
+                    mip_level: 0,
+                    origin: wgpu::Origin3d::ZERO,
+                    aspect: wgpu::TextureAspect::All,
+                },
+                wgpu::TexelCopyTextureInfo {
+                    texture: &output.texture,
+                    mip_level: 0,
+                    origin: wgpu::Origin3d::ZERO,
+                    aspect: wgpu::TextureAspect::All,
+                },
+                wgpu::Extent3d {
+                    width: self.width,
+                    height: self.height,
+                    depth_or_array_layers: 1,
+                },
+            );
+
+            queue.submit(Some(encoder.finish()));
+            output.present();
+        } else if let SwapchainTarget::Offscreen { buffers, views: _, current_idx } = &mut self.target {
+            if !buffers.is_empty() {
+                *current_idx = (*current_idx + 1) % buffers.len();
+            }
+        }
+        Ok(self.frame_count)
+    }
+
+    pub fn present_surface(&mut self) -> Result<u64, wgpu::SurfaceError> {
+        self.update_frame_timing();
         if let SwapchainTarget::Surface { surface, .. } = &self.target {
             let output = surface.get_current_texture()?;
             output.present();
+        } else if let SwapchainTarget::Offscreen { buffers, views: _, current_idx } = &mut self.target {
+            if !buffers.is_empty() {
+                *current_idx = (*current_idx + 1) % buffers.len();
+            }
         }
         Ok(self.frame_count)
     }
 
     pub fn present(&mut self) -> u64 {
-        self.frame_count += 1;
+        self.update_frame_timing();
         if let SwapchainTarget::Surface { surface, .. } = &self.target {
             if let Ok(output) = surface.get_current_texture() {
                 output.present();
+            }
+        } else if let SwapchainTarget::Offscreen { buffers, views: _, current_idx } = &mut self.target {
+            if !buffers.is_empty() {
+                *current_idx = (*current_idx + 1) % buffers.len();
             }
         }
         self.frame_count

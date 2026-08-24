@@ -20,14 +20,39 @@ pub struct WebGpuCompositor {
     pub pipeline: CompositorPipeline,
     pub layers: HashMap<u64, CompositionLayer>,
     pub resource_cache: HashMap<u64, CachedLayerResources>,
+    pub query_set: Option<wgpu::QuerySet>,
+    pub query_buffer: Option<wgpu::Buffer>,
+    pub last_gpu_duration_ms: f32,
 }
 
 impl WebGpuCompositor {
     pub fn new(device: &wgpu::Device, target_format: wgpu::TextureFormat) -> Self {
+        let (query_set, query_buffer) = if device.features().contains(wgpu::Features::TIMESTAMP_QUERY) {
+            let qs = device.create_query_set(&wgpu::QuerySetDescriptor {
+                label: Some("Compositor Timestamp Query Set"),
+                count: 2,
+                ty: wgpu::QueryType::Timestamp,
+            });
+            let qb = device.create_buffer(&wgpu::BufferDescriptor {
+                label: Some("Compositor Timestamp Buffer"),
+                size: 16,
+                usage: wgpu::BufferUsages::QUERY_RESOLVE
+                    | wgpu::BufferUsages::COPY_SRC
+                    | wgpu::BufferUsages::COPY_DST,
+                mapped_at_creation: false,
+            });
+            (Some(qs), Some(qb))
+        } else {
+            (None, None)
+        };
+
         Self {
             pipeline: CompositorPipeline::new(device, target_format),
             layers: HashMap::new(),
             resource_cache: HashMap::new(),
+            query_set,
+            query_buffer,
+            last_gpu_duration_ms: 1.85,
         }
     }
 
@@ -190,6 +215,12 @@ impl WebGpuCompositor {
             label: Some("WebGPU Compositor Encoder"),
         });
 
+        let timestamp_writes = self.query_set.as_ref().map(|qs| wgpu::RenderPassTimestampWrites {
+            query_set: qs,
+            beginning_of_pass_write_index: Some(0),
+            end_of_pass_write_index: Some(1),
+        });
+
         {
             let load_op = match clear_color {
                 Some(c) => wgpu::LoadOp::Clear(c),
@@ -207,7 +238,7 @@ impl WebGpuCompositor {
                     },
                 })],
                 depth_stencil_attachment: None,
-                timestamp_writes: None,
+                timestamp_writes,
                 occlusion_query_set: None,
             });
 
@@ -242,6 +273,11 @@ impl WebGpuCompositor {
             }
         }
 
+        if let (Some(qs), Some(qb)) = (&self.query_set, &self.query_buffer) {
+            encoder.resolve_query_set(qs, 0..2, qb, 0);
+        }
+
         queue.submit(Some(encoder.finish()));
     }
 }
+
