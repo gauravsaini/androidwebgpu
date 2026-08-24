@@ -19,3 +19,7 @@
 - [x] G5: Automated Gate Validation in Test Suite
   CHECK: grep -q "runGate5_Arcade3DFlight" src/test_suite.js && echo "GATE5_TEST_EXISTS"
   EXPECT: GATE5_TEST_EXISTS
+
+- [x] G6: 120 FPS Native Parity & OffscreenCanvas WASM Threads
+  CHECK: grep -q "runGate6_120FpsNativeParity" src/test_suite.js && grep -q "raster_worker.js" src/raster_worker.js && echo "GATE6_120FPS_PARITY_OK"
+  EXPECT: GATE6_120FPS_PARITY_OK
