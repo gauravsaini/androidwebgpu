@@ -380,6 +380,20 @@ impl VirtioGpuBridge {
                         let a = f32::from_le_bytes(cmd_payload[16..20].try_into().unwrap());
                         self.gl_context.gl_clear_color(r, g, b, a);
                         self.gl_context.gl_clear(mask);
+
+                        let r_u8 = (r * 255.0).clamp(0.0, 255.0) as u8;
+                        let g_u8 = (g * 255.0).clamp(0.0, 255.0) as u8;
+                        let b_u8 = (b * 255.0).clamp(0.0, 255.0) as u8;
+                        let a_u8 = (a * 255.0).clamp(0.0, 255.0) as u8;
+
+                        for res in self.resources.values_mut() {
+                            for chunk in res.backing_data.chunks_exact_mut(4) {
+                                chunk[0] = r_u8;
+                                chunk[1] = g_u8;
+                                chunk[2] = b_u8;
+                                chunk[3] = a_u8;
+                            }
+                        }
                     }
                 }
                 0x02 => {
