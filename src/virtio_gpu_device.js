@@ -11,12 +11,16 @@ export class VirtioGpuDevice {
      * @param {HTMLCanvasElement|OffscreenCanvas} canvas - Target Canvas
      * @param {Worker} [rasterWorker] - Optional dedicated raster worker
      */
-    constructor(v86, rustBridge, canvas, rasterWorker = null) {
+    constructor(v86, rustBridge, canvas, rasterWorker = null, offscreenTransferred = false) {
         this.v86 = v86;
         this.rustBridge = rustBridge;
         this.canvas = canvas;
         this.worker = rasterWorker;
-        this.ctx2d = canvas && canvas.getContext ? canvas.getContext("2d", { alpha: false, desynchronized: true }) : null;
+        this.offscreenTransferred = offscreenTransferred;
+        this.ctx2d = (!offscreenTransferred && canvas && typeof canvas.getContext === "function")
+            ? canvas.getContext("2d", { alpha: false, desynchronized: true })
+            : null;
+        this.cachedImageData = null;
         this.pci_space = new Uint8Array(256);
         this.io_bar = new Uint8Array(64);
         this.num_scanouts = 1;
@@ -113,12 +117,13 @@ export class VirtioGpuDevice {
         const width = this.canvas.width;
         const height = this.canvas.height;
 
-        if (!this.cachedImageData || this.cachedImageData.width !== width || this.cachedImageData.height !== height) {
-            this.cachedImageData = this.ctx2d.createImageData(width, height);
-        }
-
-        if (fb.length >= width * height * 4) {
-            this.cachedImageData.data.set(fb.subarray(0, width * height * 4));
+        if (!this.offscreenTransferred && this.ctx2d) {
+            if (!this.cachedImageData || this.cachedImageData.width !== width || this.cachedImageData.height !== height) {
+                this.cachedImageData = this.ctx2d.createImageData(width, height);
+            }
+            if (fb.length >= width * height * 4) {
+                this.cachedImageData.data.set(fb.subarray(0, width * height * 4));
+            }
         }
 
         if (damage && damage.length === 4) {
@@ -127,7 +132,7 @@ export class VirtioGpuDevice {
                 const subW = Math.min(dw, width - dx);
                 const subH = Math.min(dh, height - dy);
 
-                if (this.worker) {
+                if (this.worker && this.offscreenTransferred) {
                     this.worker.postMessage({
                         type: "UPDATE_DAMAGE_RECT",
                         x: dx,
@@ -136,7 +141,7 @@ export class VirtioGpuDevice {
                         height: subH,
                         pixels: fb.subarray(0, width * height * 4)
                     });
-                } else {
+                } else if (this.ctx2d) {
                     this.ctx2d.putImageData(this.cachedImageData, 0, 0, dx, dy, subW, subH);
                 }
 
@@ -149,7 +154,16 @@ export class VirtioGpuDevice {
         }
 
         // Full blit fallback
-        if (fb.length >= width * height * 4) {
+        if (this.worker && this.offscreenTransferred) {
+            this.worker.postMessage({
+                type: "UPDATE_DAMAGE_RECT",
+                x: 0,
+                y: 0,
+                width,
+                height,
+                pixels: fb.subarray(0, width * height * 4)
+            });
+        } else if (this.ctx2d && fb.length >= width * height * 4) {
             this.ctx2d.putImageData(this.cachedImageData, 0, 0);
         }
     }

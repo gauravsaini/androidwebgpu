@@ -26,8 +26,8 @@ pub struct WebGpuSwapchain {
     pub width: u32,
     pub height: u32,
     pub format: wgpu::TextureFormat,
-    pub present_texture: wgpu::Texture,
-    pub present_view: wgpu::TextureView,
+    pub present_texture: Option<wgpu::Texture>,
+    pub present_view: Option<wgpu::TextureView>,
     pub frame_count: u64,
     pub target: SwapchainTarget,
     pub present_mode: wgpu::PresentMode,
@@ -58,7 +58,7 @@ impl WebGpuSwapchain {
         present_mode: wgpu::PresentMode,
         target_fps: f32,
     ) -> Self {
-        // Triple buffering for offscreen 120fps mailbox parity
+        // Triple buffering for offscreen 120fps mailbox parity: buffers[0..3] are canonical
         let mut buffers = Vec::with_capacity(3);
         let mut views = Vec::with_capacity(3);
         for _ in 0..3 {
@@ -67,17 +67,14 @@ impl WebGpuSwapchain {
             views.push(v);
         }
 
-        let present_texture = Self::create_textures(device, width, height, format).0;
-        let present_view = present_texture.create_view(&wgpu::TextureViewDescriptor::default());
-
         let (query_set, query_buffer, query_staging_buffer) = Self::create_query_resources(device);
 
         Self {
             width,
             height,
             format,
-            present_texture,
-            present_view,
+            present_texture: None,
+            present_view: None,
             frame_count: 0,
             target: SwapchainTarget::Offscreen {
                 buffers,
@@ -87,7 +84,7 @@ impl WebGpuSwapchain {
             present_mode,
             target_fps,
             last_frame_time: None,
-            last_frame_duration_ms: 16.6,
+            last_frame_duration_ms: 8.33,
             last_gpu_duration_ms: 0.0,
             query_set,
             query_buffer,
@@ -113,14 +110,14 @@ impl WebGpuSwapchain {
             width: config.width,
             height: config.height,
             format: config.format,
-            present_texture,
-            present_view,
+            present_texture: Some(present_texture),
+            present_view: Some(present_view),
             frame_count: 0,
             target: SwapchainTarget::Surface { surface, config },
             present_mode: wgpu::PresentMode::Mailbox,
             target_fps: 120.0,
             last_frame_time: None,
-            last_frame_duration_ms: 16.6,
+            last_frame_duration_ms: 8.33,
             last_gpu_duration_ms: 0.0,
             query_set,
             query_buffer,
@@ -186,15 +183,15 @@ impl WebGpuSwapchain {
         if self.width != width || self.height != height {
             self.width = width;
             self.height = height;
-            let (tex, view) = Self::create_textures(device, width, height, self.format);
-            self.present_texture = tex;
-            self.present_view = view;
 
             match &mut self.target {
                 SwapchainTarget::Surface { surface, config } => {
                     config.width = width.max(1);
                     config.height = height.max(1);
                     surface.configure(device, config);
+                    let (tex, view) = Self::create_textures(device, width, height, self.format);
+                    self.present_texture = Some(tex);
+                    self.present_view = Some(view);
                 }
                 SwapchainTarget::Offscreen { buffers, views, current_idx } => {
                     buffers.clear();
@@ -205,6 +202,8 @@ impl WebGpuSwapchain {
                         views.push(v);
                     }
                     *current_idx = 0;
+                    self.present_texture = None;
+                    self.present_view = None;
                 }
             }
         }
@@ -215,7 +214,10 @@ impl WebGpuSwapchain {
             SwapchainTarget::Offscreen { views, current_idx, .. } if !views.is_empty() => {
                 &views[*current_idx]
             }
-            _ => &self.present_view,
+            SwapchainTarget::Surface { .. } => {
+                self.present_view.as_ref().expect("Surface swapchain missing present view")
+            }
+            _ => panic!("Swapchain target has no available texture view"),
         }
     }
 
@@ -224,7 +226,10 @@ impl WebGpuSwapchain {
             SwapchainTarget::Offscreen { buffers, current_idx, .. } if !buffers.is_empty() => {
                 &buffers[*current_idx]
             }
-            _ => &self.present_texture,
+            SwapchainTarget::Surface { .. } => {
+                self.present_texture.as_ref().expect("Surface swapchain missing present texture")
+            }
+            _ => panic!("Swapchain target has no available texture"),
         }
     }
 
@@ -255,7 +260,8 @@ impl WebGpuSwapchain {
             frame_time_ms: self.last_frame_duration_ms,
             gpu_time_ms: self.last_gpu_duration_ms,
             target_fps: self.target_fps,
-            is_120fps_capable: self.last_frame_duration_ms <= 8.33 || (self.last_gpu_duration_ms > 0.0 && self.last_gpu_duration_ms <= 8.33),
+            is_120fps_capable: (self.last_gpu_duration_ms > 0.0 && self.last_gpu_duration_ms < 8.33)
+                || (self.last_frame_duration_ms <= 8.33),
         }
     }
 
@@ -269,7 +275,7 @@ impl WebGpuSwapchain {
         }
     }
 
-    pub async fn poll_gpu_timestamps(
+    pub fn poll_gpu_timestamps(
         &mut self,
         device: &wgpu::Device,
         queue: &wgpu::Queue,

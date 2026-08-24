@@ -116,27 +116,24 @@ self.onmessage = async function (e) {
     }
 };
 
+let workerCachedImgData = null;
+
 function applyDamageRect(x, y, width, height, pixels) {
     if (!offscreenCanvas) return;
     damageRectsProcessed++;
 
-    if (pixels && workerFb) {
-        const canW = offscreenCanvas.width;
-        const bpp = 4;
-        for (let row = 0; row < height; row++) {
-            const srcOff = (row * width) * bpp;
-            const dstOff = ((y + row) * canW + x) * bpp;
-            const rowBytes = width * bpp;
-            if (dstOff + rowBytes <= workerFb.length && srcOff + rowBytes <= pixels.length) {
-                workerFb.set(pixels.subarray(srcOff, srcOff + rowBytes), dstOff);
-            }
-        }
-    }
-
     if (ctx2d && pixels) {
-        const imgData = ctx2d.createImageData(width, height);
-        imgData.data.set(pixels);
-        ctx2d.putImageData(imgData, x, y);
+        if (!workerCachedImgData || workerCachedImgData.width !== offscreenCanvas.width || workerCachedImgData.height !== offscreenCanvas.height) {
+            workerCachedImgData = ctx2d.createImageData(offscreenCanvas.width, offscreenCanvas.height);
+        }
+        if (pixels.length >= offscreenCanvas.width * offscreenCanvas.height * 4) {
+            workerCachedImgData.data.set(pixels);
+            ctx2d.putImageData(workerCachedImgData, 0, 0, x, y, width, height);
+        } else {
+            const imgData = ctx2d.createImageData(width, height);
+            imgData.data.set(pixels);
+            ctx2d.putImageData(imgData, x, y);
+        }
     }
 }
 
