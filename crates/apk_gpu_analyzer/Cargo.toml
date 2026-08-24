@@ -8,3 +8,9 @@ zip = { version = "2.2", default-features = false, features = ["deflate"] }
 serde = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
+
+[dev-dependencies]
+virtio_gpu_bridge = { path = "../virtio_gpu_bridge" }
+gles2wgpu = { path = "../gles2wgpu" }
+pollster = { workspace = true }
+bytemuck = { workspace = true }

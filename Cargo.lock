@@ -21,9 +21,13 @@ dependencies = [
 name = "apk_gpu_analyzer"
 version = "0.1.0"
 dependencies = [
+ "bytemuck",
+ "gles2wgpu",
+ "pollster",
  "serde",
  "serde_json",
  "thiserror 2.0.20",
+ "virtio_gpu_bridge",
  "zip",
 ]
 

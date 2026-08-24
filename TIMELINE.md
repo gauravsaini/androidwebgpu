@@ -14,3 +14,9 @@
   - Added HWC rotation/reflection matrix transformations (90°, 180°, 270°, flip-h, flip-v) and damage scissor clipping in `webgpu_compositor`.
   - Added `wgpu::Surface` target mode to `webgpu_swapchain`.
   - Wired live metrics tracking assertions into full-stack E2E tests.
+- **Pass 4 (S9 Real APK Flight & Polish)**:
+  - Created checked-in real APK fixtures (`fixtures/unity_cube.apk`, `fixtures/godot_gles2.apk`).
+  - Implemented end-to-end APK GPU analyzer & Virtio-GPU Submit3D execution flight test (`crates/apk_gpu_analyzer/tests/apk_real.rs`).
+  - Implemented DRM GEM buffer creation/mmap and command stream execbuffer in `guest/patches/egl_webgpu.cpp`.
+  - Implemented canvas surface VSync presentation in `crates/webgpu_swapchain/src/swapchain.rs`.
+  - Replaced heap attribute allocation with stack buffer in `pipeline.rs`.

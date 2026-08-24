@@ -27,3 +27,7 @@
 - [x] G7: Full Workspace automated test suite
   CHECK: cargo test --workspace
   EXPECT: test result: ok
+
+- [x] G8: Real APK Flight (Unity Cube & Godot GLES2) through Virtio-GPU Submit3D
+  CHECK: cargo test --test apk_real -- --nocapture
+  EXPECT: test_apk_real_unity_and_godot_virtio_flight ... ok
