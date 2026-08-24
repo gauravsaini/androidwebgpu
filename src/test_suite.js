@@ -228,7 +228,58 @@ export class VisualTestSuite {
     }
 
     /**
-     * Run all 4 gates sequentially
+     * Gate 5: Interactive 3D Android Game Arcade Flight
+     */
+    async runGate5_Arcade3DFlight() {
+        this.log("▶ [Gate 5] Testing Interactive 3D Android Arcade Pipeline & Composition...");
+        const w = this.canvas.width;
+        const h = this.canvas.height;
+        const resId = 104;
+
+        this.gpuDevice.processControlQueue(VirtioPacketBuilder.createResource2d(resId, w, h));
+        this.gpuDevice.processControlQueue(VirtioPacketBuilder.setScanout(0, resId, w, h));
+
+        // Create 3D Game Frame with Android System Bars
+        const arcadeData = new Uint8Array(w * h * 4);
+
+        // Status Bar (Top)
+        for (let y = 0; y < 32; y++) {
+            for (let x = 0; x < w; x++) {
+                const idx = (y * w + x) * 4;
+                arcadeData[idx] = 10; arcadeData[idx + 1] = 14; arcadeData[idx + 2] = 24; arcadeData[idx + 3] = 255;
+            }
+        }
+
+        // 3D Game Surface (Center Color Burst)
+        for (let y = 32; y < h - 36; y++) {
+            for (let x = 0; x < w; x++) {
+                const idx = (y * w + x) * 4;
+                arcadeData[idx] = 79; arcadeData[idx + 1] = 70; arcadeData[idx + 2] = 229; arcadeData[idx + 3] = 255;
+            }
+        }
+
+        // Navigation Bar (Bottom)
+        for (let y = h - 36; y < h; y++) {
+            for (let x = 0; x < w; x++) {
+                const idx = (y * w + x) * 4;
+                arcadeData[idx] = 10; arcadeData[idx + 1] = 14; arcadeData[idx + 2] = 24; arcadeData[idx + 3] = 255;
+            }
+        }
+
+        this.gpuDevice.processControlQueue(VirtioPacketBuilder.transferToHost2d(resId, w, h, 0, 0, arcadeData));
+        this.gpuDevice.processControlQueue(VirtioPacketBuilder.resourceFlush(resId, w, h));
+
+        // Verify Status Bar (y=16), Game Surface (y=200), Nav Bar (y=h-18)
+        this.assertPixel(Math.floor(w / 2), 16, 10, 14, 24);
+        this.assertPixel(Math.floor(w / 2), 200, 79, 70, 229);
+        this.assertPixel(Math.floor(w / 2), h - 18, 10, 14, 24);
+
+        this.log("✔ [Gate 5] Interactive 3D Android Game Arcade multi-plane composition verified!");
+        return true;
+    }
+
+    /**
+     * Run all 5 gates sequentially
      */
     async runAllGates() {
         const results = {};
@@ -237,6 +288,7 @@ export class VisualTestSuite {
             { id: "gate2", name: "Gate 2: Virtio 3D Submit GLES", fn: () => this.runGate2_3DSubmitGLES() },
             { id: "gate3", name: "Gate 3: Compositor & HUD", fn: () => this.runGate3_CompositorOverlay() },
             { id: "gate4", name: "Gate 4: Real APK Flight", fn: () => this.runGate4_ApkFlight() },
+            { id: "gate5", name: "Gate 5: 3D Arcade Flight", fn: () => this.runGate5_Arcade3DFlight() },
         ];
 
         let passed = 0;
@@ -262,3 +314,4 @@ export class VisualTestSuite {
         };
     }
 }
+

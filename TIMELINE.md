@@ -20,3 +20,16 @@
   - Implemented DRM GEM buffer creation/mmap and command stream execbuffer in `guest/patches/egl_webgpu.cpp`.
   - Implemented canvas surface VSync presentation in `crates/webgpu_swapchain/src/swapchain.rs`.
   - Replaced heap attribute allocation with stack buffer in `pipeline.rs`.
+- **Pass 5 (Visual Browser Test Bench & Live Chrome Validation)**:
+  - Created interactive visual HTML5 test bench (`index.html`) with WebGPU canvas, dark-mode HUD, and 60 FPS Virtio animation loop.
+  - Implemented JavaScript Virtio-GPU binary packet builder (`src/virtio_packet_builder.js`) conforming to OASIS 1.2 specification.
+  - Implemented automated visual test suite runner (`src/test_suite.js`) with pixel-level RGB assertions.
+  - Resolved `std::time::Instant` panic on `wasm32-unknown-unknown` by implementing platform-safe `PlatformInstant` via `js-sys::Date::now()` in `metrics_overlay`.
+  - Configured WebGPU adapter limits and memory hints in `gles2wgpu/src/context.rs` to match browser WebAssembly environments.
+  - Integrated `console_error_panic_hook` in `virtio_gpu_bridge/src/wasm.rs`.
+  - Validated all 4 End-to-End Gates live in Chrome via Chrome DevTools Protocol (100% passed: 4/4):
+    - Gate 1: 2D Scanout & Flush (PASSED)
+    - Gate 2: 3D Submit GLES (PASSED)
+    - Gate 3: Compositor & HUD (PASSED)
+    - Gate 4: Real APK Flight Stream (PASSED)
+  - Captured verified visual artifact screenshot and generated `walkthrough.md`.
