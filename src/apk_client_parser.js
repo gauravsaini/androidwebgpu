@@ -1450,6 +1450,10 @@ export class PackageManagerRegistry {
         return this.packages.get(packageName) || null;
     }
 
+    getPackage(packageName) {
+        return this.getPackageInfo(packageName);
+    }
+
     /**
      * Checks if a package is installed.
      * @param {string} packageName
