@@ -351,7 +351,7 @@ mod tests {
     #[test]
     fn test_virtio_binder_process_packet_graphic_buffer_producer_transact() {
         pollster::block_on(async {
-            let mut bridge = match VirtioGpuBridge::new(64, 64).await {
+            let bridge = match VirtioGpuBridge::new(64, 64).await {
                 Ok(b) => b,
                 Err(_) => return,
             };

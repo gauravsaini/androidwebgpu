@@ -148,23 +148,25 @@ impl VirtioGpuBridge {
             .ok();
         routing_policy.allow_host_offload(ams_rs::IACTIVITY_MANAGER_DESCRIPTOR);
 
-        // 6. GraphicBufferProducer (Handle 10)
-        let producer = Arc::new(surfaceflinger_gpu_service::GraphicBufferProducerService::new(
-            10,
-            Arc::clone(&dev),
-            Arc::clone(&q),
-        ));
-        binder_device.register_service(10, Arc::clone(&producer) as Arc<dyn IBinder>);
-        handle_bridge
-            .lock()
-            .unwrap()
-            .register_service_with_handle(
-                100,
-                10,
-                surfaceflinger_gpu_service::GraphicBufferProducerService::DESCRIPTOR,
-                Arc::clone(&producer) as Arc<dyn IBinder>,
-            )
-            .ok();
+        // 6. GraphicBufferProducer (Handles 10, 20, 30)
+        for &h in &[10u32, 20u32, 30u32] {
+            let producer = Arc::new(surfaceflinger_gpu_service::GraphicBufferProducerService::new(
+                h as u64,
+                Arc::clone(&dev),
+                Arc::clone(&q),
+            ));
+            binder_device.register_service(h, Arc::clone(&producer) as Arc<dyn IBinder>);
+            handle_bridge
+                .lock()
+                .unwrap()
+                .register_service_with_handle(
+                    100,
+                    h,
+                    surfaceflinger_gpu_service::GraphicBufferProducerService::DESCRIPTOR,
+                    Arc::clone(&producer) as Arc<dyn IBinder>,
+                )
+                .ok();
+        }
         routing_policy.allow_host_offload(surfaceflinger_gpu_service::GraphicBufferProducerService::DESCRIPTOR);
 
         Ok(Self {
