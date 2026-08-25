@@ -1,88 +1,124 @@
-# Project: AndroidWebGPU E2E Roundtrip Validation
+# Project: Real-World F-Droid Ingestion & Execution on AndroidWebGPU
 
 ## Architecture
-The AndroidWebGPU architecture bridges guest Android applications running in paravirtualized environments to host Web APIs (WebGPU, WebAudio, WebCodecs, WebRTC/getUserMedia, Generic Sensors) through a bidirectional multi-layer transport:
-`APK → framework (PMS/AMS/WMS) → daemon (InputFlinger/SurfaceFlinger) → HAL (Sensors/Audio/Camera) → virtio-binder / dev-binder → host runtime → host Web API bridges → virtio-binder → guest callback/buffer`.
 
-### Key Subsystems:
-1. **Transport & Registration**: VINTF manifest (`guest/etc/vintf/device_manifest.xml`), `vintf_validator`, userspace `/dev/binder` ioctl loopers (`binder_sys`), virtio-binder paravirtualized queues (`virtio_binder`), and shared memory buffer pools (`camera_host_rs::CameraBufferPool`, `audio_host_rs::AudioRingBuffer`, `binder_sys::BinderMmapRegion`).
-2. **Virtual HALs & Web API Bridges**:
-   - `ISensors` (`sensors_hal_virtual`) ↔ `sensor_host_rs` (`devicemotion` / synthetic sensor generator).
-   - `IModule` / `IConfig` (`audio_hal_virtual`) ↔ `audio_host_rs` (WebAudio stereo 48kHz playback & mic recording).
-   - `ICameraProvider` / `ICameraDeviceSession` (`camera_hal_virtual`) ↔ `camera_host_rs` (`getUserMedia` / WebRTC preview frame injection).
-   - `IMediaCodecService` ↔ `media_host_rs` (WebCodecs H.264/H.265 Annex B NALU decode to YUV420).
-3. **Resiliency & Framework Lifecycle**:
-   - Multi-process Activity lifecycle (`ams_rs`, `wms_rs`, `inputflinger_rs`, `surfaceflinger_gpu_service`).
-   - Browser backgrounding / `visibilitychange` / `blur` handling (`index.html`, `src/binder_test_suite.js`).
-   - Real-world APK ingestion, parsing, forking, and execution (`pms_rs`, `apk_gpu_analyzer`, `tests_e2e_system_services`).
-4. **Browser Test Bench**:
-   - `index.html` UI bench and `src/binder_test_suite.js` / `src/test_suite.js` automated one-click test runners with visual badges for all 11 E2E validation milestones.
+AndroidWebGPU executes real-world Android applications directly against native Rust system services without requiring a Java `system_server` runtime. The architecture spans four integrated layers:
+
+```
+┌────────────────────────────────────────────────────────────────────────┐
+│               Real-World Android APK (`F-Droid.apk`)                   │
+│   org.fdroid.fdroid.views.main.MainActivity (singleTop Launcher)       │
+│   ApkFileProvider / FileProvider | DownloaderService / SwapService     │
+└────────────────────────────────────┬───────────────────────────────────┘
+                                     │ Binder RPC / Unix Socketpair
+                                     ▼
+┌────────────────────────────────────────────────────────────────────────┐
+│                   Native System Services (Guest/Host)                  │
+│  ┌──────────────────┐  ┌───────────────────┐  ┌─────────────────────┐  │
+│  │   PMS (pms_rs)   │  │   AMS (ams_rs)    │  │    WMS (wms_rs)     │  │
+│  │  - AXML/ARSC     │  │  - Lifecycle      │  │  - WindowSession    │  │
+│  │  - Provider Reg  │  │  - AppThread bind │  │  - SurfaceBridge    │  │
+│  │  - Queries (AIDL)│  │  - Provider / Svc │  │  - Insets / Layout  │  │
+│  └─────────┬────────┘  └─────────┬─────────┘  └──────────┬──────────┘  │
+│            │                     │                       │             │
+│            │                     ▼                       │             │
+│            │           ┌───────────────────┐             │             │
+│            │           │   Zygote Client   │             │             │
+│            │           │  - Process Tracker│             │             │
+│            │           │  - PID Forking    │             │             │
+│            │           └───────────────────┘             │             │
+└────────────┼─────────────────────────────────────────────┼─────────────┘
+             │                                             │
+             ▼                                             ▼
+┌────────────────────────────────────────┐   ┌───────────────────────────┐
+│        InputFlinger & Channels         │   │   SurfaceFlinger WebGPU   │
+│  - InputManagerService (AIDL)          │   │  - SurfaceComposerService │
+│  - Socketpair InputChannel             │   │  - BufferQueue & Textures │
+│  - Publisher/Consumer Touch & Key Flow │   │  - WebGpuCompositor Read  │
+└────────────────────────────────────────┘   └───────────────────────────┘
+```
 
 ---
 
 ## Feature Inventory
+
 | # | Feature | Description | Milestone | Source |
-|---|---------|-------------|-----------|--------|
-| 1 | VINTF HAL Declarations | Validate target-level 7 declarations and `isDeclared()` for `ISensors`, `IModule`, `ICameraProvider` | M1 | ORIGINAL_REQUEST §R1 |
-| 2 | Direct & Virtio-Binder Transport | Wire-accurate Parcel serialization, `/dev/binder` ioctl looper, virtqueue roundtrips | M1 | ORIGINAL_REQUEST §R1 |
-| 3 | Shared Buffer Transport | Zero-copy shm buffer pools with frame recycling and no leaks | M1 | ORIGINAL_REQUEST §R1 |
-| 4 | Sensors HAL E2E | Host-to-guest sensor event stream with verified sample rates and timestamps | M1 | ORIGINAL_REQUEST §R2 |
-| 5 | Audio HAL Playback E2E | Stereo 16-bit 48kHz PCM playback through WebAudio bridge with volume/gain scaling | M1 | ORIGINAL_REQUEST §R2 |
-| 6 | Audio HAL Recording E2E | Microphone audio capture into guest PCM buffer | M1 | ORIGINAL_REQUEST §R2 |
-| 7 | Camera HAL Preview E2E | Live camera frames delivery to `ICameraDeviceCallback` preview buffers | M1 | ORIGINAL_REQUEST §R2 |
-| 8 | Media Decode E2E | H.264 video keyframes decode via WebCodecs bridge to YUV420 frame data | M1 | ORIGINAL_REQUEST §R2 |
-| 9 | Concurrency & Process Lifecycle | Multi-threaded stress testing, multi-session window allocations, process crash recovery | M1 | ORIGINAL_REQUEST §R3 |
-| 10 | Browser Backgrounding | `visibilitychange` & `blur` event listeners, stream pump pause, FPS drop, clean resume | M2 | ORIGINAL_REQUEST §R3 |
-| 11 | Real-World APK Execution | Unity (`unity_cube.apk`) and Godot (`godot_gles2.apk`) ingest, resolve, fork, and attach | M1 | ORIGINAL_REQUEST §R3 |
-| 12 | Browser Test Bench UI & JS Suite | Interactive UI tabs, badges, and automated one-click test runners in `index.html` & `src/binder_test_suite.js` | M3 | ORIGINAL_REQUEST §R4 |
-| 13 | Final E2E Gates Ledger & Workspace Tests | Complete runnable `GATES.md` ledger and 100% clean `cargo test --workspace` verification | M4 | ORIGINAL_REQUEST §Acceptance Criteria |
+|---|---|---|---|---|
+| 1 | F-Droid Binary APK Ingestion | Ingest `/Users/ektasaini/Desktop/androidwebgpu/F-Droid.apk` (12.4 MB), parse `AndroidManifest.xml` & `resources.arsc` | M1 | Survey (Explorer 1) |
+| 2 | AXML `<provider>` & Permission Parser | Parse `<provider>`, `<uses-permission-sdk-23>`, and reference string formatting | M1 | Survey (Explorer 1) |
+| 3 | Provider & Service Indexing | Index `ProviderInfo` by semicolon-separated authorities and `ComponentName` | M1 | Survey (Explorer 1) |
+| 4 | Extended `IPackageManager` AIDL | Implement `resolveContentProvider`, `getPackageInfo`, `getApplicationInfo`, `queryIntentActivities` | M1 | Survey (Explorer 1) |
+| 5 | Zygote Process Forking | Fork process for package `org.fdroid.fdroid`, track PID in `ProcessTracker` | M2 | Survey (Explorer 2) |
+| 6 | AMS Lifecycle State Transitions | `start_activity` -> `attach_application` -> `bind_application` -> `onCreate` -> `onStart` -> `onResume` | M2 | Survey (Explorer 2) |
+| 7 | ContentProvider IPC & Cursor Transport | `acquireProvider` / `get_content_provider` returning `IContentProvider` and `CursorData` | M2 | Survey (Explorer 2) |
+| 8 | Service Connection Plumbing | Basic `start_service` and `bind_service` tracking with `IServiceConnection` | M2 | Survey (Explorer 2) |
+| 9 | Fullscreen SurfaceControl Allocation | WMS `open_session` -> `add_to_display` -> `relayout` returning `SurfaceControl` for `MainActivity` | M3 | Survey (Explorer 3) |
+| 10 | WebGPU SurfaceFlinger Composition | Present catalog layers through `GraphicBufferProducer` and `WebGpuCompositor` | M3 | Survey (Explorer 3) |
+| 11 | InputChannel Touch Event Dispatch | Dispatch touch down, up, move, and scroll messages over socketpair to `ViewRootImpl` | M3 | Survey (Explorer 3) |
+| 12 | Deterministic E2E Verification | End-to-end multi-service tests in `crates/tests_e2e_system_services` for F-Droid | M4 | Survey (Explorer 3) |
+| 13 | GATES.md Update & Verification | Update `GATES.md` with runnable check commands and expected outputs | M4 | User Request R4 |
+| 14 | Workspace Test Pass 100% | Clean run of `cargo test --workspace` across all crates with 0 failures | M4 | User Request R4 |
 
 ---
 
 ## Milestones
+
 | # | Name | Scope | Dependencies | Status |
-|---|------|-------|-------------|--------|
-| M1 | Transport & Virtual HALs Verification | Verify R1, R2, R3 (Criteria 1-9, 11) in Rust workspace suites | none | DONE |
-| M2 | Browser Backgrounding & Resiliency | Implement visibilitychange/blur lifecycle, stream throttling, and audio focus in browser and host bridges | M1 | DONE |
-| M3 | Browser Test Bench UI Integration | Add 11 E2E milestone badges, UI runners, and test suite execution in `index.html` & `src/binder_test_suite.js` | M2 | DONE |
-| M4 | E2E Gates Sign-off & Verification | Finalize `GATES.md`, produce `TEST_READY.md`, verify 100% pass across all 11 criteria and workspace | M3 | DONE |
+|---|---|---|---|---|
+| M1 | PMS F-Droid Ingestion & Extended Queries | Parse `F-Droid.apk`, `AndroidManifest.xml` (providers, services, permissions), `resources.arsc` labels, implement `resolveContentProvider` & query APIs | none | DONE |
+| M2 | AMS Lifecycle, ContentProvider & Service Plumbing | Process fork for `org.fdroid.fdroid`, `ApplicationThread` binding, lifecycle transitions to `RESUMED`, `acquireProvider` cursor transport, service tracking | M1 | IN_PROGRESS |
+| M3 | WMS SurfaceControl & Touch Dispatch | Fullscreen window allocation, WebGPU SurfaceFlinger layer transactions, `InputChannel` socketpair touch injection | M2 | PLANNED |
+| M4 | E2E Integration Suite, GATES.md & 100% Test Pass | Deterministic E2E integration tests in `crates/tests_e2e_system_services`, update `GATES.md`, verify `cargo test --workspace` | M1, M2, M3 | PLANNED |
 
 ---
 
 ## Interface Contracts
-### Guest HALs ↔ Host Web API Bridges
-- `ISensors` (AIDL `android.hardware.sensors.ISensors`):
-  - `GET_SENSORS_LIST`: returns Vector of `SensorInfo`.
-  - `ACTIVATE(handle, enabled)`: starts/stops host sensor streaming.
-  - `BATCH(handle, sampling_period_ns, max_report_latency_ns)`: configures host sampling rate.
-  - `INJECT_SENSOR_DATA(event)`: injects accelerometer/gyroscope samples into guest queue.
-- `IModule` (AIDL `android.hardware.audio.core.IModule`):
-  - `OPEN_OUTPUT_STREAM(config)`: returns `IStreamOut` for 16-bit 48kHz stereo PCM.
-  - `OPEN_INPUT_STREAM(config)`: returns `IStreamIn` for 16-bit 48kHz mono/stereo capture.
-  - `SET_MASTER_VOLUME(vol)`, `SET_MASTER_MUTE(mute)`: scales host audio output.
-- `ICameraProvider` (AIDL `android.hardware.camera.provider.ICameraProvider`):
-  - `GET_CAMERA_DEVICE_LIST`: returns list of camera IDs.
-  - `GET_CAMERA_CHARACTERISTICS(id)`: returns metadata (facing, resolution, fps).
-  - `CREATE_DEVICE_SESSION(id, callback)`: returns `ICameraDeviceSession` with `process_capture_request`.
-- `IMediaCodecService` (AIDL `android.media.IMediaCodecService`):
-  - `CREATE_BY_CODEC_NAME(name)`: returns `IMediaCodec` instance.
-  - `DEQUEUE_INPUT_BUFFER`, `QUEUE_INPUT_BUFFER`, `DEQUEUE_OUTPUT_BUFFER`, `RELEASE_OUTPUT_BUFFER`.
-### Host Browser Bridge ↔ JS Test Bench
-- `window.AndroidWebGpu`: Global runtime namespace exposing system services and HAL bridges.
-- `window.addEventListener('visibilitychange', ...)`: Dispatches pause/resume to audio/camera/sensor stream pumps.
+
+### 1. PMS (`pms_rs`) ↔ AMS (`ams_rs`)
+- `IPackageManager::resolve_intent(intent, resolved_type, flags, user_id) -> AidlResult<Option<ResolveInfo>>`
+- `IPackageManager::resolve_content_provider(authority, flags, user_id) -> AidlResult<Option<ProviderInfo>>`
+- `IPackageManager::get_package_info(package_name, flags, user_id) -> AidlResult<Option<PackageInfo>>`
+- `IPackageManager::get_application_info(package_name, flags, user_id) -> AidlResult<Option<ApplicationInfo>>`
+
+### 2. AMS (`ams_rs`) ↔ App Process / `IApplicationThread`
+- `IActivityManager::start_activity(caller, caller_pkg, intent, resolved_type, result_to, result_who, req_code, flags, options) -> AidlResult<i32>`
+- `IActivityManager::attach_application(thread_binder, start_seq) -> AidlResult<()>`
+- `IActivityManager::activity_resumed(token) -> AidlResult<()>`
+- `IActivityManager::get_content_provider(caller, calling_package, name, user_id, stable) -> AidlResult<Option<SpIBinder>>`
+- `IApplicationThread::bind_application(pkg_name, app_info, process_name) -> AidlResult<()>`
+- `IApplicationThread::schedule_resume_activity(token, is_forward) -> AidlResult<()>`
+
+### 3. WMS (`wms_rs`) ↔ SurfaceFlinger (`surfaceflinger_gpu_service`) ↔ Input (`inputflinger_rs`)
+- `IWindowManager::open_session(callback) -> AidlResult<SpIBinder>` (`IWindowSession`)
+- `IWindowSession::add_to_display(window, token, display_id, insets_state, input_channel) -> AidlResult<i32>`
+- `IWindowSession::relayout(window, width, height, surface_control) -> AidlResult<i32>`
+- `IWindowSession::finish_drawing(window, post_draw_transaction) -> AidlResult<()>`
+- `IInputManager::inject_input_event(event, mode) -> AidlResult<bool>`
+- `InputMessage` wire format (1024 bytes binary payload): `Key`, `Motion`, `Finished`.
 
 ---
 
 ## Code Layout
-- `crates/vintf_validator/`: VINTF target-level 7 manifest validation.
-- `crates/binder_sys/`: Userspace `/dev/binder` ioctl transport, looper threadpool, and `BinderMmapRegion`.
-- `crates/virtio_binder/`: VirtIO split virtqueue descriptor chains and guest/host proxy shims.
-- `crates/sensors_hal_virtual/` & `crates/sensor_host_rs/`: Virtual Sensors HAL and Host motion bridge.
-- `crates/audio_hal_virtual/` & `crates/audio_host_rs/`: Virtual Audio HAL and WebAudio PCM bridge.
-- `crates/camera_hal_virtual/` & `crates/camera_host_rs/`: Virtual Camera HAL, zero-copy buffer pool, and preview bridge.
-- `crates/media_host_rs/`: MediaCodec service, Annex B bitstream parser, and WebCodecs decoder bridge.
-- `crates/ams_rs/`, `crates/wms_rs/`, `crates/pms_rs/`, `crates/apk_gpu_analyzer/`: Activity Manager, Window Manager, Package Manager, and APK analyzer.
-- `crates/tests_e2e_system_services/`: Full-stack system services and HAL integration test suites.
-- `index.html`: Browser test bench UI.
-- `src/binder_test_suite.js` & `src/test_suite.js`: Browser test suites and test runners.
-- `GATES.md`: 11 E2E validation checklist gates ledger.
+
+- `crates/pms_rs`:
+  - `src/types.rs`: `ProviderInfo`, `PackageInfo`, `ServiceInfo`, `ReceiverInfo`, `Parcelable` implementations
+  - `src/axml.rs`: Binary XML chunk decoder with `<provider>` and `<uses-permission-sdk-23>` parsing
+  - `src/arsc.rs`: String resource table parser and `@res_id` resolver
+  - `src/package_manager.rs`: In-memory package and provider authority registry
+  - `src/service.rs`: `IPackageManager` AIDL trait and opcode dispatcher
+- `crates/ams_rs`:
+  - `src/activity_manager.rs`: `ActivityManagerService`, `IActivityManager`
+  - `src/app_thread.rs`: `IApplicationThread`, `MockApplicationThread`
+  - `src/provider.rs`: `IContentProvider`, `CursorData` tabular data transport
+  - `src/lifecycle.rs`: `LifecycleManager`, `ActivityStack`
+- `crates/wms_rs`:
+  - `src/window_manager.rs`: `WindowManagerService`, `IWindowManager`
+  - `src/window_session.rs`: `WindowSession`, `IWindowSession`
+  - `src/surface_bridge.rs`: Bridge to `SurfaceComposerService`
+- `crates/inputflinger_rs` & `crates/input_channel`:
+  - `crates/input_channel/src/channel.rs`: `InputChannel` socketpair creation
+  - `crates/input_channel/src/message.rs`: `InputMessage` wire serialization
+  - `crates/inputflinger_rs/src/dispatcher.rs`: `InputDispatcher`
+- `crates/tests_e2e_system_services`:
+  - `tests/test_fdroid_e2e_ingestion_and_lifecycle.rs`: Comprehensive deterministic integration suite
+- `GATES.md`: Verification gates and validation commands

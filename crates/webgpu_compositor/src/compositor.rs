@@ -76,10 +76,13 @@ impl WebGpuCompositor {
     }
 
     fn to_mat4(transform: [f32; 4], hwc_transform: u32) -> [[f32; 4]; 4] {
-        let sx = transform[0];
-        let sy = transform[1];
-        let tx = transform[2];
-        let ty = transform[3];
+        let (a, b, c, d) = if transform[1] == 0.0 && transform[2] == 0.0 && transform[0] != 0.0 && transform[3] != 0.0 {
+            (transform[0], 0.0, 0.0, transform[3])
+        } else if transform[2] == 0.0 && transform[3] == 0.0 && (transform[0] != 0.0 || transform[1] != 0.0) {
+            (transform[0], 0.0, 0.0, transform[1])
+        } else {
+            (transform[0], transform[1], transform[2], transform[3])
+        };
 
         let (r00, r01, r10, r11) = match hwc_transform {
             1 => (-1.0, 0.0, 0.0, 1.0),   // FLIP_H
@@ -90,11 +93,16 @@ impl WebGpuCompositor {
             _ => (1.0, 0.0, 0.0, 1.0),    // None
         };
 
+        let m00 = a * r00 + c * r10;
+        let m01 = a * r01 + c * r11;
+        let m10 = b * r00 + d * r10;
+        let m11 = b * r01 + d * r11;
+
         [
-            [sx * r00, sx * r01, 0.0, 0.0],
-            [sy * r10, sy * r11, 0.0, 0.0],
+            [m00, m01, 0.0, 0.0],
+            [m10, m11, 0.0, 0.0],
             [0.0, 0.0, 1.0, 0.0],
-            [tx, ty, 0.0, 1.0],
+            [0.0, 0.0, 0.0, 1.0],
         ]
     }
 

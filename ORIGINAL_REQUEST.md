@@ -110,4 +110,52 @@ docs/hal.md updated:
 3. Stable-AIDL Definitions: Pull exact frozen AIDL definitions from hardware/interfaces/ for pinned API level.
 4. Workspace Layout: guest/virtual-hal/ uses binder-sys directly.
 
+## 2026-08-25T09:11:44Z
+
+Ingest and execute the real-world F-Droid client (F-Droid.apk in root workspace /Users/ektasaini/Desktop/androidwebgpu/F-Droid.apk) on AndroidWebGPU, extending PMS for full manifest/provider queries, AMS for component lifecycle, and WMS for complex multi-view catalog presentation without Java system_server.
+
+Working directory: /Users/ektasaini/Desktop/androidwebgpu
+Integrity mode: development
+
+## Requirements
+
+### R1. Real-World F-Droid APK Ingestion & PMS Parsing
+- Ingest local `F-Droid.apk` (located at `/Users/ektasaini/Desktop/androidwebgpu/F-Droid.apk`) into PMS.
+- Parse binary `AndroidManifest.xml` and `resources.arsc` containing all Activities (`org.fdroid.fdroid.views.main.MainActivity`), background Services, ContentProviders (`AppProvider`), permissions, and application metadata.
+- Implement extended `IPackageManager` queries (`queryIntentActivities`, `resolveContentProvider`, `getPackageInfo`, `getApplicationInfo`) for F-Droid components.
+
+### R2. AMS Lifecycle & Component State Management
+- Initiate Zygote process fork for package `org.fdroid.fdroid`.
+- Drive ApplicationThread binding (`bindApplication`) and launch `MainActivity` through lifecycle states (`onCreate` -> `onStart` -> `onResume`).
+- Support ContentProvider resolution (`acquireProvider` / cursor transport) and basic Service connection plumbing.
+
+### R3. WMS Multi-Layer View & Catalog Composition
+- Allocate and layout fullscreen `SurfaceControl` window for F-Droid `MainActivity`.
+- Route draw passes and layer transactions to WebGPU SurfaceFlinger compositor without rendering artifacts.
+- Dispatch touch events (down, up, scroll) over `InputChannel` socketpair to F-Droid `ViewRootImpl`.
+
+### R4. Verification & Ledger Integration
+- Implement deterministic tests in `crates/tests_e2e_system_services` verifying full F-Droid ingestion, component resolution, lifecycle transition, and touch dispatch.
+- Update `GATES.md` with runnable check commands and expected outputs.
+
+## Acceptance Criteria
+
+### F-Droid Ingestion & Manifest Resolution
+- [ ] `F-Droid.apk` parses cleanly with 0 errors in `pms_rs` AXML/ARSC parsers.
+- [ ] PMS resolves `org.fdroid.fdroid.views.main.MainActivity` as the default launcher intent.
+- [ ] All declared F-Droid ContentProviders and permissions are registered in the PMS package registry.
+
+### Process & Component Lifecycle
+- [ ] Zygote forks child process for `org.fdroid.fdroid` with valid UID/GID and target SDK version.
+- [ ] `ams_rs` successfully attaches application thread and drives `MainActivity` to `ActivityState::RESUMED`.
+
+### Window & Touch Interaction
+- [ ] WMS creates valid `SurfaceControl` layer (`org.fdroid.fdroid/...`) and delivers drawing transactions to WebGPU compositor.
+- [ ] `InputChannel` transmits touch events to F-Droid window and receives bidirectional acknowledgements.
+
+### Workspace Integrity
+- [ ] `cargo test --workspace` passes 100% cleanly across all member crates.
+- [ ] `GATES.md` includes verified runnable check for F-Droid real-world execution.
+
+
 

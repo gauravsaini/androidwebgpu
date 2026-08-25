@@ -5,7 +5,8 @@
 //! `RES_XML_END_NAMESPACE_TYPE`, and `RES_XML_CDATA_TYPE`.
 
 use crate::types::{
-    ActivityInfo, ApplicationInfo, IntentFilter, PackageInfo, ReceiverInfo, ServiceInfo,
+    ActivityInfo, ApplicationInfo, IntentFilter, PackageInfo, ProviderInfo, ReceiverInfo,
+    ServiceInfo,
 };
 use std::collections::HashMap;
 use thiserror::Error;
@@ -31,16 +32,23 @@ pub const ATTR_LABEL: u32 = 0x01010001;
 pub const ATTR_ICON: u32 = 0x01010002;
 pub const ATTR_NAME: u32 = 0x01010003;
 pub const ATTR_PERMISSION: u32 = 0x01010006;
+pub const ATTR_READ_PERMISSION: u32 = 0x01010007;
+pub const ATTR_WRITE_PERMISSION: u32 = 0x01010008;
+pub const ATTR_HAS_CODE: u32 = 0x0101000c;
+pub const ATTR_ENABLED: u32 = 0x0101000e;
 pub const ATTR_EXPORTED: u32 = 0x01010010;
 pub const ATTR_LAUNCH_MODE: u32 = 0x01010011;
+pub const ATTR_MULTIPROCESS: u32 = 0x01010012;
+pub const ATTR_AUTHORITIES: u32 = 0x01010018;
+pub const ATTR_INIT_ORDER: u32 = 0x0101001a;
+pub const ATTR_GRANT_URI_PERMISSIONS: u32 = 0x0101001b;
 pub const ATTR_VERSION_CODE: u32 = 0x0101001b;
 pub const ATTR_VERSION_NAME: u32 = 0x0101001c;
+pub const ATTR_PRIORITY: u32 = 0x0101001c;
 pub const ATTR_THEME: u32 = 0x01010020;
+pub const ATTR_MIME_TYPE: u32 = 0x01010026;
 pub const ATTR_SCHEME: u32 = 0x01010027;
 pub const ATTR_HOST: u32 = 0x01010028;
-pub const ATTR_MIME_TYPE: u32 = 0x01010026;
-pub const ATTR_PRIORITY: u32 = 0x0101001c;
-pub const ATTR_HAS_CODE: u32 = 0x0101000c;
 pub const ATTR_MIN_SDK_VERSION: u32 = 0x0101020c;
 pub const ATTR_TARGET_SDK_VERSION: u32 = 0x0101021b;
 pub const ATTR_GLES_VERSION: u32 = 0x01010281;
@@ -98,6 +106,18 @@ impl XmlAttribute {
             Some(raw.as_str())
         } else if self.data_type == TYPE_STRING {
             pool.get(self.data as usize).map(|s| s.as_str())
+        } else {
+            None
+        }
+    }
+
+    pub fn as_string_or_ref(&self, pool: &[String]) -> Option<String> {
+        if let Some(raw) = &self.raw_value {
+            Some(raw.clone())
+        } else if self.data_type == TYPE_STRING {
+            pool.get(self.data as usize).cloned()
+        } else if self.data_type == TYPE_REFERENCE {
+            Some(format!("@0x{:08x}", self.data))
         } else {
             None
         }
@@ -165,6 +185,7 @@ pub struct ParsedAxmlManifest {
     pub activities: Vec<ActivityInfo>,
     pub services: Vec<ServiceInfo>,
     pub receivers: Vec<ReceiverInfo>,
+    pub providers: Vec<ProviderInfo>,
     pub uses_permissions: Vec<String>,
     pub uses_features: Vec<UsesFeatureInfo>,
     pub meta_data: HashMap<String, String>,
@@ -198,12 +219,39 @@ impl ParsedAxmlManifest {
             }
         }
 
+        let mut services = self.services.clone();
+        for svc in &mut services {
+            if svc.package_name.is_empty() {
+                svc.package_name = self.package_name.clone();
+            }
+        }
+
+        let mut receivers = self.receivers.clone();
+        for rcv in &mut receivers {
+            if rcv.package_name.is_empty() {
+                rcv.package_name = self.package_name.clone();
+            }
+        }
+
+        let mut providers = self.providers.clone();
+        for prov in &mut providers {
+            if prov.package_name.is_empty() {
+                prov.package_name = self.package_name.clone();
+            }
+            if prov.application_info.is_none() {
+                prov.application_info = Some(app_info.clone());
+            }
+        }
+
         PackageInfo {
             package_name: self.package_name.clone(),
             version_code: self.version_code,
             version_name: self.version_name.clone(),
             application_info: Some(app_info),
             activities,
+            services,
+            receivers,
+            providers,
             requested_permissions: self.uses_permissions.clone(),
             first_install_time: 0,
             last_update_time: 0,
@@ -281,6 +329,7 @@ impl AxmlParser {
         let mut current_activity: Option<ActivityInfo> = None;
         let mut current_receiver: Option<ReceiverInfo> = None;
         let mut current_service: Option<ServiceInfo> = None;
+        let mut current_provider: Option<ProviderInfo> = None;
         let mut current_intent_filter: Option<IntentFilter> = None;
 
         pos = 8;
@@ -350,6 +399,7 @@ impl AxmlParser {
                             &mut current_activity,
                             &mut current_service,
                             &mut current_receiver,
+                            &mut current_provider,
                             &mut current_intent_filter,
                         );
 
@@ -364,6 +414,7 @@ impl AxmlParser {
                             &mut current_activity,
                             &mut current_service,
                             &mut current_receiver,
+                            &mut current_provider,
                             &mut current_intent_filter,
                         );
                     }
@@ -384,6 +435,9 @@ impl AxmlParser {
         if let Some(rcv) = current_receiver.take() {
             manifest.receivers.push(rcv);
         }
+        if let Some(prov) = current_provider.take() {
+            manifest.providers.push(prov);
+        }
 
         Ok(manifest)
     }
@@ -397,13 +451,14 @@ impl AxmlParser {
         current_activity: &mut Option<ActivityInfo>,
         current_service: &mut Option<ServiceInfo>,
         current_receiver: &mut Option<ReceiverInfo>,
+        current_provider: &mut Option<ProviderInfo>,
         current_intent_filter: &mut Option<IntentFilter>,
     ) {
         // Universal attribute scan for root/flat manifests
         for attr in attrs {
             if manifest.package_name.is_empty() && (attr.name == "package" || attr.name == "packageName") {
-                if let Some(pkg) = attr.as_string(pool) {
-                    manifest.package_name = pkg.to_string();
+                if let Some(pkg) = attr.as_string_or_ref(pool) {
+                    manifest.package_name = pkg;
                 }
             } else if attr.name == "glEsVersion" || attr.resource_id == Some(ATTR_GLES_VERSION) {
                 if let Some(v) = attr.as_u32() {
@@ -414,12 +469,12 @@ impl AxmlParser {
                     });
                 }
             } else if attr.name == "name" || attr.resource_id == Some(ATTR_NAME) {
-                if let Some(s) = attr.as_string(pool) {
-                    if s.starts_with("android.permission.") && !manifest.uses_permissions.contains(&s.to_string()) {
-                        manifest.uses_permissions.push(s.to_string());
+                if let Some(s) = attr.as_string_or_ref(pool) {
+                    if s.starts_with("android.permission.") && !manifest.uses_permissions.contains(&s) {
+                        manifest.uses_permissions.push(s);
                     } else if s.contains("vulkan") || s.contains("opengles") {
                         manifest.uses_features.push(UsesFeatureInfo {
-                            name: s.to_string(),
+                            name: s,
                             gl_es_version: 0,
                             required: true,
                         });
@@ -432,16 +487,16 @@ impl AxmlParser {
             "manifest" => {
                 for attr in attrs {
                     if attr.name == "package" || attr.name == "packageName" {
-                        if let Some(pkg) = attr.as_string(pool) {
-                            manifest.package_name = pkg.to_string();
+                        if let Some(pkg) = attr.as_string_or_ref(pool) {
+                            manifest.package_name = pkg;
                         }
                     } else if attr.name == "versionCode" || attr.resource_id == Some(ATTR_VERSION_CODE) {
                         if let Some(vc) = attr.as_i32() {
                             manifest.version_code = vc;
                         }
                     } else if attr.name == "versionName" || attr.resource_id == Some(ATTR_VERSION_NAME) {
-                        if let Some(vn) = attr.as_string(pool) {
-                            manifest.version_name = Some(vn.to_string());
+                        if let Some(vn) = attr.as_string_or_ref(pool) {
+                            manifest.version_name = Some(vn);
                         }
                     }
                 }
@@ -462,12 +517,12 @@ impl AxmlParser {
             "application" => {
                 for attr in attrs {
                     if attr.name == "name" || attr.resource_id == Some(ATTR_NAME) {
-                        if let Some(name) = attr.as_string(pool) {
-                            manifest.application_name = Some(name.to_string());
+                        if let Some(name) = attr.as_string_or_ref(pool) {
+                            manifest.application_name = Some(name);
                         }
                     } else if attr.name == "label" || attr.resource_id == Some(ATTR_LABEL) {
-                        if let Some(label) = attr.as_string(pool) {
-                            manifest.application_label = Some(label.to_string());
+                        if let Some(label) = attr.as_string_or_ref(pool) {
+                            manifest.application_label = Some(label);
                         }
                     } else if attr.name == "icon" || attr.resource_id == Some(ATTR_ICON) {
                         if let Some(icon) = attr.as_u32() {
@@ -493,8 +548,8 @@ impl AxmlParser {
                 };
                 for attr in attrs {
                     if attr.name == "name" || attr.resource_id == Some(ATTR_NAME) {
-                        if let Some(name) = attr.as_string(pool) {
-                            let mut full_name = name.to_string();
+                        if let Some(name) = attr.as_string_or_ref(pool) {
+                            let mut full_name = name;
                             if full_name.starts_with('.') {
                                 full_name = format!("{}{}", manifest.package_name, full_name);
                             } else if !full_name.contains('.') && !manifest.package_name.is_empty() {
@@ -503,8 +558,8 @@ impl AxmlParser {
                             act.name = full_name;
                         }
                     } else if attr.name == "label" || attr.resource_id == Some(ATTR_LABEL) {
-                        if let Some(label) = attr.as_string(pool) {
-                            act.label = Some(label.to_string());
+                        if let Some(label) = attr.as_string_or_ref(pool) {
+                            act.label = Some(label);
                         }
                     } else if attr.name == "icon" || attr.resource_id == Some(ATTR_ICON) {
                         if let Some(icon) = attr.as_u32() {
@@ -518,13 +573,17 @@ impl AxmlParser {
                         if let Some(exp) = attr.as_bool() {
                             act.exported = exp;
                         }
+                    } else if attr.name == "enabled" || attr.resource_id == Some(ATTR_ENABLED) {
+                        if let Some(en) = attr.as_bool() {
+                            act.enabled = en;
+                        }
                     } else if attr.name == "launchMode" || attr.resource_id == Some(ATTR_LAUNCH_MODE) {
                         if let Some(lm) = attr.as_i32() {
                             act.launch_mode = lm;
                         }
                     } else if attr.name == "permission" || attr.resource_id == Some(ATTR_PERMISSION) {
-                        if let Some(perm) = attr.as_string(pool) {
-                            act.permission = Some(perm.to_string());
+                        if let Some(perm) = attr.as_string_or_ref(pool) {
+                            act.permission = Some(perm);
                         }
                     }
                 }
@@ -539,16 +598,26 @@ impl AxmlParser {
                 };
                 for attr in attrs {
                     if attr.name == "name" || attr.resource_id == Some(ATTR_NAME) {
-                        if let Some(name) = attr.as_string(pool) {
-                            svc.name = name.to_string();
+                        if let Some(name) = attr.as_string_or_ref(pool) {
+                            let mut full_name = name;
+                            if full_name.starts_with('.') {
+                                full_name = format!("{}{}", manifest.package_name, full_name);
+                            } else if !full_name.contains('.') && !manifest.package_name.is_empty() {
+                                full_name = format!("{}.{}", manifest.package_name, full_name);
+                            }
+                            svc.name = full_name;
                         }
                     } else if attr.name == "permission" || attr.resource_id == Some(ATTR_PERMISSION) {
-                        if let Some(perm) = attr.as_string(pool) {
-                            svc.permission = Some(perm.to_string());
+                        if let Some(perm) = attr.as_string_or_ref(pool) {
+                            svc.permission = Some(perm);
                         }
                     } else if attr.name == "exported" || attr.resource_id == Some(ATTR_EXPORTED) {
                         if let Some(exp) = attr.as_bool() {
                             svc.exported = exp;
+                        }
+                    } else if attr.name == "enabled" || attr.resource_id == Some(ATTR_ENABLED) {
+                        if let Some(en) = attr.as_bool() {
+                            svc.enabled = en;
                         }
                     }
                 }
@@ -563,20 +632,84 @@ impl AxmlParser {
                 };
                 for attr in attrs {
                     if attr.name == "name" || attr.resource_id == Some(ATTR_NAME) {
-                        if let Some(name) = attr.as_string(pool) {
-                            rcv.name = name.to_string();
+                        if let Some(name) = attr.as_string_or_ref(pool) {
+                            let mut full_name = name;
+                            if full_name.starts_with('.') {
+                                full_name = format!("{}{}", manifest.package_name, full_name);
+                            } else if !full_name.contains('.') && !manifest.package_name.is_empty() {
+                                full_name = format!("{}.{}", manifest.package_name, full_name);
+                            }
+                            rcv.name = full_name;
                         }
                     } else if attr.name == "permission" || attr.resource_id == Some(ATTR_PERMISSION) {
-                        if let Some(perm) = attr.as_string(pool) {
-                            rcv.permission = Some(perm.to_string());
+                        if let Some(perm) = attr.as_string_or_ref(pool) {
+                            rcv.permission = Some(perm);
                         }
                     } else if attr.name == "exported" || attr.resource_id == Some(ATTR_EXPORTED) {
                         if let Some(exp) = attr.as_bool() {
                             rcv.exported = exp;
                         }
+                    } else if attr.name == "enabled" || attr.resource_id == Some(ATTR_ENABLED) {
+                        if let Some(en) = attr.as_bool() {
+                            rcv.enabled = en;
+                        }
                     }
                 }
                 *current_receiver = Some(rcv);
+            }
+            "provider" => {
+                let mut prov = ProviderInfo {
+                    package_name: manifest.package_name.clone(),
+                    enabled: true,
+                    exported: false,
+                    ..Default::default()
+                };
+                for attr in attrs {
+                    if attr.name == "name" || attr.resource_id == Some(ATTR_NAME) {
+                        if let Some(name) = attr.as_string_or_ref(pool) {
+                            let mut full_name = name;
+                            if full_name.starts_with('.') {
+                                full_name = format!("{}{}", manifest.package_name, full_name);
+                            } else if !full_name.contains('.') && !manifest.package_name.is_empty() {
+                                full_name = format!("{}.{}", manifest.package_name, full_name);
+                            }
+                            prov.name = full_name;
+                        }
+                    } else if attr.name == "authorities" || attr.name == "authority" || attr.resource_id == Some(ATTR_AUTHORITIES) {
+                        if let Some(auth) = attr.as_string_or_ref(pool) {
+                            prov.authority = auth;
+                        }
+                    } else if attr.name == "exported" || attr.resource_id == Some(ATTR_EXPORTED) {
+                        if let Some(exp) = attr.as_bool() {
+                            prov.exported = exp;
+                        }
+                    } else if attr.name == "enabled" || attr.resource_id == Some(ATTR_ENABLED) {
+                        if let Some(en) = attr.as_bool() {
+                            prov.enabled = en;
+                        }
+                    } else if attr.name == "grantUriPermissions" || attr.resource_id == Some(ATTR_GRANT_URI_PERMISSIONS) {
+                        if let Some(grant) = attr.as_bool() {
+                            prov.grant_uri_permissions = grant;
+                        }
+                    } else if attr.name == "readPermission" || attr.resource_id == Some(ATTR_READ_PERMISSION) {
+                        if let Some(perm) = attr.as_string_or_ref(pool) {
+                            prov.read_permission = Some(perm);
+                        }
+                    } else if attr.name == "writePermission" || attr.resource_id == Some(ATTR_WRITE_PERMISSION) {
+                        if let Some(perm) = attr.as_string_or_ref(pool) {
+                            prov.write_permission = Some(perm);
+                        }
+                    } else if attr.name == "multiprocess" || attr.resource_id == Some(ATTR_MULTIPROCESS) {
+                        if let Some(mp) = attr.as_bool() {
+                            prov.multiprocess = mp;
+                        }
+                    } else if attr.name == "initOrder" || attr.resource_id == Some(ATTR_INIT_ORDER) {
+                        if let Some(io) = attr.as_i32() {
+                            prov.init_order = io;
+                        }
+                    }
+                }
+                *current_provider = Some(prov);
             }
             "intent-filter" => {
                 let mut filter = IntentFilter::default();
@@ -593,8 +726,8 @@ impl AxmlParser {
                 if let Some(filter) = current_intent_filter {
                     for attr in attrs {
                         if attr.name == "name" || attr.resource_id == Some(ATTR_NAME) {
-                            if let Some(name) = attr.as_string(pool) {
-                                filter.actions.push(name.to_string());
+                            if let Some(name) = attr.as_string_or_ref(pool) {
+                                filter.actions.push(name);
                             }
                         }
                     }
@@ -604,8 +737,8 @@ impl AxmlParser {
                 if let Some(filter) = current_intent_filter {
                     for attr in attrs {
                         if attr.name == "name" || attr.resource_id == Some(ATTR_NAME) {
-                            if let Some(name) = attr.as_string(pool) {
-                                filter.categories.push(name.to_string());
+                            if let Some(name) = attr.as_string_or_ref(pool) {
+                                filter.categories.push(name);
                             }
                         }
                     }
@@ -615,19 +748,19 @@ impl AxmlParser {
                 if let Some(filter) = current_intent_filter {
                     for attr in attrs {
                         if attr.name == "scheme" || attr.resource_id == Some(ATTR_SCHEME) {
-                            if let Some(scheme) = attr.as_string(pool) {
-                                filter.data_schemes.push(scheme.to_string());
+                            if let Some(scheme) = attr.as_string_or_ref(pool) {
+                                filter.data_schemes.push(scheme);
                             }
                         }
                     }
                 }
             }
-            "uses-permission" => {
+            "uses-permission" | "uses-permission-sdk-23" => {
                 for attr in attrs {
                     if attr.name == "name" || attr.resource_id == Some(ATTR_NAME) {
-                        if let Some(name) = attr.as_string(pool) {
-                            if !manifest.uses_permissions.contains(&name.to_string()) {
-                                manifest.uses_permissions.push(name.to_string());
+                        if let Some(name) = attr.as_string_or_ref(pool) {
+                            if !manifest.uses_permissions.contains(&name) {
+                                manifest.uses_permissions.push(name);
                             }
                         }
                     }
@@ -640,8 +773,8 @@ impl AxmlParser {
                 };
                 for attr in attrs {
                     if attr.name == "name" || attr.resource_id == Some(ATTR_NAME) {
-                        if let Some(name) = attr.as_string(pool) {
-                            feat.name = name.to_string();
+                        if let Some(name) = attr.as_string_or_ref(pool) {
+                            feat.name = name;
                         }
                     } else if attr.name == "glEsVersion" || attr.resource_id == Some(ATTR_GLES_VERSION) {
                         if let Some(v) = attr.as_u32() {
@@ -660,12 +793,12 @@ impl AxmlParser {
                 let mut val = String::new();
                 for attr in attrs {
                     if attr.name == "name" || attr.resource_id == Some(ATTR_NAME) {
-                        if let Some(k) = attr.as_string(pool) {
-                            key = k.to_string();
+                        if let Some(k) = attr.as_string_or_ref(pool) {
+                            key = k;
                         }
                     } else if attr.name == "value" {
-                        if let Some(v) = attr.as_string(pool) {
-                            val = v.to_string();
+                        if let Some(v) = attr.as_string_or_ref(pool) {
+                            val = v;
                         }
                     }
                 }
@@ -684,6 +817,7 @@ impl AxmlParser {
         current_activity: &mut Option<ActivityInfo>,
         current_service: &mut Option<ServiceInfo>,
         current_receiver: &mut Option<ReceiverInfo>,
+        current_provider: &mut Option<ProviderInfo>,
         current_intent_filter: &mut Option<IntentFilter>,
     ) {
         match tag_name {
@@ -713,6 +847,11 @@ impl AxmlParser {
             "receiver" => {
                 if let Some(rcv) = current_receiver.take() {
                     manifest.receivers.push(rcv);
+                }
+            }
+            "provider" => {
+                if let Some(prov) = current_provider.take() {
+                    manifest.providers.push(prov);
                 }
             }
             _ => {}

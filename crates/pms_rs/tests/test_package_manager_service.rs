@@ -61,6 +61,7 @@ fn test_package_manager_service_query_apis() {
         ],
         first_install_time: 1000,
         last_update_time: 2000,
+        ..Default::default()
     };
 
     let app2 = PackageInfo {
@@ -99,6 +100,7 @@ fn test_package_manager_service_query_apis() {
         requested_permissions: vec!["android.permission.READ_EXTERNAL_STORAGE".to_string()],
         first_install_time: 1500,
         last_update_time: 2500,
+        ..Default::default()
     };
 
     pms.install_package_info(app1, None);

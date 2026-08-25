@@ -47,6 +47,10 @@ pub struct InstalledPackage {
 pub struct PackageManagerService {
     packages: RwLock<HashMap<String, InstalledPackage>>,
     components: RwLock<HashMap<ComponentName, ActivityInfo>>,
+    services: RwLock<HashMap<ComponentName, ServiceInfo>>,
+    receivers: RwLock<HashMap<ComponentName, ReceiverInfo>>,
+    providers: RwLock<HashMap<String, ProviderInfo>>,
+    provider_components: RwLock<HashMap<ComponentName, ProviderInfo>>,
 }
 
 impl PackageManagerService {
@@ -55,6 +59,10 @@ impl PackageManagerService {
         Self {
             packages: RwLock::new(HashMap::new()),
             components: RwLock::new(HashMap::new()),
+            services: RwLock::new(HashMap::new()),
+            receivers: RwLock::new(HashMap::new()),
+            providers: RwLock::new(HashMap::new()),
+            provider_components: RwLock::new(HashMap::new()),
         }
     }
 
@@ -135,6 +143,10 @@ impl PackageManagerService {
     ) {
         let mut pkgs = self.packages.write().unwrap();
         let mut comps = self.components.write().unwrap();
+        let mut svcs = self.services.write().unwrap();
+        let mut rcvs = self.receivers.write().unwrap();
+        let mut provs = self.providers.write().unwrap();
+        let mut prov_comps = self.provider_components.write().unwrap();
 
         // Index activities by ComponentName
         for act in &mut pkg_info.activities {
@@ -143,6 +155,40 @@ impl PackageManagerService {
             }
             let comp = ComponentName::new(&act.package_name, &act.name);
             comps.insert(comp, act.clone());
+        }
+
+        // Index services by ComponentName
+        for svc in &mut pkg_info.services {
+            if svc.package_name.is_empty() {
+                svc.package_name = pkg_info.package_name.clone();
+            }
+            let comp = ComponentName::new(&svc.package_name, &svc.name);
+            svcs.insert(comp, svc.clone());
+        }
+
+        // Index receivers by ComponentName
+        for rcv in &mut pkg_info.receivers {
+            if rcv.package_name.is_empty() {
+                rcv.package_name = pkg_info.package_name.clone();
+            }
+            let comp = ComponentName::new(&rcv.package_name, &rcv.name);
+            rcvs.insert(comp, rcv.clone());
+        }
+
+        // Index providers by ComponentName and semicolon-separated authorities
+        for prov in &mut pkg_info.providers {
+            if prov.package_name.is_empty() {
+                prov.package_name = pkg_info.package_name.clone();
+            }
+            let comp = ComponentName::new(&prov.package_name, &prov.name);
+            prov_comps.insert(comp, prov.clone());
+
+            for auth in prov.authority.split(';') {
+                let trimmed = auth.trim();
+                if !trimmed.is_empty() {
+                    provs.insert(trimmed.to_string(), prov.clone());
+                }
+            }
         }
 
         pkgs.insert(
@@ -173,11 +219,40 @@ impl PackageManagerService {
         if (flags & GET_ACTIVITIES) == 0 {
             info.activities.clear();
         }
+        if (flags & GET_SERVICES) == 0 {
+            info.services.clear();
+        }
+        if (flags & GET_RECEIVERS) == 0 {
+            info.receivers.clear();
+        }
+        if (flags & GET_PROVIDERS) == 0 {
+            info.providers.clear();
+        }
         if (flags & GET_PERMISSIONS) == 0 {
             info.requested_permissions.clear();
         }
 
         Some(info)
+    }
+
+    /// `resolveContentProvider(name: String, flags: i64, userId: i32) -> Option<ProviderInfo>`
+    pub fn resolve_content_provider(
+        &self,
+        name: &str,
+        _flags: i64,
+        _user_id: i32,
+    ) -> Option<ProviderInfo> {
+        let provs = self.providers.read().unwrap();
+        if let Some(prov) = provs.get(name) {
+            return Some(prov.clone());
+        }
+        if let Some(comp) = ComponentName::unflatten_from_string(name) {
+            let prov_comps = self.provider_components.read().unwrap();
+            if let Some(prov) = prov_comps.get(&comp) {
+                return Some(prov.clone());
+            }
+        }
+        None
     }
 
     /// `getApplicationInfo(packageName: String, flags: i64, userId: i32) -> Option<ApplicationInfo>`
@@ -266,6 +341,9 @@ impl PackageManagerService {
             }
 
             for act in &installed.info.activities {
+                if !act.enabled && (flags & GET_DISABLED_COMPONENTS) == 0 {
+                    continue;
+                }
                 for filter in &act.intent_filters {
                     if filter.matches(intent) {
                         // Check MATCH_DEFAULT_ONLY

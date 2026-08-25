@@ -12,77 +12,7 @@ use surfaceflinger_gpu_service::SurfaceComposerService;
 use virtio_binder::VirtioBinderDevice;
 use vulkan2wgpu::VkDevice;
 
-pub struct InputManagerService {
-    is_alive: AtomicBool,
-}
-
-impl InputManagerService {
-    pub const DESCRIPTOR: &'static str = "android.hardware.input.IInputManager";
-
-    pub fn new() -> Self {
-        Self {
-            is_alive: AtomicBool::new(true),
-        }
-    }
-}
-
-impl Default for InputManagerService {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl IBinder for InputManagerService {
-    fn transact(
-        &self,
-        code: binder_rt::types::TransactionCode,
-        _flags: binder_rt::types::TransactionFlags,
-        _data: &binder_rt::Parcel,
-        reply: &mut binder_rt::Parcel,
-    ) -> AidlResult<()> {
-        reply
-            .write_status(&aidl_compat::Status::ok())
-            .map_err(|_| aidl_compat::Status::from_status(aidl_compat::STATUS_BAD_VALUE))?;
-        match code {
-            1 => {
-                // GET_INPUT_DEVICE_IDS: write count 2, device IDs 1 and 2
-                reply.write_i32(2).map_err(|_| aidl_compat::Status::from_status(aidl_compat::STATUS_BAD_VALUE))?;
-                reply.write_i32(1).map_err(|_| aidl_compat::Status::from_status(aidl_compat::STATUS_BAD_VALUE))?;
-                reply.write_i32(2).map_err(|_| aidl_compat::Status::from_status(aidl_compat::STATUS_BAD_VALUE))?;
-                Ok(())
-            }
-            2 => {
-                // INJECT_INPUT_EVENT: status ok
-                Ok(())
-            }
-            _ => Ok(()),
-        }
-    }
-
-    fn link_to_death(&self, _recipient: Arc<dyn DeathRecipient>) -> AidlResult<()> {
-        Ok(())
-    }
-
-    fn unlink_to_death(&self, _recipient: &Arc<dyn DeathRecipient>) -> AidlResult<()> {
-        Ok(())
-    }
-
-    fn ping_binder(&self) -> AidlResult<()> {
-        if self.is_alive.load(Ordering::SeqCst) {
-            Ok(())
-        } else {
-            Err(aidl_compat::Status::new_service_specific_error(-1, Some("Dead")))
-        }
-    }
-
-    fn is_binder_alive(&self) -> bool {
-        self.is_alive.load(Ordering::SeqCst)
-    }
-
-    fn get_class_descriptor(&self) -> Option<&'static str> {
-        Some(Self::DESCRIPTOR)
-    }
-}
+pub use inputflinger_rs::InputManagerService;
 
 pub struct TestStubService {
     descriptor: &'static str,
@@ -177,11 +107,38 @@ impl VirtioGpuBridge {
         let binder_device = Arc::new(VirtioBinderDevice::new());
         let handle_bridge = Arc::new(Mutex::new(HandleBridge::new()));
         let mut routing_policy = RoutingPolicy::new_default_local();
-        routing_policy.allow_host_offload(SurfaceComposerService::DESCRIPTOR);
-        routing_policy.allow_host_offload(surfaceflinger_gpu_service::GraphicBufferProducerService::DESCRIPTOR);
-        routing_policy.allow_host_offload(InputManagerService::DESCRIPTOR);
 
-        let input_service = Arc::new(InputManagerService::new());
+        // 1. SurfaceComposerService (Handle 1) - unified device sharing gl_context.device & queue
+        let dev = Arc::clone(&gl_context.device);
+        let q = Arc::clone(&gl_context.queue);
+        let surface_composer = {
+            let sf = Arc::new(SurfaceComposerService::with_handle_bridge(
+                Arc::clone(&dev),
+                Arc::clone(&q),
+                width,
+                height,
+                Arc::clone(&handle_bridge),
+            ));
+
+            binder_device.register_service(1, Arc::clone(&sf) as Arc<dyn IBinder>);
+            handle_bridge
+                .lock()
+                .unwrap()
+                .register_service_with_handle(
+                    100,
+                    1,
+                    SurfaceComposerService::DESCRIPTOR,
+                    Arc::clone(&sf) as Arc<dyn IBinder>,
+                )
+                .ok();
+            routing_policy.allow_host_offload(SurfaceComposerService::DESCRIPTOR);
+            routing_policy.allow_host_offload(surfaceflinger_gpu_service::GraphicBufferProducerService::DESCRIPTOR);
+
+            Some(sf)
+        };
+
+        // 2. InputManagerService from inputflinger_rs (Handle 2)
+        let input_service = Arc::new(inputflinger_rs::InputManagerService::new());
         binder_device.register_service(2, Arc::clone(&input_service) as Arc<dyn IBinder>);
         handle_bridge
             .lock()
@@ -189,10 +146,61 @@ impl VirtioGpuBridge {
             .register_service_with_handle(
                 100,
                 2,
-                InputManagerService::DESCRIPTOR,
+                inputflinger_rs::IINPUT_MANAGER_DESCRIPTOR,
                 Arc::clone(&input_service) as Arc<dyn IBinder>,
             )
             .ok();
+        routing_policy.allow_host_offload(inputflinger_rs::IINPUT_MANAGER_DESCRIPTOR);
+
+        // 3. WindowManagerService from wms_rs (Handle 3)
+        let wms_service = Arc::new(wms_rs::WindowManagerService::new());
+        binder_device.register_service(3, Arc::clone(&wms_service) as Arc<dyn IBinder>);
+        handle_bridge
+            .lock()
+            .unwrap()
+            .register_service_with_handle(
+                100,
+                3,
+                wms_rs::IWINDOW_MANAGER_DESCRIPTOR,
+                Arc::clone(&wms_service) as Arc<dyn IBinder>,
+            )
+            .ok();
+        routing_policy.allow_host_offload(wms_rs::IWINDOW_MANAGER_DESCRIPTOR);
+        routing_policy.allow_host_offload(wms_rs::IWINDOW_SESSION_DESCRIPTOR);
+
+        // 4. PackageManagerService from pms_rs (Handle 5)
+        let pms_service = Arc::new(pms_rs::PackageManagerService::new());
+        binder_device.register_service(5, Arc::clone(&pms_service) as Arc<dyn IBinder>);
+        handle_bridge
+            .lock()
+            .unwrap()
+            .register_service_with_handle(
+                100,
+                5,
+                pms_rs::IPACKAGE_MANAGER_DESCRIPTOR,
+                Arc::clone(&pms_service) as Arc<dyn IBinder>,
+            )
+            .ok();
+        routing_policy.allow_host_offload(pms_rs::IPACKAGE_MANAGER_DESCRIPTOR);
+
+        // 5. ActivityManagerService from ams_rs (Handle 4)
+        let pms_client = Arc::new(pms_rs::PackageManagerClient::new(
+            aidl_compat::pointer::SpIBinder::from_arc(Arc::clone(&pms_service) as Arc<dyn IBinder>),
+        ));
+        let zygote = Arc::new(zygote_client::socket::ZygoteClient::new_path("/dev/socket/zygote"));
+        let ams_service = Arc::new(ams_rs::ActivityManagerService::new(pms_client, zygote));
+        binder_device.register_service(4, Arc::clone(&ams_service) as Arc<dyn IBinder>);
+        handle_bridge
+            .lock()
+            .unwrap()
+            .register_service_with_handle(
+                100,
+                4,
+                ams_rs::IACTIVITY_MANAGER_DESCRIPTOR,
+                Arc::clone(&ams_service) as Arc<dyn IBinder>,
+            )
+            .ok();
+        routing_policy.allow_host_offload(ams_rs::IACTIVITY_MANAGER_DESCRIPTOR);
 
         for &h in &[10, 20, 30] {
             let stub = Arc::new(TestStubService::new("android.gui.IGraphicBufferProducer"));
@@ -208,59 +216,6 @@ impl VirtioGpuBridge {
                 )
                 .ok();
         }
-
-        let surface_composer = {
-            let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor::default());
-            if let Some(adapter) = instance
-                .request_adapter(&wgpu::RequestAdapterOptions {
-                    power_preference: wgpu::PowerPreference::HighPerformance,
-                    compatible_surface: None,
-                    force_fallback_adapter: false,
-                })
-                .await
-            {
-                if let Ok((device, queue)) = adapter
-                    .request_device(
-                        &wgpu::DeviceDescriptor {
-                            label: Some("SurfaceComposer Bridge Device"),
-                            required_features: wgpu::Features::empty(),
-                            required_limits: adapter.limits(),
-                            memory_hints: wgpu::MemoryHints::default(),
-                        },
-                        None,
-                    )
-                    .await
-                {
-                    let dev = Arc::new(device);
-                    let q = Arc::new(queue);
-                    let sf = Arc::new(SurfaceComposerService::with_handle_bridge(
-                        Arc::clone(&dev),
-                        Arc::clone(&q),
-                        width,
-                        height,
-                        Arc::clone(&handle_bridge),
-                    ));
-
-                    binder_device.register_service(1, Arc::clone(&sf) as Arc<dyn IBinder>);
-                    handle_bridge
-                        .lock()
-                        .unwrap()
-                        .register_service_with_handle(
-                            100,
-                            1,
-                            SurfaceComposerService::DESCRIPTOR,
-                            Arc::clone(&sf) as Arc<dyn IBinder>,
-                        )
-                        .ok();
-
-                    Some(sf)
-                } else {
-                    None
-                }
-            } else {
-                None
-            }
-        };
 
         Ok(Self {
             gl_context,

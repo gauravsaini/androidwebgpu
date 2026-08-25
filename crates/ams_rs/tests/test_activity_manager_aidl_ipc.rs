@@ -41,6 +41,7 @@ fn test_activity_manager_aidl_proxy_transact_roundtrip() {
         requested_permissions: vec![],
         first_install_time: 0,
         last_update_time: 0,
+        ..Default::default()
     };
     pms.install_package_info(pkg_info, None);
 

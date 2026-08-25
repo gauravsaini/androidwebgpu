@@ -53,6 +53,7 @@ fn setup_test_environment() -> (Arc<ActivityManagerService>, Arc<PackageManagerS
         requested_permissions: vec!["android.permission.INTERNET".to_string()],
         first_install_time: 1000,
         last_update_time: 1000,
+        ..Default::default()
     };
 
     pms.install_package_info(pkg_info, None);

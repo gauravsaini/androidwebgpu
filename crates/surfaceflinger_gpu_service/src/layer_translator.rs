@@ -61,7 +61,7 @@ impl Default for LayerState {
             bounds: [-1.0, -1.0, 2.0, 2.0],
             is_ndc: true,
             source_crop: [0.0, 0.0, 1.0, 1.0],
-            transform: [1.0, 1.0, 0.0, 0.0],
+            transform: [1.0, 0.0, 0.0, 1.0],
             hwc_transform: 0,
             damage_rect: None,
             z_order: 0,

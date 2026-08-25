@@ -74,6 +74,7 @@ fn test_adversarial_cascading_process_crashes_and_cleanup() {
             requested_permissions: vec![],
             first_install_time: 1000,
             last_update_time: 1000,
+            ..Default::default()
         };
         harness.pms.install_package_info(pkg_info, None);
 

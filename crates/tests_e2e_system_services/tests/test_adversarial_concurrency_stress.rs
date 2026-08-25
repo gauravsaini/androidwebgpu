@@ -66,6 +66,7 @@ fn test_high_throughput_multithreaded_system_services_stress() {
             requested_permissions: vec!["android.permission.INTERNET".to_string()],
             first_install_time: 1000,
             last_update_time: 1000,
+            ..Default::default()
         };
         harness.pms.install_package_info(pkg_info, None);
     }

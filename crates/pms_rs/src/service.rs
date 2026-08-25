@@ -32,6 +32,7 @@ pub mod ipackage_manager_codes {
     pub const CHECK_PERMISSION: u32 = FIRST_CALL_TRANSACTION + 5; // 6
     pub const GET_INSTALLED_PACKAGES: u32 = FIRST_CALL_TRANSACTION + 6; // 7
     pub const GET_INSTALLED_APPLICATIONS: u32 = FIRST_CALL_TRANSACTION + 7; // 8
+    pub const RESOLVE_CONTENT_PROVIDER: u32 = FIRST_CALL_TRANSACTION + 8; // 9
 }
 
 // -----------------------------------------------------------------------------
@@ -75,6 +76,13 @@ pub trait IPackageManager: Interface + Send + Sync {
         flags: i64,
         user_id: i32,
     ) -> AidlResult<Vec<ResolveInfo>>;
+
+    fn resolve_content_provider(
+        &self,
+        name: &str,
+        flags: i64,
+        user_id: i32,
+    ) -> AidlResult<Option<ProviderInfo>>;
 
     fn check_permission(
         &self,
@@ -318,6 +326,35 @@ impl Remotable for PackageManagerService {
                     .map_err(|_| Status::from_status(STATUS_BAD_VALUE))?;
                 for a in &apps {
                     a.write_to_parcel(reply)?;
+                }
+                Ok(())
+            }
+            ipackage_manager_codes::RESOLVE_CONTENT_PROVIDER => {
+                let name = data
+                    .read_utf8(&mut offset)
+                    .map_err(|_| Status::from_status(STATUS_BAD_VALUE))?
+                    .unwrap_or_default();
+                let flags = data
+                    .read_i64(&mut offset)
+                    .map_err(|_| Status::from_status(STATUS_BAD_VALUE))?;
+                let user_id = data
+                    .read_i32(&mut offset)
+                    .map_err(|_| Status::from_status(STATUS_BAD_VALUE))?;
+
+                let res = self.resolve_content_provider(&name, flags, user_id);
+                reply
+                    .write_status(&Status::ok())
+                    .map_err(|_| Status::from_status(STATUS_BAD_VALUE))?;
+
+                if let Some(prov) = res {
+                    reply
+                        .write_bool(true)
+                        .map_err(|_| Status::from_status(STATUS_BAD_VALUE))?;
+                    prov.write_to_parcel(reply)?;
+                } else {
+                    reply
+                        .write_bool(false)
+                        .map_err(|_| Status::from_status(STATUS_BAD_VALUE))?;
                 }
                 Ok(())
             }
@@ -743,6 +780,50 @@ impl IPackageManager for PackageManagerClient {
             results.push(item);
         }
         Ok(results)
+    }
+
+    fn resolve_content_provider(
+        &self,
+        name: &str,
+        flags: i64,
+        user_id: i32,
+    ) -> AidlResult<Option<ProviderInfo>> {
+        let mut data = Parcel::new();
+        data.write_utf16(Some(IPACKAGE_MANAGER_DESCRIPTOR))
+            .map_err(|_| Status::from_status(STATUS_BAD_VALUE))?;
+        data.write_utf8(Some(name))
+            .map_err(|_| Status::from_status(STATUS_BAD_VALUE))?;
+        data.write_i64(flags)
+            .map_err(|_| Status::from_status(STATUS_BAD_VALUE))?;
+        data.write_i32(user_id)
+            .map_err(|_| Status::from_status(STATUS_BAD_VALUE))?;
+
+        let mut reply = Parcel::new();
+        self.binder.transact(
+            ipackage_manager_codes::RESOLVE_CONTENT_PROVIDER,
+            0,
+            &data,
+            &mut reply,
+        )?;
+
+        let mut offset = 0;
+        let status = reply
+            .read_status(&mut offset)
+            .map_err(|_| Status::from_status(STATUS_BAD_VALUE))?;
+        if !status.is_ok() {
+            return Err(status);
+        }
+
+        let has_prov = reply
+            .read_bool(&mut offset)
+            .map_err(|_| Status::from_status(STATUS_BAD_VALUE))?;
+        if has_prov {
+            let mut prov = ProviderInfo::default();
+            prov.read_from_parcel_at(&reply, &mut offset)?;
+            Ok(Some(prov))
+        } else {
+            Ok(None)
+        }
     }
 }
 

@@ -15,6 +15,11 @@ aidl_compat = { path = "../aidl_compat" }
 binder_handle_bridge = { path = "../binder_handle_bridge" }
 binder_routing = { path = "../binder_routing" }
 surfaceflinger_gpu_service = { path = "../surfaceflinger_gpu_service" }
+inputflinger_rs = { path = "../inputflinger_rs" }
+wms_rs = { path = "../wms_rs" }
+ams_rs = { path = "../ams_rs" }
+pms_rs = { path = "../pms_rs" }
+zygote_client = { path = "../zygote_client" }
 wgpu = { workspace = true }
 bytemuck = { workspace = true }
 pollster = { workspace = true }

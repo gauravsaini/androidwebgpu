@@ -5,6 +5,7 @@ use crate::shader::ShaderTranslator;
 use crate::texture::GlTexture;
 use metrics_overlay::MetricsTracker;
 use std::collections::HashMap;
+use std::sync::Arc;
 
 #[derive(Debug, Clone, Copy)]
 pub struct Viewport {
@@ -55,8 +56,8 @@ pub struct GlVertexArrayObject {
 }
 
 pub struct GlContext {
-    pub device: wgpu::Device,
-    pub queue: wgpu::Queue,
+    pub device: Arc<wgpu::Device>,
+    pub queue: Arc<wgpu::Queue>,
     pub surface_format: wgpu::TextureFormat,
 
     // GLES state
@@ -141,6 +142,9 @@ impl GlContext {
             )
             .await
             .map_err(|e| format!("Failed to create WebGPU device: {:?}", e))?;
+
+        let device = Arc::new(device);
+        let queue = Arc::new(queue);
 
         let surface_format = wgpu::TextureFormat::Rgba8UnormSrgb;
         let mut default_render_target = GlTexture::new(0, 0x0DE1); // GL_TEXTURE_2D

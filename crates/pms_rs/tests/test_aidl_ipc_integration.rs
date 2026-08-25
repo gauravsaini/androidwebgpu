@@ -85,6 +85,7 @@ fn test_parcel_roundtrips() {
         requested_permissions: vec!["android.permission.INTERNET".to_string()],
         first_install_time: 1234567890,
         last_update_time: 1234567899,
+        ..Default::default()
     };
 
     let mut p4 = Parcel::new();

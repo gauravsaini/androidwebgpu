@@ -95,6 +95,14 @@ This ledger records verified, runnable verification gates for the bidirectional 
 - **Expected Output**: `test result: ok. 1 passed; 0 failed`
 - **Status**: [x] VERIFIED
 
+### Gate E2E-12: Real-World F-Droid APK Boot & Catalog Lifecycle
+- **Requirement**: Full binary AXML/ARSC parsing (25 activities, 4 providers, 16 services, 16 receivers, 29 permissions), intent resolution for `org.fdroid.fdroid.views.main.MainActivity`, Zygote process fork, AMS attach, WMS fullscreen SurfaceControl creation, ContentProvider resolution (`ApkFileProvider`), and touch dispatch.
+- **Target Crates**: `crates/pms_rs`, `crates/tests_e2e_system_services`
+- **Command**: `cargo test -p pms_rs --test test_real_fdroid_apk && cargo test -p tests_e2e_system_services --test test_fdroid_realworld_e2e`
+- **Verification Target**: `test_real_fdroid_apk_ingestion_and_manifest_parsing`, `test_fdroid_full_stack_boot_and_input_flow`
+- **Expected Output**: `test result: ok. 3 passed; 0 failed` & `test result: ok. 1 passed; 0 failed`
+- **Status**: [x] VERIFIED
+
 ---
 
 ## Full Workspace Verification Gate

@@ -104,6 +104,10 @@ impl SystemServicesHarness {
             format!("../../fixtures/{}", apk_name),
             format!("../fixtures/{}", apk_name),
             format!("/Users/ektasaini/Desktop/androidwebgpu/fixtures/{}", apk_name),
+            format!("{}", apk_name),
+            format!("../../{}", apk_name),
+            format!("../{}", apk_name),
+            format!("/Users/ektasaini/Desktop/androidwebgpu/{}", apk_name),
         ];
 
         for p in &candidate_paths {

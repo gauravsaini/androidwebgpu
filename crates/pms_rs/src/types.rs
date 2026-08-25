@@ -577,7 +577,7 @@ impl Parcelable for ActivityInfo {
 }
 
 // -----------------------------------------------------------------------------
-// ServiceInfo & ReceiverInfo
+// ServiceInfo, ReceiverInfo & ProviderInfo
 // -----------------------------------------------------------------------------
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
@@ -589,6 +589,48 @@ pub struct ServiceInfo {
     pub enabled: bool,
 }
 
+impl Parcelable for ServiceInfo {
+    fn write_to_parcel(&self, parcel: &mut Parcel) -> AidlResult<()> {
+        parcel
+            .write_utf8(Some(&self.name))
+            .map_err(|_| Status::from_status(STATUS_BAD_VALUE))?;
+        parcel
+            .write_utf8(Some(&self.package_name))
+            .map_err(|_| Status::from_status(STATUS_BAD_VALUE))?;
+        parcel
+            .write_utf8(self.permission.as_deref())
+            .map_err(|_| Status::from_status(STATUS_BAD_VALUE))?;
+        parcel
+            .write_bool(self.exported)
+            .map_err(|_| Status::from_status(STATUS_BAD_VALUE))?;
+        parcel
+            .write_bool(self.enabled)
+            .map_err(|_| Status::from_status(STATUS_BAD_VALUE))?;
+        Ok(())
+    }
+
+    fn read_from_parcel_at(&mut self, parcel: &Parcel, offset: &mut usize) -> AidlResult<()> {
+        self.name = parcel
+            .read_utf8(offset)
+            .map_err(|_| Status::from_status(STATUS_BAD_VALUE))?
+            .unwrap_or_default();
+        self.package_name = parcel
+            .read_utf8(offset)
+            .map_err(|_| Status::from_status(STATUS_BAD_VALUE))?
+            .unwrap_or_default();
+        self.permission = parcel
+            .read_utf8(offset)
+            .map_err(|_| Status::from_status(STATUS_BAD_VALUE))?;
+        self.exported = parcel
+            .read_bool(offset)
+            .map_err(|_| Status::from_status(STATUS_BAD_VALUE))?;
+        self.enabled = parcel
+            .read_bool(offset)
+            .map_err(|_| Status::from_status(STATUS_BAD_VALUE))?;
+        Ok(())
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub struct ReceiverInfo {
     pub name: String,
@@ -597,6 +639,171 @@ pub struct ReceiverInfo {
     pub exported: bool,
     pub enabled: bool,
     pub intent_filters: Vec<IntentFilter>,
+}
+
+impl Parcelable for ReceiverInfo {
+    fn write_to_parcel(&self, parcel: &mut Parcel) -> AidlResult<()> {
+        parcel
+            .write_utf8(Some(&self.name))
+            .map_err(|_| Status::from_status(STATUS_BAD_VALUE))?;
+        parcel
+            .write_utf8(Some(&self.package_name))
+            .map_err(|_| Status::from_status(STATUS_BAD_VALUE))?;
+        parcel
+            .write_utf8(self.permission.as_deref())
+            .map_err(|_| Status::from_status(STATUS_BAD_VALUE))?;
+        parcel
+            .write_bool(self.exported)
+            .map_err(|_| Status::from_status(STATUS_BAD_VALUE))?;
+        parcel
+            .write_bool(self.enabled)
+            .map_err(|_| Status::from_status(STATUS_BAD_VALUE))?;
+        parcel
+            .write_i32(self.intent_filters.len() as i32)
+            .map_err(|_| Status::from_status(STATUS_BAD_VALUE))?;
+        for f in &self.intent_filters {
+            f.write_to_parcel(parcel)?;
+        }
+        Ok(())
+    }
+
+    fn read_from_parcel_at(&mut self, parcel: &Parcel, offset: &mut usize) -> AidlResult<()> {
+        self.name = parcel
+            .read_utf8(offset)
+            .map_err(|_| Status::from_status(STATUS_BAD_VALUE))?
+            .unwrap_or_default();
+        self.package_name = parcel
+            .read_utf8(offset)
+            .map_err(|_| Status::from_status(STATUS_BAD_VALUE))?
+            .unwrap_or_default();
+        self.permission = parcel
+            .read_utf8(offset)
+            .map_err(|_| Status::from_status(STATUS_BAD_VALUE))?;
+        self.exported = parcel
+            .read_bool(offset)
+            .map_err(|_| Status::from_status(STATUS_BAD_VALUE))?;
+        self.enabled = parcel
+            .read_bool(offset)
+            .map_err(|_| Status::from_status(STATUS_BAD_VALUE))?;
+        let filter_count = parcel
+            .read_i32(offset)
+            .map_err(|_| Status::from_status(STATUS_BAD_VALUE))?;
+        self.intent_filters.clear();
+        for _ in 0..filter_count.max(0) {
+            let mut f = IntentFilter::default();
+            f.read_from_parcel_at(parcel, offset)?;
+            self.intent_filters.push(f);
+        }
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub struct ProviderInfo {
+    pub name: String,
+    pub package_name: String,
+    pub authority: String,
+    pub exported: bool,
+    pub grant_uri_permissions: bool,
+    pub read_permission: Option<String>,
+    pub write_permission: Option<String>,
+    pub multiprocess: bool,
+    pub init_order: i32,
+    pub enabled: bool,
+    pub application_info: Option<ApplicationInfo>,
+}
+
+impl Parcelable for ProviderInfo {
+    fn write_to_parcel(&self, parcel: &mut Parcel) -> AidlResult<()> {
+        parcel
+            .write_utf8(Some(&self.name))
+            .map_err(|_| Status::from_status(STATUS_BAD_VALUE))?;
+        parcel
+            .write_utf8(Some(&self.package_name))
+            .map_err(|_| Status::from_status(STATUS_BAD_VALUE))?;
+        parcel
+            .write_utf8(Some(&self.authority))
+            .map_err(|_| Status::from_status(STATUS_BAD_VALUE))?;
+        parcel
+            .write_bool(self.exported)
+            .map_err(|_| Status::from_status(STATUS_BAD_VALUE))?;
+        parcel
+            .write_bool(self.grant_uri_permissions)
+            .map_err(|_| Status::from_status(STATUS_BAD_VALUE))?;
+        parcel
+            .write_utf8(self.read_permission.as_deref())
+            .map_err(|_| Status::from_status(STATUS_BAD_VALUE))?;
+        parcel
+            .write_utf8(self.write_permission.as_deref())
+            .map_err(|_| Status::from_status(STATUS_BAD_VALUE))?;
+        parcel
+            .write_bool(self.multiprocess)
+            .map_err(|_| Status::from_status(STATUS_BAD_VALUE))?;
+        parcel
+            .write_i32(self.init_order)
+            .map_err(|_| Status::from_status(STATUS_BAD_VALUE))?;
+        parcel
+            .write_bool(self.enabled)
+            .map_err(|_| Status::from_status(STATUS_BAD_VALUE))?;
+        if let Some(app) = &self.application_info {
+            parcel
+                .write_bool(true)
+                .map_err(|_| Status::from_status(STATUS_BAD_VALUE))?;
+            app.write_to_parcel(parcel)?;
+        } else {
+            parcel
+                .write_bool(false)
+                .map_err(|_| Status::from_status(STATUS_BAD_VALUE))?;
+        }
+        Ok(())
+    }
+
+    fn read_from_parcel_at(&mut self, parcel: &Parcel, offset: &mut usize) -> AidlResult<()> {
+        self.name = parcel
+            .read_utf8(offset)
+            .map_err(|_| Status::from_status(STATUS_BAD_VALUE))?
+            .unwrap_or_default();
+        self.package_name = parcel
+            .read_utf8(offset)
+            .map_err(|_| Status::from_status(STATUS_BAD_VALUE))?
+            .unwrap_or_default();
+        self.authority = parcel
+            .read_utf8(offset)
+            .map_err(|_| Status::from_status(STATUS_BAD_VALUE))?
+            .unwrap_or_default();
+        self.exported = parcel
+            .read_bool(offset)
+            .map_err(|_| Status::from_status(STATUS_BAD_VALUE))?;
+        self.grant_uri_permissions = parcel
+            .read_bool(offset)
+            .map_err(|_| Status::from_status(STATUS_BAD_VALUE))?;
+        self.read_permission = parcel
+            .read_utf8(offset)
+            .map_err(|_| Status::from_status(STATUS_BAD_VALUE))?;
+        self.write_permission = parcel
+            .read_utf8(offset)
+            .map_err(|_| Status::from_status(STATUS_BAD_VALUE))?;
+        self.multiprocess = parcel
+            .read_bool(offset)
+            .map_err(|_| Status::from_status(STATUS_BAD_VALUE))?;
+        self.init_order = parcel
+            .read_i32(offset)
+            .map_err(|_| Status::from_status(STATUS_BAD_VALUE))?;
+        self.enabled = parcel
+            .read_bool(offset)
+            .map_err(|_| Status::from_status(STATUS_BAD_VALUE))?;
+        let has_app = parcel
+            .read_bool(offset)
+            .map_err(|_| Status::from_status(STATUS_BAD_VALUE))?;
+        if has_app {
+            let mut app = ApplicationInfo::default();
+            app.read_from_parcel_at(parcel, offset)?;
+            self.application_info = Some(app);
+        } else {
+            self.application_info = None;
+        }
+        Ok(())
+    }
 }
 
 // -----------------------------------------------------------------------------
@@ -684,6 +891,9 @@ pub struct PackageInfo {
     pub version_name: Option<String>,
     pub application_info: Option<ApplicationInfo>,
     pub activities: Vec<ActivityInfo>,
+    pub services: Vec<ServiceInfo>,
+    pub receivers: Vec<ReceiverInfo>,
+    pub providers: Vec<ProviderInfo>,
     pub requested_permissions: Vec<String>,
     pub first_install_time: i64,
     pub last_update_time: i64,
@@ -717,6 +927,27 @@ impl Parcelable for PackageInfo {
             .map_err(|_| Status::from_status(STATUS_BAD_VALUE))?;
         for act in &self.activities {
             act.write_to_parcel(parcel)?;
+        }
+
+        parcel
+            .write_i32(self.services.len() as i32)
+            .map_err(|_| Status::from_status(STATUS_BAD_VALUE))?;
+        for svc in &self.services {
+            svc.write_to_parcel(parcel)?;
+        }
+
+        parcel
+            .write_i32(self.receivers.len() as i32)
+            .map_err(|_| Status::from_status(STATUS_BAD_VALUE))?;
+        for rcv in &self.receivers {
+            rcv.write_to_parcel(parcel)?;
+        }
+
+        parcel
+            .write_i32(self.providers.len() as i32)
+            .map_err(|_| Status::from_status(STATUS_BAD_VALUE))?;
+        for prov in &self.providers {
+            prov.write_to_parcel(parcel)?;
         }
 
         parcel
@@ -769,6 +1000,36 @@ impl Parcelable for PackageInfo {
             let mut act = ActivityInfo::default();
             act.read_from_parcel_at(parcel, offset)?;
             self.activities.push(act);
+        }
+
+        let svc_count = parcel
+            .read_i32(offset)
+            .map_err(|_| Status::from_status(STATUS_BAD_VALUE))?;
+        self.services.clear();
+        for _ in 0..svc_count.max(0) {
+            let mut svc = ServiceInfo::default();
+            svc.read_from_parcel_at(parcel, offset)?;
+            self.services.push(svc);
+        }
+
+        let rcv_count = parcel
+            .read_i32(offset)
+            .map_err(|_| Status::from_status(STATUS_BAD_VALUE))?;
+        self.receivers.clear();
+        for _ in 0..rcv_count.max(0) {
+            let mut rcv = ReceiverInfo::default();
+            rcv.read_from_parcel_at(parcel, offset)?;
+            self.receivers.push(rcv);
+        }
+
+        let prov_count = parcel
+            .read_i32(offset)
+            .map_err(|_| Status::from_status(STATUS_BAD_VALUE))?;
+        self.providers.clear();
+        for _ in 0..prov_count.max(0) {
+            let mut prov = ProviderInfo::default();
+            prov.read_from_parcel_at(parcel, offset)?;
+            self.providers.push(prov);
         }
 
         let perm_count = parcel

@@ -69,6 +69,7 @@ fn test_process_crash_and_death_recipient_cleanup_during_window_session() {
         requested_permissions: vec![],
         first_install_time: 1000,
         last_update_time: 1000,
+        ..Default::default()
     };
     harness.pms.install_package_info(pkg_info, None);
 

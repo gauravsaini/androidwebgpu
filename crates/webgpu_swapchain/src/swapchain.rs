@@ -37,6 +37,8 @@ pub enum SwapchainTarget {
     Surface {
         surface: wgpu::Surface<'static>,
         config: wgpu::SurfaceConfiguration,
+        present_texture: wgpu::Texture,
+        present_view: wgpu::TextureView,
     },
 }
 
@@ -54,8 +56,6 @@ pub struct WebGpuSwapchain {
     pub width: u32,
     pub height: u32,
     pub format: wgpu::TextureFormat,
-    pub present_texture: Option<wgpu::Texture>,
-    pub present_view: Option<wgpu::TextureView>,
     pub frame_count: u64,
     pub target: SwapchainTarget,
     pub present_mode: wgpu::PresentMode,
@@ -104,8 +104,6 @@ impl WebGpuSwapchain {
             width,
             height,
             format,
-            present_texture: None,
-            present_view: None,
             frame_count: 0,
             target: SwapchainTarget::Offscreen {
                 buffers,
@@ -141,10 +139,13 @@ impl WebGpuSwapchain {
             width: config.width,
             height: config.height,
             format: config.format,
-            present_texture: Some(present_texture),
-            present_view: Some(present_view),
             frame_count: 0,
-            target: SwapchainTarget::Surface { surface, config },
+            target: SwapchainTarget::Surface {
+                surface,
+                config,
+                present_texture,
+                present_view,
+            },
             present_mode: wgpu::PresentMode::Mailbox,
             target_fps: 120.0,
             last_frame_time: None,
@@ -216,13 +217,13 @@ impl WebGpuSwapchain {
             self.height = height;
 
             match &mut self.target {
-                SwapchainTarget::Surface { surface, config } => {
+                SwapchainTarget::Surface { surface, config, present_texture, present_view } => {
                     config.width = width.max(1);
                     config.height = height.max(1);
                     surface.configure(device, config);
                     let (tex, view) = Self::create_textures(device, width, height, self.format);
-                    self.present_texture = Some(tex);
-                    self.present_view = Some(view);
+                    *present_texture = tex;
+                    *present_view = view;
                 }
                 SwapchainTarget::Offscreen { buffers, views, current_idx } => {
                     buffers.clear();
@@ -233,8 +234,6 @@ impl WebGpuSwapchain {
                         views.push(v);
                     }
                     *current_idx = 0;
-                    self.present_texture = None;
-                    self.present_view = None;
                 }
             }
         }
@@ -245,8 +244,8 @@ impl WebGpuSwapchain {
             SwapchainTarget::Offscreen { views, current_idx, .. } if !views.is_empty() => {
                 &views[*current_idx]
             }
-            SwapchainTarget::Surface { .. } => {
-                self.present_view.as_ref().expect("Surface swapchain missing present view")
+            SwapchainTarget::Surface { present_view, .. } => {
+                present_view
             }
             _ => panic!("Swapchain target has no available texture view"),
         }
@@ -257,10 +256,36 @@ impl WebGpuSwapchain {
             SwapchainTarget::Offscreen { buffers, current_idx, .. } if !buffers.is_empty() => {
                 &buffers[*current_idx]
             }
-            SwapchainTarget::Surface { .. } => {
-                self.present_texture.as_ref().expect("Surface swapchain missing present texture")
+            SwapchainTarget::Surface { present_texture, .. } => {
+                present_texture
             }
             _ => panic!("Swapchain target has no available texture"),
+        }
+    }
+
+    pub fn get_last_presented_texture(&self) -> &wgpu::Texture {
+        match &self.target {
+            SwapchainTarget::Offscreen { buffers, current_idx, .. } if !buffers.is_empty() => {
+                let prev_idx = (*current_idx + buffers.len() - 1) % buffers.len();
+                &buffers[prev_idx]
+            }
+            SwapchainTarget::Surface { present_texture, .. } => {
+                present_texture
+            }
+            _ => panic!("Swapchain target has no available texture"),
+        }
+    }
+
+    pub fn get_last_presented_texture_view(&self) -> &wgpu::TextureView {
+        match &self.target {
+            SwapchainTarget::Offscreen { views, current_idx, .. } if !views.is_empty() => {
+                let prev_idx = (*current_idx + views.len() - 1) % views.len();
+                &views[prev_idx]
+            }
+            SwapchainTarget::Surface { present_view, .. } => {
+                present_view
+            }
+            _ => panic!("Swapchain target has no available texture view"),
         }
     }
 

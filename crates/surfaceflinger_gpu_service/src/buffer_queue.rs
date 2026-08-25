@@ -143,17 +143,11 @@ impl GraphicBufferProducerService {
     ) -> Result<i32, BufferQueueError> {
         let mut slots = self.slots.lock().unwrap();
 
-        // Find first free slot or first non-acquired slot
+        // Strictly find first free slot; return Err(NoFreeSlots) if none available
         let target_slot = slots
             .values()
             .find(|s| s.state == SlotState::Free)
             .map(|s| s.slot_id)
-            .or_else(|| {
-                slots
-                    .values()
-                    .find(|s| s.state != SlotState::Dequeued && s.state != SlotState::Acquired)
-                    .map(|s| s.slot_id)
-            })
             .ok_or(BufferQueueError::NoFreeSlots)?;
 
         let slot_ref = slots.get_mut(&target_slot).unwrap();
@@ -283,6 +277,81 @@ impl GraphicBufferProducerService {
         self.queue_buffer_data(slot, &pixels, w, h)
     }
 
+    /// Set buffer slot count (e.g. 3 for triple buffering).
+    pub fn set_buffer_count(&self, count: i32) -> Result<(), BufferQueueError> {
+        let count = count.clamp(1, 64);
+        let mut slots = self.slots.lock().unwrap();
+        let mut new_slots = std::collections::HashMap::new();
+        for slot in 0..count {
+            if let Some(existing) = slots.remove(&slot) {
+                new_slots.insert(slot, existing);
+            } else {
+                new_slots.insert(
+                    slot,
+                    GraphicBufferSlot {
+                        slot_id: slot,
+                        width: 0,
+                        height: 0,
+                        format: 1,
+                        state: SlotState::Free,
+                        texture: None,
+                        texture_view: None,
+                        generation: 0,
+                    },
+                );
+            }
+        }
+        *slots = new_slots;
+        Ok(())
+    }
+
+    /// Pre-allocate GPU textures for buffer slots.
+    pub fn allocate_buffers(
+        &self,
+        width: u32,
+        height: u32,
+        format: u32,
+    ) -> Result<(), BufferQueueError> {
+        let mut slots = self.slots.lock().unwrap();
+        let w = width.max(1);
+        let h = height.max(1);
+        for (slot_id, slot_ref) in slots.iter_mut() {
+            if slot_ref.texture.is_none() || slot_ref.width != width || slot_ref.height != height {
+                let texture = self.device.create_texture(&wgpu::TextureDescriptor {
+                    label: Some(&format!("Surface_{}_BufferSlot_{}", self.surface_id, slot_id)),
+                    size: wgpu::Extent3d {
+                        width: w,
+                        height: h,
+                        depth_or_array_layers: 1,
+                    },
+                    mip_level_count: 1,
+                    sample_count: 1,
+                    dimension: wgpu::TextureDimension::D2,
+                    format: wgpu::TextureFormat::Rgba8UnormSrgb,
+                    usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
+                    view_formats: &[],
+                });
+                let texture_view = texture.create_view(&wgpu::TextureViewDescriptor::default());
+                slot_ref.width = width;
+                slot_ref.height = height;
+                slot_ref.format = format;
+                slot_ref.texture = Some(texture);
+                slot_ref.texture_view = Some(texture_view);
+            }
+        }
+        Ok(())
+    }
+
+    /// Release an acquired buffer back to Free state.
+    pub fn release_buffer(&self, slot: i32) {
+        let mut slots = self.slots.lock().unwrap();
+        if let Some(slot_ref) = slots.get_mut(&slot) {
+            if slot_ref.state == SlotState::Acquired {
+                slot_ref.state = SlotState::Free;
+            }
+        }
+    }
+
     /// Cancel a previously dequeued buffer.
     pub fn cancel_buffer(&self, slot: i32) {
         let mut slots = self.slots.lock().unwrap();
@@ -298,6 +367,11 @@ impl GraphicBufferProducerService {
         let last_slot = *self.last_queued_slot.lock().unwrap();
         if let Some(slot) = last_slot {
             let mut slots = self.slots.lock().unwrap();
+            for (id, s) in slots.iter_mut() {
+                if *id != slot && s.state == SlotState::Acquired {
+                    s.state = SlotState::Free;
+                }
+            }
             if let Some(slot_ref) = slots.get_mut(&slot) {
                 if let Some(tex) = &slot_ref.texture {
                     let view = tex.create_view(&wgpu::TextureViewDescriptor::default());
@@ -330,6 +404,22 @@ impl Remotable for GraphicBufferProducerService {
             }
             igraphicbufferproducer_codes::DISCONNECT => {
                 self.disconnect().map_err(|_| Status::from_status(STATUS_BAD_VALUE))?;
+                reply.write_status(&Status::ok()).map_err(|_| Status::from_status(STATUS_BAD_VALUE))?;
+                Ok(())
+            }
+            igraphicbufferproducer_codes::SET_BUFFER_COUNT => {
+                let mut offset = 0;
+                let count = data.read_i32(&mut offset).unwrap_or(3);
+                self.set_buffer_count(count).map_err(|_| Status::from_status(STATUS_BAD_VALUE))?;
+                reply.write_status(&Status::ok()).map_err(|_| Status::from_status(STATUS_BAD_VALUE))?;
+                Ok(())
+            }
+            igraphicbufferproducer_codes::ALLOCATE_BUFFERS => {
+                let mut offset = 0;
+                let w = data.read_u32(&mut offset).unwrap_or(64);
+                let h = data.read_u32(&mut offset).unwrap_or(64);
+                let format = data.read_u32(&mut offset).unwrap_or(1);
+                self.allocate_buffers(w, h, format).map_err(|_| Status::from_status(STATUS_BAD_VALUE))?;
                 reply.write_status(&Status::ok()).map_err(|_| Status::from_status(STATUS_BAD_VALUE))?;
                 Ok(())
             }

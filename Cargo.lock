@@ -1322,13 +1322,16 @@ name = "virtio_gpu_bridge"
 version = "0.1.0"
 dependencies = [
  "aidl_compat",
+ "ams_rs",
  "binder_handle_bridge",
  "binder_routing",
  "binder_rt",
  "bytemuck",
  "console_error_panic_hook",
  "gles2wgpu",
+ "inputflinger_rs",
  "log",
+ "pms_rs",
  "pollster",
  "serde",
  "serde_json",
@@ -1339,6 +1342,8 @@ dependencies = [
  "wasm-bindgen",
  "wasm-bindgen-futures",
  "wgpu",
+ "wms_rs",
+ "zygote_client",
 ]
 
 [[package]]
