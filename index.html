@@ -1452,6 +1452,7 @@
         </div>
 
         <div class="nav-tabs">
+            <a href="android.html" class="tab-btn" style="text-decoration: none; color: #38bdf8; background: rgba(56, 189, 248, 0.15); border: 1px solid rgba(56, 189, 248, 0.3); font-weight: 700;">🤖 Standalone Android OS →</a>
             <button class="tab-btn active" id="tab-emulator">📱 Android OS Emulator</button>
             <button class="tab-btn" id="tab-arcade">🎮 3D Arcade Mode</button>
             <button class="tab-btn" id="tab-gates">🧪 Verification Gates</button>
@@ -2092,6 +2093,13 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
         import { BinderTestSuite } from './src/binder_test_suite.js';
         import { V86GuestManager, VM_STATES, BOOT_MILESTONES } from './src/v86_guest_manager.js';
 
+        // Import Dalvik VM & Android Runtime Engine
+        import { DexParser, DalvikVM } from './src/dex_vm.js';
+        import { AndroidRuntime } from './src/android_runtime.js';
+
+        const androidRuntime = new AndroidRuntime();
+        window.AndroidRuntime = androidRuntime;
+
         // Dynamic import of APK parser module if available
         let apkParserModule = null;
         try {
@@ -2572,6 +2580,12 @@ fn fs_normals(in: VertexOutput) -> @location(0) vec4<f32> {
             inspectorBinderStatus.textContent = 'ONLINE (0 errors)';
         }
 
+        window.AndroidEmulatorLaunchApp = (pkg) => launchApp(pkg);
+        window.AndroidEmulatorOnPackageInstalled = (pkg, name, icon) => {
+            addDynamicAppToGrid(pkg, name, icon);
+            updateSubsystemInspector();
+        };
+
         function launchApp(appId, options = {}) {
             appendLog(`[AMS] startActivity -> [${appId}]`, 'info');
 
@@ -2581,14 +2595,20 @@ fn fs_normals(in: VertexOutput) -> @location(0) vec4<f32> {
                 activateScreen('screen-home');
                 fdroidDetailModal.style.display = 'none';
                 if (arcade && !tabArcade.classList.contains('active')) arcade.stop();
-            } else if (appId === 'fdroid') {
+            } else if (appId === 'fdroid' || appId === 'org.fdroid.fdroid') {
                 if (navigationStack[navigationStack.length - 1] !== 'fdroid') {
                     navigationStack.push('fdroid');
                 }
                 runningTasks.set('fdroid', { title: 'F-Droid', pkg: 'org.fdroid.fdroid', screenId: 'screen-fdroid' });
                 fdroidDetailModal.style.display = 'none';
                 activateScreen('screen-fdroid');
-                renderFdroidCatalog();
+                
+                // Execute F-Droid Activity in Dalvik Runtime
+                if (androidRuntime && androidRuntime.activeApps.has('org.fdroid.fdroid')) {
+                    androidRuntime.renderActivityUi(androidRuntime.activeApps.get('org.fdroid.fdroid'), screenFdroid);
+                } else if (androidRuntime) {
+                    androidRuntime.renderActivityUi({ packageName: 'org.fdroid.fdroid', appName: 'F-Droid' }, screenFdroid);
+                }
                 if (arcade && !tabArcade.classList.contains('active')) arcade.stop();
             } else if (appId === 'unity' || appId === 'godot') {
                 if (navigationStack[navigationStack.length - 1] !== appId) {
@@ -2612,11 +2632,18 @@ fn fs_normals(in: VertexOutput) -> @location(0) vec4<f32> {
                 // Generic / Ingested App
                 const appInfo = PMS_REGISTRY.get(appId) || {
                     appName: options.appName || appId.charAt(0).toUpperCase() + appId.slice(1),
-                    packageName: options.packageName || `com.android.${appId}`,
+                    packageName: options.packageName || (appId.includes('.') ? appId : `com.android.${appId}`),
                     versionName: options.versionName || '1.0.0',
                     desc: 'Android Application Runtime Surface.'
                 };
-                renderGenericApp(appInfo);
+                
+                if (androidRuntime && androidRuntime.activeApps.has(appInfo.packageName)) {
+                    genericAppTitle.textContent = appInfo.appName;
+                    androidRuntime.renderActivityUi(androidRuntime.activeApps.get(appInfo.packageName), genericAppBody);
+                } else {
+                    renderGenericApp(appInfo);
+                }
+                
                 activateScreen('screen-generic-app');
                 if (navigationStack[navigationStack.length - 1] !== appId) {
                     navigationStack.push(appId);
@@ -3150,6 +3177,15 @@ fn fs_normals(in: VertexOutput) -> @location(0) vec4<f32> {
                 updateSubsystemInspector();
                 showNotificationPill(`Installed ${appLabel}`);
                 appendLog(`[PMS] Registered package '${pkgName}' (Activities: ${activitiesCount}, Providers: ${providersCount}).`, 'success');
+
+                if (androidRuntime) {
+                    try {
+                        await androidRuntime.loadAndRunApk(buffer, genericAppBody);
+                    } catch (runErr) {
+                        appendLog(`[Runtime] Note: ${runErr.message}`, 'info');
+                    }
+                }
+                launchApp(pkgName);
             } catch (err) {
                 appendLog(`[PMS] APK ingestion failed: ${err.message}`, 'error');
             }
@@ -3466,8 +3502,20 @@ fn fs_normals(in: VertexOutput) -> @location(0) vec4<f32> {
                     }
                 });
 
-                // Initialize F-Droid Catalog List
-                renderFdroidCatalog();
+                // Pre-load and execute F-Droid.apk in Dalvik VM Runtime
+                try {
+                    const fdroidFetch = await fetch('F-Droid.apk');
+                    if (fdroidFetch.ok) {
+                        const fdroidBuf = await fdroidFetch.arrayBuffer();
+                        await androidRuntime.loadAndRunApk(fdroidBuf, screenFdroid);
+                        appendLog(`[DalvikVM] Ingested real F-Droid.apk (${(fdroidBuf.byteLength / 1024 / 1024).toFixed(1)} MB) - Bytecode VM ready.`, 'success');
+                    } else {
+                        renderFdroidCatalog();
+                    }
+                } catch (e) {
+                    renderFdroidCatalog();
+                }
+
                 updateSubsystemInspector();
             } catch (err) {
                 statusPill.textContent = 'ERROR';

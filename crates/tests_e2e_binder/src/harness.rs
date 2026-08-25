@@ -24,11 +24,16 @@ pub async fn create_test_wgpu_device() -> Option<(Arc<wgpu::Device>, Arc<wgpu::Q
         })
         .await?;
 
+    let mut required_features = wgpu::Features::empty();
+    if adapter.features().contains(wgpu::Features::TIMESTAMP_QUERY) {
+        required_features |= wgpu::Features::TIMESTAMP_QUERY;
+    }
+
     let (device, queue) = adapter
         .request_device(
             &wgpu::DeviceDescriptor {
                 label: Some("E2E Test Device"),
-                required_features: wgpu::Features::empty(),
+                required_features,
                 required_limits: adapter.limits(),
                 memory_hints: wgpu::MemoryHints::default(),
             },

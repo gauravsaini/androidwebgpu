@@ -17,11 +17,16 @@ async fn create_test_wgpu() -> (Arc<wgpu::Device>, Arc<wgpu::Queue>) {
         .await
         .expect("Failed to find suitable WGPU adapter");
 
+    let mut required_features = wgpu::Features::empty();
+    if adapter.features().contains(wgpu::Features::TIMESTAMP_QUERY) {
+        required_features |= wgpu::Features::TIMESTAMP_QUERY;
+    }
+
     let (device, queue) = adapter
         .request_device(
             &wgpu::DeviceDescriptor {
                 label: Some("SurfaceFlinger Test Device"),
-                required_features: wgpu::Features::empty(),
+                required_features,
                 required_limits: adapter.limits(),
                 memory_hints: wgpu::MemoryHints::default(),
             },

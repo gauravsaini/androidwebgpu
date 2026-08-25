@@ -868,6 +868,103 @@ export class AxmlDecoder {
 
         return manifest;
     }
+
+    /**
+     * Decodes any general binary Android XML layout / drawable file into an AST node tree.
+     * @param {ArrayBuffer | Uint8Array} buffer
+     * @returns {object|null} Root AST node { tag, attrs, children }
+     */
+    static decodeXmlTree(buffer) {
+        let bytes;
+        if (buffer instanceof ArrayBuffer) bytes = new Uint8Array(buffer);
+        else if (buffer && buffer.buffer) bytes = new Uint8Array(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+        else return null;
+
+        if (bytes.byteLength < 8) return null;
+        const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+        if (view.getUint16(0, true) !== RES_XML_TYPE) return null;
+
+        let stringPool = [];
+        const textDecoder = new TextDecoder("utf-8");
+
+        // Pass 1: String pool
+        let pos = 8;
+        while (pos + 8 <= bytes.byteLength) {
+            const chunkType = view.getUint16(pos, true);
+            const chunkSize = view.getUint32(pos + 4, true);
+            if (chunkSize < 8 || pos + chunkSize > bytes.byteLength) break;
+
+            if (chunkType === RES_STRING_POOL_TYPE) {
+                const stringCount = view.getUint32(pos + 8, true);
+                const stringsStart = view.getUint32(pos + 20, true);
+                const isUtf8 = (view.getUint32(pos + 16, true) & (1 << 8)) !== 0;
+                for (let i = 0; i < stringCount; i++) {
+                    const strOff = view.getUint32(pos + 28 + i * 4, true);
+                    const strAbs = pos + stringsStart + strOff;
+                    if (isUtf8) {
+                        let cursor = strAbs;
+                        if (bytes[cursor] & 0x80) cursor += 2; else cursor += 1;
+                        let utf8Len = 0;
+                        const b = bytes[cursor];
+                        if (b & 0x80) {
+                            cursor += 2;
+                            utf8Len = ((b & 0x7F) << 8) | bytes[cursor - 1];
+                        } else {
+                            cursor += 1;
+                            utf8Len = b;
+                        }
+                        stringPool.push(textDecoder.decode(bytes.subarray(cursor, cursor + utf8Len)).replace(/\0+$/, ""));
+                    } else {
+                        let cursor = strAbs;
+                        const charLen = view.getUint16(cursor, true);
+                        cursor += 2;
+                        const u16 = [];
+                        for (let c = 0; c < charLen; c++) {
+                            u16.push(view.getUint16(cursor + c * 2, true));
+                        }
+                        stringPool.push(String.fromCharCode(...u16));
+                    }
+                }
+            }
+            pos += chunkSize;
+        }
+
+        // Pass 2: Tags & Elements
+        pos = 8;
+        const stack = [];
+        let root = null;
+        while (pos + 8 <= bytes.byteLength) {
+            const chunkType = view.getUint16(pos, true);
+            const chunkSize = view.getUint32(pos + 4, true);
+            if (chunkSize < 8 || pos + chunkSize > bytes.byteLength) break;
+
+            if (chunkType === RES_XML_START_ELEMENT_TYPE) {
+                const tagIdx = view.getUint32(pos + 20, true);
+                const tagName = stringPool[tagIdx] || `tag_${tagIdx}`;
+                const attrCount = view.getUint16(pos + 28, true);
+                const attrs = {};
+                let attrOff = pos + 36;
+                for (let i = 0; i < attrCount; i++) {
+                    if (attrOff + 20 <= pos + chunkSize) {
+                        const nameIdx = view.getUint32(attrOff + 4, true);
+                        const rawIdx = view.getUint32(attrOff + 8, true);
+                        const name = stringPool[nameIdx] || `attr_${nameIdx}`;
+                        const val = rawIdx !== 0xFFFFFFFF ? stringPool[rawIdx] : view.getUint32(attrOff + 16, true);
+                        attrs[name] = val;
+                        attrOff += 20;
+                    }
+                }
+                const node = { tag: tagName, attrs, children: [] };
+                if (stack.length > 0) stack[stack.length - 1].children.push(node);
+                else root = node;
+                stack.push(node);
+            } else if (chunkType === RES_XML_END_ELEMENT_TYPE) {
+                stack.pop();
+            }
+            pos += chunkSize;
+        }
+        return root;
+    }
 }
 
 // -----------------------------------------------------------------------------
