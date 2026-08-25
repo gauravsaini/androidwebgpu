@@ -1,71 +1,17 @@
 use crate::binary::{BinaryWireParser, DecodedVirtioCommand};
 use crate::command::{CommandResponse, GpuCommand};
 use crate::protocol::*;
-use aidl_compat::{death::DeathRecipient, status::Result as AidlResult, IBinder};
+use aidl_compat::IBinder;
 use binder_handle_bridge::HandleBridge;
 use binder_routing::RoutingPolicy;
 use gles2wgpu::GlContext;
 use std::collections::HashMap;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use surfaceflinger_gpu_service::SurfaceComposerService;
 use virtio_binder::VirtioBinderDevice;
 use vulkan2wgpu::VkDevice;
 
 pub use inputflinger_rs::InputManagerService;
-
-pub struct TestStubService {
-    descriptor: &'static str,
-    is_alive: AtomicBool,
-}
-
-impl TestStubService {
-    pub fn new(descriptor: &'static str) -> Self {
-        Self {
-            descriptor,
-            is_alive: AtomicBool::new(true),
-        }
-    }
-}
-
-impl IBinder for TestStubService {
-    fn transact(
-        &self,
-        _code: binder_rt::types::TransactionCode,
-        _flags: binder_rt::types::TransactionFlags,
-        _data: &binder_rt::Parcel,
-        reply: &mut binder_rt::Parcel,
-    ) -> AidlResult<()> {
-        reply
-            .write_status(&aidl_compat::Status::ok())
-            .map_err(|_| aidl_compat::Status::from_status(aidl_compat::STATUS_BAD_VALUE))?;
-        Ok(())
-    }
-
-    fn link_to_death(&self, _recipient: Arc<dyn DeathRecipient>) -> AidlResult<()> {
-        Ok(())
-    }
-
-    fn unlink_to_death(&self, _recipient: &Arc<dyn DeathRecipient>) -> AidlResult<()> {
-        Ok(())
-    }
-
-    fn ping_binder(&self) -> AidlResult<()> {
-        if self.is_alive.load(Ordering::SeqCst) {
-            Ok(())
-        } else {
-            Err(aidl_compat::Status::new_service_specific_error(-1, Some("Dead")))
-        }
-    }
-
-    fn is_binder_alive(&self) -> bool {
-        self.is_alive.load(Ordering::SeqCst)
-    }
-
-    fn get_class_descriptor(&self) -> Option<&'static str> {
-        Some(self.descriptor)
-    }
-}
 
 pub struct HostResource2D {
     pub resource_id: u32,
@@ -202,20 +148,24 @@ impl VirtioGpuBridge {
             .ok();
         routing_policy.allow_host_offload(ams_rs::IACTIVITY_MANAGER_DESCRIPTOR);
 
-        for &h in &[10, 20, 30] {
-            let stub = Arc::new(TestStubService::new("android.gui.IGraphicBufferProducer"));
-            binder_device.register_service(h, Arc::clone(&stub) as Arc<dyn IBinder>);
-            handle_bridge
-                .lock()
-                .unwrap()
-                .register_service_with_handle(
-                    100,
-                    h,
-                    "android.gui.IGraphicBufferProducer",
-                    Arc::clone(&stub) as Arc<dyn IBinder>,
-                )
-                .ok();
-        }
+        // 6. GraphicBufferProducer (Handle 10)
+        let producer = Arc::new(surfaceflinger_gpu_service::GraphicBufferProducerService::new(
+            10,
+            Arc::clone(&dev),
+            Arc::clone(&q),
+        ));
+        binder_device.register_service(10, Arc::clone(&producer) as Arc<dyn IBinder>);
+        handle_bridge
+            .lock()
+            .unwrap()
+            .register_service_with_handle(
+                100,
+                10,
+                surfaceflinger_gpu_service::GraphicBufferProducerService::DESCRIPTOR,
+                Arc::clone(&producer) as Arc<dyn IBinder>,
+            )
+            .ok();
+        routing_policy.allow_host_offload(surfaceflinger_gpu_service::GraphicBufferProducerService::DESCRIPTOR);
 
         Ok(Self {
             gl_context,

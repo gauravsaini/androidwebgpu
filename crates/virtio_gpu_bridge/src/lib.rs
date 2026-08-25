@@ -347,4 +347,51 @@ mod tests {
             assert_eq!(resp.hdr.status, aidl_compat::STATUS_BAD_VALUE);
         });
     }
+
+    #[test]
+    fn test_virtio_binder_process_packet_graphic_buffer_producer_transact() {
+        pollster::block_on(async {
+            let mut bridge = match VirtioGpuBridge::new(64, 64).await {
+                Ok(b) => b,
+                Err(_) => return,
+            };
+
+            // 1. Connect transaction to handle 10 (IGraphicBufferProducer)
+            let req_conn = virtio_binder::VirtioBinderRequest::new_transact(
+                1003,
+                10,
+                surfaceflinger_gpu_service::igraphicbufferproducer_codes::CONNECT,
+                0,
+                0,
+                Vec::new(),
+                Vec::new(),
+            );
+            let resp_bytes = bridge.process_binder_packet(&req_conn.serialize());
+            let resp = virtio_binder::VirtioBinderResponse::deserialize(&resp_bytes)
+                .expect("Failed to deserialize response");
+            assert_eq!(resp.hdr.msg_id, 1003);
+            assert!(resp.hdr.is_success());
+
+            // 2. Dequeue buffer on handle 10
+            let mut deq_parcel = binder_rt::Parcel::new();
+            deq_parcel.write_u32(64).unwrap();
+            deq_parcel.write_u32(64).unwrap();
+            deq_parcel.write_u32(1).unwrap();
+
+            let req_deq = virtio_binder::VirtioBinderRequest::new_transact(
+                1004,
+                10,
+                surfaceflinger_gpu_service::igraphicbufferproducer_codes::DEQUEUE_BUFFER,
+                0,
+                0,
+                deq_parcel.data().to_vec(),
+                Vec::new(),
+            );
+            let deq_resp_bytes = bridge.process_binder_packet(&req_deq.serialize());
+            let deq_resp = virtio_binder::VirtioBinderResponse::deserialize(&deq_resp_bytes)
+                .expect("Failed to deserialize dequeue response");
+            assert_eq!(deq_resp.hdr.msg_id, 1004);
+            assert!(deq_resp.hdr.is_success());
+        });
+    }
 }
