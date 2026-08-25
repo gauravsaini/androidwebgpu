@@ -450,9 +450,15 @@ impl WebGpuSwapchain {
             label: Some("Swapchain Readback Encoder"),
         });
 
+        let texture_to_read = if self.frame_count > 0 {
+            self.get_last_presented_texture()
+        } else {
+            self.get_current_texture()
+        };
+
         encoder.copy_texture_to_buffer(
             wgpu::TexelCopyTextureInfo {
-                texture: self.get_current_texture(),
+                texture: texture_to_read,
                 mip_level: 0,
                 origin: wgpu::Origin3d::ZERO,
                 aspect: wgpu::TextureAspect::All,
