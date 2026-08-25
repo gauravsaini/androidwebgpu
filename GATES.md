@@ -5,7 +5,7 @@ This ledger records verified, runnable verification gates for the bidirectional 
 
 ---
 
-## 11-Criterion E2E Validation Gates Ledger
+## 14-Criterion E2E Validation Gates Ledger
 
 ### Gate E2E-1: VINTF Declarations & Manifest Validation
 - **Requirement**: Validate target-level 7 manifest declarations and `isDeclared()` checks for virtual HALs (`ISensors`, `IModule`, `IConfig`, `ICameraProvider`).
@@ -103,14 +103,38 @@ This ledger records verified, runnable verification gates for the bidirectional 
 - **Expected Output**: `test result: ok. 3 passed; 0 failed` & `test result: ok. 1 passed; 0 failed`
 - **Status**: [x] VERIFIED
 
+### Gate E2E-13: Android Material You Launcher & Navigation Bar Viewport
+- **Requirement**: Render authentic Android 13/14 Material You Home Screen directly inside the phone screen container with live Status Bar (real-time clock, battery level, 5G cellular signal, Wi-Fi 6, notification badges), Google Search Widget, Date/Weather glance pill, 6-app Launcher Grid (F-Droid, Unity 3D Cube, Godot GLES2, Chrome, Files, Settings), 4-app Dock (Phone, Messages, Browser, Camera), and 3-Button Navigation Bar (Back ◀, Home ◯, Recents ▢) with verified stack pops, underflow protection, and task switcher.
+- **Target Files**: `src/binder_test_suite.js`, `index.html`, `tests/adversarial_browser_bench_verifier.mjs`
+- **Command**: `node tests/adversarial_browser_bench_verifier.mjs` (Section 9 & 11)
+- **Verification Target**: `runE2E12_AndroidLauncherAndNavigation()` & Sections 9 and 11
+- **Expected Output**: `✔ [PASS] 9. Android Material You Home Launcher Grid & Click Transition Invariants` & `✔ [PASS] 11. 3-Button Navigation Bar Stack Machine & Underflow Protection Invariants`
+- **Status**: [x] VERIFIED
+
+### Gate E2E-14: Interactive F-Droid Client Store Experience & Catalog Filtering
+- **Requirement**: Dedicated F-Droid client view with search query filtering, 5 category tabs (Latest, Games, Internet, Security, System), real-time repository sync indicator, app catalog cards with labels/packages/versions/action buttons, and app detail modal view with permissions inspection and backstack navigation.
+- **Target Files**: `src/binder_test_suite.js`, `src/apk_client_parser.js`, `index.html`, `tests/adversarial_browser_bench_verifier.mjs`
+- **Command**: `node tests/adversarial_browser_bench_verifier.mjs` (Section 10)
+- **Verification Target**: `runE2E13_FDroidClientExperience()` & Section 10
+- **Expected Output**: `✔ [PASS] 10. F-Droid Search & Category Query Filtering Fuzzing completed successfully.`
+- **Status**: [x] VERIFIED
+
+### Gate E2E-15: Client-Side Drag-and-Drop APK Ingestion & Pure-JS Binary AXML Parser
+- **Requirement**: Client-side drag-and-drop dropzone on phone frame and pure-JS ZIP/AXML parser (`ApkZipReader`, `AxmlDecoder`, `ArscStringPoolParser`, `PackageManagerRegistry`) decoding `AndroidManifest.xml` and `resources.arsc` to extract package name, application label, version code/name, launcher activity, component counts (activities, services, providers), and permissions from raw APK ArrayBuffers (including real `F-Droid.apk` with 25 activities, 4 providers, 29 permissions), dynamically registering into PMS and placing newly styled icons on the home launcher grid ready for execution.
+- **Target Files**: `src/binder_test_suite.js`, `src/apk_client_parser.js`, `index.html`, `tests/adversarial_browser_bench_verifier.mjs`
+- **Command**: `node tests/adversarial_browser_bench_verifier.mjs` (Section 12)
+- **Verification Target**: `runE2E14_ClientSideApkAndAxmlIngestion()` & Section 12
+- **Expected Output**: `✔ [PASS] 12. Pure-JS Binary AXML Parsing & Fuzzing Invariants completed successfully.`
+- **Status**: [x] VERIFIED
+
 ---
 
 ## Full Workspace Verification Gate
 
-### Gate E2E-WORKSPACE: Clean Workspace Test Suite Pass
-- **Requirement**: 100% clean compilation and test execution across all 30 member crates in the Cargo workspace.
-- **Command**: `cargo test --workspace`
-- **Expected Output**: `test result: ok` across all 30 crates (0 failed, 0 ignored)
+### Gate E2E-WORKSPACE: Clean Workspace Test Suite & Adversarial Verifier Pass
+- **Requirement**: 100% clean compilation and test execution across all 30 member crates in Cargo workspace AND all 12 sections of the JavaScript adversarial test harness (176,000+ assertions).
+- **Command**: `cargo test --workspace && node tests/adversarial_browser_bench_verifier.mjs`
+- **Expected Output**: `test result: ok` across all 30 crates (0 failed, 0 ignored) and `⚡ ALL ADVERSARIAL CHECKS COMPLETED (0 failed)`
 - **Status**: [x] VERIFIED
 
 ---

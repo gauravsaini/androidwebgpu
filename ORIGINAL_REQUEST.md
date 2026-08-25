@@ -157,5 +157,80 @@ Integrity mode: development
 - [ ] `cargo test --workspace` passes 100% cleanly across all member crates.
 - [ ] `GATES.md` includes verified runnable check for F-Droid real-world execution.
 
+## Follow-up — 2026-08-25T10:26:40Z
+
+Use a very large team of agents.
+
+Uplift the AndroidWebGPU browser experience with a full Android Material You Emulator UI experience inside the phone frame, featuring an interactive Android Home Launcher, a dedicated F-Droid app store client view with search and app details, an Android 3-button navigation bar (Back/Home/Recents), and a generic drag-and-drop client-side APK parser/installer supporting any user-provided `.apk` file.
+
+Working directory: /Users/ektasaini/Desktop/androidwebgpu
+Integrity mode: development
+
+## Requirements
+
+### R1. Android Home Launcher & Material You OS Theme
+- Implement an authentic Android 13/14 Material You Home Screen directly inside the phone screen container with:
+  - Android Status Bar: Real-time clock, battery percentage, Wi-Fi 6, 5G cellular signal, and notification icons.
+  - Google-style Search Widget and Date/Weather pill.
+  - App Grid with icons: **F-Droid**, **Unity 3D Cube**, **Godot GLES2**, **Chrome**, **Files**, **Settings**.
+  - App Dock with Phone, Messages, Browser, Camera.
+  - 3-Button Android Navigation Bar (Back ◀, Home ◯, Overview/Recents ▢) that works across all launched apps.
+
+### R2. Interactive F-Droid Client Experience
+- Implement a dedicated F-Droid application view when tapping the F-Droid icon:
+  - F-Droid Header: Search bar, Category tabs (Latest, Games, Internet, Security, System), Settings gear, and Repo Sync indicator.
+  - App Catalog List: Displays app cards with icons, labels, package identifiers (`org.fdroid.fdroid`, `com.unity.cube.gles`, `org.godotengine.gles2`), version numbers, descriptions, and "Install" / "Open" action buttons.
+  - Search & Filter: Real-time search query filtering of the catalog.
+  - App Detail View: Tapping an app card opens a detailed view showing permissions, size, version history, and screenshots.
+  - Touch Scrolling: Smooth vertical scrolling and fling physics via touch and mouse drag.
+
+### R3. Generic Client-Side Drag-and-Drop APK Ingestion & Parser
+- Implement a drag-and-drop dropzone on the phone frame (plus an "Upload APK" button in the sidebar) that accepts any valid `.apk` file.
+- Client-side ZIP unpacker reading `AndroidManifest.xml` (AXML chunk decoder) and `resources.arsc` string pool to automatically extract:
+  - Package Name (e.g. `com.example.myapp`)
+  - Application Label / Name
+  - Version Code and Version Name
+  - Launcher / Main Activity
+  - Permissions and Component counts (Activities, Services, Providers)
+- Dynamically register the parsed APK into the in-memory PMS registry and place a newly styled app icon on the Android Home Screen grid, ready to launch.
+
+### R4. Sidebar Controls & Subsystem Integration
+- Add an "📱 Android OS Emulator" tab to the top navigation bar with live controls:
+  - Quick App Switcher (Home, F-Droid, Unity Cube, Godot GLES2).
+  - Virtual Hardware Controls (Power button, Volume rocker, Screen Rotate 90°/portrait/landscape).
+  - Live Inspector showing active PMS installed packages count and AMS task backstack.
+  - Integration with the underlying `binder_sys`, `wms_rs`, and `inputflinger_rs` subsystems.
+
+### R5. Verification & Test Suite
+- Extend `tests/adversarial_browser_bench_verifier.mjs` and `src/binder_test_suite.js` to programmatically verify:
+  - Home launcher app grid rendering and click transitions.
+  - F-Droid launch, category switching, search filtering, and app detail opening.
+  - Navigation bar Home/Back button state stack pops.
+  - Binary AXML parser extraction from drag-and-dropped APK buffers.
+
+## Acceptance Criteria
+
+### Android Launcher & Navigation Experience
+- [ ] Phone frame renders Android Material You Home Screen with live status bar, search bar, and app grid.
+- [ ] Tapping F-Droid icon launches the F-Droid client view with an animated app opening transition.
+- [ ] Tapping the Home button (◯) from F-Droid or any app returns immediately to the Home Screen.
+- [ ] Tapping the Back button (◀) navigates back through the app view stack (e.g. App Details → Catalog → Home).
+
+### F-Droid Client UI
+- [ ] F-Droid view renders app catalog cards with app icons, package names, versions, and install buttons.
+- [ ] Typing in the search input dynamically filters displayed apps.
+- [ ] Category tabs filter apps by tag (Latest, Games, Internet, Security).
+- [ ] Tapping an app opens its App Details modal with permissions and metadata.
+
+### Drag-and-Drop Generic APK Ingestion
+- [ ] Dragging and dropping an `.apk` file onto the phone frame decodes `AndroidManifest.xml` and adds a new icon to the home grid.
+- [ ] Uploading `F-Droid.apk` dynamically extracts package `org.fdroid.fdroid`, 25 activities, and 4 providers.
+- [ ] Dropped APK icon can be clicked to launch its simulated activity surface.
+
+### Test Bench & Verification
+- [ ] Automated tests in `tests/adversarial_browser_bench_verifier.mjs` pass 100% cleanly.
+- [ ] `cargo test --workspace` passes 100% cleanly across all 30 Rust crates.
+- [ ] `GATES.md` updated with runnable check commands for Android Emulator UI and drag-and-drop APK parser.
+
 
 

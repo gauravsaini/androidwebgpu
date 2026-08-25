@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Android WebGPU Interactive 3D Arcade & Virtio-GPU Test Bench</title>
+    <title>Android WebGPU Interactive 3D Arcade & Material You Emulator</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600&family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -46,7 +46,7 @@
         }
 
         header {
-            padding: 1rem 2rem;
+            padding: 0.85rem 2rem;
             background: rgba(14, 19, 32, 0.85);
             backdrop-filter: blur(14px);
             border-bottom: 1px solid var(--surface-border);
@@ -79,13 +79,13 @@
         }
 
         h1 {
-            font-size: 1.2rem;
+            font-size: 1.15rem;
             font-weight: 700;
             letter-spacing: -0.02em;
         }
 
         .subtitle {
-            font-size: 0.78rem;
+            font-size: 0.75rem;
             color: var(--text-muted);
             font-weight: 400;
         }
@@ -100,10 +100,10 @@
         }
 
         .tab-btn {
-            padding: 0.5rem 1.1rem;
+            padding: 0.45rem 0.95rem;
             border-radius: 8px;
             font-family: var(--font-ui);
-            font-size: 0.85rem;
+            font-size: 0.82rem;
             font-weight: 600;
             background: transparent;
             color: var(--text-muted);
@@ -112,7 +112,13 @@
             transition: all 0.2s ease;
             display: flex;
             align-items: center;
-            gap: 0.4rem;
+            gap: 0.35rem;
+            white-space: nowrap;
+        }
+
+        .tab-btn:hover {
+            color: var(--text-main);
+            background: rgba(255, 255, 255, 0.05);
         }
 
         .tab-btn.active {
@@ -146,26 +152,37 @@
         }
 
         main {
-            padding: 1.75rem 2rem;
+            padding: 1.5rem 2rem;
             display: grid;
-            grid-template-columns: 1fr 440px;
+            grid-template-columns: 460px 1fr;
             gap: 1.75rem;
-            max-width: 1440px;
+            max-width: 1480px;
             width: 100%;
             margin: 0 auto;
             flex: 1;
         }
 
+        /* Phone Enclosure & Bezel */
         .phone-frame {
+            position: relative;
+            width: 100%;
+            max-width: 440px;
+            height: 750px;
             background: #000;
             border: 10px solid #1a2035;
-            border-radius: 36px;
+            border-radius: 40px;
             box-shadow: 0 25px 60px rgba(0, 0, 0, 0.9), 0 0 0 1px rgba(255, 255, 255, 0.08), 0 0 40px rgba(99, 102, 241, 0.15);
             overflow: hidden;
-            position: relative;
             display: flex;
             flex-direction: column;
             align-items: center;
+            margin: 0 auto;
+            transition: max-width 0.3s cubic-bezier(0.4, 0, 0.2, 1), height 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .phone-frame.landscape {
+            max-width: 780px;
+            height: 480px;
         }
 
         .camera-notch {
@@ -175,10 +192,11 @@
             height: 16px;
             background: #0d111d;
             border-radius: 12px;
-            z-index: 20;
+            z-index: 30;
             display: flex;
             align-items: center;
             justify-content: center;
+            pointer-events: none;
         }
 
         .camera-lens {
@@ -189,47 +207,1004 @@
             box-shadow: inset 0 0 2px #3b82f6;
         }
 
-        .viewport-card {
-            background: var(--surface);
-            border: 1px solid var(--surface-border);
-            border-radius: 20px;
-            overflow: hidden;
+        /* Main Android OS Viewport Container */
+        .android-viewport {
+            width: 100%;
+            height: 100%;
             display: flex;
             flex-direction: column;
-            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
+            position: relative;
+            background: linear-gradient(180deg, #0f1527 0%, #080c18 100%);
+            overflow: hidden;
         }
 
-        .card-header {
-            padding: 1rem 1.25rem;
-            background: rgba(255, 255, 255, 0.02);
-            border-bottom: 1px solid var(--surface-border);
+        /* System Status Bar */
+        .android-status-bar {
+            height: 32px;
+            min-height: 32px;
+            padding: 0 16px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 0.75rem;
+            font-weight: 600;
+            color: #f1f5f9;
+            z-index: 25;
+            background: rgba(14, 19, 32, 0.6);
+            backdrop-filter: blur(10px);
+            user-select: none;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+        }
+
+        .status-left {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .status-clock {
+            font-family: var(--font-mono);
+            font-size: 0.78rem;
+            font-weight: 700;
+            letter-spacing: 0.02em;
+        }
+
+        .status-notifications {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .status-notif-pill {
+            background: rgba(99, 102, 241, 0.25);
+            border: 1px solid var(--primary);
+            color: #a5b4fc;
+            padding: 1px 5px;
+            border-radius: 6px;
+            font-size: 0.62rem;
+            font-weight: 600;
+            animation: pulse 2s infinite;
+        }
+
+        .status-right {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .signal-5g {
+            background: linear-gradient(135deg, #06b6d4, #3b82f6);
+            color: white;
+            font-size: 0.6rem;
+            font-weight: 800;
+            padding: 1px 4px;
+            border-radius: 4px;
+            letter-spacing: 0.03em;
+        }
+
+        .wifi {
+            font-size: 0.8rem;
+        }
+
+        .status-battery {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            font-size: 0.72rem;
+            font-family: var(--font-mono);
+        }
+
+        .battery-icon-pill {
+            width: 20px;
+            height: 10px;
+            border: 1.5px solid #94a3b8;
+            border-radius: 3px;
+            padding: 1px;
+            position: relative;
+            display: flex;
+            align-items: center;
+        }
+
+        .battery-icon-pill::after {
+            content: '';
+            position: absolute;
+            right: -3px;
+            top: 2px;
+            width: 2px;
+            height: 4px;
+            background: #94a3b8;
+            border-radius: 0 1px 1px 0;
+        }
+
+        .battery-icon-level {
+            height: 100%;
+            background: #10b981;
+            border-radius: 1px;
+            transition: width 0.3s ease;
+        }
+
+        /* Screen Stack Container */
+        .android-screen-stack {
+            flex: 1;
+            position: relative;
+            width: 100%;
+            height: calc(100% - 76px);
+            overflow: hidden;
+        }
+
+        .android-screen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            overflow-y: auto;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.22s ease, transform 0.22s cubic-bezier(0.4, 0, 0.2, 1);
+            transform: scale(0.98);
+        }
+
+        .android-screen.active {
+            opacity: 1;
+            pointer-events: auto;
+            transform: scale(1);
+            z-index: 10;
+        }
+
+        /* Material You Home Launcher */
+        #screen-home {
+            padding: 12px 14px 12px 14px;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+        }
+
+        .search-widget {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            background: rgba(255, 255, 255, 0.08);
+            backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            border-radius: 28px;
+            padding: 10px 16px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .search-widget:hover {
+            background: rgba(255, 255, 255, 0.12);
+            border-color: rgba(99, 102, 241, 0.4);
+        }
+
+        .search-g-logo {
+            font-weight: 800;
+            font-size: 1.05rem;
+            background: linear-gradient(135deg, #4285F4, #EA4335, #FBBC05, #34A853);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .search-placeholder {
+            flex: 1;
+            font-size: 0.82rem;
+            color: #94a3b8;
+            font-weight: 500;
+        }
+
+        .search-mic-icon, .search-lens-icon {
+            font-size: 0.95rem;
+            opacity: 0.85;
+            transition: transform 0.15s ease;
+        }
+
+        .search-mic-icon:hover, .search-lens-icon:hover {
+            transform: scale(1.15);
+        }
+
+        .at-a-glance {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 6px 10px;
+            margin-top: 4px;
+            color: #e2e8f0;
+            font-size: 0.82rem;
+            font-weight: 500;
+        }
+
+        .glance-date {
+            font-weight: 600;
+            letter-spacing: -0.01em;
+        }
+
+        .glance-weather {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            color: #38bdf8;
+            font-size: 0.78rem;
+        }
+
+        .app-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 16px 12px;
+            padding: 8px 4px;
+            margin-top: 4px;
+            justify-items: center;
+            align-content: start;
+        }
+
+        .app-icon-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 6px;
+            cursor: pointer;
+            transition: transform 0.15s cubic-bezier(0.34, 1.56, 0.64, 1);
+            user-select: none;
+            width: 72px;
+        }
+
+        .app-icon-item:hover {
+            transform: translateY(-3px) scale(1.04);
+        }
+
+        .app-icon-item:active {
+            transform: scale(0.92);
+        }
+
+        .app-icon-squircle {
+            width: 54px;
+            height: 54px;
+            border-radius: 17px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem;
+            box-shadow: 0 6px 16px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.12);
+            transition: box-shadow 0.2s ease;
+        }
+
+        .icon-fdroid { background: linear-gradient(135deg, #0284c7, #06b6d4); color: #fff; }
+        .icon-unity { background: linear-gradient(135deg, #1e1b4b, #6366f1); color: #fff; }
+        .icon-godot { background: linear-gradient(135deg, #0369a1, #38bdf8); color: #fff; }
+        .icon-chrome { background: linear-gradient(135deg, #ea580c, #eab308 40%, #16a34a 70%, #2563eb); color: #fff; }
+        .icon-files { background: linear-gradient(135deg, #2563eb, #38bdf8); color: #fff; }
+        .icon-settings { background: linear-gradient(135deg, #334155, #64748b); color: #fff; }
+        .icon-phone { background: linear-gradient(135deg, #059669, #10b981); color: #fff; }
+        .icon-messages { background: linear-gradient(135deg, #2563eb, #60a5fa); color: #fff; }
+        .icon-browser { background: linear-gradient(135deg, #0891b2, #06b6d4); color: #fff; }
+        .icon-camera { background: linear-gradient(135deg, #dc2626, #f87171); color: #fff; }
+        .icon-generic-apk { background: linear-gradient(135deg, #7c3aed, #ec4899); color: #fff; }
+
+        .app-icon-label {
+            font-size: 0.72rem;
+            font-weight: 500;
+            color: #e2e8f0;
+            text-align: center;
+            max-width: 70px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            letter-spacing: -0.01em;
+        }
+
+        .app-dock {
+            margin-top: auto;
+            padding: 8px 16px;
+            background: rgba(255, 255, 255, 0.07);
+            backdrop-filter: blur(18px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 26px;
+            display: flex;
+            justify-content: space-around;
+            align-items: center;
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+        }
+
+        .dock-icon-item {
+            cursor: pointer;
+            transition: transform 0.15s ease;
+        }
+
+        .dock-icon-item:hover {
+            transform: translateY(-2px) scale(1.08);
+        }
+
+        .dock-icon-item:active {
+            transform: scale(0.92);
+        }
+
+        .dock-squircle {
+            width: 46px;
+            height: 46px;
+            border-radius: 14px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.3rem;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
+        }
+
+        /* 3-Button Navigation Bar */
+        .android-nav-bar {
+            height: 44px;
+            min-height: 44px;
+            background: rgba(6, 8, 14, 0.95);
+            backdrop-filter: blur(14px);
+            border-top: 1px solid rgba(255, 255, 255, 0.06);
+            display: flex;
+            justify-content: space-around;
+            align-items: center;
+            z-index: 25;
+            user-select: none;
+        }
+
+        .nav-btn {
+            background: none;
+            border: none;
+            color: #94a3b8;
+            font-size: 1.15rem;
+            cursor: pointer;
+            padding: 6px 24px;
+            border-radius: 12px;
+            transition: all 0.15s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .nav-btn:hover {
+            color: #f8fafc;
+            background: rgba(255, 255, 255, 0.08);
+        }
+
+        .nav-btn:active {
+            transform: scale(0.88);
+            background: rgba(99, 102, 241, 0.2);
+            color: var(--primary);
+        }
+
+        /* F-Droid App Store View */
+        #screen-fdroid {
+            background: #0b1120;
+            display: flex;
+            flex-direction: column;
+            position: relative;
+        }
+
+        .fdroid-appbar {
+            padding: 10px 14px 6px 14px;
+            background: rgba(15, 23, 42, 0.85);
+            backdrop-filter: blur(12px);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            position: sticky;
+            top: 0;
+            z-index: 15;
+        }
+
+        .fdroid-title-row {
             display: flex;
             justify-content: space-between;
             align-items: center;
         }
 
-        .card-title {
-            font-size: 0.95rem;
-            font-weight: 600;
+        .fdroid-brand {
             display: flex;
             align-items: center;
-            gap: 0.5rem;
+            gap: 8px;
+            font-size: 1rem;
+            font-weight: 700;
+            color: #38bdf8;
         }
 
-        .live-dot {
-            width: 8px;
-            height: 8px;
-            background: var(--success);
-            border-radius: 50%;
-            box-shadow: 0 0 8px var(--success);
-            animation: pulse 2s infinite;
+        .fdroid-logo-icon {
+            font-size: 1.2rem;
         }
 
-        @keyframes pulse {
-            0%, 100% { opacity: 1; transform: scale(1); }
-            50% { opacity: 0.5; transform: scale(0.85); }
+        .fdroid-actions {
+            display: flex;
+            align-items: center;
+            gap: 6px;
         }
 
+        .fdroid-btn-icon {
+            background: rgba(255, 255, 255, 0.06);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 8px;
+            width: 32px;
+            height: 32px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #cbd5e1;
+            font-size: 0.9rem;
+            cursor: pointer;
+            transition: all 0.15s ease;
+        }
+
+        .fdroid-btn-icon:hover {
+            background: rgba(255, 255, 255, 0.12);
+            color: white;
+        }
+
+        .fdroid-btn-icon.spinning {
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            100% { transform: rotate(360deg); }
+        }
+
+        .fdroid-search-container {
+            position: relative;
+            display: flex;
+            align-items: center;
+        }
+
+        .fdroid-search-input {
+            width: 100%;
+            padding: 7px 32px 7px 12px;
+            background: rgba(0, 0, 0, 0.35);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 10px;
+            font-family: var(--font-ui);
+            font-size: 0.8rem;
+            color: #f8fafc;
+            outline: none;
+            transition: border-color 0.2s ease;
+        }
+
+        .fdroid-search-input:focus {
+            border-color: var(--primary);
+            background: rgba(0, 0, 0, 0.5);
+        }
+
+        .fdroid-search-clear {
+            position: absolute;
+            right: 8px;
+            background: none;
+            border: none;
+            color: #94a3b8;
+            cursor: pointer;
+            font-size: 0.8rem;
+        }
+
+        .fdroid-category-tabs {
+            display: flex;
+            gap: 6px;
+            overflow-x: auto;
+            padding-bottom: 2px;
+            scrollbar-width: none;
+        }
+
+        .fdroid-category-tabs::-webkit-scrollbar {
+            display: none;
+        }
+
+        .cat-tab {
+            padding: 4px 10px;
+            border-radius: 14px;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            font-size: 0.72rem;
+            font-weight: 500;
+            color: #94a3b8;
+            white-space: nowrap;
+            cursor: pointer;
+            transition: all 0.15s ease;
+        }
+
+        .cat-tab:hover {
+            color: #f8fafc;
+            border-color: rgba(255, 255, 255, 0.2);
+        }
+
+        .cat-tab.active {
+            background: var(--primary);
+            color: white;
+            border-color: var(--primary);
+            font-weight: 600;
+            box-shadow: 0 2px 8px var(--primary-glow);
+        }
+
+        .fdroid-catalog-scroll {
+            flex: 1;
+            overflow-y: auto;
+            padding: 10px 14px;
+        }
+
+        .fdroid-catalog-list {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .fdroid-card {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.06);
+            border-radius: 14px;
+            padding: 10px 12px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .fdroid-card:hover {
+            background: rgba(255, 255, 255, 0.06);
+            border-color: rgba(99, 102, 241, 0.3);
+            transform: translateY(-1px);
+        }
+
+        .fdroid-card-icon {
+            width: 44px;
+            height: 44px;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.3rem;
+            flex-shrink: 0;
+        }
+
+        .fdroid-card-info {
+            flex: 1;
+            min-width: 0;
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+        }
+
+        .fdroid-card-title {
+            font-size: 0.84rem;
+            font-weight: 600;
+            color: #f1f5f9;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .fdroid-card-pkg {
+            font-size: 0.65rem;
+            font-family: var(--font-mono);
+            color: #94a3b8;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .fdroid-card-desc {
+            font-size: 0.7rem;
+            color: #cbd5e1;
+            line-height: 1.3;
+            display: -webkit-box;
+            -webkit-line-clamp: 1;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+        }
+
+        .fdroid-card-action {
+            flex-shrink: 0;
+        }
+
+        .btn-fdroid-action {
+            padding: 4px 10px;
+            border-radius: 8px;
+            font-size: 0.72rem;
+            font-weight: 600;
+            border: 1px solid transparent;
+            cursor: pointer;
+            transition: all 0.15s ease;
+        }
+
+        .btn-fdroid-action.install {
+            background: linear-gradient(135deg, #0284c7, #06b6d4);
+            color: white;
+        }
+
+        .btn-fdroid-action.installed {
+            background: rgba(16, 185, 129, 0.15);
+            border-color: rgba(16, 185, 129, 0.4);
+            color: #10b981;
+        }
+
+        /* F-Droid App Detail Modal */
+        .fdroid-detail-modal {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: #0b1120;
+            z-index: 20;
+            display: flex;
+            flex-direction: column;
+            overflow-y: auto;
+        }
+
+        .detail-header {
+            padding: 10px 14px;
+            background: rgba(15, 23, 42, 0.95);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            position: sticky;
+            top: 0;
+            z-index: 5;
+        }
+
+        .detail-back-btn {
+            background: rgba(255, 255, 255, 0.08);
+            border: none;
+            border-radius: 8px;
+            width: 32px;
+            height: 32px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #f1f5f9;
+            font-size: 1.1rem;
+            cursor: pointer;
+        }
+
+        .detail-title {
+            font-size: 0.92rem;
+            font-weight: 600;
+            color: #f8fafc;
+        }
+
+        .detail-content {
+            padding: 14px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .detail-hero {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+        }
+
+        .detail-icon {
+            width: 58px;
+            height: 58px;
+            border-radius: 18px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.8rem;
+            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.4);
+        }
+
+        .detail-meta-block {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+        }
+
+        .detail-app-name {
+            font-size: 1rem;
+            font-weight: 700;
+            color: #f8fafc;
+        }
+
+        .detail-pkg-name {
+            font-size: 0.7rem;
+            font-family: var(--font-mono);
+            color: #94a3b8;
+        }
+
+        .detail-version-tag {
+            font-size: 0.72rem;
+            color: #38bdf8;
+            font-weight: 500;
+        }
+
+        .detail-btn-row {
+            display: flex;
+            gap: 8px;
+            margin-top: 4px;
+        }
+
+        .detail-stats-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 8px;
+            background: rgba(0, 0, 0, 0.25);
+            border: 1px solid rgba(255, 255, 255, 0.06);
+            border-radius: 12px;
+            padding: 10px;
+        }
+
+        .detail-stat-box {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+        }
+
+        .detail-stat-label {
+            font-size: 0.65rem;
+            color: #94a3b8;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+        }
+
+        .detail-stat-val {
+            font-size: 0.8rem;
+            font-weight: 600;
+            color: #f1f5f9;
+            font-family: var(--font-mono);
+        }
+
+        .detail-section-title {
+            font-size: 0.78rem;
+            font-weight: 600;
+            color: #94a3b8;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            margin-top: 4px;
+        }
+
+        .permissions-badge-list {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 4px;
+        }
+
+        .perm-badge {
+            background: rgba(99, 102, 241, 0.15);
+            border: 1px solid rgba(99, 102, 241, 0.3);
+            color: #c7d2fe;
+            padding: 2px 6px;
+            border-radius: 6px;
+            font-size: 0.62rem;
+            font-family: var(--font-mono);
+        }
+
+        /* Generic App Screen */
+        #screen-generic-app {
+            background: #090e1a;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .generic-app-header {
+            padding: 10px 14px;
+            background: rgba(14, 19, 32, 0.9);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 0.9rem;
+            font-weight: 600;
+            color: #f1f5f9;
+        }
+
+        .generic-app-body {
+            flex: 1;
+            padding: 14px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        /* Recents Overview Screen */
+        #screen-recents {
+            background: rgba(11, 15, 26, 0.95);
+            padding: 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .recents-header {
+            font-size: 0.9rem;
+            font-weight: 600;
+            color: #cbd5e1;
+        }
+
+        .recents-carousel {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            overflow-y: auto;
+        }
+
+        .recents-card-item {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 14px;
+            padding: 12px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            cursor: pointer;
+            transition: all 0.15s ease;
+        }
+
+        .recents-card-item:hover {
+            background: rgba(255, 255, 255, 0.09);
+            border-color: var(--primary);
+        }
+
+        .recents-clear-btn {
+            padding: 8px;
+            background: rgba(239, 68, 68, 0.15);
+            border: 1px solid rgba(239, 68, 68, 0.4);
+            border-radius: 10px;
+            color: #f87171;
+            font-weight: 600;
+            font-size: 0.8rem;
+            cursor: pointer;
+        }
+
+        /* Dropzone Overlay */
+        .dropzone-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(6, 182, 212, 0.2);
+            backdrop-filter: blur(8px);
+            border: 3px dashed #06b6d4;
+            border-radius: 36px;
+            z-index: 40;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            pointer-events: none;
+            transition: opacity 0.2s ease;
+        }
+
+        .dropzone-box {
+            background: rgba(14, 19, 32, 0.95);
+            border: 1px solid rgba(6, 182, 212, 0.5);
+            border-radius: 20px;
+            padding: 24px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 8px;
+            box-shadow: 0 12px 32px rgba(0, 0, 0, 0.6);
+        }
+
+        .dropzone-icon {
+            font-size: 2.2rem;
+            animation: bounce 1s infinite alternate ease-in-out;
+        }
+
+        @keyframes bounce {
+            0% { transform: translateY(0); }
+            100% { transform: translateY(-8px); }
+        }
+
+        .dropzone-text {
+            font-size: 1rem;
+            font-weight: 700;
+            color: #f8fafc;
+        }
+
+        .dropzone-sub {
+            font-size: 0.75rem;
+            color: #38bdf8;
+            font-family: var(--font-mono);
+        }
+
+        /* Volume HUD Overlay */
+        .volume-hud {
+            position: absolute;
+            right: 12px;
+            top: 45%;
+            transform: translateY(-50%);
+            width: 32px;
+            height: 140px;
+            background: rgba(15, 23, 42, 0.9);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            border-radius: 16px;
+            padding: 8px 6px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: space-between;
+            z-index: 30;
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6);
+            transition: opacity 0.3s ease;
+        }
+
+        .volume-bar-bg {
+            flex: 1;
+            width: 6px;
+            background: rgba(255, 255, 255, 0.15);
+            border-radius: 3px;
+            position: relative;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column-reverse;
+        }
+
+        .volume-bar-fill {
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(180deg, #38bdf8, #6366f1);
+            border-radius: 3px;
+            transition: height 0.15s ease;
+        }
+
+        .volume-icon {
+            font-size: 0.85rem;
+            margin-top: 4px;
+        }
+
+        /* Sleep Screen Overlay */
+        .screen-sleep-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: #000;
+            z-index: 35;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.25s ease;
+        }
+
+        .screen-sleep-overlay.sleeping {
+            opacity: 1;
+            pointer-events: auto;
+        }
+
+        /* Emulator Sidebar Diagnostics */
+        .diag-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 8px;
+            margin-top: 0.8rem;
+        }
+
+        .diag-item {
+            background: rgba(0, 0, 0, 0.3);
+            border: 1px solid var(--surface-border);
+            border-radius: 10px;
+            padding: 8px 10px;
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+        }
+
+        .diag-label {
+            font-size: 0.68rem;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .diag-value {
+            font-size: 0.8rem;
+            font-weight: 600;
+            color: #38bdf8;
+            font-family: var(--font-mono);
+            word-break: break-all;
+        }
+
+        /* Native Screen & Canvas */
         .screen-container {
             flex: 1;
             display: flex;
@@ -278,6 +1253,14 @@
             padding: 1.25rem;
         }
 
+        .card-title {
+            font-size: 0.95rem;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
         .control-group-title {
             font-size: 0.75rem;
             color: var(--text-muted);
@@ -321,7 +1304,7 @@
             display: flex;
             flex-direction: column;
             gap: 0.6rem;
-            margin-top: 1rem;
+            margin-top: 0.8rem;
         }
 
         .btn {
@@ -464,12 +1447,13 @@
             <div class="logo-badge">W</div>
             <div>
                 <h1>Android WebGPU 3D Arcade</h1>
-                <div class="subtitle">Virtio-GPU Wire Protocol & GLES2/3 Emulation Stack</div>
+                <div class="subtitle">Material You OS Emulator & Virtio-GPU Stack</div>
             </div>
         </div>
 
         <div class="nav-tabs">
-            <button class="tab-btn active" id="tab-arcade">🎮 3D Arcade Mode</button>
+            <button class="tab-btn active" id="tab-emulator">📱 Android OS Emulator</button>
+            <button class="tab-btn" id="tab-arcade">🎮 3D Arcade Mode</button>
             <button class="tab-btn" id="tab-gates">🧪 Verification Gates</button>
             <button class="tab-btn" id="tab-vulkan">🌋 Vulkan E2E Pipeline</button>
             <button class="tab-btn" id="tab-binder">⚡ Binder Subsystem</button>
@@ -498,23 +1482,237 @@
 
     <main>
         <!-- Left: Phone Enclosure Viewport -->
-        <div class="phone-frame">
+        <div class="phone-frame" id="phone-frame">
             <div class="camera-notch">
                 <div class="camera-lens"></div>
             </div>
-            <div class="screen-container">
-                <canvas id="screen" width="640" height="480"></canvas>
+
+            <!-- Drag and drop APK dropzone overlay -->
+            <div class="dropzone-overlay" id="phone-dropzone" style="display: none;">
+                <div class="dropzone-box">
+                    <div class="dropzone-icon">📦</div>
+                    <div class="dropzone-text">Drop .APK to Install</div>
+                    <div class="dropzone-sub">Binary AXML & ARSC Parser</div>
+                </div>
             </div>
-            <div class="screen-footer" style="width: 100%;">
-                <span id="cursor-pos">Drag to Rotate 3D Model</span>
-                <span id="pixel-color">Shader: Phong Lighting</span>
-                <span id="pipeline-status">OASIS Virtio 1.2 Active</span>
+
+            <!-- Virtual Volume HUD -->
+            <div class="volume-hud" id="volume-hud" style="display: none;">
+                <div class="volume-bar-bg">
+                    <div class="volume-bar-fill" id="volume-bar-fill" style="height: 100%;"></div>
+                </div>
+                <div class="volume-icon">🔊</div>
+            </div>
+
+            <!-- Screen Sleep Overlay -->
+            <div class="screen-sleep-overlay" id="screen-sleep-overlay"></div>
+
+            <!-- Main Android OS Viewport -->
+            <div class="android-viewport" id="android-viewport">
+                <!-- 1. System Status Bar -->
+                <div class="android-status-bar" id="android-status-bar">
+                    <div class="status-left">
+                        <span class="status-clock" id="status-clock">12:00</span>
+                        <div class="status-notifications" id="status-notifications"></div>
+                    </div>
+                    <div class="status-right">
+                        <span class="status-icon signal-5g" title="5G Cellular">5G</span>
+                        <span class="status-icon wifi" title="Wi-Fi 6">📶</span>
+                        <div class="status-battery" id="status-battery">
+                            <span id="battery-level-text">98%</span>
+                            <div class="battery-icon-pill"><div class="battery-icon-level" style="width: 98%;"></div></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 2. Screen Stack -->
+                <div class="android-screen-stack" id="android-screen-stack">
+                    <!-- Screen 1: Material You Home Launcher -->
+                    <div class="android-screen active" id="screen-home">
+                        <div class="search-widget" id="home-search-widget">
+                            <span class="search-g-logo">G</span>
+                            <span class="search-placeholder">Search apps & web...</span>
+                            <span class="search-mic-icon">🎙️</span>
+                            <span class="search-lens-icon">📷</span>
+                        </div>
+                        <div class="at-a-glance" id="home-at-a-glance">
+                            <div class="glance-date" id="glance-date">Tuesday, Aug 25</div>
+                            <div class="glance-weather">🌤️ 24°C Sunny</div>
+                        </div>
+                        <div class="app-grid" id="home-app-grid">
+                            <div class="app-icon-item" data-package="org.fdroid.fdroid" data-app="fdroid">
+                                <div class="app-icon-squircle icon-fdroid">🤖</div>
+                                <div class="app-icon-label">F-Droid</div>
+                            </div>
+                            <div class="app-icon-item" data-package="com.unity.cube.gles" data-app="unity">
+                                <div class="app-icon-squircle icon-unity">🎲</div>
+                                <div class="app-icon-label">Unity Cube</div>
+                            </div>
+                            <div class="app-icon-item" data-package="org.godotengine.gles2" data-app="godot">
+                                <div class="app-icon-squircle icon-godot">👾</div>
+                                <div class="app-icon-label">Godot GLES2</div>
+                            </div>
+                            <div class="app-icon-item" data-package="com.android.chrome" data-app="chrome">
+                                <div class="app-icon-squircle icon-chrome">🌐</div>
+                                <div class="app-icon-label">Chrome</div>
+                            </div>
+                            <div class="app-icon-item" data-package="com.android.documentsui" data-app="files">
+                                <div class="app-icon-squircle icon-files">📁</div>
+                                <div class="app-icon-label">Files</div>
+                            </div>
+                            <div class="app-icon-item" data-package="com.android.settings" data-app="settings">
+                                <div class="app-icon-squircle icon-settings">⚙️</div>
+                                <div class="app-icon-label">Settings</div>
+                            </div>
+                            <!-- Dynamic Ingested APKs -->
+                            <div id="dynamic-app-grid-container" style="display: contents;"></div>
+                        </div>
+                        <div class="app-dock" id="home-app-dock">
+                            <div class="dock-icon-item" data-app="phone" data-package="com.android.dialer"><div class="dock-squircle icon-phone">📞</div></div>
+                            <div class="dock-icon-item" data-app="messages" data-package="com.android.mms"><div class="dock-squircle icon-messages">💬</div></div>
+                            <div class="dock-icon-item" data-app="browser" data-package="com.android.browser"><div class="dock-squircle icon-browser">🧭</div></div>
+                            <div class="dock-icon-item" data-app="camera" data-package="com.android.camera2"><div class="dock-squircle icon-camera">📷</div></div>
+                        </div>
+                    </div>
+
+                    <!-- Screen 2: Interactive F-Droid Client View -->
+                    <div class="android-screen" id="screen-fdroid">
+                        <div class="fdroid-appbar">
+                            <div class="fdroid-title-row">
+                                <div class="fdroid-brand">
+                                    <span class="fdroid-logo-icon">🤖</span>
+                                    <span class="fdroid-title-text">F-Droid</span>
+                                </div>
+                                <div class="fdroid-actions">
+                                    <button class="fdroid-btn-icon" id="fdroid-sync-btn" title="Sync Repositories">🔄</button>
+                                    <button class="fdroid-btn-icon" id="fdroid-settings-btn" title="F-Droid Settings">⚙️</button>
+                                </div>
+                            </div>
+                            <div class="fdroid-search-container">
+                                <input type="text" id="fdroid-search-input" class="fdroid-search-input" placeholder="Search 1,840+ open source apps...">
+                                <button class="fdroid-search-clear" id="fdroid-search-clear" style="display: none;">✕</button>
+                            </div>
+                            <div class="fdroid-category-tabs" id="fdroid-category-tabs">
+                                <button class="cat-tab active" data-cat="all">All</button>
+                                <button class="cat-tab" data-cat="latest">Latest</button>
+                                <button class="cat-tab" data-cat="games">Games</button>
+                                <button class="cat-tab" data-cat="internet">Internet</button>
+                                <button class="cat-tab" data-cat="security">Security</button>
+                                <button class="cat-tab" data-cat="system">System</button>
+                                <button class="cat-tab" data-cat="dev">Development</button>
+                            </div>
+                        </div>
+                        <div class="fdroid-catalog-scroll" id="fdroid-catalog-scroll">
+                            <div class="fdroid-catalog-list" id="fdroid-catalog-list">
+                                <!-- Populated dynamically from catalog -->
+                            </div>
+                        </div>
+                        <!-- App Detail Modal Inside F-Droid -->
+                        <div class="fdroid-detail-modal" id="fdroid-detail-modal" style="display: none;">
+                            <div class="detail-header">
+                                <button class="detail-back-btn" id="fdroid-detail-back-btn">←</button>
+                                <span class="detail-title">App Details</span>
+                            </div>
+                            <div class="detail-content" id="fdroid-detail-content"></div>
+                        </div>
+                    </div>
+
+                    <!-- Screen 3: Native Virtio-GPU / WebGPU Canvas View -->
+                    <div class="android-screen" id="screen-native-surface">
+                        <div class="screen-container" style="flex: 1; display: flex; align-items: center; justify-content: center; background: #05070e; padding: 1rem; width: 100%; height: 100%;">
+                            <canvas id="screen" width="640" height="480"></canvas>
+                        </div>
+                        <div class="screen-footer" style="width: 100%;">
+                            <span id="cursor-pos">Drag to Rotate 3D Model</span>
+                            <span id="pixel-color">Shader: Phong Lighting</span>
+                            <span id="pipeline-status">OASIS Virtio 1.2 Active</span>
+                        </div>
+                    </div>
+
+                    <!-- Screen 4: Generic System App View (Chrome / Files / Settings) -->
+                    <div class="android-screen" id="screen-generic-app">
+                        <div class="generic-app-header" id="generic-app-header">
+                            <span id="generic-app-title">Application</span>
+                        </div>
+                        <div class="generic-app-body" id="generic-app-body"></div>
+                    </div>
+
+                    <!-- Screen 5: Recents / Task Switcher -->
+                    <div class="android-screen" id="screen-recents">
+                        <div class="recents-header">Active Tasks</div>
+                        <div class="recents-carousel" id="recents-carousel"></div>
+                        <button class="recents-clear-btn" id="recents-clear-btn">Clear All</button>
+                    </div>
+                </div>
+
+                <!-- 3. Global 3-Button Navigation Bar -->
+                <div class="android-nav-bar" id="android-nav-bar">
+                    <button class="nav-btn" id="nav-btn-back" title="Back (◀)">◀</button>
+                    <button class="nav-btn" id="nav-btn-home" title="Home (◯)">◯</button>
+                    <button class="nav-btn" id="nav-btn-recents" title="Recents (▢)">▢</button>
+                </div>
             </div>
         </div>
 
-        <!-- Right: Interactive Controls & Live Shader Switcher -->
+        <!-- Right: Interactive Controls & Live Diagnostics -->
         <div class="sidebar">
-            <div class="controls-card" id="arcade-controls">
+            <!-- Android OS Emulator Controls Card -->
+            <div class="controls-card" id="emulator-card">
+                <div class="card-title">📱 Android OS Emulator Controls</div>
+
+                <div class="control-group-title">Quick App Switcher</div>
+                <div class="chip-group" id="quick-app-switcher">
+                    <button class="chip active" data-switch="home">🏠 Home</button>
+                    <button class="chip" data-switch="fdroid">🤖 F-Droid</button>
+                    <button class="chip" data-switch="unity">🎲 Unity Cube</button>
+                    <button class="chip" data-switch="godot">👾 Godot</button>
+                    <button class="chip" data-switch="chrome">🌐 Chrome</button>
+                    <button class="chip" data-switch="settings">⚙️ Settings</button>
+                </div>
+
+                <div class="control-group-title">Virtual Hardware Controls</div>
+                <div class="chip-group">
+                    <button class="chip" id="btn-hw-power">⏻ Power Button</button>
+                    <button class="chip" id="btn-hw-vol-down">🔉 Vol -</button>
+                    <button class="chip" id="btn-hw-vol-up">🔊 Vol +</button>
+                    <button class="chip" id="btn-hw-rotate">🔄 Rotate Screen</button>
+                </div>
+
+                <div class="control-group-title">Generic APK Ingestion</div>
+                <div class="btn-group" style="margin-top: 0.4rem;">
+                    <button class="btn btn-primary" id="btn-sidebar-upload-apk">
+                        📦 Upload & Install .APK
+                    </button>
+                    <input type="file" id="apk-file-input" accept=".apk" style="display: none;">
+                </div>
+
+                <div class="control-group-title">Live Subsystem Inspector</div>
+                <div class="diag-grid">
+                    <div class="diag-item">
+                        <div class="diag-label">PMS Packages</div>
+                        <div class="diag-value" id="inspector-pms-count">6 Installed</div>
+                    </div>
+                    <div class="diag-item">
+                        <div class="diag-label">AMS Backstack</div>
+                        <div class="diag-value" id="inspector-ams-depth">Depth: 1</div>
+                    </div>
+                    <div class="diag-item" style="grid-column: 1 / -1;">
+                        <div class="diag-label">Active Activity</div>
+                        <div class="diag-value" id="inspector-ams-activity">com.android.launcher3/.Launcher</div>
+                    </div>
+                    <div class="diag-item" style="grid-column: 1 / -1;">
+                        <div class="diag-label">WMS Surface Compositor</div>
+                        <div class="diag-value" id="inspector-wms-windows">StatusBar, NavigationBar, HomeScreen</div>
+                    </div>
+                    <div class="diag-item" style="grid-column: 1 / -1;">
+                        <div class="diag-label">Binder IPC Subsystem</div>
+                        <div class="diag-value" id="inspector-binder-status">ONLINE (0 errors)</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Arcade Controls Card -->
+            <div class="controls-card" id="arcade-controls" style="display: none;">
                 <div class="card-title">🕹 Arcade GPU Controls</div>
 
                 <div class="control-group-title">Shader Pipeline (Naga WGSL)</div>
@@ -544,7 +1742,7 @@
             </div>
 
             <!-- Live Shader Decompiler Card -->
-            <div class="shader-card">
+            <div class="shader-card" id="shader-card" style="display: none;">
                 <div class="card-title">🧬 Live Naga WGSL Shader Output</div>
                 <div class="code-viewer" id="shader-code">
 // Naga Translated WGSL Vertex & Fragment Shader
@@ -563,7 +1761,7 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
                 </div>
             </div>
 
-            <!-- Verification Gates Card (Hidden in arcade tab, visible in gates tab) -->
+            <!-- Verification Gates Card -->
             <div class="results-card" id="gates-card" style="display: none;">
                 <div class="card-title">🧪 End-to-End Verification Gates</div>
                 <div class="btn-group" style="margin-bottom: 1rem;">
@@ -617,7 +1815,7 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
                 </div>
             </div>
 
-            <!-- Vulkan E2E Pipeline Card (Hidden in arcade/gates tab, visible in vulkan tab) -->
+            <!-- Vulkan E2E Pipeline Card -->
             <div class="results-card" id="vulkan-card" style="display: none;">
                 <div class="card-title" style="color: #f97316;">🌋 Vulkan WebGPU Pipeline & E2E Validation</div>
                 <div class="btn-group" style="margin-bottom: 1rem;">
@@ -678,7 +1876,7 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
                 </div>
             </div>
 
-            <!-- Binder Subsystem Card (Hidden in arcade/gates/vulkan tab, visible in binder tab) -->
+            <!-- Binder Subsystem Card -->
             <div class="results-card" id="binder-card" style="display: none;">
                 <div class="card-title" style="color: #a855f7;">⚡ Binder Subsystem & Cross-VM Offloading</div>
                 <div class="btn-group" style="margin-bottom: 1rem;">
@@ -725,7 +1923,7 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
                 </div>
             </div>
 
-            <!-- E2E Roundtrip Validation Card (Hidden in other tabs, visible in e2e tab) -->
+            <!-- E2E Roundtrip Validation Card -->
             <div class="results-card" id="e2e-card" style="display: none;">
                 <div class="card-title" style="color: #10b981;">⚡ End-to-End (E2E) Roundtrip Validation</div>
                 <div class="btn-group" style="margin-bottom: 1rem;">
@@ -814,6 +2012,7 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
                 </div>
             </div>
 
+            <!-- Execution Logs Card -->
             <div class="log-card">
                 <div class="card-title">📟 Execution Logs</div>
                 <div class="log-terminal" id="log-term"></div>
@@ -829,6 +2028,15 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
         import { Arcade3DScene } from './src/arcade_demo.js';
         import { BinderTestSuite } from './src/binder_test_suite.js';
 
+        // Dynamic import of APK parser module if available
+        let apkParserModule = null;
+        try {
+            apkParserModule = await import('./src/apk_client_parser.js');
+        } catch (e) {
+            // Fallback parser will be used if file is not loaded yet
+        }
+
+        // DOM Elements
         const logTerm = document.getElementById('log-term');
         const statusPill = document.getElementById('status-pill');
         const fpsCounter = document.getElementById('fps-counter');
@@ -841,17 +2049,78 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
         const btnRunE2e = document.getElementById('btn-run-e2e');
         const btnActionPulse = document.getElementById('btn-action-pulse');
         const btnToggleAutoRotate = document.getElementById('btn-toggle-autorotate');
+        
+        // Navigation Tabs
+        const tabEmulator = document.getElementById('tab-emulator');
         const tabArcade = document.getElementById('tab-arcade');
         const tabGates = document.getElementById('tab-gates');
         const tabVulkan = document.getElementById('tab-vulkan');
         const tabBinder = document.getElementById('tab-binder');
         const tabE2e = document.getElementById('tab-e2e');
+        
+        // Sidebar Cards
+        const emulatorCard = document.getElementById('emulator-card');
         const arcadeControls = document.getElementById('arcade-controls');
+        const shaderCard = document.getElementById('shader-card');
         const gatesCard = document.getElementById('gates-card');
         const vulkanCard = document.getElementById('vulkan-card');
         const binderCard = document.getElementById('binder-card');
         const e2eCard = document.getElementById('e2e-card');
         const shaderCodeView = document.getElementById('shader-code');
+
+        // Android Phone Frame UI Elements
+        const phoneFrame = document.getElementById('phone-frame');
+        const phoneDropzone = document.getElementById('phone-dropzone');
+        const volumeHud = document.getElementById('volume-hud');
+        const volumeBarFill = document.getElementById('volume-bar-fill');
+        const screenSleepOverlay = document.getElementById('screen-sleep-overlay');
+        const statusClock = document.getElementById('status-clock');
+        const batteryLevelText = document.getElementById('battery-level-text');
+        const batteryLevelFill = document.querySelector('.battery-icon-level');
+        const glanceDate = document.getElementById('glance-date');
+        const statusNotifications = document.getElementById('status-notifications');
+        const dynamicAppGrid = document.getElementById('dynamic-app-grid-container');
+
+        // Android Screens
+        const screenHome = document.getElementById('screen-home');
+        const screenFdroid = document.getElementById('screen-fdroid');
+        const screenNativeSurface = document.getElementById('screen-native-surface');
+        const screenGenericApp = document.getElementById('screen-generic-app');
+        const screenRecents = document.getElementById('screen-recents');
+        const genericAppHeader = document.getElementById('generic-app-header');
+        const genericAppTitle = document.getElementById('generic-app-title');
+        const genericAppBody = document.getElementById('generic-app-body');
+        const recentsCarousel = document.getElementById('recents-carousel');
+        const recentsClearBtn = document.getElementById('recents-clear-btn');
+
+        // Navigation Bar Buttons
+        const navBtnBack = document.getElementById('nav-btn-back');
+        const navBtnHome = document.getElementById('nav-btn-home');
+        const navBtnRecents = document.getElementById('nav-btn-recents');
+
+        // F-Droid Elements
+        const fdroidSyncBtn = document.getElementById('fdroid-sync-btn');
+        const fdroidSettingsBtn = document.getElementById('fdroid-settings-btn');
+        const fdroidSearchInput = document.getElementById('fdroid-search-input');
+        const fdroidSearchClear = document.getElementById('fdroid-search-clear');
+        const fdroidCategoryTabs = document.getElementById('fdroid-category-tabs');
+        const fdroidCatalogList = document.getElementById('fdroid-catalog-list');
+        const fdroidDetailModal = document.getElementById('fdroid-detail-modal');
+        const fdroidDetailBackBtn = document.getElementById('fdroid-detail-back-btn');
+        const fdroidDetailContent = document.getElementById('fdroid-detail-content');
+
+        // Virtual Hardware Controls & Inspector Elements
+        const btnHwPower = document.getElementById('btn-hw-power');
+        const btnHwVolDown = document.getElementById('btn-hw-vol-down');
+        const btnHwVolUp = document.getElementById('btn-hw-vol-up');
+        const btnHwRotate = document.getElementById('btn-hw-rotate');
+        const btnSidebarUploadApk = document.getElementById('btn-sidebar-upload-apk');
+        const apkFileInput = document.getElementById('apk-file-input');
+        const inspectorPmsCount = document.getElementById('inspector-pms-count');
+        const inspectorAmsDepth = document.getElementById('inspector-ams-depth');
+        const inspectorAmsActivity = document.getElementById('inspector-ams-activity');
+        const inspectorWmsWindows = document.getElementById('inspector-wms-windows');
+        const inspectorBinderStatus = document.getElementById('inspector-binder-status');
 
         function appendLog(msg, type = 'info') {
             const line = document.createElement('div');
@@ -867,6 +2136,12 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
         let vulkanSuite = null;
         let binderSuite = null;
         let arcade = null;
+        let masterVolume = 1.0;
+        let volumeHudTimeout = null;
+        let isScreenSleeping = false;
+        let isLandscape = false;
+        let currentFdroidCategory = 'all';
+        let currentFdroidQuery = '';
 
         const WGSL_SHADERS = {
             phong: `// Naga Translated WGSL - Phong Specular
@@ -897,78 +2172,1124 @@ fn fs_normals(in: VertexOutput) -> @location(0) vec4<f32> {
 }`
         };
 
-        // Tab Switching
-        tabArcade.addEventListener('click', () => {
-            tabArcade.classList.add('active');
+        // -----------------------------------------------------------------------------
+        // In-Memory PMS & F-Droid Seed Catalog
+        // -----------------------------------------------------------------------------
+        const PMS_REGISTRY = new Map([
+            ['org.fdroid.fdroid', {
+                packageName: 'org.fdroid.fdroid',
+                appName: 'F-Droid',
+                versionName: '1.19.0',
+                versionCode: 1019050,
+                mainActivity: 'org.fdroid.fdroid.views.main.MainActivity',
+                category: 'system',
+                icon: '🤖',
+                iconClass: 'icon-fdroid',
+                desc: 'Official Free and Open Source Android Application Repository Client.',
+                author: 'F-Droid Open Source Community',
+                license: 'GPL-3.0',
+                size: '12.4 MB',
+                targetSdk: 'Android 14 (API 34)',
+                minSdk: 'Android 8.0 (API 26)',
+                activitiesCount: 25,
+                providersCount: 4,
+                servicesCount: 16,
+                receiversCount: 16,
+                permissions: ['android.permission.INTERNET', 'android.permission.ACCESS_NETWORK_STATE', 'android.permission.REQUEST_INSTALL_PACKAGES', 'android.permission.READ_EXTERNAL_STORAGE', 'android.permission.FOREGROUND_SERVICE', 'android.permission.WAKE_LOCK'],
+                installed: true
+            }],
+            ['com.unity.cube.gles', {
+                packageName: 'com.unity.cube.gles',
+                appName: 'Unity 3D Cube',
+                versionName: '2022.3.18f1',
+                versionCode: 20220318,
+                mainActivity: 'com.unity3d.player.UnityPlayerActivity',
+                category: 'games',
+                icon: '🎲',
+                iconClass: 'icon-unity',
+                desc: 'Real-time 3D interactive spinning mesh with Naga WGSL phong specular lighting.',
+                author: 'Unity Technologies & WebGPU Port Team',
+                license: 'MIT',
+                size: '28.6 MB',
+                targetSdk: 'Android 14 (API 34)',
+                minSdk: 'Android 9.0 (API 28)',
+                activitiesCount: 3,
+                providersCount: 0,
+                servicesCount: 2,
+                receiversCount: 1,
+                permissions: ['android.permission.INTERNET', 'android.permission.VIBRATE', 'android.permission.WAKE_LOCK'],
+                installed: true
+            }],
+            ['org.godotengine.gles2', {
+                packageName: 'org.godotengine.gles2',
+                appName: 'Godot GLES2',
+                versionName: '3.5.2-stable',
+                versionCode: 350200,
+                mainActivity: 'org.godotengine.godot.GodotActivity',
+                category: 'games',
+                icon: '👾',
+                iconClass: 'icon-godot',
+                desc: 'Godot Engine 2D/3D Mobile Runtime utilizing GLES2/3 and Naga WGSL translation.',
+                author: 'Juan Linietsky, Ariel Manzur & Godot Contributors',
+                license: 'MIT',
+                size: '34.2 MB',
+                targetSdk: 'Android 14 (API 34)',
+                minSdk: 'Android 8.0 (API 26)',
+                activitiesCount: 4,
+                providersCount: 1,
+                servicesCount: 3,
+                receiversCount: 2,
+                permissions: ['android.permission.INTERNET', 'android.permission.WRITE_EXTERNAL_STORAGE', 'android.permission.ACCESS_NETWORK_STATE'],
+                installed: true
+            }],
+            ['com.android.chrome', {
+                packageName: 'com.android.chrome',
+                appName: 'Chromium Browser',
+                versionName: '124.0.6367.82',
+                versionCode: 636708200,
+                mainActivity: 'com.google.android.apps.chrome.Main',
+                category: 'internet',
+                icon: '🌐',
+                iconClass: 'icon-chrome',
+                desc: 'High performance open-source browser engine with multi-process tab sandboxing.',
+                author: 'The Chromium Authors',
+                license: 'BSD-3-Clause',
+                size: '89.1 MB',
+                targetSdk: 'Android 14 (API 34)',
+                minSdk: 'Android 10.0 (API 29)',
+                activitiesCount: 42,
+                providersCount: 6,
+                servicesCount: 18,
+                receiversCount: 12,
+                permissions: ['android.permission.INTERNET', 'android.permission.ACCESS_NETWORK_STATE', 'android.permission.CAMERA', 'android.permission.RECORD_AUDIO'],
+                installed: true
+            }],
+            ['com.android.documentsui', {
+                packageName: 'com.android.documentsui',
+                appName: 'Files Manager',
+                versionName: '14.0.0',
+                versionCode: 340000000,
+                mainActivity: 'com.android.documentsui.files.FilesActivity',
+                category: 'system',
+                icon: '📁',
+                iconClass: 'icon-files',
+                desc: 'AOSP Material document browser, storage provider client, and APK installer.',
+                author: 'Android Open Source Project',
+                license: 'Apache-2.0',
+                size: '8.4 MB',
+                targetSdk: 'Android 14 (API 34)',
+                minSdk: 'Android 8.0 (API 26)',
+                activitiesCount: 8,
+                providersCount: 3,
+                servicesCount: 4,
+                receiversCount: 2,
+                permissions: ['android.permission.READ_EXTERNAL_STORAGE', 'android.permission.WRITE_EXTERNAL_STORAGE', 'android.permission.MANAGE_EXTERNAL_STORAGE'],
+                installed: true
+            }],
+            ['com.android.settings', {
+                packageName: 'com.android.settings',
+                appName: 'Settings',
+                versionName: '14.0.0',
+                versionCode: 340000001,
+                mainActivity: 'com.android.settings.Settings',
+                category: 'system',
+                icon: '⚙️',
+                iconClass: 'icon-settings',
+                desc: 'System configuration, display resolution, audio focus, and developer options.',
+                author: 'Android Open Source Project',
+                license: 'Apache-2.0',
+                size: '14.5 MB',
+                targetSdk: 'Android 14 (API 34)',
+                minSdk: 'Android 8.0 (API 26)',
+                activitiesCount: 65,
+                providersCount: 5,
+                servicesCount: 22,
+                receiversCount: 19,
+                permissions: ['android.permission.WRITE_SETTINGS', 'android.permission.ACCESS_NETWORK_STATE', 'android.permission.BLUETOOTH'],
+                installed: true
+            }],
+            ['com.termux', {
+                packageName: 'com.termux',
+                appName: 'Termux Terminal',
+                versionName: '0.118.0',
+                versionCode: 118,
+                mainActivity: 'com.termux.app.TermuxActivity',
+                category: 'dev',
+                icon: '💻',
+                iconClass: 'icon-generic-apk',
+                desc: 'Android terminal emulator and comprehensive Linux environment with APT packaging.',
+                author: 'Fredrik Fornwall & Termux Contributors',
+                license: 'GPL-3.0',
+                size: '31.2 MB',
+                targetSdk: 'Android 10 (API 29)',
+                minSdk: 'Android 7.0 (API 24)',
+                activitiesCount: 6,
+                providersCount: 2,
+                servicesCount: 4,
+                receiversCount: 3,
+                permissions: ['android.permission.INTERNET', 'android.permission.READ_EXTERNAL_STORAGE', 'android.permission.WRITE_EXTERNAL_STORAGE', 'android.permission.FOREGROUND_SERVICE'],
+                installed: false
+            }],
+            ['com.wireguard.android', {
+                packageName: 'com.wireguard.android',
+                appName: 'WireGuard VPN',
+                versionName: '1.0.20231014',
+                versionCode: 504,
+                mainActivity: 'com.wireguard.android.activity.MainActivity',
+                category: 'security',
+                icon: '🛡️',
+                iconClass: 'icon-generic-apk',
+                desc: 'Fast, modern, secure VPN tunnel with state-of-the-art Noise protocol cryptography.',
+                author: 'Jason A. Donenfeld & WireGuard Development Team',
+                license: 'Apache-2.0',
+                size: '9.8 MB',
+                targetSdk: 'Android 14 (API 34)',
+                minSdk: 'Android 8.0 (API 26)',
+                activitiesCount: 5,
+                providersCount: 1,
+                servicesCount: 2,
+                receiversCount: 2,
+                permissions: ['android.permission.INTERNET', 'android.permission.ACCESS_NETWORK_STATE', 'android.permission.FOREGROUND_SERVICE'],
+                installed: false
+            }],
+            ['org.videolan.vlc', {
+                packageName: 'org.videolan.vlc',
+                appName: 'VLC Media Player',
+                versionName: '3.5.4',
+                versionCode: 3050400,
+                mainActivity: 'org.videolan.vlc.gui.MainActivity',
+                category: 'latest',
+                icon: '🎬',
+                iconClass: 'icon-generic-apk',
+                desc: 'Free and open-source cross-platform multimedia player for videos and audio streams.',
+                author: 'VideoLAN Project',
+                license: 'GPL-2.0',
+                size: '42.1 MB',
+                targetSdk: 'Android 14 (API 34)',
+                minSdk: 'Android 8.0 (API 26)',
+                activitiesCount: 18,
+                providersCount: 3,
+                servicesCount: 8,
+                receiversCount: 6,
+                permissions: ['android.permission.READ_EXTERNAL_STORAGE', 'android.permission.WRITE_EXTERNAL_STORAGE', 'android.permission.FOREGROUND_SERVICE', 'android.permission.INTERNET'],
+                installed: false
+            }],
+            ['de.dennisguse.opentracks', {
+                packageName: 'de.dennisguse.opentracks',
+                appName: 'OpenTracks GPS',
+                versionName: '4.10.0',
+                versionCode: 4100,
+                mainActivity: 'de.dennisguse.opentracks.TrackListActivity',
+                category: 'latest',
+                icon: '📍',
+                iconClass: 'icon-generic-apk',
+                desc: 'Privacy-respecting sport tracking application without cloud dependency or tracking.',
+                author: 'Dennis Guse & OpenTracks Contributors',
+                license: 'Apache-2.0',
+                size: '14.2 MB',
+                targetSdk: 'Android 14 (API 34)',
+                minSdk: 'Android 8.0 (API 26)',
+                activitiesCount: 12,
+                providersCount: 2,
+                servicesCount: 4,
+                receiversCount: 4,
+                permissions: ['android.permission.ACCESS_FINE_LOCATION', 'android.permission.ACCESS_COARSE_LOCATION', 'android.permission.FOREGROUND_SERVICE'],
+                installed: false
+            }],
+            ['com.fsck.k9', {
+                packageName: 'com.fsck.k9',
+                appName: 'K-9 Mail',
+                versionName: '6.702',
+                versionCode: 37002,
+                mainActivity: 'com.fsck.k9.activity.Accounts',
+                category: 'internet',
+                icon: '✉️',
+                iconClass: 'icon-generic-apk',
+                desc: 'Full-featured open-source email client supporting IMAP, POP3, and OpenPGP encryption.',
+                author: 'K-9 Dog Walkers Community',
+                license: 'Apache-2.0',
+                size: '22.8 MB',
+                targetSdk: 'Android 14 (API 34)',
+                minSdk: 'Android 8.0 (API 26)',
+                activitiesCount: 24,
+                providersCount: 4,
+                servicesCount: 10,
+                receiversCount: 8,
+                permissions: ['android.permission.INTERNET', 'android.permission.ACCESS_NETWORK_STATE', 'android.permission.READ_CONTACTS'],
+                installed: false
+            }],
+            ['im.vector.app', {
+                packageName: 'im.vector.app',
+                appName: 'Element Matrix Chat',
+                versionName: '1.6.8',
+                versionCode: 40106080,
+                mainActivity: 'im.vector.app.features.home.HomeActivity',
+                category: 'security',
+                icon: '💬',
+                iconClass: 'icon-generic-apk',
+                desc: 'Decentralized end-to-end encrypted messaging and collaboration powered by Matrix.',
+                author: 'Element / New Vector Ltd',
+                license: 'Apache-2.0',
+                size: '56.4 MB',
+                targetSdk: 'Android 14 (API 34)',
+                minSdk: 'Android 8.0 (API 26)',
+                activitiesCount: 30,
+                providersCount: 3,
+                servicesCount: 12,
+                receiversCount: 10,
+                permissions: ['android.permission.INTERNET', 'android.permission.ACCESS_NETWORK_STATE', 'android.permission.CAMERA', 'android.permission.RECORD_AUDIO'],
+                installed: false
+            }]
+        ]);
+
+        // -----------------------------------------------------------------------------
+        // Navigation Stack & Screen Management
+        // -----------------------------------------------------------------------------
+        const navigationStack = ['home'];
+        const runningTasks = new Map([
+            ['home', { title: 'Launcher', pkg: 'com.android.launcher3', screenId: 'screen-home' }]
+        ]);
+
+        function activateScreen(screenId) {
+            document.querySelectorAll('.android-screen').forEach(el => el.classList.remove('active'));
+            const target = document.getElementById(screenId);
+            if (target) {
+                target.classList.add('active');
+            }
+        }
+
+        function updateSubsystemInspector() {
+            let installedCount = 0;
+            for (const item of PMS_REGISTRY.values()) {
+                if (item.installed) installedCount++;
+            }
+            inspectorPmsCount.textContent = `${installedCount} Installed`;
+            inspectorAmsDepth.textContent = `Depth: ${navigationStack.length}`;
+
+            const top = navigationStack[navigationStack.length - 1];
+            if (top === 'home') {
+                inspectorAmsActivity.textContent = 'com.android.launcher3/.Launcher';
+                inspectorWmsWindows.textContent = 'StatusBar, NavigationBar, HomeScreen';
+            } else if (top === 'fdroid') {
+                inspectorAmsActivity.textContent = 'org.fdroid.fdroid/.views.main.MainActivity';
+                inspectorWmsWindows.textContent = 'StatusBar, NavigationBar, FDroidActivity';
+            } else if (top === 'fdroid-detail') {
+                inspectorAmsActivity.textContent = 'org.fdroid.fdroid/.views.details.AppDetailsActivity';
+                inspectorWmsWindows.textContent = 'StatusBar, NavigationBar, FDroidActivity, AppDetailsDialog';
+            } else if (top === 'unity') {
+                inspectorAmsActivity.textContent = 'com.unity.cube.gles/.UnityPlayerActivity';
+                inspectorWmsWindows.textContent = 'StatusBar, NavigationBar, UnitySurfaceView';
+            } else if (top === 'godot') {
+                inspectorAmsActivity.textContent = 'org.godotengine.gles2/.GodotActivity';
+                inspectorWmsWindows.textContent = 'StatusBar, NavigationBar, GodotSurfaceView';
+            } else if (top === 'recents') {
+                inspectorAmsActivity.textContent = 'com.android.systemui/.recents.RecentsActivity';
+                inspectorWmsWindows.textContent = 'StatusBar, NavigationBar, RecentsOverview';
+            } else if (PMS_REGISTRY.has(top)) {
+                const app = PMS_REGISTRY.get(top);
+                inspectorAmsActivity.textContent = `${app.packageName}/.${app.mainActivity.split('.').pop()}`;
+                inspectorWmsWindows.textContent = `StatusBar, NavigationBar, ${app.appName}Window`;
+            } else {
+                inspectorAmsActivity.textContent = `com.android.${top}/.MainActivity`;
+                inspectorWmsWindows.textContent = `StatusBar, NavigationBar, ${top}Window`;
+            }
+
+            inspectorBinderStatus.textContent = 'ONLINE (0 errors)';
+        }
+
+        function launchApp(appId, options = {}) {
+            appendLog(`[AMS] startActivity -> [${appId}]`, 'info');
+
+            if (appId === 'home') {
+                navigationStack.length = 0;
+                navigationStack.push('home');
+                activateScreen('screen-home');
+                fdroidDetailModal.style.display = 'none';
+                if (arcade && !tabArcade.classList.contains('active')) arcade.stop();
+            } else if (appId === 'fdroid') {
+                if (navigationStack[navigationStack.length - 1] !== 'fdroid') {
+                    navigationStack.push('fdroid');
+                }
+                runningTasks.set('fdroid', { title: 'F-Droid', pkg: 'org.fdroid.fdroid', screenId: 'screen-fdroid' });
+                fdroidDetailModal.style.display = 'none';
+                activateScreen('screen-fdroid');
+                renderFdroidCatalog();
+                if (arcade && !tabArcade.classList.contains('active')) arcade.stop();
+            } else if (appId === 'unity' || appId === 'godot') {
+                if (navigationStack[navigationStack.length - 1] !== appId) {
+                    navigationStack.push(appId);
+                }
+                const label = appId === 'unity' ? 'Unity 3D Cube' : 'Godot GLES2';
+                const pkg = appId === 'unity' ? 'com.unity.cube.gles' : 'org.godotengine.gles2';
+                runningTasks.set(appId, { title: label, pkg: pkg, screenId: 'screen-native-surface' });
+                activateScreen('screen-native-surface');
+                if (arcade) {
+                    arcade.setTheme(appId === 'unity' ? 'unity' : 'godot');
+                    arcade.start();
+                }
+            } else if (appId === 'recents') {
+                renderRecents();
+                activateScreen('screen-recents');
+                if (navigationStack[navigationStack.length - 1] !== 'recents') {
+                    navigationStack.push('recents');
+                }
+            } else {
+                // Generic / Ingested App
+                const appInfo = PMS_REGISTRY.get(appId) || {
+                    appName: options.appName || appId.charAt(0).toUpperCase() + appId.slice(1),
+                    packageName: options.packageName || `com.android.${appId}`,
+                    versionName: options.versionName || '1.0.0',
+                    desc: 'Android Application Runtime Surface.'
+                };
+                renderGenericApp(appInfo);
+                activateScreen('screen-generic-app');
+                if (navigationStack[navigationStack.length - 1] !== appId) {
+                    navigationStack.push(appId);
+                }
+                runningTasks.set(appId, { title: appInfo.appName, pkg: appInfo.packageName, screenId: 'screen-generic-app' });
+                if (arcade && !tabArcade.classList.contains('active')) arcade.stop();
+            }
+
+            // Sync quick switcher chips
+            document.querySelectorAll('#quick-app-switcher button').forEach(chip => {
+                chip.classList.toggle('active', chip.getAttribute('data-switch') === appId);
+            });
+
+            updateSubsystemInspector();
+        }
+
+        function goBack() {
+            if (fdroidDetailModal.style.display !== 'none') {
+                fdroidDetailModal.style.display = 'none';
+                if (navigationStack[navigationStack.length - 1] === 'fdroid-detail') {
+                    navigationStack.pop();
+                }
+                updateSubsystemInspector();
+                return;
+            }
+
+            if (navigationStack.length > 1) {
+                navigationStack.pop();
+                const prev = navigationStack[navigationStack.length - 1];
+                if (prev === 'home') {
+                    activateScreen('screen-home');
+                } else if (prev === 'fdroid') {
+                    activateScreen('screen-fdroid');
+                } else if (prev === 'unity' || prev === 'godot') {
+                    activateScreen('screen-native-surface');
+                    if (arcade) arcade.start();
+                } else if (prev === 'recents') {
+                    renderRecents();
+                    activateScreen('screen-recents');
+                } else {
+                    const appInfo = PMS_REGISTRY.get(prev);
+                    if (appInfo) renderGenericApp(appInfo);
+                    activateScreen('screen-generic-app');
+                }
+            } else {
+                activateScreen('screen-home');
+            }
+            updateSubsystemInspector();
+        }
+
+        function goHome() {
+            fdroidDetailModal.style.display = 'none';
+            navigationStack.length = 0;
+            navigationStack.push('home');
+            activateScreen('screen-home');
+            if (arcade && !tabArcade.classList.contains('active')) arcade.stop();
+            updateSubsystemInspector();
+        }
+
+        function toggleRecents() {
+            if (navigationStack[navigationStack.length - 1] === 'recents') {
+                goBack();
+            } else {
+                launchApp('recents');
+            }
+        }
+
+        // Navigation Bar Listeners
+        navBtnBack.addEventListener('click', () => goBack());
+        navBtnHome.addEventListener('click', () => goHome());
+        navBtnRecents.addEventListener('click', () => toggleRecents());
+
+        // Quick Switcher Listeners
+        document.querySelectorAll('#quick-app-switcher button').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const target = btn.getAttribute('data-switch');
+                launchApp(target);
+            });
+        });
+
+        // App Grid Click Listeners
+        document.querySelectorAll('#home-app-grid .app-icon-item').forEach(item => {
+            item.addEventListener('click', () => {
+                const app = item.getAttribute('data-app');
+                const pkg = item.getAttribute('data-package');
+                launchApp(app || pkg);
+            });
+        });
+
+        // Dock Click Listeners
+        document.querySelectorAll('#home-app-dock .dock-icon-item').forEach(item => {
+            item.addEventListener('click', () => {
+                const app = item.getAttribute('data-app');
+                launchApp(app);
+            });
+        });
+
+        // -----------------------------------------------------------------------------
+        // F-Droid Catalog & Detail Presentation
+        // -----------------------------------------------------------------------------
+        function renderFdroidCatalog() {
+            fdroidCatalogList.innerHTML = '';
+            const query = currentFdroidQuery.trim().toLowerCase();
+
+            for (const [pkg, app] of PMS_REGISTRY.entries()) {
+                const matchesCat = currentFdroidCategory === 'all' || 
+                                   (currentFdroidCategory === 'latest' && (app.category === 'latest' || app.installed)) ||
+                                   (app.category && app.category.toLowerCase() === currentFdroidCategory);
+                
+                const matchesQuery = !query || 
+                                     app.appName.toLowerCase().includes(query) || 
+                                     pkg.toLowerCase().includes(query) || 
+                                     (app.desc && app.desc.toLowerCase().includes(query));
+
+                if (!matchesCat || !matchesQuery) continue;
+
+                const card = document.createElement('div');
+                card.className = 'fdroid-card';
+                card.setAttribute('data-package', pkg);
+
+                card.innerHTML = `
+                    <div class="fdroid-card-icon ${app.iconClass || 'icon-generic-apk'}">${app.icon || '📦'}</div>
+                    <div class="fdroid-card-info">
+                        <div class="fdroid-card-title">${app.appName}</div>
+                        <div class="fdroid-card-pkg">${pkg} • v${app.versionName}</div>
+                        <div class="fdroid-card-desc">${app.desc || ''}</div>
+                    </div>
+                    <div class="fdroid-card-action">
+                        <button class="btn-fdroid-action ${app.installed ? 'installed' : 'install'}" data-action-pkg="${pkg}">
+                            ${app.installed ? 'OPEN' : 'INSTALL'}
+                        </button>
+                    </div>
+                `;
+
+                // Card Click -> Details View
+                card.addEventListener('click', (e) => {
+                    if (e.target.closest('.btn-fdroid-action')) return;
+                    showFdroidAppDetails(pkg);
+                });
+
+                // Action Button Click
+                const actionBtn = card.querySelector('.btn-fdroid-action');
+                actionBtn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    if (app.installed) {
+                        launchApp(pkg);
+                    } else {
+                        installPackage(pkg);
+                    }
+                });
+
+                fdroidCatalogList.appendChild(card);
+            }
+        }
+
+        function showFdroidAppDetails(pkg) {
+            const app = PMS_REGISTRY.get(pkg);
+            if (!app) return;
+
+            navigationStack.push('fdroid-detail');
+            updateSubsystemInspector();
+
+            fdroidDetailContent.innerHTML = `
+                <div class="detail-hero">
+                    <div class="detail-icon ${app.iconClass || 'icon-generic-apk'}">${app.icon || '📦'}</div>
+                    <div class="detail-meta-block">
+                        <div class="detail-app-name">${app.appName}</div>
+                        <div class="detail-pkg-name">${pkg}</div>
+                        <div class="detail-version-tag">Version ${app.versionName} (${app.versionCode || 1})</div>
+                    </div>
+                </div>
+
+                <div class="detail-btn-row">
+                    <button class="btn btn-primary" id="btn-detail-action" style="flex: 1; padding: 0.6rem;">
+                        ${app.installed ? '🚀 Open Application' : '📥 Install Application'}
+                    </button>
+                </div>
+
+                <div class="detail-stats-grid">
+                    <div class="detail-stat-box">
+                        <span class="detail-stat-label">Target SDK</span>
+                        <span class="detail-stat-val">${app.targetSdk || 'Android 14 (API 34)'}</span>
+                    </div>
+                    <div class="detail-stat-box">
+                        <span class="detail-stat-label">Min SDK</span>
+                        <span class="detail-stat-val">${app.minSdk || 'Android 8.0 (API 26)'}</span>
+                    </div>
+                    <div class="detail-stat-box">
+                        <span class="detail-stat-label">Package Size</span>
+                        <span class="detail-stat-val">${app.size || '16.8 MB'}</span>
+                    </div>
+                    <div class="detail-stat-box">
+                        <span class="detail-stat-label">License</span>
+                        <span class="detail-stat-val">${app.license || 'Open Source'}</span>
+                    </div>
+                </div>
+
+                <div class="detail-section-title">Component Statistics</div>
+                <div class="detail-stats-grid">
+                    <div class="detail-stat-box">
+                        <span class="detail-stat-label">Activities</span>
+                        <span class="detail-stat-val">${app.activitiesCount || 1}</span>
+                    </div>
+                    <div class="detail-stat-box">
+                        <span class="detail-stat-label">Providers</span>
+                        <span class="detail-stat-val">${app.providersCount || 0}</span>
+                    </div>
+                    <div class="detail-stat-box">
+                        <span class="detail-stat-label">Services</span>
+                        <span class="detail-stat-val">${app.servicesCount || 0}</span>
+                    </div>
+                    <div class="detail-stat-box">
+                        <span class="detail-stat-label">Receivers</span>
+                        <span class="detail-stat-val">${app.receiversCount || 0}</span>
+                    </div>
+                </div>
+
+                <div class="detail-section-title">Application Description</div>
+                <p style="font-size: 0.78rem; line-height: 1.4; color: #cbd5e1;">${app.desc || 'No detailed description available.'}</p>
+
+                <div class="detail-section-title">Requested Permissions</div>
+                <div class="permissions-badge-list">
+                    ${(app.permissions || ['android.permission.INTERNET']).map(p => `<span class="perm-badge">${p.replace('android.permission.', '')}</span>`).join('')}
+                </div>
+            `;
+
+            const detailActionBtn = document.getElementById('btn-detail-action');
+            detailActionBtn.addEventListener('click', () => {
+                if (app.installed) {
+                    launchApp(pkg);
+                } else {
+                    installPackage(pkg);
+                    showFdroidAppDetails(pkg);
+                }
+            });
+
+            fdroidDetailModal.style.display = 'flex';
+        }
+
+        fdroidDetailBackBtn.addEventListener('click', () => {
+            fdroidDetailModal.style.display = 'none';
+            if (navigationStack[navigationStack.length - 1] === 'fdroid-detail') {
+                navigationStack.pop();
+            }
+            updateSubsystemInspector();
+        });
+
+        // F-Droid Search & Filter Handlers
+        fdroidSearchInput.addEventListener('input', (e) => {
+            currentFdroidQuery = e.target.value;
+            fdroidSearchClear.style.display = currentFdroidQuery ? 'block' : 'none';
+            renderFdroidCatalog();
+        });
+
+        fdroidSearchClear.addEventListener('click', () => {
+            fdroidSearchInput.value = '';
+            currentFdroidQuery = '';
+            fdroidSearchClear.style.display = 'none';
+            renderFdroidCatalog();
+        });
+
+        fdroidCategoryTabs.querySelectorAll('.cat-tab').forEach(tab => {
+            tab.addEventListener('click', () => {
+                fdroidCategoryTabs.querySelectorAll('.cat-tab').forEach(t => t.classList.remove('active'));
+                tab.classList.add('active');
+                currentFdroidCategory = tab.getAttribute('data-cat');
+                renderFdroidCatalog();
+            });
+        });
+
+        fdroidSyncBtn.addEventListener('click', () => {
+            fdroidSyncBtn.classList.add('spinning');
+            appendLog('[F-DROID] Syncing repositories with index-v2.json...', 'info');
+            setTimeout(() => {
+                fdroidSyncBtn.classList.remove('spinning');
+                showNotificationPill('F-Droid Synced');
+                appendLog('[F-DROID] Repository sync complete (1,840 packages indexed).', 'success');
+                renderFdroidCatalog();
+            }, 800);
+        });
+
+        fdroidSettingsBtn.addEventListener('click', () => {
+            appendLog('[F-DROID] Opened repository & mirror preferences.', 'info');
+        });
+
+        function installPackage(pkg) {
+            const app = PMS_REGISTRY.get(pkg);
+            if (!app) return;
+            app.installed = true;
+            appendLog(`[PMS] Package [${pkg}] successfully installed.`, 'success');
+            showNotificationPill(`Installed ${app.appName}`);
+            addDynamicAppToGrid(pkg, app.appName, app.icon);
+            renderFdroidCatalog();
+            updateSubsystemInspector();
+        }
+
+        function addDynamicAppToGrid(pkg, appName, icon = '📦') {
+            const existing = dynamicAppGrid.querySelector(`[data-package="${pkg}"]`);
+            if (existing) return;
+
+            const item = document.createElement('div');
+            item.className = 'app-icon-item';
+            item.setAttribute('data-package', pkg);
+            item.setAttribute('data-app', pkg);
+
+            item.innerHTML = `
+                <div class="app-icon-squircle icon-generic-apk">${icon}</div>
+                <div class="app-icon-label">${appName}</div>
+            `;
+
+            item.addEventListener('click', () => {
+                launchApp(pkg);
+            });
+
+            dynamicAppGrid.appendChild(item);
+        }
+
+        function showNotificationPill(text) {
+            const pill = document.createElement('div');
+            pill.className = 'status-notif-pill';
+            pill.textContent = text;
+            statusNotifications.innerHTML = '';
+            statusNotifications.appendChild(pill);
+            setTimeout(() => {
+                if (pill.parentElement) pill.remove();
+            }, 4000);
+        }
+
+        // -----------------------------------------------------------------------------
+        // Generic App & Recents View Rendering
+        // -----------------------------------------------------------------------------
+        function renderGenericApp(appInfo) {
+            genericAppTitle.textContent = appInfo.appName || 'Application';
+            if (appInfo.packageName === 'com.android.chrome' || appInfo.appName === 'Chrome' || appInfo.appName === 'Chromium Browser') {
+                genericAppBody.innerHTML = `
+                    <div style="background: rgba(0,0,0,0.4); padding: 8px 12px; border-radius: 12px; display: flex; align-items: center; gap: 8px; border: 1px solid rgba(255,255,255,0.08);">
+                        <span style="color: #38bdf8;">🔒</span>
+                        <span style="font-family: var(--font-mono); font-size: 0.75rem; color: #cbd5e1;">https://android.webgpu.org/demo</span>
+                    </div>
+                    <div style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06); border-radius: 14px; padding: 14px; display: flex; flex-direction: column; gap: 8px;">
+                        <h3 style="font-size: 0.95rem; color: #f8fafc;">WebGPU Native Rendering Engine</h3>
+                        <p style="font-size: 0.78rem; color: #94a3b8; line-height: 1.4;">Zero-overhead GPU virtual device bridge rendering GLES2/3 and Vulkan SPIR-V command streams inside browser Canvas.</p>
+                    </div>
+                `;
+            } else if (appInfo.packageName === 'com.android.settings' || appInfo.appName === 'Settings') {
+                genericAppBody.innerHTML = `
+                    <div style="display: flex; flex-direction: column; gap: 8px;">
+                        <div class="fdroid-card"><span style="font-size: 1.2rem;">📶</span><div><div style="font-size: 0.85rem; font-weight: 600;">Network & Internet</div><div style="font-size: 0.7rem; color: #94a3b8;">Wi-Fi 6, 5G Data, DNS</div></div></div>
+                        <div class="fdroid-card"><span style="font-size: 1.2rem;">🔋</span><div><div style="font-size: 0.85rem; font-weight: 600;">Battery</div><div style="font-size: 0.7rem; color: #94a3b8;">98% • Performance Mode</div></div></div>
+                        <div class="fdroid-card"><span style="font-size: 1.2rem;">📱</span><div><div style="font-size: 0.85rem; font-weight: 600;">Display</div><div style="font-size: 0.7rem; color: #94a3b8;">120Hz Mailbox VSync, Material You Dark</div></div></div>
+                        <div class="fdroid-card"><span style="font-size: 1.2rem;">⚡</span><div><div style="font-size: 0.85rem; font-weight: 600;">Developer Options</div><div style="font-size: 0.7rem; color: #94a3b8;">Virtio-GPU Wire Protocol Inspector Active</div></div></div>
+                    </div>
+                `;
+            } else {
+                genericAppBody.innerHTML = `
+                    <div style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06); border-radius: 14px; padding: 16px; display: flex; flex-direction: column; gap: 10px;">
+                        <div style="display: flex; align-items: center; gap: 10px;">
+                            <div style="font-size: 1.8rem;">📦</div>
+                            <div>
+                                <div style="font-weight: 700; font-size: 0.95rem; color: #f8fafc;">${appInfo.appName}</div>
+                                <div style="font-family: var(--font-mono); font-size: 0.7rem; color: #94a3b8;">${appInfo.packageName}</div>
+                            </div>
+                        </div>
+                        <div style="font-size: 0.78rem; color: #cbd5e1; line-height: 1.4;">${appInfo.desc || 'Activity running inside AndroidWebGPU user-space sandbox.'}</div>
+                    </div>
+                `;
+            }
+        }
+
+        function renderRecents() {
+            recentsCarousel.innerHTML = '';
+            for (const [key, task] of runningTasks.entries()) {
+                const item = document.createElement('div');
+                item.className = 'recents-card-item';
+                item.innerHTML = `
+                    <div style="display: flex; align-items: center; gap: 10px;">
+                        <span style="font-size: 1.3rem;">📱</span>
+                        <div>
+                            <div style="font-size: 0.85rem; font-weight: 600; color: #f8fafc;">${task.title}</div>
+                            <div style="font-size: 0.68rem; font-family: var(--font-mono); color: #94a3b8;">${task.pkg}</div>
+                        </div>
+                    </div>
+                    <button class="btn-fdroid-action install" style="font-size: 0.65rem;">SWITCH</button>
+                `;
+                item.addEventListener('click', () => {
+                    launchApp(key);
+                });
+                recentsCarousel.appendChild(item);
+            }
+        }
+
+        recentsClearBtn.addEventListener('click', () => {
+            runningTasks.clear();
+            runningTasks.set('home', { title: 'Launcher', pkg: 'com.android.launcher3', screenId: 'screen-home' });
+            goHome();
+        });
+
+        // -----------------------------------------------------------------------------
+        // Virtual Hardware Controls (Power, Volume, Rotate)
+        // -----------------------------------------------------------------------------
+        btnHwPower.addEventListener('click', () => {
+            isScreenSleeping = !isScreenSleeping;
+            screenSleepOverlay.classList.toggle('sleeping', isScreenSleeping);
+            appendLog(`[POWER] Screen ${isScreenSleeping ? 'turned OFF (Sleep Mode)' : 'turned ON (Wake Mode)'}.`, 'info');
+        });
+
+        function setVolume(vol) {
+            masterVolume = Math.max(0, Math.min(1.0, vol));
+            volumeBarFill.style.height = `${masterVolume * 100}%`;
+            volumeHud.style.display = 'flex';
+            volumeHud.style.opacity = '1';
+
+            if (window.AndroidWebGpu && window.AndroidWebGpu.audio) {
+                window.AndroidWebGpu.audio.setMasterVolume(masterVolume);
+            }
+
+            if (volumeHudTimeout) clearTimeout(volumeHudTimeout);
+            volumeHudTimeout = setTimeout(() => {
+                volumeHud.style.opacity = '0';
+                setTimeout(() => { volumeHud.style.display = 'none'; }, 300);
+            }, 2000);
+
+            appendLog(`[AUDIO] Master Volume adjusted to ${Math.round(masterVolume * 100)}%.`, 'info');
+        }
+
+        btnHwVolDown.addEventListener('click', () => setVolume(masterVolume - 0.1));
+        btnHwVolUp.addEventListener('click', () => setVolume(masterVolume + 0.1));
+
+        btnHwRotate.addEventListener('click', () => {
+            isLandscape = !isLandscape;
+            phoneFrame.classList.toggle('landscape', isLandscape);
+            appendLog(`[WMS] Screen orientation changed to ${isLandscape ? 'LANDSCAPE (90°)' : 'PORTRAIT (0°)'}.`, 'info');
+        });
+
+        // -----------------------------------------------------------------------------
+        // Generic Client-Side APK Drag & Drop Ingestion
+        // -----------------------------------------------------------------------------
+        phoneFrame.addEventListener('dragenter', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            phoneDropzone.style.display = 'flex';
+        });
+
+        phoneFrame.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            phoneDropzone.style.display = 'flex';
+        });
+
+        phoneFrame.addEventListener('dragleave', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            if (e.target === phoneDropzone || !phoneFrame.contains(e.relatedTarget)) {
+                phoneDropzone.style.display = 'none';
+            }
+        });
+
+        phoneFrame.addEventListener('drop', async (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            phoneDropzone.style.display = 'none';
+            const file = e.dataTransfer.files[0];
+            if (file) {
+                await processApkFile(file);
+            }
+        });
+
+        btnSidebarUploadApk.addEventListener('click', () => {
+            apkFileInput.click();
+        });
+
+        apkFileInput.addEventListener('change', async (e) => {
+            const file = e.target.files[0];
+            if (file) {
+                await processApkFile(file);
+                apkFileInput.value = '';
+            }
+        });
+
+        async function processApkFile(file) {
+            appendLog(`[PMS] Ingesting APK file '${file.name}' (${(file.size / (1024 * 1024)).toFixed(2)} MB)...`, 'info');
+            try {
+                const buffer = await file.arrayBuffer();
+                let parsed = null;
+
+                if (window.AndroidApkParser && typeof window.AndroidApkParser.parseApk === 'function') {
+                    parsed = await window.AndroidApkParser.parseApk(buffer);
+                } else if (apkParserModule && apkParserModule.AndroidApkParser) {
+                    parsed = await apkParserModule.AndroidApkParser.parseApk(buffer);
+                } else {
+                    parsed = fallbackApkParser(buffer, file.name);
+                }
+
+                const pkgName = parsed.packageName || `com.example.${file.name.replace(/[^a-zA-Z0-9]/g, '').toLowerCase()}`;
+                const appLabel = parsed.appName || parsed.label || file.name.replace(/\.apk$/i, '');
+                const versionName = parsed.versionName || '1.0.0';
+                const versionCode = parsed.versionCode || 1;
+                const mainActivity = parsed.mainActivity || `${pkgName}.MainActivity`;
+                const activitiesCount = parsed.activitiesCount || (parsed.activities ? parsed.activities.length : 1);
+                const providersCount = parsed.providersCount || (parsed.providers ? parsed.providers.length : 0);
+                const servicesCount = parsed.servicesCount || (parsed.services ? parsed.services.length : 0);
+                const receiversCount = parsed.receiversCount || (parsed.receivers ? parsed.receivers.length : 0);
+                const permissions = parsed.permissions || ['android.permission.INTERNET', 'android.permission.ACCESS_NETWORK_STATE'];
+
+                const appRecord = {
+                    packageName: pkgName,
+                    appName: appLabel,
+                    versionName: versionName,
+                    versionCode: versionCode,
+                    mainActivity: mainActivity,
+                    category: 'latest',
+                    icon: '📦',
+                    iconClass: 'icon-generic-apk',
+                    desc: `Dynamically ingested package containing ${activitiesCount} activities, ${providersCount} providers, ${servicesCount} services.`,
+                    author: 'User Ingested Package',
+                    license: 'Custom',
+                    size: `${(file.size / (1024 * 1024)).toFixed(1)} MB`,
+                    targetSdk: 'Android 14 (API 34)',
+                    minSdk: 'Android 8.0 (API 26)',
+                    activitiesCount: activitiesCount,
+                    providersCount: providersCount,
+                    servicesCount: servicesCount,
+                    receiversCount: receiversCount,
+                    permissions: permissions,
+                    installed: true
+                };
+
+                PMS_REGISTRY.set(pkgName, appRecord);
+                addDynamicAppToGrid(pkgName, appLabel);
+                renderFdroidCatalog();
+                updateSubsystemInspector();
+                showNotificationPill(`Installed ${appLabel}`);
+                appendLog(`[PMS] Registered package '${pkgName}' (Activities: ${activitiesCount}, Providers: ${providersCount}).`, 'success');
+            } catch (err) {
+                appendLog(`[PMS] APK ingestion failed: ${err.message}`, 'error');
+            }
+        }
+
+        function fallbackApkParser(buffer, filename) {
+            // Pure JS fallback string-scan / ZIP inspector
+            const bytes = new Uint8Array(buffer);
+            let pkgName = '';
+            let activities = [];
+            let providers = [];
+            let services = [];
+            let receivers = [];
+            let permissions = [];
+
+            // Quick extraction of ASCII string tokens
+            let token = '';
+            const allStrings = [];
+            for (let i = 0; i < bytes.length; i++) {
+                const b = bytes[i];
+                if ((b >= 48 && b <= 57) || (b >= 65 && b <= 90) || (b >= 97 && b <= 122) || b === 46 || b === 95) {
+                    token += String.fromCharCode(b);
+                } else {
+                    if (token.length >= 4) {
+                        allStrings.push(token);
+                    }
+                    token = '';
+                }
+            }
+
+            for (const s of allStrings) {
+                if (s.startsWith('android.permission.') && !permissions.includes(s)) {
+                    permissions.push(s);
+                }
+                if (s.includes('.views.') || s.includes('.activity.') || s.endsWith('Activity')) {
+                    if (!activities.includes(s)) activities.push(s);
+                }
+                if (s.includes('Provider') && !providers.includes(s)) {
+                    providers.push(s);
+                }
+                if (s.includes('Service') && !services.includes(s)) {
+                    services.push(s);
+                }
+                if (s.includes('Receiver') && !receivers.includes(s)) {
+                    receivers.push(s);
+                }
+                if (s.includes('.') && s.split('.').length >= 3 && !pkgName) {
+                    if (s.startsWith('com.') || s.startsWith('org.') || s.startsWith('de.') || s.startsWith('net.')) {
+                        pkgName = s.split('.').slice(0, 3).join('.');
+                    }
+                }
+            }
+
+            if (!pkgName) {
+                pkgName = `org.${filename.replace(/[^a-zA-Z0-9]/g, '').toLowerCase()}`;
+            }
+
+            const cleanName = filename.replace(/\.apk$/i, '');
+            return {
+                packageName: pkgName,
+                appName: cleanName.charAt(0).toUpperCase() + cleanName.slice(1),
+                versionName: '1.0.0',
+                versionCode: 1,
+                mainActivity: activities[0] || `${pkgName}.MainActivity`,
+                activitiesCount: Math.max(activities.length, 1),
+                providersCount: providers.length,
+                servicesCount: services.length,
+                receiversCount: receivers.length,
+                permissions: permissions.length > 0 ? permissions : ['android.permission.INTERNET']
+            };
+        }
+
+        // -----------------------------------------------------------------------------
+        // Live Clock, Battery & Date Ticker
+        // -----------------------------------------------------------------------------
+        function updateLiveClock() {
+            const now = new Date();
+            const hours = String(now.getHours()).padStart(2, '0');
+            const minutes = String(now.getMinutes()).padStart(2, '0');
+            if (statusClock) statusClock.textContent = `${hours}:${minutes}`;
+
+            const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+            const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+            if (glanceDate) {
+                glanceDate.textContent = `${days[now.getDay()]}, ${months[now.getMonth()]} ${now.getDate()}`;
+            }
+        }
+        setInterval(updateLiveClock, 1000);
+        updateLiveClock();
+
+        // -----------------------------------------------------------------------------
+        // Tab Switching Logic
+        // -----------------------------------------------------------------------------
+        tabEmulator.addEventListener('click', () => {
+            tabEmulator.classList.add('active');
+            tabArcade.classList.remove('active');
             tabGates.classList.remove('active');
             tabVulkan.classList.remove('active');
             tabBinder.classList.remove('active');
             tabE2e.classList.remove('active');
-            arcadeControls.style.display = 'block';
+            
+            emulatorCard.style.display = 'block';
+            arcadeControls.style.display = 'none';
+            shaderCard.style.display = 'none';
             gatesCard.style.display = 'none';
             vulkanCard.style.display = 'none';
             binderCard.style.display = 'none';
             e2eCard.style.display = 'none';
+            
+            launchApp('home');
+        });
+
+        tabArcade.addEventListener('click', () => {
+            tabArcade.classList.add('active');
+            tabEmulator.classList.remove('active');
+            tabGates.classList.remove('active');
+            tabVulkan.classList.remove('active');
+            tabBinder.classList.remove('active');
+            tabE2e.classList.remove('active');
+
+            emulatorCard.style.display = 'none';
+            arcadeControls.style.display = 'block';
+            shaderCard.style.display = 'block';
+            gatesCard.style.display = 'none';
+            vulkanCard.style.display = 'none';
+            binderCard.style.display = 'none';
+            e2eCard.style.display = 'none';
+
+            launchApp('unity');
             if (arcade) arcade.start();
         });
 
         tabGates.addEventListener('click', () => {
             tabGates.classList.add('active');
+            tabEmulator.classList.remove('active');
             tabArcade.classList.remove('active');
             tabVulkan.classList.remove('active');
             tabBinder.classList.remove('active');
             tabE2e.classList.remove('active');
+
+            emulatorCard.style.display = 'none';
             arcadeControls.style.display = 'none';
+            shaderCard.style.display = 'none';
             gatesCard.style.display = 'block';
             vulkanCard.style.display = 'none';
             binderCard.style.display = 'none';
             e2eCard.style.display = 'none';
+
+            activateScreen('screen-native-surface');
             if (arcade) arcade.stop();
         });
 
         tabVulkan.addEventListener('click', () => {
             tabVulkan.classList.add('active');
+            tabEmulator.classList.remove('active');
             tabArcade.classList.remove('active');
             tabGates.classList.remove('active');
             tabBinder.classList.remove('active');
             tabE2e.classList.remove('active');
+
+            emulatorCard.style.display = 'none';
             arcadeControls.style.display = 'none';
+            shaderCard.style.display = 'none';
             gatesCard.style.display = 'none';
             vulkanCard.style.display = 'block';
             binderCard.style.display = 'none';
             e2eCard.style.display = 'none';
+
+            activateScreen('screen-native-surface');
             if (arcade) arcade.stop();
         });
 
         tabBinder.addEventListener('click', () => {
             tabBinder.classList.add('active');
+            tabEmulator.classList.remove('active');
             tabArcade.classList.remove('active');
             tabGates.classList.remove('active');
             tabVulkan.classList.remove('active');
             tabE2e.classList.remove('active');
+
+            emulatorCard.style.display = 'none';
             arcadeControls.style.display = 'none';
+            shaderCard.style.display = 'none';
             gatesCard.style.display = 'none';
             vulkanCard.style.display = 'none';
             binderCard.style.display = 'block';
             e2eCard.style.display = 'none';
+
+            activateScreen('screen-native-surface');
             if (arcade) arcade.stop();
         });
 
         tabE2e.addEventListener('click', () => {
             tabE2e.classList.add('active');
+            tabEmulator.classList.remove('active');
             tabArcade.classList.remove('active');
             tabGates.classList.remove('active');
             tabVulkan.classList.remove('active');
             tabBinder.classList.remove('active');
+
+            emulatorCard.style.display = 'none';
             arcadeControls.style.display = 'none';
+            shaderCard.style.display = 'none';
             gatesCard.style.display = 'none';
             vulkanCard.style.display = 'none';
             binderCard.style.display = 'none';
             e2eCard.style.display = 'block';
+
+            activateScreen('screen-native-surface');
             if (arcade) arcade.stop();
         });
 
-        // Mouse & Touch Dragging for 3D Mesh
+        // -----------------------------------------------------------------------------
+        // Mouse & Touch Dragging for 3D Mesh (Canvas)
+        // -----------------------------------------------------------------------------
         let isMouseDown = false;
         let lastX = 0;
         let lastY = 0;
@@ -999,7 +3320,7 @@ fn fs_normals(in: VertexOutput) -> @location(0) vec4<f32> {
         // Keyboard Shortcuts
         window.addEventListener('keydown', (e) => {
             if (e.code === 'Space') {
-                if (arcade) arcade.triggerAction();
+                if (arcade && screenNativeSurface.classList.contains('active')) arcade.triggerAction();
             }
         });
 
@@ -1057,7 +3378,7 @@ fn fs_normals(in: VertexOutput) -> @location(0) vec4<f32> {
 
                 statusPill.textContent = 'ONLINE';
                 statusPill.style.color = 'var(--success)';
-                appendLog('Virtio-GPU Stack online (Mailbox VSync). Initializing 3D Game Arcade...', 'success');
+                appendLog('Virtio-GPU Stack online (Mailbox VSync). Material You Android OS Ready.', 'success');
 
                 // Launch 3D Arcade Engine with 120 FPS pacing
                 arcade = new Arcade3DScene(gpuDev, canvas, (stats) => {
@@ -1069,7 +3390,10 @@ fn fs_normals(in: VertexOutput) -> @location(0) vec4<f32> {
                         gpuTimeVal.textContent = `${stats.gpuTimeMs} ms`;
                     }
                 });
-                arcade.start();
+
+                // Initialize F-Droid Catalog List
+                renderFdroidCatalog();
+                updateSubsystemInspector();
             } catch (err) {
                 statusPill.textContent = 'ERROR';
                 statusPill.style.color = 'var(--error)';
@@ -1077,6 +3401,7 @@ fn fs_normals(in: VertexOutput) -> @location(0) vec4<f32> {
             }
         }
 
+        // Test Runners Wiring
         btnRunAll.addEventListener('click', async () => {
             if (!suite) return;
             if (arcade) arcade.stop();
@@ -1231,6 +3556,18 @@ fn fs_normals(in: VertexOutput) -> @location(0) vec4<f32> {
         // -----------------------------------------------------------------------------
         window.AndroidWebGpu = {
             version: '1.0.0',
+            pms: {
+                installedPackages: PMS_REGISTRY,
+                getPackageInfo(pkg) { return PMS_REGISTRY.get(pkg) || null; },
+                installPackage(pkg) { installPackage(pkg); }
+            },
+            ams: {
+                navigationStack,
+                runningTasks,
+                launchApp(appId) { launchApp(appId); },
+                goBack() { goBack(); },
+                goHome() { goHome(); }
+            },
             lifecycle: {
                 state: 'RESUMED', // 'RESUMED' | 'PAUSED' | 'STOPPED'
                 isVisible: typeof document !== 'undefined' ? !document.hidden : true,
@@ -1244,6 +3581,7 @@ fn fs_normals(in: VertexOutput) -> @location(0) vec4<f32> {
                 pumpInterval: null,
                 setMasterVolume(vol) {
                     this.savedVolume = vol;
+                    masterVolume = vol;
                     if (this.masterGainNode && this.context) {
                         this.masterGainNode.gain.setValueAtTime(vol, this.context.currentTime);
                     }
@@ -1383,4 +3721,3 @@ fn fs_normals(in: VertexOutput) -> @location(0) vec4<f32> {
     </script>
 </body>
 </html>
-
