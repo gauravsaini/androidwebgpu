@@ -510,3 +510,48 @@ fn test_error_paths_and_invalid_operations() {
     });
 }
 
+#[test]
+fn test_layer_state_marshaling_roundtrip() {
+    pollster::block_on(async {
+        let (device, queue) = create_test_wgpu().await;
+        let service = SurfaceComposerService::new(device, queue, 1280, 720);
+
+        let surface = service.create_surface("AppWindow", 1280, 720, 0).unwrap();
+
+        // Marshaling test with what mask 16383 (0x3fff)
+        let mut original_state = LayerState::new(surface.surface_id, "AppWindow");
+        original_state.what = 16383;
+        original_state.set_bounds_pixels([0.0, 0.0, 1280.0, 720.0]);
+        original_state.alpha = 1.0;
+        original_state.visible = true;
+
+        let composer_state = ComposerState::new(surface.surface_id, original_state.clone());
+
+        let mut parcel = Parcel::new();
+        composer_state.write_to_parcel(&mut parcel).unwrap();
+
+        let mut deserialized_state = ComposerState::new(0, LayerState::default());
+        let mut offset = 0;
+        deserialized_state.read_from_parcel_at(&parcel, &mut offset).unwrap();
+
+        assert_eq!(deserialized_state.surface_id, surface.surface_id);
+        assert_eq!(deserialized_state.state.what, 16383);
+        assert_eq!(deserialized_state.state.bounds, [0.0, 0.0, 1280.0, 720.0]);
+        assert_eq!(deserialized_state.state.alpha, 1.0);
+        assert!(deserialized_state.state.visible);
+
+        // Test through transact SET_TRANSACTION_STATE
+        let mut tx_data = Parcel::new();
+        tx_data.write_i32(1).unwrap();
+        deserialized_state.write_to_parcel(&mut tx_data).unwrap();
+        tx_data.write_u32(0).unwrap();
+
+        let mut tx_reply = Parcel::new();
+        service.transact(isurfacecomposer_codes::SET_TRANSACTION_STATE, 0, &tx_data, &mut tx_reply).unwrap();
+
+        let mut rep_offset = 0;
+        assert!(tx_reply.read_status(&mut rep_offset).unwrap().is_ok());
+    });
+}
+
+

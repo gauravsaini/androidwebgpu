@@ -483,6 +483,8 @@ impl Remotable for SurfaceComposerService {
                 for _ in 0..count {
                     let mut state = ComposerState::new(0, LayerState::default());
                     state.read_from_parcel_at(data, &mut offset)?;
+                    let layer = &state.state;
+                    eprintln!("[SF] Layer 0 bounds={:?} alpha={} what={:#x} visible={}", layer.bounds, layer.alpha, layer.what, layer.visible);
                     updates.push(state);
                 }
                 let flags = data.read_u32(&mut offset).unwrap_or(0);

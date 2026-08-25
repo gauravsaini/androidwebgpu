@@ -196,6 +196,7 @@ impl GraphicBufferProducerService {
         width: u32,
         height: u32,
     ) -> Result<(), BufferQueueError> {
+        eprintln!("[BQ] slot {} {}x{} bytes {}", slot, width, height, data.len());
         let mut slots = self.slots.lock().unwrap();
         let slot_ref = slots.get_mut(&slot).ok_or(BufferQueueError::InvalidSlot(slot))?;
 

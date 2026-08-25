@@ -402,6 +402,9 @@ impl LayerTranslator {
 
         if (state.what & layer_change_flags::VISIBILITY_CHANGED) != 0 {
             layer.visible = state.visible;
+        } else if (state.what & 1) == 0 {
+            // Real WindowManager may not set eLayerHidden, keep layer visible
+            layer.visible = true;
         }
     }
 }
