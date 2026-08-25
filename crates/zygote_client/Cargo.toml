@@ -1,0 +1,14 @@
+[package]
+name = "zygote_client"
+version = "0.1.0"
+edition = "2021"
+description = "Native Android Zygote abstract unix socket client and process tracking for AndroidWebGPU"
+
+[dependencies]
+thiserror = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+log = { workspace = true }
+
+[dev-dependencies]
+pollster = { workspace = true }

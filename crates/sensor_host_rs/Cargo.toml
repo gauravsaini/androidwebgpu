@@ -1,0 +1,16 @@
+[package]
+name = "sensor_host_rs"
+version = "0.1.0"
+edition = "2021"
+description = "Host-Side Browser Sensor API / devicemotion Bridge for AndroidWebGPU Sensors HAL"
+
+[dependencies]
+sensors_hal_virtual = { path = "../sensors_hal_virtual" }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+log = { workspace = true }
+
+[dev-dependencies]
+pollster = { workspace = true }
+bytemuck = { workspace = true }

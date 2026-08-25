@@ -1,0 +1,21 @@
+[package]
+name = "wms_rs"
+version = "0.1.0"
+edition = "2021"
+description = "Native Android Window Manager Service (WMS), IWindowSession AIDL, and SurfaceBridge for AndroidWebGPU"
+
+[dependencies]
+aidl_compat = { path = "../aidl_compat" }
+binder_rt = { path = "../binder_rt" }
+binder_sys = { path = "../binder_sys" }
+input_channel = { path = "../input_channel" }
+surfaceflinger_gpu_service = { path = "../surfaceflinger_gpu_service" }
+webgpu_compositor = { path = "../webgpu_compositor" }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+log = { workspace = true }
+
+[dev-dependencies]
+pollster = { workspace = true }
+bytemuck = { workspace = true }

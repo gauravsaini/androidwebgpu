@@ -473,6 +473,7 @@
             <button class="tab-btn" id="tab-gates">🧪 Verification Gates</button>
             <button class="tab-btn" id="tab-vulkan">🌋 Vulkan E2E Pipeline</button>
             <button class="tab-btn" id="tab-binder">⚡ Binder Subsystem</button>
+            <button class="tab-btn" id="tab-e2e">⚡ 11 E2E Milestones</button>
         </div>
 
         <div class="header-stats">
@@ -724,6 +725,95 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
                 </div>
             </div>
 
+            <!-- E2E Roundtrip Validation Card (Hidden in other tabs, visible in e2e tab) -->
+            <div class="results-card" id="e2e-card" style="display: none;">
+                <div class="card-title" style="color: #10b981;">⚡ End-to-End (E2E) Roundtrip Validation</div>
+                <div class="btn-group" style="margin-bottom: 1rem;">
+                    <button class="btn btn-primary" id="btn-run-e2e" style="background: linear-gradient(135deg, #10b981, #06b6d4); box-shadow: 0 0 20px rgba(16, 185, 129, 0.4);">
+                        ⚡ Run All 11 E2E Milestone Tests
+                    </button>
+                </div>
+                <div class="gate-list">
+                    <div class="gate-item">
+                        <div class="gate-info">
+                            <div class="gate-title">E2E-1: VINTF HAL Declarations</div>
+                            <div class="gate-desc">Target-level 7 manifest declarations for ISensors, IModule, ICameraProvider</div>
+                        </div>
+                        <span class="badge badge-pending" id="badge-e2e-1">READY</span>
+                    </div>
+                    <div class="gate-item">
+                        <div class="gate-info">
+                            <div class="gate-title">E2E-2: Binder Transport & Looper</div>
+                            <div class="gate-desc">Wire-accurate Parcel serialization, ioctl loopers, virtqueue roundtrips</div>
+                        </div>
+                        <span class="badge badge-pending" id="badge-e2e-2">READY</span>
+                    </div>
+                    <div class="gate-item">
+                        <div class="gate-info">
+                            <div class="gate-title">E2E-3: Shared Memory Buffer Pools</div>
+                            <div class="gate-desc">Zero-copy shared memory buffer recycling without memory leaks</div>
+                        </div>
+                        <span class="badge badge-pending" id="badge-e2e-3">READY</span>
+                    </div>
+                    <div class="gate-item">
+                        <div class="gate-info">
+                            <div class="gate-title">E2E-4: Sensors HAL E2E</div>
+                            <div class="gate-desc">Host devicemotion & synthetic stream injection to ISensors at 100Hz</div>
+                        </div>
+                        <span class="badge badge-pending" id="badge-e2e-4">READY</span>
+                    </div>
+                    <div class="gate-item">
+                        <div class="gate-info">
+                            <div class="gate-title">E2E-5: Audio HAL Playback E2E</div>
+                            <div class="gate-desc">Stereo 16-bit 48kHz PCM playback routed to WebAudio with gain scaling</div>
+                        </div>
+                        <span class="badge badge-pending" id="badge-e2e-5">READY</span>
+                    </div>
+                    <div class="gate-item">
+                        <div class="gate-info">
+                            <div class="gate-title">E2E-6: Audio HAL Recording E2E</div>
+                            <div class="gate-desc">Host microphone capture into guest PCM ring buffer</div>
+                        </div>
+                        <span class="badge badge-pending" id="badge-e2e-6">READY</span>
+                    </div>
+                    <div class="gate-item">
+                        <div class="gate-info">
+                            <div class="gate-title">E2E-7: Camera HAL Preview E2E</div>
+                            <div class="gate-desc">Host getUserMedia/WebRTC stream frames to ICameraDeviceCallback</div>
+                        </div>
+                        <span class="badge badge-pending" id="badge-e2e-7">READY</span>
+                    </div>
+                    <div class="gate-item">
+                        <div class="gate-info">
+                            <div class="gate-title">E2E-8: Media Decode E2E (WebCodecs)</div>
+                            <div class="gate-desc">H.264 Annex B NALU keyframe decode via WebCodecs to YUV420 surface</div>
+                        </div>
+                        <span class="badge badge-pending" id="badge-e2e-8">READY</span>
+                    </div>
+                    <div class="gate-item">
+                        <div class="gate-info">
+                            <div class="gate-title">E2E-9: Concurrency & Lifecycle</div>
+                            <div class="gate-desc">Multi-process Activity state transitions & crash recovery under stress</div>
+                        </div>
+                        <span class="badge badge-pending" id="badge-e2e-9">READY</span>
+                    </div>
+                    <div class="gate-item">
+                        <div class="gate-info">
+                            <div class="gate-title">E2E-10: Browser Backgrounding</div>
+                            <div class="gate-desc">visibilitychange & blur pause/resume without ANR or audio glitch</div>
+                        </div>
+                        <span class="badge badge-pending" id="badge-e2e-10">READY</span>
+                    </div>
+                    <div class="gate-item">
+                        <div class="gate-info">
+                            <div class="gate-title">E2E-11: Real APK Execution</div>
+                            <div class="gate-desc">Unity (unity_cube.apk) & Godot (godot_gles2.apk) ingest, fork & attach</div>
+                        </div>
+                        <span class="badge badge-pending" id="badge-e2e-11">READY</span>
+                    </div>
+                </div>
+            </div>
+
             <div class="log-card">
                 <div class="card-title">📟 Execution Logs</div>
                 <div class="log-terminal" id="log-term"></div>
@@ -748,16 +838,19 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
         const btnRunAll = document.getElementById('btn-run-all');
         const btnRunVulkan = document.getElementById('btn-run-vulkan');
         const btnRunBinder = document.getElementById('btn-run-binder');
+        const btnRunE2e = document.getElementById('btn-run-e2e');
         const btnActionPulse = document.getElementById('btn-action-pulse');
         const btnToggleAutoRotate = document.getElementById('btn-toggle-autorotate');
         const tabArcade = document.getElementById('tab-arcade');
         const tabGates = document.getElementById('tab-gates');
         const tabVulkan = document.getElementById('tab-vulkan');
         const tabBinder = document.getElementById('tab-binder');
+        const tabE2e = document.getElementById('tab-e2e');
         const arcadeControls = document.getElementById('arcade-controls');
         const gatesCard = document.getElementById('gates-card');
         const vulkanCard = document.getElementById('vulkan-card');
         const binderCard = document.getElementById('binder-card');
+        const e2eCard = document.getElementById('e2e-card');
         const shaderCodeView = document.getElementById('shader-code');
 
         function appendLog(msg, type = 'info') {
@@ -810,10 +903,12 @@ fn fs_normals(in: VertexOutput) -> @location(0) vec4<f32> {
             tabGates.classList.remove('active');
             tabVulkan.classList.remove('active');
             tabBinder.classList.remove('active');
+            tabE2e.classList.remove('active');
             arcadeControls.style.display = 'block';
             gatesCard.style.display = 'none';
             vulkanCard.style.display = 'none';
             binderCard.style.display = 'none';
+            e2eCard.style.display = 'none';
             if (arcade) arcade.start();
         });
 
@@ -822,10 +917,12 @@ fn fs_normals(in: VertexOutput) -> @location(0) vec4<f32> {
             tabArcade.classList.remove('active');
             tabVulkan.classList.remove('active');
             tabBinder.classList.remove('active');
+            tabE2e.classList.remove('active');
             arcadeControls.style.display = 'none';
             gatesCard.style.display = 'block';
             vulkanCard.style.display = 'none';
             binderCard.style.display = 'none';
+            e2eCard.style.display = 'none';
             if (arcade) arcade.stop();
         });
 
@@ -834,10 +931,12 @@ fn fs_normals(in: VertexOutput) -> @location(0) vec4<f32> {
             tabArcade.classList.remove('active');
             tabGates.classList.remove('active');
             tabBinder.classList.remove('active');
+            tabE2e.classList.remove('active');
             arcadeControls.style.display = 'none';
             gatesCard.style.display = 'none';
             vulkanCard.style.display = 'block';
             binderCard.style.display = 'none';
+            e2eCard.style.display = 'none';
             if (arcade) arcade.stop();
         });
 
@@ -846,10 +945,26 @@ fn fs_normals(in: VertexOutput) -> @location(0) vec4<f32> {
             tabArcade.classList.remove('active');
             tabGates.classList.remove('active');
             tabVulkan.classList.remove('active');
+            tabE2e.classList.remove('active');
             arcadeControls.style.display = 'none';
             gatesCard.style.display = 'none';
             vulkanCard.style.display = 'none';
             binderCard.style.display = 'block';
+            e2eCard.style.display = 'none';
+            if (arcade) arcade.stop();
+        });
+
+        tabE2e.addEventListener('click', () => {
+            tabE2e.classList.add('active');
+            tabArcade.classList.remove('active');
+            tabGates.classList.remove('active');
+            tabVulkan.classList.remove('active');
+            tabBinder.classList.remove('active');
+            arcadeControls.style.display = 'none';
+            gatesCard.style.display = 'none';
+            vulkanCard.style.display = 'none';
+            binderCard.style.display = 'none';
+            e2eCard.style.display = 'block';
             if (arcade) arcade.stop();
         });
 
@@ -1057,6 +1172,211 @@ fn fs_normals(in: VertexOutput) -> @location(0) vec4<f32> {
             } finally {
                 btnRunBinder.disabled = false;
             }
+        });
+
+        btnRunE2e.addEventListener('click', async () => {
+            if (!binderSuite && typeof BinderTestSuite !== 'undefined') {
+                binderSuite = new BinderTestSuite(bridge, canvas, appendLog);
+            }
+            if (!binderSuite) {
+                appendLog('BinderTestSuite not initialized or available.', 'error');
+                return;
+            }
+            if (arcade) arcade.stop();
+            btnRunE2e.disabled = true;
+
+            for (let i = 1; i <= 11; i++) {
+                const badge = document.getElementById(`badge-e2e-${i}`);
+                if (badge) {
+                    badge.className = 'badge badge-pending';
+                    badge.textContent = 'RUNNING';
+                }
+            }
+
+            appendLog('Starting End-to-End (E2E) 11-Milestone Validation Run...', 'info');
+            try {
+                const results = await (binderSuite.runE2ETestSuite ? binderSuite.runE2ETestSuite() : binderSuite.runAllE2ETests());
+                for (let i = 1; i <= 11; i++) {
+                    const badge = document.getElementById(`badge-e2e-${i}`);
+                    if (!badge) continue;
+                    const res = results && results.results ? (results.results[`e2e_${i}`] || results.results[`e2e${i}`]) : null;
+                    if (res && (res.status === 'PASSED' || res === true)) {
+                        badge.className = 'badge badge-passed';
+                        badge.textContent = 'PASSED';
+                    } else {
+                        badge.className = 'badge badge-failed';
+                        badge.textContent = 'FAILED';
+                    }
+                }
+                window.__E2E_TEST_RESULTS__ = results;
+                const total = results.total ?? 11;
+                const passed = results.passed ?? 0;
+                appendLog(`E2E Validation complete: ${passed}/${total} passed.`, (results.failed === 0 || passed === total) ? 'success' : 'error');
+            } catch (err) {
+                appendLog(`E2E Validation error: ${err.message}`, 'error');
+                for (let i = 1; i <= 11; i++) {
+                    const badge = document.getElementById(`badge-e2e-${i}`);
+                    if (badge && badge.textContent === 'RUNNING') {
+                        badge.className = 'badge badge-failed';
+                        badge.textContent = 'FAILED';
+                    }
+                }
+            } finally {
+                btnRunE2e.disabled = false;
+            }
+        });
+
+        // -----------------------------------------------------------------------------
+        // AndroidWebGPU Global Runtime & Lifecycle Manager
+        // -----------------------------------------------------------------------------
+        window.AndroidWebGpu = {
+            version: '1.0.0',
+            lifecycle: {
+                state: 'RESUMED', // 'RESUMED' | 'PAUSED' | 'STOPPED'
+                isVisible: typeof document !== 'undefined' ? !document.hidden : true,
+                hasFocus: typeof document !== 'undefined' && document.hasFocus ? document.hasFocus() : true,
+                lastStateChange: performance.now(),
+            },
+            audio: {
+                context: null,
+                masterGainNode: null,
+                savedVolume: 1.0,
+                pumpInterval: null,
+                setMasterVolume(vol) {
+                    this.savedVolume = vol;
+                    if (this.masterGainNode && this.context) {
+                        this.masterGainNode.gain.setValueAtTime(vol, this.context.currentTime);
+                    }
+                },
+                pause() {
+                    if (this.context && this.context.state === 'running') {
+                        this.context.suspend();
+                    }
+                    if (this.pumpInterval) {
+                        clearInterval(this.pumpInterval);
+                        this.pumpInterval = null;
+                    }
+                },
+                resume() {
+                    if (this.context && this.context.state === 'suspended') {
+                        this.context.resume();
+                    }
+                },
+            },
+            camera: {
+                isStreaming: false,
+                tickInterval: null,
+                pause() {
+                    if (this.tickInterval) {
+                        clearInterval(this.tickInterval);
+                        this.tickInterval = null;
+                    }
+                },
+                resume() {},
+            },
+            sensors: {
+                isActive: false,
+                tickInterval: null,
+                pause() {
+                    if (this.tickInterval) {
+                        clearInterval(this.tickInterval);
+                        this.tickInterval = null;
+                    }
+                },
+                resume() {},
+            },
+            renderer: {
+                pause() {
+                    if (arcade && tabArcade.classList.contains('active')) {
+                        arcade.stop();
+                    }
+                },
+                resume() {
+                    if (arcade && tabArcade.classList.contains('active')) {
+                        arcade.start();
+                    }
+                },
+            },
+            dispatchVisibilityChange(targetState) {
+                const isVisible = targetState === 'visible';
+                handleVisibilityChange(isVisible);
+            },
+            dispatchFocusChange(focused) {
+                handleWindowFocus(focused);
+            },
+        };
+
+        function handleVisibilityChange(isVisible) {
+            window.AndroidWebGpu.lifecycle.isVisible = isVisible;
+            window.AndroidWebGpu.lifecycle.lastStateChange = performance.now();
+
+            if (!isVisible) {
+                window.AndroidWebGpu.lifecycle.state = 'PAUSED';
+                window.AndroidWebGpu.renderer.pause();
+                window.AndroidWebGpu.audio.pause();
+                window.AndroidWebGpu.camera.pause();
+                window.AndroidWebGpu.sensors.pause();
+
+                if (statusPill) {
+                    statusPill.textContent = 'BACKGROUND (PAUSED)';
+                    statusPill.style.color = 'var(--text-muted)';
+                }
+                if (fpsCounter) {
+                    fpsCounter.textContent = '0.0 FPS (SUSPENDED)';
+                    fpsCounter.style.color = 'var(--text-muted)';
+                }
+                appendLog('[LIFECYCLE] Tab hidden: stream pumps paused, RAF throttled, audio suspended.', 'info');
+            } else {
+                window.AndroidWebGpu.lifecycle.state = 'RESUMED';
+                window.AndroidWebGpu.audio.resume();
+                window.AndroidWebGpu.camera.resume();
+                window.AndroidWebGpu.sensors.resume();
+                window.AndroidWebGpu.renderer.resume();
+
+                if (statusPill) {
+                    statusPill.textContent = 'ONLINE';
+                    statusPill.style.color = 'var(--success)';
+                }
+                if (fpsCounter) {
+                    fpsCounter.style.color = '#10b981';
+                }
+                appendLog('[LIFECYCLE] Tab visible: stream pumps resumed, 60/120 FPS render loop restored.', 'success');
+            }
+        }
+
+        function handleWindowFocus(hasFocus) {
+            window.AndroidWebGpu.lifecycle.hasFocus = hasFocus;
+
+            if (!hasFocus) {
+                if (window.AndroidWebGpu.audio.masterGainNode && window.AndroidWebGpu.audio.context) {
+                    window.AndroidWebGpu.audio.savedVolume = window.AndroidWebGpu.audio.masterGainNode.gain.value;
+                    window.AndroidWebGpu.audio.masterGainNode.gain.setValueAtTime(0.0, window.AndroidWebGpu.audio.context.currentTime);
+                }
+                appendLog('[LIFECYCLE] Window blur: transient audio focus loss applied.', 'info');
+            } else {
+                if (window.AndroidWebGpu.lifecycle.isVisible) {
+                    if (window.AndroidWebGpu.audio.masterGainNode && window.AndroidWebGpu.audio.context) {
+                        window.AndroidWebGpu.audio.masterGainNode.gain.setValueAtTime(
+                            window.AndroidWebGpu.audio.savedVolume || 1.0,
+                            window.AndroidWebGpu.audio.context.currentTime
+                        );
+                    }
+                    appendLog('[LIFECYCLE] Window focus: audio focus restored.', 'info');
+                }
+            }
+        }
+
+        // Register Native DOM Event Listeners
+        document.addEventListener('visibilitychange', () => {
+            handleVisibilityChange(document.visibilityState !== 'hidden');
+        });
+
+        window.addEventListener('blur', () => {
+            handleWindowFocus(false);
+        });
+
+        window.addEventListener('focus', () => {
+            handleWindowFocus(true);
         });
 
         bootstrap();

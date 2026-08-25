@@ -1,0 +1,19 @@
+[package]
+name = "media_host_rs"
+version = "0.1.0"
+edition = "2021"
+description = "Framework-level IMediaCodecService and WebCodecs VideoDecoder Bridge for AndroidWebGPU"
+
+[dependencies]
+aidl_compat = { path = "../aidl_compat" }
+binder_rt = { path = "../binder_rt" }
+binder_sys = { path = "../binder_sys" }
+surfaceflinger_gpu_service = { path = "../surfaceflinger_gpu_service" }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+log = { workspace = true }
+
+[dev-dependencies]
+pollster = { workspace = true }
+bytemuck = { workspace = true }

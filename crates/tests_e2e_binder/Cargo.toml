@@ -19,3 +19,14 @@ bytemuck = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
+pms_rs = { path = "../pms_rs" }
+zygote_client = { path = "../zygote_client" }
+ams_rs = { path = "../ams_rs" }
+wms_rs = { path = "../wms_rs" }
+input_channel = { path = "../input_channel" }
+inputflinger_rs = { path = "../inputflinger_rs" }
+sensors_hal_virtual = { path = "../sensors_hal_virtual" }
+sensor_host_rs = { path = "../sensor_host_rs" }
+audio_hal_virtual = { path = "../audio_hal_virtual" }
+audio_host_rs = { path = "../audio_host_rs" }
+

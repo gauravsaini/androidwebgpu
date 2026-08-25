@@ -1,0 +1,19 @@
+[package]
+name = "inputflinger_rs"
+version = "0.1.0"
+edition = "2021"
+description = "Native Android InputFlinger Service (IInputManager), Evdev Reader, and InputDispatcher for AndroidWebGPU"
+
+[dependencies]
+aidl_compat = { path = "../aidl_compat" }
+binder_rt = { path = "../binder_rt" }
+binder_sys = { path = "../binder_sys" }
+input_channel = { path = "../input_channel" }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+log = { workspace = true }
+
+[dev-dependencies]
+pollster = { workspace = true }
+bytemuck = { workspace = true }

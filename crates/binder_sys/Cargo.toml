@@ -1,0 +1,19 @@
+[package]
+name = "binder_sys"
+version = "0.1.0"
+edition = "2021"
+description = "Direct Kernel Binder Userspace Transport and Looper Threadpool"
+
+[dependencies]
+binder_rt = { path = "../binder_rt" }
+aidl_compat = { path = "../aidl_compat" }
+bytemuck = { workspace = true }
+thiserror = { workspace = true }
+log = { workspace = true, optional = true }
+
+[dev-dependencies]
+log = { workspace = true }
+
+[features]
+default = ["log"]
+log = ["dep:log", "aidl_compat/log"]

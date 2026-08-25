@@ -1,0 +1,34 @@
+[package]
+name = "tests_e2e_system_services"
+version = "0.1.0"
+edition = "2021"
+description = "Comprehensive E2E Integration and Adversarial Test Suite for AndroidWebGPU System Services and Virtual HALs"
+
+[dependencies]
+pms_rs = { path = "../pms_rs" }
+ams_rs = { path = "../ams_rs" }
+zygote_client = { path = "../zygote_client" }
+wms_rs = { path = "../wms_rs" }
+inputflinger_rs = { path = "../inputflinger_rs" }
+input_channel = { path = "../input_channel" }
+sensors_hal_virtual = { path = "../sensors_hal_virtual" }
+sensor_host_rs = { path = "../sensor_host_rs" }
+audio_hal_virtual = { path = "../audio_hal_virtual" }
+audio_host_rs = { path = "../audio_host_rs" }
+camera_hal_virtual = { path = "../camera_hal_virtual" }
+camera_host_rs = { path = "../camera_host_rs" }
+media_host_rs = { path = "../media_host_rs" }
+vintf_validator = { path = "../vintf_validator" }
+surfaceflinger_gpu_service = { path = "../surfaceflinger_gpu_service" }
+webgpu_compositor = { path = "../webgpu_compositor" }
+webgpu_swapchain = { path = "../webgpu_swapchain" }
+binder_rt = { path = "../binder_rt" }
+aidl_compat = { path = "../aidl_compat" }
+binder_sys = { path = "../binder_sys" }
+wgpu = { workspace = true }
+pollster = { workspace = true }
+bytemuck = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+log = { workspace = true }

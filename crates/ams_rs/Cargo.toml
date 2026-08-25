@@ -1,0 +1,20 @@
+[package]
+name = "ams_rs"
+version = "0.1.0"
+edition = "2021"
+description = "Native Android Activity Manager Service (AMS) & Activity Lifecycle State Machine for AndroidWebGPU"
+
+[dependencies]
+aidl_compat = { path = "../aidl_compat" }
+binder_rt = { path = "../binder_rt" }
+binder_sys = { path = "../binder_sys" }
+pms_rs = { path = "../pms_rs" }
+zygote_client = { path = "../zygote_client" }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+log = { workspace = true }
+
+[dev-dependencies]
+pollster = { workspace = true }
+bytemuck = { workspace = true }

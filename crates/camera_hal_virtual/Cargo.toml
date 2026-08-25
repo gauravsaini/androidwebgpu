@@ -1,0 +1,19 @@
+[package]
+name = "camera_hal_virtual"
+version = "0.1.0"
+edition = "2021"
+description = "Virtual Android 13 AIDL Camera HAL (ICameraProvider, ICameraDevice, ICameraDeviceSession) for AndroidWebGPU"
+
+[dependencies]
+aidl_compat = { path = "../aidl_compat" }
+binder_rt = { path = "../binder_rt" }
+binder_sys = { path = "../binder_sys" }
+vintf_validator = { path = "../vintf_validator" }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+log = { workspace = true }
+
+[dev-dependencies]
+pollster = { workspace = true }
+bytemuck = { workspace = true }

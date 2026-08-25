@@ -1,121 +1,88 @@
-# Project: AndroidWebGPU Binder Subsystem Offloading & Browser Verification
+# Project: AndroidWebGPU E2E Roundtrip Validation
 
 ## Architecture
-Paravirtualized Binder IPC offloading pipeline routing selective Android IPC transactions across the VM boundary from Android-x86 guest into host Rust runtime and WebGPU compositor, verified in-browser via WASM, HTML5 WebGPU Test Bench, and Chrome DevTools MCP.
+The AndroidWebGPU architecture bridges guest Android applications running in paravirtualized environments to host Web APIs (WebGPU, WebAudio, WebCodecs, WebRTC/getUserMedia, Generic Sensors) through a bidirectional multi-layer transport:
+`APK → framework (PMS/AMS/WMS) → daemon (InputFlinger/SurfaceFlinger) → HAL (Sensors/Audio/Camera) → virtio-binder / dev-binder → host runtime → host Web API bridges → virtio-binder → guest callback/buffer`.
 
-```
-┌─────────────────────────────────────────────────────────────────────────┐
-│                    Browser Test Bench (index.html)                      │
-│                                                                         │
-│  [Tab: Binder Subsystem] ──► [src/binder_test_suite.js (Phases 0,2,3,4,5)]│
-│                                           │                             │
-│                                           ▼                             │
-│                         [pkg/virtio_gpu_bridge_bg.wasm]                 │
-│                                           │                             │
-│                 ┌─────────────────────────┴────────────────────────┐    │
-│                 ▼                                                  ▼    │
-│  [Virtio-Binder Device / Bridge]                        [WebGPU Canvas] │
-│                 │                                                  ▲    │
-│  [binder_rt / aidl_compat / handle_bridge]                         │    │
-│                 │                                                  │    │
-│  [surfaceflinger_gpu_service] ─────────────────────────────────────┘    │
-└─────────────────────────────────────────────────────────────────────────┘
-```
+### Key Subsystems:
+1. **Transport & Registration**: VINTF manifest (`guest/etc/vintf/device_manifest.xml`), `vintf_validator`, userspace `/dev/binder` ioctl loopers (`binder_sys`), virtio-binder paravirtualized queues (`virtio_binder`), and shared memory buffer pools (`camera_host_rs::CameraBufferPool`, `audio_host_rs::AudioRingBuffer`, `binder_sys::BinderMmapRegion`).
+2. **Virtual HALs & Web API Bridges**:
+   - `ISensors` (`sensors_hal_virtual`) ↔ `sensor_host_rs` (`devicemotion` / synthetic sensor generator).
+   - `IModule` / `IConfig` (`audio_hal_virtual`) ↔ `audio_host_rs` (WebAudio stereo 48kHz playback & mic recording).
+   - `ICameraProvider` / `ICameraDeviceSession` (`camera_hal_virtual`) ↔ `camera_host_rs` (`getUserMedia` / WebRTC preview frame injection).
+   - `IMediaCodecService` ↔ `media_host_rs` (WebCodecs H.264/H.265 Annex B NALU decode to YUV420).
+3. **Resiliency & Framework Lifecycle**:
+   - Multi-process Activity lifecycle (`ams_rs`, `wms_rs`, `inputflinger_rs`, `surfaceflinger_gpu_service`).
+   - Browser backgrounding / `visibilitychange` / `blur` handling (`index.html`, `src/binder_test_suite.js`).
+   - Real-world APK ingestion, parsing, forking, and execution (`pms_rs`, `apk_gpu_analyzer`, `tests_e2e_system_services`).
+4. **Browser Test Bench**:
+   - `index.html` UI bench and `src/binder_test_suite.js` / `src/test_suite.js` automated one-click test runners with visual badges for all 11 E2E validation milestones.
+
+---
 
 ## Feature Inventory
 | # | Feature | Description | Milestone | Source |
 |---|---------|-------------|-----------|--------|
-| 1 | Parcel Alignment & Padding | 4-byte alignment and zero-padding formula | M1 | Survey Wire Spec |
-| 2 | Parcel Scalar Codec | Little-endian primitives (bool, i8..i64, u8..u64, f32, f64) | M1 | Survey Wire Spec |
-| 3 | Parcel String Codec | UTF-16LE and UTF-8 string serialization with null terminators and padding | M1 | Survey Wire Spec |
-| 4 | Parcel Vectors & Arrays | Array serialization with count prefixes and nullable handling | M1 | Survey Wire Spec |
-| 5 | Binder Object Serialization | `flat_binder_object` (24-byte) packing and offsets array tracking | M1 | Survey Wire Spec |
-| 6 | File Descriptor Serialization | `BINDER_TYPE_FD` object packing and index mapping | M1 | Survey Wire Spec |
-| 7 | Transaction Envelopes | 64-byte `binder_transaction_data`, `BC_TRANSACTION`, `BR_REPLY`, etc. | M1 | Survey Wire Spec |
-| 8 | AIDL Status & Exceptions | Exception code serialization (`EX_NONE`, `EX_SERVICE_SPECIFIC`, etc.) | M1 | Survey Wire Spec |
-| 9 | `binder::Interface` & `IBinder` | Base traits for AIDL interface definitions and transaction dispatch | M2 | Survey Wire Spec |
-| 10 | `binder::SpIBinder` & `WpIBinder` | Smart pointer types with strong and weak reference count management | M2 | Survey Wire Spec |
-| 11 | `binder::Remotable` & `Proxy` | `Bn*` stub and `Bp*` proxy traits for AIDL codegen | M2 | Survey Wire Spec |
-| 12 | `binder::Parcelable` & Macros | Trait and macros for custom parcelable struct auto-derivation | M2 | Survey Wire Spec |
-| 13 | Official AIDL Stub Compatibility | Ability to compile unmodified AOSP `aidl --lang=rust` stubs | M2 | Survey Wire Spec |
-| 14 | Virtio-Binder Device & Protocol | Virtio MMIO/PCI queue device (Device ID 44) with request/response headers | M3 | Survey Wire Spec |
-| 15 | Transport Dispatch Loop | Async queue descriptor processing, msg_id tracking, and response delivery | M3 | Survey Wire Spec |
-| 16 | Virtio Event Queue | Out-of-band host-to-guest death notification and lifecycle event queue | M3 | Survey Wire Spec |
-| 17 | Guest Interception Shim | Guest userspace/driver shim capturing targeted binder transactions | M3 | Survey Wire Spec |
-| 18 | Bidirectional Handle Table | Mapping between guest handle IDs and host service trait objects (`Arc<dyn IBinder>`) | M4 | Survey Compositor |
-| 19 | Distributed Reference Counting | Synchronized `BC_ACQUIRE` / `BC_RELEASE` tracking across the VM boundary | M4 | Survey Compositor |
-| 20 | Multi-Hop Handle Transfer | Safe handle passing across multiple clients with reference preservation | M4 | Survey Compositor |
-| 21 | Death Notification Propagation | `DeathRecipient` registration and automatic host resource cleanup on client death | M4 | Survey Compositor |
-| 22 | Selective Routing Policy | Configurable routing rules defaulting to local guest kernel execution | M5 | Survey Compositor |
-| 23 | Interface & Code Matcher | Routing decision based on interface descriptor and transaction opcode | M5 | Survey Compositor |
-| 24 | Offloaded Compositor Service | Host-side `ISurfaceComposer` implementation receiving layer transactions | M5 | Survey Compositor |
-| 25 | Layer State Translation | Mapping Android `layer_state_t` to `webgpu_compositor::CompositionLayer` | M5 | Survey Compositor |
-| 26 | WebGPU Frame Presentation | Frame compositing and submission to `webgpu_swapchain` Mailbox target | M5 | Survey Compositor |
-| 27 | E2E Integration Test Suite | Automated verification of Tiers 1-4 covering all features across VM boundary | M6 | Survey Codebase |
-| 28 | Adversarial Coverage Hardening | White-box stress tests, race condition validation, and fuzzing (Tier 5) | M6 | Survey Codebase |
-| 29 | WASM Virtio-Binder Bridge | WASM exports for Virtio-Binder request/reply dispatch and buffer extraction in `crates/virtio_gpu_bridge` | M7 | R2 Spec |
-| 30 | Rebuilt WASM Artifact | Recompiled `pkg/` containing `WasmVirtioGpuBridge` binder bindings | M7 | R2 Spec |
-| 31 | Browser Test Bench Extension | `index.html` `#tab-binder`, `#binder-card`, `#btn-run-binder`, and 5 phase badges | M8 | R1 Spec |
-| 32 | Phase 0 Guest Baseline Check | In-browser test fixture verifying `/dev/binder` driver and `servicemanager` | M9 | R3 Spec |
-| 33 | Phase 2 TestPing Roundtrip | In-browser test fixture verifying `TestPing` IPC roundtrip and byte equality | M9 | R3 Spec |
-| 34 | Phase 3 Handles & Concurrency | In-browser test fixture verifying handle transfer, refcounting, and thread stress | M9 | R3 Spec |
-| 35 | Phase 4 TestInput Forwarding | In-browser test fixture verifying Android input subsystem event forwarding | M9 | R3 Spec |
-| 36 | Phase 5 SurfaceFlinger Compositor | In-browser test fixture verifying APK frame rendering to WebGPU canvas | M9 | R3, R4 Spec |
-| 37 | WebGPU Pixel Color Assertions | Canvas readback asserting non-zero rendered pixels from SurfaceFlinger | M9 | R4 Spec |
-| 38 | Chrome DevTools MCP E2E Execution | Automated test runner execution and badge state assertion against `http://localhost:8000` | M10 | R5 Spec |
+| 1 | VINTF HAL Declarations | Validate target-level 7 declarations and `isDeclared()` for `ISensors`, `IModule`, `ICameraProvider` | M1 | ORIGINAL_REQUEST §R1 |
+| 2 | Direct & Virtio-Binder Transport | Wire-accurate Parcel serialization, `/dev/binder` ioctl looper, virtqueue roundtrips | M1 | ORIGINAL_REQUEST §R1 |
+| 3 | Shared Buffer Transport | Zero-copy shm buffer pools with frame recycling and no leaks | M1 | ORIGINAL_REQUEST §R1 |
+| 4 | Sensors HAL E2E | Host-to-guest sensor event stream with verified sample rates and timestamps | M1 | ORIGINAL_REQUEST §R2 |
+| 5 | Audio HAL Playback E2E | Stereo 16-bit 48kHz PCM playback through WebAudio bridge with volume/gain scaling | M1 | ORIGINAL_REQUEST §R2 |
+| 6 | Audio HAL Recording E2E | Microphone audio capture into guest PCM buffer | M1 | ORIGINAL_REQUEST §R2 |
+| 7 | Camera HAL Preview E2E | Live camera frames delivery to `ICameraDeviceCallback` preview buffers | M1 | ORIGINAL_REQUEST §R2 |
+| 8 | Media Decode E2E | H.264 video keyframes decode via WebCodecs bridge to YUV420 frame data | M1 | ORIGINAL_REQUEST §R2 |
+| 9 | Concurrency & Process Lifecycle | Multi-threaded stress testing, multi-session window allocations, process crash recovery | M1 | ORIGINAL_REQUEST §R3 |
+| 10 | Browser Backgrounding | `visibilitychange` & `blur` event listeners, stream pump pause, FPS drop, clean resume | M2 | ORIGINAL_REQUEST §R3 |
+| 11 | Real-World APK Execution | Unity (`unity_cube.apk`) and Godot (`godot_gles2.apk`) ingest, resolve, fork, and attach | M1 | ORIGINAL_REQUEST §R3 |
+| 12 | Browser Test Bench UI & JS Suite | Interactive UI tabs, badges, and automated one-click test runners in `index.html` & `src/binder_test_suite.js` | M3 | ORIGINAL_REQUEST §R4 |
+| 13 | Final E2E Gates Ledger & Workspace Tests | Complete runnable `GATES.md` ledger and 100% clean `cargo test --workspace` verification | M4 | ORIGINAL_REQUEST §Acceptance Criteria |
+
+---
 
 ## Milestones
 | # | Name | Scope | Dependencies | Status |
 |---|------|-------|-------------|--------|
-| M1 | `binder_rt` | Parcel Codec & Wire Protocol Envelopes | none | DONE |
-| M2 | `aidl_compat` | AIDL Interface Integration & Traits | M1 | DONE |
-| M3 | `virtio_binder` | Paravirtualized Transport (Virtio-Binder Device & Shim) | M1 | DONE |
-| M4 | `binder_handle_bridge` | Cross-Boundary Handle Bridge & Lifecycle Management | M1, M2 | DONE |
-| M5 | `binder_routing_compositor` | Selective Routing Policy & Offloaded Compositor Service | M1, M2, M4 | DONE |
-| M6 | `e2e_verification_hardening` | Full E2E Test Suite (Tiers 1-4) & Adversarial Hardening (Tier 5) | M1, M2, M3, M4, M5 | DONE |
-| M7 | `wasm_binder_bridge` | Expose Virtio-Binder in WASM bridge and rebuild `pkg/` | M1-M6 | DONE |
-| M8 | `browser_test_bench_ui` | Add "Binder Subsystem" tab, card, and badges to `index.html` | none | DONE |
-| M9 | `binder_test_suite_js` | Implement 5-phase test suite (`src/binder_test_suite.js`) + pixel assertions | M7, M8 | DONE |
-| M10 | `chrome_devtools_e2e` | Automated Chrome DevTools MCP execution against `http://localhost:8000` | M7, M8, M9 | DONE |
+| M1 | Transport & Virtual HALs Verification | Verify R1, R2, R3 (Criteria 1-9, 11) in Rust workspace suites | none | DONE |
+| M2 | Browser Backgrounding & Resiliency | Implement visibilitychange/blur lifecycle, stream throttling, and audio focus in browser and host bridges | M1 | DONE |
+| M3 | Browser Test Bench UI Integration | Add 11 E2E milestone badges, UI runners, and test suite execution in `index.html` & `src/binder_test_suite.js` | M2 | DONE |
+| M4 | E2E Gates Sign-off & Verification | Finalize `GATES.md`, produce `TEST_READY.md`, verify 100% pass across all 11 criteria and workspace | M3 | DONE |
+
+---
 
 ## Interface Contracts
+### Guest HALs ↔ Host Web API Bridges
+- `ISensors` (AIDL `android.hardware.sensors.ISensors`):
+  - `GET_SENSORS_LIST`: returns Vector of `SensorInfo`.
+  - `ACTIVATE(handle, enabled)`: starts/stops host sensor streaming.
+  - `BATCH(handle, sampling_period_ns, max_report_latency_ns)`: configures host sampling rate.
+  - `INJECT_SENSOR_DATA(event)`: injects accelerometer/gyroscope samples into guest queue.
+- `IModule` (AIDL `android.hardware.audio.core.IModule`):
+  - `OPEN_OUTPUT_STREAM(config)`: returns `IStreamOut` for 16-bit 48kHz stereo PCM.
+  - `OPEN_INPUT_STREAM(config)`: returns `IStreamIn` for 16-bit 48kHz mono/stereo capture.
+  - `SET_MASTER_VOLUME(vol)`, `SET_MASTER_MUTE(mute)`: scales host audio output.
+- `ICameraProvider` (AIDL `android.hardware.camera.provider.ICameraProvider`):
+  - `GET_CAMERA_DEVICE_LIST`: returns list of camera IDs.
+  - `GET_CAMERA_CHARACTERISTICS(id)`: returns metadata (facing, resolution, fps).
+  - `CREATE_DEVICE_SESSION(id, callback)`: returns `ICameraDeviceSession` with `process_capture_request`.
+- `IMediaCodecService` (AIDL `android.media.IMediaCodecService`):
+  - `CREATE_BY_CODEC_NAME(name)`: returns `IMediaCodec` instance.
+  - `DEQUEUE_INPUT_BUFFER`, `QUEUE_INPUT_BUFFER`, `DEQUEUE_OUTPUT_BUFFER`, `RELEASE_OUTPUT_BUFFER`.
+### Host Browser Bridge ↔ JS Test Bench
+- `window.AndroidWebGpu`: Global runtime namespace exposing system services and HAL bridges.
+- `window.addEventListener('visibilitychange', ...)`: Dispatches pause/resume to audio/camera/sensor stream pumps.
 
-### WASM Bridge ↔ JavaScript Runtime
-- `WasmVirtioGpuBridge`:
-  - `process_binder_packet(&self, packet: &[u8]) -> Vec<u8>`
-  - `compose_and_present(&mut self) -> bool`
-  - `get_scanout_framebuffer(&self, scanout_id: u32) -> Vec<u8>`
-  - `get_scanout_damage(&self, scanout_id: u32) -> Vec<u32>`
-  - `clear_scanout_damage(&mut self, scanout_id: u32)`
-
-### JavaScript Test Suite ↔ DOM UI
-- Container: `#binder-card`
-- Tab Button: `#tab-binder`
-- Trigger Button: `#btn-run-binder`
-- Badges: `#badge-phase0`, `#badge-phase2`, `#badge-phase3`, `#badge-phase4`, `#badge-phase5`
-- Global Result: `window.__BINDER_TEST_RESULTS__`
+---
 
 ## Code Layout
-```
-crates/
-├── binder_rt/                   # M1: Parcel codec and wire protocol
-├── aidl_compat/                 # M2: AIDL Rust compatibility crate
-├── virtio_binder/               # M3: Virtio transport device & shim
-├── binder_handle_bridge/        # M4: Cross-boundary handle translation & lifecycle
-├── binder_routing/              # M5: Selective routing policy engine
-├── surfaceflinger_gpu_service/  # M5: Offloaded SurfaceFlinger service
-├── tests_e2e_binder/            # M6: Rust native E2E test suite
-└── virtio_gpu_bridge/           # M7: WASM bridge cdylib
-    ├── Cargo.toml
-    └── src/
-        ├── lib.rs
-        ├── bridge.rs
-        └── wasm.rs
-pkg/                             # M7: Compiled WebAssembly artifacts
-index.html                       # M8: HTML5 test bench UI
-src/
-├── binder_test_suite.js         # M9: 5-Phase Guest Payload Test Suite
-├── test_suite.js                # Existing Virtio-GPU / Vulkan suites
-├── arcade_demo.js               # 3D arcade demo
-└── virtio_gpu_device.js         # Virtqueue device emulation
-```
+- `crates/vintf_validator/`: VINTF target-level 7 manifest validation.
+- `crates/binder_sys/`: Userspace `/dev/binder` ioctl transport, looper threadpool, and `BinderMmapRegion`.
+- `crates/virtio_binder/`: VirtIO split virtqueue descriptor chains and guest/host proxy shims.
+- `crates/sensors_hal_virtual/` & `crates/sensor_host_rs/`: Virtual Sensors HAL and Host motion bridge.
+- `crates/audio_hal_virtual/` & `crates/audio_host_rs/`: Virtual Audio HAL and WebAudio PCM bridge.
+- `crates/camera_hal_virtual/` & `crates/camera_host_rs/`: Virtual Camera HAL, zero-copy buffer pool, and preview bridge.
+- `crates/media_host_rs/`: MediaCodec service, Annex B bitstream parser, and WebCodecs decoder bridge.
+- `crates/ams_rs/`, `crates/wms_rs/`, `crates/pms_rs/`, `crates/apk_gpu_analyzer/`: Activity Manager, Window Manager, Package Manager, and APK analyzer.
+- `crates/tests_e2e_system_services/`: Full-stack system services and HAL integration test suites.
+- `index.html`: Browser test bench UI.
+- `src/binder_test_suite.js` & `src/test_suite.js`: Browser test suites and test runners.
+- `GATES.md`: 11 E2E validation checklist gates ledger.

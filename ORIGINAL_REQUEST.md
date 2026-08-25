@@ -48,3 +48,66 @@ Provide automated test runner execution and badge state validation using Chrome 
 
 ### Chrome DevTools Validation
 - [ ] Automated execution via Chrome DevTools MCP runs all test phases and verifies all gate badges transition to `PASSED`.
+
+## Follow-up — 2026-08-24T19:55:15Z
+
+Use a very large team of agents. Implement guest-side native Rust system services (PMS, AMS, WMS, InputFlinger) and virtual HAL modules (Sensors, Audio, Camera, Media) for AndroidWebGPU targeting Android 13+ (API 33+), enabling unmodified stock APKs to boot and execute with hardware offloading and zero Java system_server runtime overhead.
+
+Working directory: /Users/ektasaini/Desktop/androidwebgpu
+Integrity mode: development
+
+## Requirements
+
+### R1. Direct Kernel Binder Userspace Transport (binder-sys)
+Implement guest userspace direct `/dev/binder` ioctl transport, memory-mapped shared buffer management, and re-entrant looper threadpool handling in Rust. All native services must register with real `servicemanager` and answer incoming AIDL transactions from unmodified client processes.
+
+### R2. Native System Services Replacement (PMS, AMS, WMS, InputFlinger)
+Implement wire-compatible AIDL/socket services matching Android 13 (API 33) specifications:
+- **PMS**: Binary AndroidManifest.xml and resources parser resolving APK components, metadata, and permissions.
+- **AMS**: Zygote abstract-socket client to fork app processes, bind application records, and drive Activity lifecycle states from creation through resume.
+- **WMS**: Single-window surface lifecycle management routed to the host WebGPU SurfaceFlinger compositor.
+- **InputFlinger**: Event dispatcher routing evdev/virtual input events over `InputChannel` socketpairs and shared-memory buffers to active window views.
+
+### R3. Virtual AIDL Hardware Abstraction Layer (Virtual HAL)
+Implement Android 13 AIDL-based virtual HAL services interfacing with unmodified native AOSP daemons (`sensorservice`, `audioserver`, `cameraserver`) and host browser Web APIs:
+- **Sensors HAL (`ISensors`)**: Virtual sensor provider delivering accelerometer and gyroscope event streams.
+- **Audio HAL (`IDevicesFactory` / `IModule`)**: Audio stream pipeline routing guest PCM buffer output to WebAudio and capturing microphone input.
+- **Camera HAL (`ICameraProvider` / `ICameraDevice`)**: Virtual camera provider delivering video frames from host `getUserMedia` into guest preview buffers.
+- **Media Codec**: Framework-level `IMediaCodecService` bridge delegating video decode and encode operations to host WebCodecs.
+
+### R4. Unlazy Test Verification Ledger (GATES.md)
+Define and enforce a deterministic verification ledger in `GATES.md` with runnable `CHECK:` commands and exact `EXPECT:` tokens for every phase (Phases 6 through 14). Every phase must provide programmatic test evidence before completion.
+
+## Acceptance Criteria
+
+### Binder Kernel Transport & Service Registration (Phase 6)
+- [ ] `cargo test -p binder_sys` executes successfully with zero failures.
+- [ ] Direct ioctl looper spawns replacement worker threads before blocking on nested Binder calls.
+- [ ] Rust test service registers with guest `servicemanager` and responds to AIDL transactions from client apps.
+
+### Native System Services MVP (Phases 7–10)
+- [ ] `cargo test -p pms_rs` validates binary manifest parsing and activity component resolution.
+- [ ] `cargo test -p ams_rs` confirms Zygote socket argument encoding and process lifecycle state machine.
+- [ ] `cargo test -p wms_rs` verifies surface allocation and presentation handoff to WebGPU compositor.
+- [ ] `cargo test -p inputflinger_rs` verifies `InputChannel` socketpair/shared memory event transfer.
+- [ ] End-to-end integration test boots a single test APK, reaches `onResume`, and receives touch input without Java `system_server`.
+
+### Virtual AIDL HAL & Host Web API Bridges (Phases 11–14)
+- [ ] `cargo test -p sensors_hal_virtual` verifies `ISensors` AIDL dispatch and sample streaming.
+- [ ] `cargo test -p audio_hal_virtual` verifies PCM audio buffer streaming to WebAudio mock harness.
+- [ ] `cargo test -p camera_hal_virtual` verifies `ICameraProvider` preview frame pipeline.
+- [ ] `cargo test -p media_host_rs` verifies H.264 video decoding via WebCodecs bridge.
+
+### Workspace Integrity & Full Test Suite
+- [ ] `cargo test --workspace` passes all tests with zero errors.
+- [ ] `GATES.md` contains verified runnable gates for Phases 6–14 with verified command output.
+
+## Follow-up — 2026-08-24T19:56:22Z
+
+docs/hal.md updated:
+1. Android 13+ Transport Decision Locked: AIDL HALs use standard /dev/binder and real ServiceManager. No separate hwbinder-sys or virtio-hwbinder needed; reuse binder-sys (Phase 6) + virtio-binder.
+2. VINTF Manifest Gate: Virtual HAL services (ISensors, Audio IModule, ICameraProvider) must be declared in VINTF device_manifest.xml for ServiceManager isDeclared() check to pass.
+3. Stable-AIDL Definitions: Pull exact frozen AIDL definitions from hardware/interfaces/ for pinned API level.
+4. Workspace Layout: guest/virtual-hal/ uses binder-sys directly.
+
+
