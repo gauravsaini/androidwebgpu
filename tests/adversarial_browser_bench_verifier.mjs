@@ -34,7 +34,10 @@ import {
     STATUS_FAILED_TRANSACTION,
     BR_OK,
     BR_REPLY,
-    BR_FAILED_REPLY
+    BR_FAILED_REPLY,
+    V86GuestManager,
+    VM_STATES,
+    BOOT_MILESTONES
 } from '../src/binder_test_suite.js';
 import fs from 'fs';
 import path from 'path';
@@ -51,12 +54,15 @@ function assert(condition, message) {
     passedChecks++;
 }
 
-function runSection(name, fn) {
+async function runSection(name, fn) {
     console.log(`\n======================================================`);
     console.log(`▶ Running Adversarial Suite: ${name}`);
     console.log(`======================================================`);
     try {
-        fn();
+        const res = fn();
+        if (res && typeof res.then === 'function') {
+            await res;
+        }
         console.log(`✔ [PASS] ${name} completed successfully.`);
     } catch (err) {
         console.error(`✖ [FAIL] ${name} failed: ${err.message}`);
@@ -67,7 +73,7 @@ function runSection(name, fn) {
 // -----------------------------------------------------------------------------
 // Test Section 1: Rapid VisibilityChange Toggling
 // -----------------------------------------------------------------------------
-runSection("1. Rapid VisibilityChange Toggling & Lifecycle State Machine", () => {
+await runSection("1. Rapid VisibilityChange Toggling & Lifecycle State Machine", () => {
     // Construct mock browser environment
     let audioPaused = false;
     let audioResumed = false;
@@ -231,7 +237,7 @@ runSection("1. Rapid VisibilityChange Toggling & Lifecycle State Machine", () =>
 // -----------------------------------------------------------------------------
 // Test Section 2: Blur / Focus Event Storms & Audio Focus Invariants
 // -----------------------------------------------------------------------------
-runSection("2. Blur / Focus Event Storms & Audio Focus Invariants", () => {
+await runSection("2. Blur / Focus Event Storms & Audio Focus Invariants", () => {
     let audioGainValue = 1.0;
     let savedAudioVolume = 0.85;
 
@@ -319,7 +325,7 @@ runSection("2. Blur / Focus Event Storms & Audio Focus Invariants", () => {
 // -----------------------------------------------------------------------------
 // Test Section 3: Corrupted BinderParcel Packets & VirtioBinder Framing
 // -----------------------------------------------------------------------------
-runSection("3. Corrupted BinderParcel Packets & Fuzzing", () => {
+await runSection("3. Corrupted BinderParcel Packets & Fuzzing", () => {
     // 3.1 Header Truncation (< 32 bytes for response, < 48 bytes for request)
     const shortBuffers = [
         new Uint8Array(0),
@@ -454,7 +460,7 @@ runSection("3. Corrupted BinderParcel Packets & Fuzzing", () => {
 // -----------------------------------------------------------------------------
 // Test Section 4: Malformed NALUs (WebCodecs / Media Pipeline)
 // -----------------------------------------------------------------------------
-runSection("4. Malformed NALUs & Bitstream Edge Cases", () => {
+await runSection("4. Malformed NALUs & Bitstream Edge Cases", () => {
     function validateH264Keyframe(nalu) {
         if (!nalu || nalu.length < 5) return false;
         // Check Annex B start code: 00 00 00 01
@@ -498,7 +504,7 @@ runSection("4. Malformed NALUs & Bitstream Edge Cases", () => {
 // -----------------------------------------------------------------------------
 // Test Section 5: Invalid Sensor Coordinates, Handles & Timestamps
 // -----------------------------------------------------------------------------
-runSection("5. Invalid Sensor Coordinates, Handles & Timestamps", () => {
+await runSection("5. Invalid Sensor Coordinates, Handles & Timestamps", () => {
     function sanitizeSensorSample(handle, x, y, z, timestampNs) {
         // Valid handle check: integer > 0
         if (!Number.isInteger(handle) || handle <= 0) {
@@ -574,7 +580,7 @@ runSection("5. Invalid Sensor Coordinates, Handles & Timestamps", () => {
 // -----------------------------------------------------------------------------
 // Test Section 6: Buffer Pool Exhaustion & Empty / Double Buffer Releases
 // -----------------------------------------------------------------------------
-runSection("6. Buffer Pool Exhaustion & Empty / Double Buffer Releases", () => {
+await runSection("6. Buffer Pool Exhaustion & Empty / Double Buffer Releases", () => {
     class ResilientBufferPool {
         constructor(cap, size) {
             this.capacity = cap;
@@ -671,14 +677,14 @@ runSection("6. Buffer Pool Exhaustion & Empty / Double Buffer Releases", () => {
 // -----------------------------------------------------------------------------
 // Test Section 7: Resilient Error Handling in BinderTestSuite
 // -----------------------------------------------------------------------------
-runSection("7. Test Suite Error Handling & Unhandled Rejection Immunity", async () => {
+await runSection("7. Test Suite Error Handling & Unhandled Rejection Immunity", async () => {
     const logs = [];
     const testSuite = new BinderTestSuite(null, null, (msg, type) => logs.push({ msg, type }));
 
-    // Execute standard E2E suite
+    // Execute standard E2E suite (15 tests: E2E 0-14)
     const results = await testSuite.runE2ETestSuite();
-    assert(results.total === 14, "Must run all 14 E2E tests");
-    assert(results.passed === 14, `All 14 tests must pass, got ${results.passed} passed`);
+    assert(results.total === 15, "Must run all 15 E2E tests (E2E 0-14)");
+    assert(results.passed === 15, `All 15 tests must pass, got ${results.passed} passed`);
     assert(results.failed === 0, "Zero failures in baseline run");
 
     // Now inject intentional failure in one test method and verify runner catches it gracefully without throwing unhandled rejection
@@ -697,7 +703,7 @@ runSection("7. Test Suite Error Handling & Unhandled Rejection Immunity", async 
 
     assert(caughtResults !== null, "Results object returned despite failure");
     assert(caughtResults.failed === 1, "Failed count recorded as 1");
-    assert(caughtResults.passed === 13, "13 tests passed");
+    assert(caughtResults.passed === 14, "14 tests passed (1 failed)");
     assert(caughtResults.results.e2e_4.status === 'FAILED', "E2E-4 status marked FAILED");
     assert(caughtResults.results.e2e_4.error === "Adversarial injected sensor failure", "Error message captured");
 
@@ -708,7 +714,7 @@ runSection("7. Test Suite Error Handling & Unhandled Rejection Immunity", async 
 // -----------------------------------------------------------------------------
 // Test Section 8: Visual Gates & 5-Phase End-to-End Simulation in Node.js
 // -----------------------------------------------------------------------------
-runSection("8. Visual Gates & 5-Phase End-to-End Execution", async () => {
+await runSection("8. Visual Gates & 5-Phase End-to-End Execution", async () => {
     // Construct mock HTML5 Canvas with 2D Context
     class MockCanvas {
         constructor(w = 640, h = 480) {
@@ -757,18 +763,18 @@ runSection("8. Visual Gates & 5-Phase End-to-End Execution", async () => {
     assert(phaseResults.passed === 5, `All 5 phases must pass, got ${phaseResults.passed}`);
     assert(phaseResults.failed === 0, "0 failed phases");
 
-    // 2. Run all 14 E2E tests
-    console.log("  -> Executing 14-Milestone E2E Test Suite (E2E 1-14)...");
+    // 2. Run all 15 E2E tests (E2E 0-14)
+    console.log("  -> Executing 15-Milestone E2E Test Suite (E2E 0-14)...");
     const e2eResults = await testSuite.runE2ETestSuite();
-    assert(e2eResults.total === 14, "14 E2E tests total");
-    assert(e2eResults.passed === 14, `All 14 E2E tests must pass, got ${e2eResults.passed}`);
+    assert(e2eResults.total === 15, "15 E2E tests total");
+    assert(e2eResults.passed === 15, `All 15 E2E tests must pass, got ${e2eResults.passed}`);
     assert(e2eResults.failed === 0, "0 failed E2E tests");
 });
 
 // -----------------------------------------------------------------------------
 // Test Section 9: Android Material You Home Launcher Grid & Click Transition Invariants
 // -----------------------------------------------------------------------------
-runSection("9. Android Material You Home Launcher Grid & Click Transition Invariants", () => {
+await runSection("9. Android Material You Home Launcher Grid & Click Transition Invariants", () => {
     // 9.1 Grid Coordinates and Hit-Testing Validation
     const gridLayout = {
         screenWidth: 640,
@@ -898,7 +904,7 @@ runSection("9. Android Material You Home Launcher Grid & Click Transition Invari
 // -----------------------------------------------------------------------------
 // Test Section 10: F-Droid Search & Category Query Filtering Fuzzing
 // -----------------------------------------------------------------------------
-runSection("10. F-Droid Search & Category Query Filtering Fuzzing", () => {
+await runSection("10. F-Droid Search & Category Query Filtering Fuzzing", () => {
     const catalog = [
         {
             packageName: "org.fdroid.fdroid",
@@ -1063,7 +1069,7 @@ runSection("10. F-Droid Search & Category Query Filtering Fuzzing", () => {
 // -----------------------------------------------------------------------------
 // Test Section 11: 3-Button Navigation Bar Stack Machine & Underflow Protection
 // -----------------------------------------------------------------------------
-runSection("11. 3-Button Navigation Bar Stack Machine & Underflow Protection Invariants", () => {
+await runSection("11. 3-Button Navigation Bar Stack Machine & Underflow Protection Invariants", () => {
     class NavigationBarStateMachine {
         constructor() {
             this.backStack = [];
@@ -1248,7 +1254,7 @@ runSection("11. 3-Button Navigation Bar Stack Machine & Underflow Protection Inv
 // -----------------------------------------------------------------------------
 // Test Section 12: Pure-JS Binary AXML Parsing & Fuzzing Invariants
 // -----------------------------------------------------------------------------
-runSection("12. Pure-JS Binary AXML Parsing & Fuzzing Invariants", () => {
+await runSection("12. Pure-JS Binary AXML Parsing & Fuzzing Invariants", () => {
     // 12.1 Real F-Droid.apk Binary AXML Extraction & Parsing
     const apkPath = path.resolve(process.cwd(), 'F-Droid.apk');
     assert(fs.existsSync(apkPath), `F-Droid.apk must exist at ${apkPath}`);
@@ -1395,6 +1401,78 @@ runSection("12. Pure-JS Binary AXML Parsing & Fuzzing Invariants", () => {
         }
         assert(true, `Fuzz ${i}: Handled gracefully`);
     }
+});
+
+// -----------------------------------------------------------------------------
+// Test Section 13: Gate E2E-0 Phase 0 v86 Real Guest Baseline Invariants
+// -----------------------------------------------------------------------------
+await runSection("13. Gate E2E-0: Phase 0 v86 Real Guest Baseline Invariants", async () => {
+    // 13.1 Anti-mock detection and standalone certification rejection (Rule §0.2)
+    const testSuiteNoVM = new BinderTestSuite(null, null, () => {});
+    const mockRes = await testSuiteNoVM.runPhase0_GuestBaseline();
+    assert(mockRes.certified === false, "Phase 0 must reject certification when no real guest VM is attached (Rule §0.2)");
+    assert(mockRes.isMock === true || mockRes.status === 'UNVERIFIED_MOCK', "Unattached run must be flagged as uncertified mock baseline");
+
+    // 13.2 Real Guest Manager 9-state machine transitions
+    const guestMgr = new V86GuestManager({
+        memorySizeMb: 512,
+        vgaMemorySizeMb: 16
+    });
+    assert(guestMgr.getState() === VM_STATES.UNINITIALIZED, "Initial state UNINITIALIZED");
+
+    await guestMgr.start();
+    assert(guestMgr.getState() === VM_STATES.RUNNING, "Booted state RUNNING");
+
+    guestMgr.pause();
+    assert(guestMgr.getState() === VM_STATES.PAUSED, "Paused state PAUSED");
+
+    guestMgr.resume();
+    assert(guestMgr.getState() === VM_STATES.RUNNING, "Resumed state RUNNING");
+
+    // 13.3 Boot milestones sequence verification
+    const requiredMilestones = [
+        'BIOS_POST', 'KERNEL_BOOT', 'BINDERFS_MOUNT',
+        'SERVICEMANAGER_READY', 'ZYGOTE_ART_READY'
+    ];
+    for (const ms of requiredMilestones) {
+        assert(guestMgr.hasMilestone(ms), `Milestone ${ms} must be reached in boot sequence`);
+    }
+
+    // 13.4 Certified Phase 0 & E2E-0 execution with attached Guest Manager
+    const certifiedSuite = new BinderTestSuite(null, null, () => {}, guestMgr);
+    const phase0Res = await certifiedSuite.runPhase0_GuestBaseline();
+    assert(phase0Res.status === 'PASSED', "Certified Phase 0 status must be PASSED");
+    assert(phase0Res.certified === true, "Attached suite must certify Phase 0");
+    assert(phase0Res.isMock === false, "isMock must be false for certified guest execution");
+
+    const e2e0Res = await certifiedSuite.runE2E0_GuestBaseline();
+    assert(e2e0Res.status === 'PASSED', "E2E-0 status must be PASSED");
+    assert(e2e0Res.certified === true, "E2E-0 must certify guest baseline");
+
+    // 13.5 Serial Panic and SIGILL error detector fuzzing (500 fuzz variations)
+    const panicLines = [
+        "Kernel panic - not syncing: Fatal exception in interrupt",
+        "Kernel panic - not syncing: VFS: Unable to mount root fs",
+        "Invalid opcode: 0000 [#1] PREEMPT SMP",
+        "Illegal instruction (SIGILL) in process 102 (zygote)",
+        "binderfs: failed to mount /dev/binderfs (-19)",
+        "Out of memory: Kill process 54 (servicemanager)"
+    ];
+    for (let i = 0; i < 500; i++) {
+        const fuzzMgr = new V86GuestManager();
+        await fuzzMgr.start();
+        const panicLine = panicLines[i % panicLines.length];
+        fuzzMgr.feedSerial(`${panicLine}\n`);
+        assert(fuzzMgr.getState() === VM_STATES.ERROR, `Panic line ${i} must transition state to ERROR`);
+    }
+
+    // 13.6 Guest memory buffer invariants
+    const mem = guestMgr.getGuestMemory();
+    assert(mem instanceof Uint8Array, "Guest RAM must be Uint8Array");
+    assert(mem.length === 512 * 1024 * 1024, "Guest RAM size must be 512 MB");
+
+    guestMgr.destroy();
+    assert(guestMgr.getState() === VM_STATES.UNINITIALIZED, "State must reset to UNINITIALIZED");
 });
 
 // -----------------------------------------------------------------------------

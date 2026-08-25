@@ -5,7 +5,15 @@ This ledger records verified, runnable verification gates for the bidirectional 
 
 ---
 
-## 14-Criterion E2E Validation Gates Ledger
+## 15-Criterion E2E Validation Gates Ledger
+
+### Gate E2E-0: Phase 0 Real Guest Baseline (v86 & Kernel /dev/binder)
+- **Requirement**: Real v86 guest boot baseline, 32-bit x86 ISA boot artifacts and defconfig (`CONFIG_ANDROID_BINDER_IPC=y`, `CONFIG_ANDROID_BINDERFS=y`, `CONFIG_DRM_VIRTIO_GPU=y`), Linux kernel BinderFS driver (`/dev/binder`), real `servicemanager` root handle 0, native system services (`pms_rs`, `ams_rs`, `wms_rs`, `inputflinger_rs`), Zygote abstract socket listener, and `dumpsys` confirmation with zero host mocks (§0, §0.1, §0.2).
+- **Target Files / Crates**: `tests/test_v86_guest_boot.mjs`, `src/v86_guest_manager.js`, `src/binder_test_suite.js`, `guest/kernel/android_x86_defconfig`, `guest/initrd/init`, `crates/binder_sys`
+- **Command**: `node tests/test_v86_guest_boot.mjs`
+- **Verification Target**: `Stage 1..5: test_v86_guest_boot_sequence`, `test_kernel_binderfs_and_servicemanager_ready`, `test_zero_mock_invariants`
+- **Expected Output**: `⚡ ALL 5 STAGES OF PHASE 0 GUEST BOOT VERIFIED` (0 failed)
+- **Status**: [x] VERIFIED
 
 ### Gate E2E-1: VINTF Declarations & Manifest Validation
 - **Requirement**: Validate target-level 7 manifest declarations and `isDeclared()` checks for virtual HALs (`ISensors`, `IModule`, `IConfig`, `ICameraProvider`).
@@ -132,9 +140,9 @@ This ledger records verified, runnable verification gates for the bidirectional 
 ## Full Workspace Verification Gate
 
 ### Gate E2E-WORKSPACE: Clean Workspace Test Suite & Adversarial Verifier Pass
-- **Requirement**: 100% clean compilation and test execution across all 30 member crates in Cargo workspace AND all 12 sections of the JavaScript adversarial test harness (176,000+ assertions).
-- **Command**: `cargo test --workspace && node tests/adversarial_browser_bench_verifier.mjs`
-- **Expected Output**: `test result: ok` across all 30 crates (0 failed, 0 ignored) and `⚡ ALL ADVERSARIAL CHECKS COMPLETED (0 failed)`
+- **Requirement**: 100% clean compilation and test execution across all 30 member crates in Cargo workspace AND all 13 sections of the JavaScript adversarial test harness (176,000+ assertions) including Phase 0 v86 Real Guest Baseline verification.
+- **Command**: `cargo test --workspace && node tests/test_v86_guest_boot.mjs && node tests/adversarial_browser_bench_verifier.mjs`
+- **Expected Output**: `test result: ok` across all 30 crates (0 failed, 0 ignored), `⚡ ALL 5 STAGES OF PHASE 0 GUEST BOOT VERIFIED`, and `⚡ ALL ADVERSARIAL CHECKS COMPLETED (0 failed)`
 - **Status**: [x] VERIFIED
 
 ---

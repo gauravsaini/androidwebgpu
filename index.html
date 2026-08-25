@@ -1711,6 +1711,41 @@
                 </div>
             </div>
 
+            <!-- v86 WebAssembly Hypervisor Card -->
+            <div class="controls-card" id="v86-control-card">
+                <div class="card-title" style="display: flex; justify-content: space-between; align-items: center;">
+                    <span>⚡ v86 WebAssembly Hypervisor</span>
+                    <span class="badge badge-pending" id="vm-state-badge">UNINITIALIZED</span>
+                </div>
+                
+                <div class="control-group-title">VM Lifecycle Controls</div>
+                <div class="btn-group">
+                    <button class="btn btn-primary" id="btn-vm-start">▶ Boot Real Android-x86 VM</button>
+                    <button class="btn" id="btn-vm-pause" disabled>⏸ Pause VM</button>
+                    <button class="btn btn-action" id="btn-vm-reset" disabled>🔄 Reset Guest</button>
+                </div>
+
+                <div class="control-group-title">Guest Hardware Status</div>
+                <div class="diag-grid">
+                    <div class="diag-item">
+                        <div class="diag-label">RAM Allocated</div>
+                        <div class="diag-value" id="vm-ram-stat">512 MB</div>
+                    </div>
+                    <div class="diag-item">
+                        <div class="diag-label">Kernel Binder</div>
+                        <div class="diag-value" id="vm-binder-stat">STANDBY</div>
+                    </div>
+                    <div class="diag-item">
+                        <div class="diag-label">Virtio-GPU</div>
+                        <div class="diag-value" id="vm-virtio-stat">PCI 00:02.0</div>
+                    </div>
+                    <div class="diag-item">
+                        <div class="diag-label">Boot Duration</div>
+                        <div class="diag-value" id="vm-boot-time">0.0s</div>
+                    </div>
+                </div>
+            </div>
+
             <!-- Arcade Controls Card -->
             <div class="controls-card" id="arcade-controls" style="display: none;">
                 <div class="card-title">🕹 Arcade GPU Controls</div>
@@ -1928,10 +1963,17 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
                 <div class="card-title" style="color: #10b981;">⚡ End-to-End (E2E) Roundtrip Validation</div>
                 <div class="btn-group" style="margin-bottom: 1rem;">
                     <button class="btn btn-primary" id="btn-run-e2e" style="background: linear-gradient(135deg, #10b981, #06b6d4); box-shadow: 0 0 20px rgba(16, 185, 129, 0.4);">
-                        ⚡ Run All 11 E2E Milestone Tests
+                        ⚡ Run All 15 E2E Milestone Tests (E2E-0 to E2E-14)
                     </button>
                 </div>
                 <div class="gate-list">
+                    <div class="gate-item">
+                        <div class="gate-info">
+                            <div class="gate-title">E2E-0: Phase 0 Real Guest Baseline (v86 & Kernel /dev/binder)</div>
+                            <div class="gate-desc">v86 Boot, 32-bit x86 ISA, BinderFS /dev/binder, ServiceManager Handle 0, ART Zygote</div>
+                        </div>
+                        <span class="badge badge-pending" id="badge-e2e-0">READY</span>
+                    </div>
                     <div class="gate-item">
                         <div class="gate-info">
                             <div class="gate-title">E2E-1: VINTF HAL Declarations</div>
@@ -2009,6 +2051,27 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
                         </div>
                         <span class="badge badge-pending" id="badge-e2e-11">READY</span>
                     </div>
+                    <div class="gate-item">
+                        <div class="gate-info">
+                            <div class="gate-title">E2E-12: Android Material You Launcher & Nav</div>
+                            <div class="gate-desc">Launcher grid hit-testing, status bar, and 3-button navigation machine</div>
+                        </div>
+                        <span class="badge badge-pending" id="badge-e2e-12">READY</span>
+                    </div>
+                    <div class="gate-item">
+                        <div class="gate-info">
+                            <div class="gate-title">E2E-13: F-Droid Client Store Experience</div>
+                            <div class="gate-desc">F-Droid category tabs, real-time search filtering, and app detail inspection</div>
+                        </div>
+                        <span class="badge badge-pending" id="badge-e2e-13">READY</span>
+                    </div>
+                    <div class="gate-item">
+                        <div class="gate-info">
+                            <div class="gate-title">E2E-14: Client-Side Binary AXML & Drag-Drop APK</div>
+                            <div class="gate-desc">Pure-JS ZIP reader, Binary AXML/ARSC chunk decoder, and PMS registry</div>
+                        </div>
+                        <span class="badge badge-pending" id="badge-e2e-14">READY</span>
+                    </div>
                 </div>
             </div>
 
@@ -2027,6 +2090,7 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
         import { VisualTestSuite, VulkanTestSuite } from './src/test_suite.js';
         import { Arcade3DScene } from './src/arcade_demo.js';
         import { BinderTestSuite } from './src/binder_test_suite.js';
+        import { V86GuestManager, VM_STATES, BOOT_MILESTONES } from './src/v86_guest_manager.js';
 
         // Dynamic import of APK parser module if available
         let apkParserModule = null;
@@ -2060,6 +2124,7 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
         
         // Sidebar Cards
         const emulatorCard = document.getElementById('emulator-card');
+        const v86ControlCard = document.getElementById('v86-control-card');
         const arcadeControls = document.getElementById('arcade-controls');
         const shaderCard = document.getElementById('shader-card');
         const gatesCard = document.getElementById('gates-card');
@@ -2067,6 +2132,16 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
         const binderCard = document.getElementById('binder-card');
         const e2eCard = document.getElementById('e2e-card');
         const shaderCodeView = document.getElementById('shader-code');
+
+        // v86 Hypervisor UI Elements
+        const vmStateBadge = document.getElementById('vm-state-badge');
+        const btnVmStart = document.getElementById('btn-vm-start');
+        const btnVmPause = document.getElementById('btn-vm-pause');
+        const btnVmReset = document.getElementById('btn-vm-reset');
+        const vmRamStat = document.getElementById('vm-ram-stat');
+        const vmBinderStat = document.getElementById('vm-binder-stat');
+        const vmVirtioStat = document.getElementById('vm-virtio-stat');
+        const vmBootTime = document.getElementById('vm-boot-time');
 
         // Android Phone Frame UI Elements
         const phoneFrame = document.getElementById('phone-frame');
@@ -3499,9 +3574,71 @@ fn fs_normals(in: VertexOutput) -> @location(0) vec4<f32> {
             }
         });
 
+        // -----------------------------------------------------------------------------
+        // v86 Hypervisor Integration & Lifecycle Management
+        // -----------------------------------------------------------------------------
+        const guestManager = new V86GuestManager({
+            wasmPath: './pkg/v86.wasm',
+            screenContainer: document.getElementById('screen-native-surface'),
+            canvas: document.getElementById('screen'),
+            onStateChange: (newState) => {
+                if (vmStateBadge) {
+                    vmStateBadge.textContent = newState;
+                    vmStateBadge.className = `badge badge-${newState === 'RUNNING' || newState === 'SERVICES_READY' ? 'passed' : 'pending'}`;
+                }
+                if (vmBinderStat && (newState === 'BINDER_READY' || newState === 'SERVICES_READY' || newState === 'RUNNING')) {
+                    vmBinderStat.textContent = 'ACTIVE (/dev/binder)';
+                    vmBinderStat.style.color = 'var(--success)';
+                }
+                if (btnVmStart) btnVmStart.disabled = (newState !== 'UNINITIALIZED' && newState !== 'ERROR');
+                if (btnVmPause) btnVmPause.disabled = (newState !== 'RUNNING' && newState !== 'PAUSED');
+                if (btnVmReset) btnVmReset.disabled = (newState === 'UNINITIALIZED');
+            },
+            onLog: (msg, type) => {
+                appendLog(msg, type);
+            }
+        });
+
+        window.v86GuestManager = guestManager;
+
+        if (btnVmStart) {
+            btnVmStart.addEventListener('click', async () => {
+                appendLog('▶ Booting real Android-x86 v86 VM...', 'info');
+                try {
+                    await guestManager.start();
+                    if (vmBootTime) {
+                        vmBootTime.textContent = `${(guestManager.stats.bootDurationMs / 1000).toFixed(2)}s`;
+                    }
+                } catch (err) {
+                    appendLog(`VM Boot failed: ${err.message}`, 'error');
+                }
+            });
+        }
+
+        if (btnVmPause) {
+            btnVmPause.addEventListener('click', () => {
+                if (guestManager.getState() === 'RUNNING') {
+                    guestManager.pause();
+                    btnVmPause.textContent = '▶ Resume VM';
+                } else {
+                    guestManager.resume();
+                    btnVmPause.textContent = '⏸ Pause VM';
+                }
+            });
+        }
+
+        if (btnVmReset) {
+            btnVmReset.addEventListener('click', async () => {
+                guestManager.destroy();
+                await guestManager.start();
+            });
+        }
+
         btnRunE2e.addEventListener('click', async () => {
             if (!binderSuite && typeof BinderTestSuite !== 'undefined') {
-                binderSuite = new BinderTestSuite(bridge, canvas, appendLog);
+                binderSuite = new BinderTestSuite(bridge, canvas, appendLog, guestManager);
+            } else if (binderSuite && typeof binderSuite.attachGuestManager === 'function') {
+                binderSuite.attachGuestManager(guestManager);
             }
             if (!binderSuite) {
                 appendLog('BinderTestSuite not initialized or available.', 'error');
@@ -3510,7 +3647,7 @@ fn fs_normals(in: VertexOutput) -> @location(0) vec4<f32> {
             if (arcade) arcade.stop();
             btnRunE2e.disabled = true;
 
-            for (let i = 1; i <= 11; i++) {
+            for (let i = 0; i <= 14; i++) {
                 const badge = document.getElementById(`badge-e2e-${i}`);
                 if (badge) {
                     badge.className = 'badge badge-pending';
@@ -3518,10 +3655,10 @@ fn fs_normals(in: VertexOutput) -> @location(0) vec4<f32> {
                 }
             }
 
-            appendLog('Starting End-to-End (E2E) 11-Milestone Validation Run...', 'info');
+            appendLog('Starting End-to-End (E2E) 15-Milestone Validation Run (E2E-0 to E2E-14)...', 'info');
             try {
                 const results = await (binderSuite.runE2ETestSuite ? binderSuite.runE2ETestSuite() : binderSuite.runAllE2ETests());
-                for (let i = 1; i <= 11; i++) {
+                for (let i = 0; i <= 14; i++) {
                     const badge = document.getElementById(`badge-e2e-${i}`);
                     if (!badge) continue;
                     const res = results && results.results ? (results.results[`e2e_${i}`] || results.results[`e2e${i}`]) : null;
@@ -3534,12 +3671,12 @@ fn fs_normals(in: VertexOutput) -> @location(0) vec4<f32> {
                     }
                 }
                 window.__E2E_TEST_RESULTS__ = results;
-                const total = results.total ?? 11;
+                const total = results.total ?? 15;
                 const passed = results.passed ?? 0;
                 appendLog(`E2E Validation complete: ${passed}/${total} passed.`, (results.failed === 0 || passed === total) ? 'success' : 'error');
             } catch (err) {
                 appendLog(`E2E Validation error: ${err.message}`, 'error');
-                for (let i = 1; i <= 11; i++) {
+                for (let i = 0; i <= 14; i++) {
                     const badge = document.getElementById(`badge-e2e-${i}`);
                     if (badge && badge.textContent === 'RUNNING') {
                         badge.className = 'badge badge-failed';
@@ -3556,6 +3693,7 @@ fn fs_normals(in: VertexOutput) -> @location(0) vec4<f32> {
         // -----------------------------------------------------------------------------
         window.AndroidWebGpu = {
             version: '1.0.0',
+            guestManager,
             pms: {
                 installedPackages: PMS_REGISTRY,
                 getPackageInfo(pkg) { return PMS_REGISTRY.get(pkg) || null; },
@@ -3654,6 +3792,7 @@ fn fs_normals(in: VertexOutput) -> @location(0) vec4<f32> {
                 window.AndroidWebGpu.audio.pause();
                 window.AndroidWebGpu.camera.pause();
                 window.AndroidWebGpu.sensors.pause();
+                if (guestManager) guestManager.pause();
 
                 if (statusPill) {
                     statusPill.textContent = 'BACKGROUND (PAUSED)';
@@ -3663,13 +3802,14 @@ fn fs_normals(in: VertexOutput) -> @location(0) vec4<f32> {
                     fpsCounter.textContent = '0.0 FPS (SUSPENDED)';
                     fpsCounter.style.color = 'var(--text-muted)';
                 }
-                appendLog('[LIFECYCLE] Tab hidden: stream pumps paused, RAF throttled, audio suspended.', 'info');
+                appendLog('[LIFECYCLE] Tab hidden: stream pumps paused, RAF throttled, audio suspended, VM paused.', 'info');
             } else {
                 window.AndroidWebGpu.lifecycle.state = 'RESUMED';
                 window.AndroidWebGpu.audio.resume();
                 window.AndroidWebGpu.camera.resume();
                 window.AndroidWebGpu.sensors.resume();
                 window.AndroidWebGpu.renderer.resume();
+                if (guestManager) guestManager.resume();
 
                 if (statusPill) {
                     statusPill.textContent = 'ONLINE';
@@ -3678,7 +3818,7 @@ fn fs_normals(in: VertexOutput) -> @location(0) vec4<f32> {
                 if (fpsCounter) {
                     fpsCounter.style.color = '#10b981';
                 }
-                appendLog('[LIFECYCLE] Tab visible: stream pumps resumed, 60/120 FPS render loop restored.', 'success');
+                appendLog('[LIFECYCLE] Tab visible: stream pumps resumed, 60/120 FPS render loop restored, VM resumed.', 'success');
             }
         }
 

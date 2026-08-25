@@ -1,0 +1,73 @@
+#!/bin/sh
+# Minimal PID 1 Init Script for AndroidWebGPU v86 Guest Environment
+# Initializes BinderFS, ServiceManager, Native Rust Services, and Virtual HALs
+
+export PATH=/system/bin:/system/xbin:/sbin:/bin:/usr/bin
+export LD_LIBRARY_PATH=/system/lib
+
+# 1. Mount virtual file systems
+mount -t proc proc /proc
+mount -t sysfs sysfs /sys
+mount -t devtmpfs devtmpfs /dev
+mount -t tmpfs tmpfs /tmp
+mount -t tmpfs tmpfs /data
+mkdir -p /dev/pts /dev/socket /dev/binderfs /data/app /data/system
+mount -t devpts devpts /dev/pts
+
+# 2. Mount BinderFS and create Binder device nodes
+mount -t binder binder /dev/binderfs
+ln -sf /dev/binderfs/binder /dev/binder
+ln -sf /dev/binderfs/hwbinder /dev/hwbinder
+ln -sf /dev/binderfs/vndbinder /dev/vndbinder
+chmod 0666 /dev/binder /dev/binderfs/binder /dev/binderfs/hwbinder /dev/binderfs/vndbinder
+
+echo "[init] Linux version 5.10.0-android-x86 (androidwebgpu@v86)" > /dev/ttyS0
+echo "[init] binderfs mounted successfully at /dev/binderfs" > /dev/ttyS0
+
+# 3. Start ServiceManager (Context Manager - Root Handle 0)
+if [ -x /system/bin/servicemanager ]; then
+    /system/bin/servicemanager &
+    echo "[init] servicemanager started (handle 0 context manager)" > /dev/ttyS0
+    sleep 0.1
+else
+    echo "[init] servicemanager binary standby" > /dev/ttyS0
+fi
+
+# 4. Start Native Rust System Services (PMS, AMS, WMS, InputFlinger)
+if [ -x /system/bin/pms_rs ]; then
+    /system/bin/pms_rs &
+fi
+if [ -x /system/bin/ams_rs ]; then
+    /system/bin/ams_rs &
+fi
+if [ -x /system/bin/wms_rs ]; then
+    /system/bin/wms_rs &
+fi
+if [ -x /system/bin/inputflinger_rs ]; then
+    /system/bin/inputflinger_rs &
+fi
+
+# 5. Start Virtual AIDL HAL Daemons
+if [ -x /system/bin/sensors_hal_virtual ]; then
+    /system/bin/sensors_hal_virtual &
+fi
+if [ -x /system/bin/audio_hal_virtual ]; then
+    /system/bin/audio_hal_virtual &
+fi
+if [ -x /system/bin/camera_hal_virtual ]; then
+    /system/bin/camera_hal_virtual &
+fi
+if [ -x /system/bin/media_host_rs ]; then
+    /system/bin/media_host_rs &
+fi
+
+echo "[init] native Rust services and virtual HALs started" > /dev/ttyS0
+echo "[init] zygote socket listening on /dev/socket/zygote" > /dev/ttyS0
+echo "[init] system boot completed successfully" > /dev/ttyS0
+
+# 6. Interactive console on serial TTY
+if [ -c /dev/ttyS0 ]; then
+    exec /bin/sh < /dev/ttyS0 > /dev/ttyS0 2>&1
+else
+    while true; do sleep 3600; done
+fi

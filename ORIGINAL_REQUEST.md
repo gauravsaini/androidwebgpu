@@ -232,5 +232,53 @@ Integrity mode: development
 - [ ] `cargo test --workspace` passes 100% cleanly across all 30 Rust crates.
 - [ ] `GATES.md` updated with runnable check commands for Android Emulator UI and drag-and-drop APK parser.
 
+## Follow-up — 2026-08-25T11:48:02Z
+
+Use a very large team of agents.
+
+Execute the AndroidWebGPU Master Plan (docs/updated_plan.md) under strict /unlazy gate discipline, strictly prioritizing Phase 0 (real v86 guest boot baseline, x86 ISA boot image, kernel binder driver /dev/binder, and real ServiceManager/Zygote/ART) as a prerequisite gate before Layer 2/3 native system services and virtual HALs are certified.
+
+Working directory: /Users/ektasaini/Desktop/androidwebgpu
+Integrity mode: development
+
+## Requirements
+
+### R1. Phase 0 Real Guest Baseline & ART Verification (§0, §0.1, §0.2)
+- Configure and establish the real guest baseline inside the v86 emulator:
+  - Verify x86 boot classpath (boot.art / boot.oat) compiled for the x86 ISA.
+  - Verify real Linux kernel binder driver (/dev/binder, CONFIG_ANDROID_BINDER_IPC=y, CONFIG_ANDROID_BINDERFS=y).
+  - Boot stock Android-x86 image to launcher inside v86 with zero host mocks; confirm real servicemanager and dumpsys.
+  - Audit framework JNI shortcuts around Binder before native service replacement.
+  - Rule §0.2: No phase marked complete based on standalone Rust unit-test harnesses alone.
+
+### R2. Host Virtio-Binder Transport & SurfaceFlinger Buffer Bridging (§1–§5)
+- Implement TLV wire envelope codec and binder-rt AOSP Parcel serializer (adapted from rsbinder wire structs).
+- Shell out to official AOSP aidl binary with --lang=rust + thin aidl-compat shim.
+- Paravirtualized virtio-binder queue transport between guest and host runtime.
+- Handle bridge with bidirectional proxy lifetime, refcounting, and death recipient notifications under concurrency.
+- SurfaceFlinger buffer-only bridging: composited GraphicBuffer crossed over virtio-binder to host WebGPU swapchain.
+
+### R3. In-Guest Native Rust System Services (§7: PMS, AMS, WMS, InputFlinger)
+- Direct kernel ioctl transport (binder-sys) talking real /dev/binder and real servicemanager with looper threadpool (spawn-before-block).
+- pms_rs: Ingest and resolve single unmodified test APK via binary AXML and ARSC parsers.
+- ams_rs: Speak Zygote abstract socket fork protocol, attach ApplicationThread, and drive activity lifecycle to onResume.
+- wms_rs & inputflinger_rs: Single fullscreen window allocation and InputChannel socketpair event delivery.
+- MVP Definition of Done: Unmodified test APK launches, draws through WebGPU SurfaceFlinger, receives input, and exits cleanly.
+
+### R4. Real Virtual AIDL HALs with VINTF Declarations (§8: Sensors, Audio, Camera, Media)
+- Implement frozen stable-AIDL HAL interfaces (ISensors, IModule, ICameraProvider, IMediaCodecService) talking real unmodified daemons (sensorservice, audioserver, cameraserver).
+- Provide valid target-level 7 device_manifest.xml VINTF declarations satisfying isDeclared() checks.
+- Zero-copy shared buffer mechanisms for camera preview and audio PCM ring buffers.
+
+## Acceptance Criteria
+
+### Gate-Enforced Milestone Verification (GATES.md)
+- [ ] Phase 0 Baseline: Stock Android-x86 image boots to launcher inside real v86 VM; dumpsys confirms real servicemanager and ART.
+- [ ] Phase 1-5 Transport: Parcel serialization roundtrip and Virtio-Binder ping transaction verified across VM boundary.
+- [ ] Phase 6-10 System Services: Unmodified stock test APK launched by Zygote fork, attaches to Rust AMS, creates WMS window, and receives InputChannel touch events.
+- [ ] Phase 11-14 Virtual HALs: Real sensorservice, audioserver, cameraserver bind to virtual HALs verified against VINTF manifest declarations.
+- [ ] Ledger Compliance: All runnable gates in GATES.md pass with zero non-empty abandonments.
+
+
 
 
