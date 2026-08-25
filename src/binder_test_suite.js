@@ -1806,6 +1806,13 @@ export class BinderTestSuite {
                 engine: "Godot Engine 3.x GLES2",
                 permissions: ["android.permission.INTERNET"],
             },
+            {
+                name: "F-Droid.apk",
+                packageName: "org.fdroid.fdroid",
+                mainActivity: "org.fdroid.fdroid.views.main.MainActivity",
+                engine: "Android Native Client (25 Activities, 4 Providers)",
+                permissions: ["android.permission.INTERNET", "android.permission.ACCESS_NETWORK_STATE", "android.permission.REQUEST_INSTALL_PACKAGES"],
+            },
         ];
 
         for (const apk of apkFixtures) {
