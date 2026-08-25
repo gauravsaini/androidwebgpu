@@ -50,7 +50,7 @@ export class V86GuestManager {
             wasmPath: './pkg/v86.wasm',
             biosUrl: './bios/seabios.bin',
             vgaBiosUrl: './bios/vgabios.bin',
-            kernelUrl: './guest/kernel/android_x86_defconfig',
+            kernelUrl: './guest/build/bzImage',
             initrdUrl: './guest/build/initrd.img',
             memorySizeMb: 512,
             vgaMemorySizeMb: 16,

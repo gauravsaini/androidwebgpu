@@ -1,0 +1,22 @@
+<manifest version="5.0" type="device" target-level="7">
+    <hal format="aidl">
+        <name>android.hardware.sensors</name>
+        <version>1</version>
+        <fqname>ISensors/default</fqname>
+    </hal>
+    <hal format="aidl">
+        <name>android.hardware.audio.core</name>
+        <version>1</version>
+        <fqname>IModule/default</fqname>
+    </hal>
+    <hal format="aidl">
+        <name>android.hardware.audio.core</name>
+        <version>1</version>
+        <fqname>IConfig/default</fqname>
+    </hal>
+    <hal format="aidl">
+        <name>android.hardware.camera.provider</name>
+        <version>1</version>
+        <fqname>ICameraProvider/virtual/0</fqname>
+    </hal>
+</manifest>

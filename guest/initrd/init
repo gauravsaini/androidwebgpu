@@ -21,6 +21,10 @@ ln -sf /dev/binderfs/hwbinder /dev/hwbinder
 ln -sf /dev/binderfs/vndbinder /dev/vndbinder
 chmod 0666 /dev/binder /dev/binderfs/binder /dev/binderfs/hwbinder /dev/binderfs/vndbinder
 
+while [ ! -e /dev/binder ]; do
+    sleep 0.05
+done
+
 echo "[init] Linux version 5.10.0-android-x86 (androidwebgpu@v86)" > /dev/ttyS0
 echo "[init] binderfs mounted successfully at /dev/binderfs" > /dev/ttyS0
 
@@ -47,7 +51,7 @@ if [ -x /system/bin/inputflinger_rs ]; then
     /system/bin/inputflinger_rs &
 fi
 
-# 5. Start Virtual AIDL HAL Daemons
+# 5. Start Virtual AIDL HAL Daemons (Sensors, Audio, Camera)
 if [ -x /system/bin/sensors_hal_virtual ]; then
     /system/bin/sensors_hal_virtual &
 fi
@@ -56,9 +60,6 @@ if [ -x /system/bin/audio_hal_virtual ]; then
 fi
 if [ -x /system/bin/camera_hal_virtual ]; then
     /system/bin/camera_hal_virtual &
-fi
-if [ -x /system/bin/media_host_rs ]; then
-    /system/bin/media_host_rs &
 fi
 
 echo "[init] native Rust services and virtual HALs started" > /dev/ttyS0

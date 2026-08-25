@@ -20,11 +20,13 @@ chmod +x "$INITRD_SRC/init"
 
 # Create necessary mount directory structures in initrd
 mkdir -p "$INITRD_SRC/dev" "$INITRD_SRC/proc" "$INITRD_SRC/sys" "$INITRD_SRC/tmp" "$INITRD_SRC/data"
-mkdir -p "$INITRD_SRC/system/bin" "$INITRD_SRC/system/lib" "$INITRD_SRC/system/etc/vintf"
+mkdir -p "$INITRD_SRC/system/bin" "$INITRD_SRC/system/lib" "$INITRD_SRC/system/framework" "$INITRD_SRC/system/etc/vintf"
+mkdir -p "$INITRD_SRC/vendor/etc/vintf"
 
-# Copy VINTF device manifest if available
+# Copy VINTF device manifest to /system/etc/vintf and /vendor/etc/vintf
 if [ -f "$GUEST_DIR/etc/vintf/device_manifest.xml" ]; then
     cp "$GUEST_DIR/etc/vintf/device_manifest.xml" "$INITRD_SRC/system/etc/vintf/"
+    cp "$GUEST_DIR/etc/vintf/device_manifest.xml" "$INITRD_SRC/vendor/etc/vintf/"
 fi
 
 # Package cpio.gz archive
