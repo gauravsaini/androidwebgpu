@@ -279,6 +279,48 @@ Integrity mode: development
 - [ ] Phase 11-14 Virtual HALs: Real sensorservice, audioserver, cameraserver bind to virtual HALs verified against VINTF manifest declarations.
 - [ ] Ledger Compliance: All runnable gates in GATES.md pass with zero non-empty abandonments.
 
+## Follow-up — 2026-08-25T12:24:30Z
+
+Use a very large team of agents.
+
+Complete, harden, and fully integrate all remaining phases (Phase 0 through Phase 14) of the AndroidWebGPU Master Plan (docs/updated_plan.md) under strict /unlazy gate discipline. Fully wire the guest-native Rust system services (binder-sys, pms-rs, ams-rs, wms-rs, inputflinger-rs), virtual AIDL HALs (ISensors, IModule, ICameraProvider, IMediaCodecService), and host virtio-binder buffer pipeline without mock drift.
+
+Working directory: /Users/ektasaini/Desktop/androidwebgpu
+Integrity mode: development
+
+## Requirements
+
+### R1. Complete Guest-Native System Services Stack (§7: Phase 6–10)
+- Phase 6 (binder-sys): Full direct ioctl bindings (BINDER_WRITE_READ, mmap, BINDER_SET_MAX_THREADS) with spawn-before-block looper threadpool.
+- Phase 7 (pms-rs): Full binary AXML and ARSC resource table parsing, resolving activities, permissions, and ContentProviders for stock APKs.
+- Phase 8 (ams-rs): Zygote abstract socket protocol client, process lifecycle state machine (INITIALIZING -> RESUMED -> PAUSED -> DESTROYED), and bindApplication IPC.
+- Phase 9 (wms-rs): Fullscreen SurfaceControl window session allocation and layer composition handoff to WebGPU swapchain.
+- Phase 10 (inputflinger-rs): InputChannel socketpair creation, event dispatching, and synchronous finish acknowledgement loop.
+
+### R2. Complete Virtual AIDL HAL Subsystem (§8: Phase 11–14)
+- Phase 11 (Sensors HAL): Implement frozen ISensors stable-AIDL interface with VINTF manifest registration (android.hardware.sensors.ISensors/default) and host devicemotion streaming bridge.
+- Phase 12 (Audio HAL): Implement IModule / IStreamOut / IStreamIn AIDL interfaces with VINTF declaration, routing stereo 16-bit 48kHz PCM playback to WebAudio and microphone capture into ring buffers.
+- Phase 13 (Camera HAL): Implement ICameraProvider / ICameraDevice AIDL interfaces with VINTF declaration and zero-copy shared memory buffer pools feeding YUV420 preview frames.
+- Phase 14 (MediaCodec): Implement IMediaCodecService framework-level bridging with WebCodecs Annex-B H.264/H.265 NALU parsing and timestamp synchronization.
+
+### R3. Real Guest v86 Integration & Virtio-Binder Transport (§0–§5)
+- Validate real v86 guest boot baseline (v86_guest_manager.js, initrd.img, android_x86_defconfig) with real BinderFS and ServiceManager.
+- Verify paravirtualized virtio-binder queue transport and zero-copy SurfaceFlinger GraphicBuffer composition to host WebGPU.
+
+### R4. Comprehensive Verification & Regression Suite
+- Update GATES.md with runnable check commands for all 15 gates (E2E-0 through E2E-14 + E2E-WORKSPACE).
+- Ensure 100% clean compilation and test execution across all 30 member crates in Cargo workspace.
+
+## Acceptance Criteria
+
+### Master Plan Phase Gates (GATES.md)
+- [ ] Phase 0–5 (Transport & Baseline): Real v86 guest boots to ServiceManager; Virtio-Binder and GraphicBuffer composition pass cleanly.
+- [ ] Phase 6–10 (Native System Services): Unmodified test APK launches through Zygote fork, attaches to ams_rs, creates WMS window, and receives input.
+- [ ] Phase 11–14 (Virtual AIDL HALs): Sensors, Audio, Camera, and MediaCodec services bind to virtual HALs and pass VINTF isDeclared() checks.
+- [ ] Cargo Workspace Suite: cargo test --workspace passes 100% across all 30 member crates (0 failures).
+- [ ] Adversarial Browser Suite: tests/adversarial_browser_bench_verifier.mjs passes all test sections cleanly.
+
+
 
 
 
