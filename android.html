@@ -1530,9 +1530,11 @@
                 }
             }
 
-            // 5. Show real WebGPU compositor output (SurfaceFlinger composited frame)
+            // 5. Show app UI and queue compositor buffer
             runtime.startActivity(pkg, `${pkg}.MainActivity`);
-            activateScreen(screenWebGpu);
+            const appState = runtime.activeApps.get(pkg) || { packageName: pkg, appName: meta.name };
+            runtime.renderActivityUi(appState, screenApp);
+            activateScreen(screenApp);
         };
 
         // ---------------------------------------------------------------------
