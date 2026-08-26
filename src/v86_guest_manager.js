@@ -182,22 +182,31 @@ export class V86GuestManager {
                 this.allocatedMemory = new Uint8Array(ramBytes);
             }
 
+            // Fetch and verify real Linux x86 kernel bzImage and initrd assets
+            const [kernelBuf, initrdBuf] = await Promise.all([
+                this.fetchBuffer(this.config.kernelUrl, 'Kernel bzImage'),
+                this.fetchBuffer(this.config.initrdUrl, 'Initrd CPIO')
+            ]);
+
+            // Validate Linux x86 kernel bzImage boot header
+            if (!this.verifyBzImage(kernelBuf)) {
+                throw new Error("Invalid bzImage: failed Linux x86 boot header validation ('HdrS' / 0xAA55)");
+            }
+
+            // Copy verified kernel binary into guest linear memory
+            const kernelBytes = new Uint8Array(kernelBuf);
+            if (this.allocatedMemory && kernelBytes.length > 0) {
+                this.allocatedMemory.set(kernelBytes.subarray(0, Math.min(kernelBytes.length, this.allocatedMemory.length)), 0x100000);
+            }
+
             // Check if running in browser with global V86Starter
             const hasBrowserV86 = typeof window !== 'undefined' && typeof window.V86Starter !== 'undefined';
 
             if (hasBrowserV86) {
-                // Fetch binary assets
-                const [biosBuf, vgaBiosBuf, kernelBuf, initrdBuf] = await Promise.all([
+                const [biosBuf, vgaBiosBuf] = await Promise.all([
                     this.fetchBuffer(this.config.biosUrl, 'BIOS'),
-                    this.fetchBuffer(this.config.vgaBiosUrl, 'VGA BIOS'),
-                    this.fetchBuffer(this.config.kernelUrl, 'Kernel'),
-                    this.fetchBuffer(this.config.initrdUrl, 'Initrd')
+                    this.fetchBuffer(this.config.vgaBiosUrl, 'VGA BIOS')
                 ]);
-
-                // Validate Linux x86 kernel bzImage header
-                if (!this.verifyBzImage(kernelBuf)) {
-                    throw new Error("Invalid bzImage: failed Linux x86 boot header validation ('HdrS' / 0xAA55)");
-                }
 
                 this.setState(VM_STATES.BOOTING);
                 this.recordMilestone(BOOT_MILESTONES.BIOS_POST);

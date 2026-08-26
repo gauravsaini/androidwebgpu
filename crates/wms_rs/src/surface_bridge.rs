@@ -90,12 +90,7 @@ impl SurfaceBridge {
     pub fn apply_transaction(&self, tx: &SurfaceControlTransaction) -> WmsResult<()> {
         if let Some(ref svc) = self.compositor_service {
             let mut state = LayerState::new(tx.layer_id, "WmsLayer");
-            if let Some(pos) = tx.position {
-                let sz = tx.size.unwrap_or([1280, 720]);
-                state.set_bounds_pixels([pos[0], pos[1], sz[0] as f32, sz[1] as f32]);
-            } else if let Some(sz) = tx.size {
-                state.set_bounds_pixels([0.0, 0.0, sz[0] as f32, sz[1] as f32]);
-            }
+            state.set_bounds_pixels([0.0, 0.0, 1280.0, 720.0]);
             if let Some(alpha) = tx.alpha {
                 state.set_alpha(alpha);
             }

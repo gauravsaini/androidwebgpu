@@ -2,8 +2,12 @@
 
 use crate::error::{ZygoteError, ZygoteResult};
 use crate::process::{ProcessRecord, ProcessTracker};
-use crate::protocol::{parse_pid_response, ZygoteSpawnArgs};
+#[cfg(unix)]
+use crate::protocol::parse_pid_response;
+use crate::protocol::ZygoteSpawnArgs;
+#[cfg(unix)]
 use std::io::{Read, Write};
+#[cfg(unix)]
 use std::os::unix::net::UnixStream;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU32, Ordering};
@@ -143,7 +147,7 @@ impl ZygoteClient {
         &self.tracker
     }
 
-    /// Connect to the configured Unix domain socket.
+    #[cfg(unix)]
     fn connect_socket(&self) -> ZygoteResult<UnixStream> {
         match &self.endpoint {
             ZygoteEndpoint::Path(path) => {
@@ -195,6 +199,7 @@ impl ZygoteClient {
     pub fn fork_app(&self, args: &ZygoteSpawnArgs) -> ZygoteResult<u32> {
         let pid = match &self.endpoint {
             ZygoteEndpoint::Mock(handler) => handler.handle_spawn(args)?,
+            #[cfg(unix)]
             _ => {
                 let mut stream = self.connect_socket()?;
                 let payload = args.encode_wire_bytes();
@@ -214,6 +219,12 @@ impl ZygoteClient {
                 })?;
 
                 parse_pid_response(&pid_buf)?
+            }
+            #[cfg(not(unix))]
+            _ => {
+                // Synthesize deterministic virtual PID on non-unix / wasm environments
+                let hash = args.package_name.chars().fold(10000u32, |acc: u32, c: char| acc.wrapping_add(c as u32));
+                hash.max(1000)
             }
         };
 

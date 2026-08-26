@@ -326,6 +326,17 @@ impl SurfaceComposerService {
         Ok(frame_id)
     }
 
+    /// Retrieve the most recently queued pixel buffer across all surfaces.
+    pub fn get_latest_queued_buffer(&self) -> Option<(Vec<u8>, u32, u32)> {
+        let surfaces = self.surfaces.lock().unwrap();
+        for surface in surfaces.values() {
+            if let Some(data) = surface.producer.get_latest_buffer_data() {
+                return Some(data);
+            }
+        }
+        None
+    }
+
     /// Read back the rendered frame pixels from the active swapchain target.
     pub async fn readback_pixels(&self) -> Result<Vec<u8>, CompositorServiceError> {
         let (output_buffer, width, height, bytes_per_row) = {

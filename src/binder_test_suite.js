@@ -376,6 +376,10 @@ export class BinderParcel {
         return new Uint8Array(this.buffer, 0, this.writePos);
     }
 
+    toUint8Array() {
+        return this.data();
+    }
+
     writeBool(val) {
         this.writeInt32(val ? 1 : 0);
     }
@@ -536,6 +540,10 @@ export class BinderParcel {
         this.align4();
     }
 
+    writeString(str) {
+        this.writeUtf8(str);
+    }
+
     readUtf8() {
         const len = this.readInt32();
         if (len < 0) return null;
@@ -545,6 +553,20 @@ export class BinderParcel {
         this.readPos += len + 1; // skip string + null
         this.alignRead4();
         return str;
+    }
+
+    readString() {
+        return this.readUtf8();
+    }
+
+    writeStrongBinder(binder) {
+        if (!binder) {
+            this.writeInt32(0);
+        } else if (typeof binder === 'number') {
+            this.writeInt32(binder);
+        } else {
+            this.writeInt32(binder.handle || 0);
+        }
     }
 
     writeUtf16(str) {

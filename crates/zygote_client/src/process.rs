@@ -51,6 +51,9 @@ impl ProcessRecord {
             uid: args.uid,
             gid: args.gid,
             target_sdk_version: args.target_sdk_version,
+            #[cfg(target_arch = "wasm32")]
+            spawn_time: SystemTime::UNIX_EPOCH,
+            #[cfg(not(target_arch = "wasm32"))]
             spawn_time: SystemTime::now(),
             state: ProcessState::Starting,
         }

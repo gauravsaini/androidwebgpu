@@ -1341,6 +1341,7 @@ dependencies = [
  "vulkan2wgpu",
  "wasm-bindgen",
  "wasm-bindgen-futures",
+ "webgpu_compositor",
  "wgpu",
  "wms_rs",
  "zygote_client",

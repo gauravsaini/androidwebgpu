@@ -1073,11 +1073,29 @@ impl VirtioGpuBridge {
     }
 
     pub fn get_scanout_framebuffer(&self, scanout_id: u32) -> Option<Vec<u8>> {
+        if let Some(scanout) = self.scanouts.get(&scanout_id) {
+            if scanout.fb_data.iter().any(|&b| b != 0) {
+                return Some(scanout.fb_data.clone());
+            }
+        }
+        if let Some(sf) = &self.surface_composer {
+            if let Some((pixels, _, _)) = sf.get_latest_queued_buffer() {
+                return Some(pixels);
+            }
+        }
         self.scanouts.get(&scanout_id).map(|s| s.fb_data.clone())
     }
 
     pub fn get_scanout_damage(&self, scanout_id: u32) -> Option<[u32; 4]> {
-        self.scanouts.get(&scanout_id).and_then(|s| s.damage_rect)
+        if let Some(d) = self.scanouts.get(&scanout_id).and_then(|s| s.damage_rect) {
+            return Some(d);
+        }
+        if let Some(sf) = &self.surface_composer {
+            if let Some((_, w, h)) = sf.get_latest_queued_buffer() {
+                return Some([0, 0, w, h]);
+            }
+        }
+        None
     }
 
     pub fn clear_scanout_damage(&mut self, scanout_id: u32) {

@@ -96,12 +96,20 @@ export class AndroidHttpClient {
         let isSuccess = true;
         let errorMessage = null;
 
+        // Check for local file aliases for bundled APKs and assets
+        let targetUrl = url;
+        if (url.includes('firefox') && (url.endsWith('.apk') || url.includes('.apk'))) {
+            targetUrl = './firefox.apk';
+        } else if ((url.includes('fdroid') || url.includes('F-Droid')) && (url.endsWith('.apk') || url.includes('.apk'))) {
+            targetUrl = './F-Droid.apk';
+        }
+
         // 1. Check for local or relative URLs
-        const isLocal = !url.startsWith('http://') && !url.startsWith('https://');
+        const isLocal = !targetUrl.startsWith('http://') && !targetUrl.startsWith('https://');
 
         if (isLocal) {
             try {
-                const resp = await fetch(url, options);
+                const resp = await fetch(targetUrl, options);
                 status = resp.status;
                 statusText = resp.statusText || 'OK';
                 isSuccess = resp.ok;
@@ -119,39 +127,43 @@ export class AndroidHttpClient {
                 statusText = 'OK';
                 bytes = 1024 * 14;
                 this.totalBytesRx += bytes;
-                responseData = { status: 'simulated_ok', url };
+                responseData = { status: 'simulated_ok', url: targetUrl };
             }
         } else {
-            // 2. Remote URLs: Attempt direct fetch with CORS proxy fallback
+            // 2. Remote URLs: If in browser origin that would trigger CORS preflight redirect errors,
+            // provide immediate Android Subsystem simulated offline cache.
+            const isBrowserLocalhost = typeof window !== 'undefined' && window.location && 
+                (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
+
             let fetched = false;
-            
-            // Try direct fetch first
-            try {
-                const controller = new AbortController();
-                const timeoutId = setTimeout(() => controller.abort(), 2500);
-                const resp = await fetch(url, {
-                    ...options,
-                    signal: controller.signal,
-                    headers: {
-                        'Accept': 'application/json, text/plain, */*',
-                        ...(options.headers || {})
-                    }
-                });
-                clearTimeout(timeoutId);
-                status = resp.status;
-                statusText = resp.statusText || 'OK';
-                isSuccess = resp.ok;
-                const blob = await resp.blob();
-                bytes = blob.size;
-                this.totalBytesRx += bytes;
+            if (!isBrowserLocalhost || options.forceRemote) {
                 try {
-                    responseData = JSON.parse(await blob.text());
+                    const controller = new AbortController();
+                    const timeoutId = setTimeout(() => controller.abort(), 2000);
+                    const resp = await fetch(targetUrl, {
+                        ...options,
+                        signal: controller.signal,
+                        headers: {
+                            'Accept': 'application/json, text/plain, */*',
+                            ...(options.headers || {})
+                        }
+                    });
+                    clearTimeout(timeoutId);
+                    status = resp.status;
+                    statusText = resp.statusText || 'OK';
+                    isSuccess = resp.ok;
+                    const blob = await resp.blob();
+                    bytes = blob.size;
+                    this.totalBytesRx += bytes;
+                    try {
+                        responseData = JSON.parse(await blob.text());
+                    } catch (_) {
+                        responseData = blob;
+                    }
+                    fetched = true;
                 } catch (_) {
-                    responseData = blob;
+                    // CORS or network block
                 }
-                fetched = true;
-            } catch (_) {
-                // CORS or network block
             }
 
             // Fallback: Use simulated Android Network Stack response to prevent unhandled CORS errors

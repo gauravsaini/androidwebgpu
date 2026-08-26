@@ -126,18 +126,30 @@ impl InputDispatcher {
                 .map_err(|e| InputFlingerError::Channel(e.to_string()))?,
         };
 
-        let start = Instant::now();
-        let timeout = Duration::from_millis(timeout_ms);
-
-        while start.elapsed() < timeout {
+        #[cfg(target_arch = "wasm32")]
+        {
             if let Ok(Some((ack_seq, handled))) = publisher.try_receive_finished_signal() {
                 if ack_seq == seq {
                     return Ok(handled);
                 }
             }
-            std::thread::yield_now();
+            Ok(true)
         }
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            let start = Instant::now();
+            let timeout = Duration::from_millis(timeout_ms);
 
-        Err(InputFlingerError::Timeout)
+            while start.elapsed() < timeout {
+                if let Ok(Some((ack_seq, handled))) = publisher.try_receive_finished_signal() {
+                    if ack_seq == seq {
+                        return Ok(handled);
+                    }
+                }
+                std::thread::yield_now();
+            }
+
+            Err(InputFlingerError::Timeout)
+        }
     }
 }

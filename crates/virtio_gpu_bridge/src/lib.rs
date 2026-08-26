@@ -7,6 +7,8 @@ pub mod wasm;
 pub use binary::{BinaryWireParser, DecodedVirtioCommand};
 pub use bridge::VirtioGpuBridge;
 pub use command::{CommandResponse, GpuCommand};
+#[cfg(feature = "wasm")]
+pub use wasm::WasmVirtioGpuBridge;
 
 #[cfg(test)]
 mod tests {

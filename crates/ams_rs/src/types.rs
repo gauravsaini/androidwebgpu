@@ -133,6 +133,9 @@ impl ActivityRecord {
             request_code: -1,
             visible: false,
             finishing: false,
+            #[cfg(target_arch = "wasm32")]
+            launch_time: SystemTime::UNIX_EPOCH,
+            #[cfg(not(target_arch = "wasm32"))]
             launch_time: SystemTime::now(),
         }
     }

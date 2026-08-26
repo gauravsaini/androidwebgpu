@@ -20,6 +20,7 @@ wms_rs = { path = "../wms_rs" }
 ams_rs = { path = "../ams_rs" }
 pms_rs = { path = "../pms_rs" }
 zygote_client = { path = "../zygote_client" }
+webgpu_compositor = { path = "../webgpu_compositor" }
 wgpu = { workspace = true }
 bytemuck = { workspace = true }
 pollster = { workspace = true }
@@ -32,6 +33,6 @@ wasm-bindgen-futures = { workspace = true, optional = true }
 console_error_panic_hook = { workspace = true, optional = true }
 
 [features]
-default = []
+default = ["wasm"]
 wasm = ["dep:wasm-bindgen", "dep:wasm-bindgen-futures", "dep:console_error_panic_hook"]
 

@@ -70,6 +70,7 @@ pub struct GraphicBufferProducerService {
     max_slots: i32,
     connected: AtomicBool,
     last_queued_slot: Mutex<Option<i32>>,
+    last_queued_data: Mutex<Option<(Vec<u8>, u32, u32)>>,
     generation_counter: AtomicU32,
 }
 
@@ -108,6 +109,7 @@ impl GraphicBufferProducerService {
             max_slots,
             connected: AtomicBool::new(false),
             last_queued_slot: Mutex::new(None),
+            last_queued_data: Mutex::new(None),
             generation_counter: AtomicU32::new(1),
         }
     }
@@ -256,6 +258,7 @@ impl GraphicBufferProducerService {
 
         slot_ref.state = SlotState::Queued;
         *self.last_queued_slot.lock().unwrap() = Some(slot);
+        *self.last_queued_data.lock().unwrap() = Some((data[0..expected_len].to_vec(), w, h));
         Ok(())
     }
 
@@ -385,6 +388,11 @@ impl GraphicBufferProducerService {
             }
         }
         None
+    }
+
+    /// Get the pixel data from the most recently queued buffer.
+    pub fn get_latest_buffer_data(&self) -> Option<(Vec<u8>, u32, u32)> {
+        self.last_queued_data.lock().unwrap().clone()
     }
 }
 
