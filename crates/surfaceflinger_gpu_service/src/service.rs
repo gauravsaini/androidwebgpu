@@ -201,6 +201,40 @@ impl SurfaceComposerService {
         Ok(handle)
     }
 
+    /// Register an externally created buffer producer and attach a composition layer.
+    pub fn register_producer(
+        &self,
+        surface_id: u64,
+        name: &str,
+        producer: Arc<GraphicBufferProducerService>,
+        width: u32,
+        height: u32,
+    ) {
+        let initial_layer = CompositionLayer::new_color(
+            surface_id,
+            name,
+            [-1.0, -1.0, 2.0, 2.0],
+            0,
+            [0.0, 0.0, 0.0, 1.0],
+        );
+
+        {
+            let mut comp = self.compositor.lock().unwrap();
+            comp.add_or_update_layer(initial_layer);
+        }
+
+        self.surfaces.lock().unwrap().insert(
+            surface_id,
+            SurfaceHandle {
+                surface_id,
+                name: name.to_string(),
+                width,
+                height,
+                producer,
+            },
+        );
+    }
+
     /// Update multi-layer transaction states in a single batch.
     pub fn set_transaction_state(
         &self,

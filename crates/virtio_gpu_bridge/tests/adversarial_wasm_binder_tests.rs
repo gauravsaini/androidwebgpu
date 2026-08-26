@@ -457,3 +457,36 @@ fn test_adversarial_surface_composer_offload_and_large_parcel() {
         assert_eq!(resp.hdr.msg_id, 7002);
     });
 }
+
+#[test]
+fn test_wms_surface_bridge_and_producer_handles_10_20_30() {
+    pollster::block_on(async {
+        let bridge = match VirtioGpuBridge::new(128, 128).await {
+            Ok(b) => b,
+            Err(_) => return,
+        };
+
+        let sf = match bridge.surface_composer.as_ref() {
+            Some(s) => s,
+            None => return,
+        };
+
+        // Check that handles 10, 20, 30 are registered and have producers in SF
+        for &h in &[10u32, 20u32, 30u32] {
+            assert!(bridge.binder_device.get_service(h).is_some());
+            let producer = sf.get_surface_producer(h as u64).expect("Surface producer should be registered");
+
+            // Test dequeue and queue buffer
+            let slot = producer.dequeue_buffer(64, 64, 1).expect("Should dequeue buffer");
+            let pixel_data = vec![0xFF; 64 * 64 * 4];
+            producer.queue_buffer_data(slot, &pixel_data, 64, 64).expect("Should queue buffer");
+
+            let view = producer.acquire_latest_texture_view();
+            assert!(view.is_some(), "Should acquire queued texture view");
+        }
+
+        // Check WMS service on handle 3
+        assert!(bridge.binder_device.get_service(3).is_some());
+    });
+}
+

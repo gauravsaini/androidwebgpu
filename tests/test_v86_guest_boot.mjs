@@ -13,6 +13,7 @@
 
 import fs from 'fs';
 import path from 'path';
+import zlib from 'zlib';
 import { fileURLToPath } from 'url';
 import { V86GuestManager, VM_STATES, BOOT_MILESTONES } from '../src/v86_guest_manager.js';
 import { BinderTestSuite } from '../src/binder_test_suite.js';
@@ -45,6 +46,35 @@ async function runStage(stageNum, name, fn) {
         console.error(`✖ [STAGE ${stageNum} FAIL] ${err.message}`);
         throw err;
     }
+}
+
+function parseCpioNewc(buffer) {
+    const files = new Map();
+    let offset = 0;
+    while (offset + 110 <= buffer.length) {
+        const magic = buffer.toString('ascii', offset, offset + 6);
+        if (magic !== '070701') break;
+        const fileSize = parseInt(buffer.toString('ascii', offset + 54, offset + 62), 16);
+        const nameSize = parseInt(buffer.toString('ascii', offset + 94, offset + 102), 16);
+        const nameOffset = offset + 110;
+        const name = buffer.toString('ascii', nameOffset, nameOffset + nameSize - 1);
+        if (name === 'TRAILER!!!') break;
+
+        let headerAndNameLen = 110 + nameSize;
+        if (headerAndNameLen % 4 !== 0) {
+            headerAndNameLen += 4 - (headerAndNameLen % 4);
+        }
+        const dataOffset = offset + headerAndNameLen;
+        const fileData = buffer.subarray(dataOffset, dataOffset + fileSize);
+        files.set(name.replace(/^\.\//, ''), fileData);
+
+        let totalLen = headerAndNameLen + fileSize;
+        if (totalLen % 4 !== 0) {
+            totalLen += 4 - (totalLen % 4);
+        }
+        offset += totalLen;
+    }
+    return files;
 }
 
 async function main() {
@@ -92,6 +122,48 @@ async function main() {
         assert(vintfContent.includes('android.hardware.sensors'), "VINTF manifest must declare ISensors");
         assert(vintfContent.includes('android.hardware.audio'), "VINTF manifest must declare IModule");
         assert(vintfContent.includes('android.hardware.camera.provider'), "VINTF manifest must declare ICameraProvider");
+
+        // 1.5 Linux x86 bzImage binary header inspection
+        const bzImagePath = path.join(rootDir, 'guest/build/bzImage');
+        assert(fs.existsSync(bzImagePath), "guest/build/bzImage must exist");
+        const bzImageBuf = fs.readFileSync(bzImagePath);
+        assert(bzImageBuf.length >= 0x208, "bzImage must be at least 520 bytes");
+        const bootSig = bzImageBuf.readUInt16LE(0x1FE);
+        assert(bootSig === 0xAA55, `bzImage boot sector signature at 0x1FE must be 0xAA55, got 0x${bootSig.toString(16)}`);
+        const hdrMagic = bzImageBuf.toString('ascii', 0x202, 0x206);
+        assert(hdrMagic === 'HdrS', `bzImage setup header magic at 0x202 must be 'HdrS', got '${hdrMagic}'`);
+        const bootProtocol = bzImageBuf.readUInt16LE(0x206);
+        assert(bootProtocol >= 0x0200, `bzImage boot protocol at 0x206 must be >= 0x0200, got 0x${bootProtocol.toString(16)}`);
+
+        // 1.6 Initrd archive & ART Boot classpath verification
+        const initrdPath = path.join(rootDir, 'guest/build/initrd.img');
+        assert(fs.existsSync(initrdPath), "guest/build/initrd.img must exist");
+        const initrdGz = fs.readFileSync(initrdPath);
+        const rawCpio = zlib.gunzipSync(initrdGz);
+        const cpioEntries = parseCpioNewc(rawCpio);
+
+        assert(cpioEntries.has('system/framework/boot.art'), "initrd.img must contain system/framework/boot.art");
+        const bootArt = cpioEntries.get('system/framework/boot.art');
+        assert(bootArt.length >= 0x40, "boot.art must have at least 64 bytes header");
+        const artMagic = bootArt.toString('ascii', 0, 8);
+        assert(artMagic === 'art\n018\0', `boot.art magic must be 'art\\n018\\0', got ${JSON.stringify(artMagic)}`);
+        assert(bootArt.readUInt32LE(0x08) === 0x70000000, "boot.art image_begin_ must be 0x70000000");
+        assert(bootArt.readUInt32LE(0x24) === 4, "boot.art pointer_size_ must be 4 (32-bit x86)");
+        assert(bootArt.readUInt32LE(0x20) === 0x70001000, "boot.art image_roots_ must be 0x70001000");
+
+        assert(cpioEntries.has('system/framework/framework.jar'), "initrd.img must contain system/framework/framework.jar");
+        const frameworkJar = cpioEntries.get('system/framework/framework.jar');
+        assert(frameworkJar.length >= 30, "framework.jar must have at least ZIP header");
+        assert(frameworkJar.readUInt32LE(0) === 0x04034B50, "framework.jar must be a valid ZIP archive (magic PK\\x03\\x04)");
+        assert(frameworkJar.includes(Buffer.from('classes.dex')), "framework.jar must contain classes.dex entry");
+
+        // Validate classes.dex inside framework.jar
+        const dexOffset = 30 + 11; // 30 bytes local header + 11 bytes 'classes.dex'
+        const dexMagic = frameworkJar.toString('ascii', dexOffset, dexOffset + 8);
+        assert(dexMagic === 'dex\n035\0', `classes.dex magic must be 'dex\\n035\\0', got ${JSON.stringify(dexMagic)}`);
+        assert(frameworkJar.includes(Buffer.from('Landroid/app/Activity;')), "classes.dex must contain descriptor Landroid/app/Activity;");
+        assert(frameworkJar.includes(Buffer.from('Landroid/os/ServiceManager;')), "classes.dex must contain descriptor Landroid/os/ServiceManager;");
+        assert(frameworkJar.includes(Buffer.from('Landroid/view/SurfaceControl;')), "classes.dex must contain descriptor Landroid/view/SurfaceControl;");
     });
 
     // -------------------------------------------------------------------------
@@ -134,6 +206,63 @@ async function main() {
         // 2.5 Destroy & Reset
         manager.destroy();
         assert(manager.getState() === VM_STATES.UNINITIALIZED, "State must reset to UNINITIALIZED");
+
+        // 2.6 V86GuestManager verifyBzImage() method tests
+        assert(typeof manager.verifyBzImage === 'function', "V86GuestManager must implement verifyBzImage(buffer)");
+        const bzImageBuf = fs.readFileSync(path.join(rootDir, 'guest/build/bzImage'));
+        assert(manager.verifyBzImage(bzImageBuf) === true, "verifyBzImage must return true for valid bzImage binary");
+
+        // Corrupted boot signature at 0x1FE
+        const badSigBuf = Buffer.from(bzImageBuf);
+        badSigBuf.writeUInt16LE(0x0000, 0x1FE);
+        assert(manager.verifyBzImage(badSigBuf) === false, "verifyBzImage must reject invalid boot sector signature");
+
+        // Corrupted magic at 0x202
+        const badMagicBuf = Buffer.from(bzImageBuf);
+        badMagicBuf.write('BAD!', 0x202, 'ascii');
+        assert(manager.verifyBzImage(badMagicBuf) === false, "verifyBzImage must reject invalid setup header magic");
+
+        // Corrupted boot protocol at 0x206
+        const badProtoBuf = Buffer.from(bzImageBuf);
+        badProtoBuf.writeUInt16LE(0x0100, 0x206);
+        assert(manager.verifyBzImage(badProtoBuf) === false, "verifyBzImage must reject boot protocol < 0x0200");
+
+        // Null and truncated buffer handling
+        assert(manager.verifyBzImage(null) === false, "verifyBzImage must reject null");
+        assert(manager.verifyBzImage(new Uint8Array(100)) === false, "verifyBzImage must reject truncated buffer");
+
+        // 2.7 V86GuestManager initWebGpuDevice() method tests with TIMESTAMP_QUERY
+        assert(typeof manager.initWebGpuDevice === 'function', "V86GuestManager must implement initWebGpuDevice()");
+
+        let requestedFeatures = null;
+        const mockAdapterWithTimestamp = {
+            features: new Set(['timestamp-query']),
+            requestDevice: async (desc) => {
+                requestedFeatures = desc.requiredFeatures;
+                return { label: 'mock-gpu-device-ts', features: new Set(desc.requiredFeatures) };
+            }
+        };
+
+        const deviceWithTs = await manager.initWebGpuDevice(mockAdapterWithTimestamp);
+        assert(deviceWithTs !== null, "initWebGpuDevice must return device");
+        assert(Array.isArray(requestedFeatures) && requestedFeatures.includes('timestamp-query'), "initWebGpuDevice must enable 'timestamp-query' when supported");
+        assert(manager.gpuFeatures.includes('timestamp-query'), "manager.gpuFeatures must record timestamp-query");
+
+        const mockAdapterWithoutTimestamp = {
+            features: new Set([]),
+            requestDevice: async (desc) => {
+                requestedFeatures = desc.requiredFeatures;
+                return { label: 'mock-gpu-device-no-ts', features: new Set(desc.requiredFeatures) };
+            }
+        };
+
+        const deviceWithoutTs = await manager.initWebGpuDevice(mockAdapterWithoutTimestamp);
+        assert(deviceWithoutTs !== null, "initWebGpuDevice must return device without timestamp-query");
+        assert(Array.isArray(requestedFeatures) && requestedFeatures.length === 0, "requiredFeatures must be empty when timestamp-query unsupported");
+        assert(manager.gpuFeatures.length === 0, "manager.gpuFeatures must be empty");
+
+        const nullDevice = await manager.initWebGpuDevice(null);
+        assert(nullDevice === null, "initWebGpuDevice with null adapter returns null gracefully");
     });
 
     // -------------------------------------------------------------------------

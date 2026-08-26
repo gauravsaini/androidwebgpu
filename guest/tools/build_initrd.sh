@@ -29,6 +29,10 @@ if [ -f "$GUEST_DIR/etc/vintf/device_manifest.xml" ]; then
     cp "$GUEST_DIR/etc/vintf/device_manifest.xml" "$INITRD_SRC/vendor/etc/vintf/"
 fi
 
+# Generate ART and Framework assets (boot.art and framework.jar)
+echo "[build_initrd] Generating ART boot image and framework.jar assets..."
+node "$SCRIPT_DIR/generate_art_assets.mjs"
+
 # Package cpio.gz archive
 echo "[build_initrd] Packaging initrd archive to: $OUTPUT_IMG"
 (cd "$INITRD_SRC" && find . | cpio -o -H newc | gzip -9 > "$OUTPUT_IMG")

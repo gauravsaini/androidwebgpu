@@ -1,68 +1,102 @@
-# Project: AndroidWebGPU
+# Project: Android WebGPU Real Execution & Visual Pipeline
 
 ## Architecture
-- Paravirtualized Android 13+ guest running on 32-bit x86 Linux kernel with BinderFS in browser WASM/v86 hypervisor.
-- Guest-native Rust system services (`binder_sys`, `pms_rs`, `ams_rs`, `zygote_client`, `wms_rs`, `inputflinger_rs`, `input_channel`).
-- Virtual AIDL HAL subsystem (`sensors_hal_virtual`, `audio_hal_virtual`, `camera_hal_virtual`, `media_host_rs`, `vintf_validator`).
-- Host WebGPU compositor & swapchain (`surfaceflinger_gpu_service`, `webgpu_compositor`, `webgpu_swapchain`, `virtio_gpu_bridge`).
-- Zero-copy shared memory buffer transport (`camera_host_rs`, `audio_host_rs`, `sensor_host_rs`).
+```
+┌────────────────────────────────────────────────────────┐
+│                   Android Guest OS                     │
+│  - Guest Kernel: bzImage (x86 Linux 5.10 / BinderFS)   │
+│  - Initrd: initrd.img (boot.art, framework.jar, HALs)  │
+│  - Guest HALs: gralloc / hwcomposer / egl (VirtIO-GPU) │
+└──────────────────────────┬─────────────────────────────┘
+                           │ VirtIO Rings & Binder IPC
+                           ▼
+┌────────────────────────────────────────────────────────┐
+│        VirtIO-GPU & VirtIO-Binder Bridge               │
+│  (crates/virtio_gpu_bridge, crates/virtio_binder)      │
+│  - Control queue / wire packet demux                   │
+│  - Handles 1, 2, 3, 4, 5, 10, 20, 30 routing           │
+└────────────┬─────────────────────────────┬─────────────┘
+             │                             │
+             ▼                             ▼
+┌──────────────────────────┐  ┌──────────────────────────┐
+│  GraphicBufferProducer   │  │   System Services        │
+│  (Handles 10, 20, 30)    │  │  (Handles 1, 2, 3, 4, 5) │
+│ - Real wgpu::Texture     │  │  - PMS, AMS, WMS         │
+│ - BufferQueue slots      │  │  - InputFlinger / Socket │
+│ - wgpu Queue write       │  │  - SurfaceComposerService│
+└────────────┬─────────────┘  └────────────┬─────────────┘
+             │                             │
+             └──────────────┬──────────────┘
+                            ▼
+┌────────────────────────────────────────────────────────┐
+│      WebGPU Compositor & WebGpuSwapchain               │
+│  (crates/webgpu_compositor, crates/webgpu_swapchain)   │
+│  - Multi-layer composition & Z-ordering                │
+│  - Single-set unified triple-buffered Offscreen target │
+│  - GPU readback with pitch unpadding                   │
+└───────────────────────────┬────────────────────────────┘
+                            │
+                            ▼
+┌────────────────────────────────────────────────────────┐
+│      Browser Presentation & Offscreen Canvas           │
+│  (src/raster_worker.js, index.html)                    │
+│  - transferControlToOffscreen() WebGPU rasterization   │
+│  - Accurate damage rect scissoring                     │
+│  - Zero mock layers / true APK pixel presentation      │
+└────────────────────────────────────────────────────────┘
+```
 
 ## Feature Inventory
 | # | Feature | Description | Milestone | Source |
 |---|---------|-------------|-----------|--------|
-| 1 | Real v86 Guest Boot Baseline | 9-state hypervisor FSM, kernel decomp, BinderFS mount, ServiceManager ping | M0 | docs/updated_plan.md §0 |
-| 2 | VINTF Device Manifest (Target-Level 7) | Target-level 7 manifest declaring ISensors, IModule, ICameraProvider | M1 | docs/updated_plan.md §1 |
-| 3 | Direct & Virtio-Binder Transport | Direct ioctl to /dev/binder and VirtIO descriptor queue processing | M2 | docs/updated_plan.md §2 |
-| 4 | Shared Buffer Transport & Zero-Copy | SharedArrayBuffer ring buffers and pre-allocated buffer pools | M3 | docs/updated_plan.md §3 |
-| 5 | Sensors HAL E2E Streaming | ISensors AIDL HAL + devicemotion host bridge streaming | M4 | docs/updated_plan.md §4 |
-| 6 | Audio HAL Playback & Recording | IModule AIDL HAL + 16-bit 48kHz stereo WebAudio ring buffer & mic source | M5 | docs/updated_plan.md §5 |
-| 7 | binder-sys Direct ioctl & Threadpool | Raw ioctls (BINDER_WRITE_READ, BINDER_SET_MAX_THREADS) + spawn-before-block looper | M6 | docs/updated_plan.md §6 |
-| 8 | pms-rs Binary AXML/ARSC & APK Ingestion | Full chunk parser for AXML/ARSC, resolving activities, permissions, providers | M7 | docs/updated_plan.md §7 |
-| 9 | ams-rs & zygote-client Process Lifecycle | Zygote abstract socket fork client, 7-state activity lifecycle, bindApplication IPC | M8 | docs/updated_plan.md §8 |
-| 10 | wms-rs Window Sessions & SurfaceControl | Fullscreen window sessions and layer composition handoff to WebGPU | M9 | docs/updated_plan.md §9 |
-| 11 | inputflinger-rs & input-channel Subsystem | InputChannel socketpairs, evdev decoding, and synchronous finish ack | M10 | docs/updated_plan.md §10 |
-| 12 | ISensors Virtual AIDL HAL | Frozen stable-AIDL ISensors interface with VINTF registration | M11 | docs/updated_plan.md §11 |
-| 13 | IModule Virtual Audio AIDL HAL | Stable-AIDL IModule/IStreamOut/IStreamIn with VINTF declaration | M12 | docs/updated_plan.md §12 |
-| 14 | ICameraProvider Virtual AIDL HAL | Stable-AIDL ICameraProvider/ICameraDevice with VINTF declaration & YUV420 pool | M13 | docs/updated_plan.md §13 |
-| 15 | IMediaCodecService Framework Bridge | Framework-level bridging with WebCodecs Annex-B H.264/H.265 NALU parser | M14 | docs/updated_plan.md §14 |
-| 16 | Comprehensive E2E Verification & Gates | All 16 gates in GATES.md passing 100% clean across 30 member crates | M15 | GATES.md |
+| 1 | Real Guest Kernel & Initrd Artifacts | Build and validate x86 bzImage, initrd.img with boot.art & framework.jar | M1 | ORIGINAL_REQUEST §R1 |
+| 2 | Real GraphicBufferProducer Bridge | Implement handles 10, 20, 30 with real GraphicBufferProducerService & wgpu texture allocation | M2 | ORIGINAL_REQUEST §R2 |
+| 3 | Real System Services Wiring | Wire PMS (ServiceManager), AMS (Zygote/Activity), WMS (SurfaceBridge), InputFlinger (Socketpair) | M3 | ORIGINAL_REQUEST §R3 |
+| 4 | Single-Set Offscreen Swapchain | Unified texture set for composition and readback in webgpu_swapchain | M4 | ORIGINAL_REQUEST §R4 |
+| 5 | Real Browser Canvas & Rasterization | WebGPU rasterization on OffscreenCanvas, damage rects, remove mock DOM layers | M5 | ORIGINAL_REQUEST §R5 |
+| 6 | E2E System & Workspace Test Pass | Complete pass of cargo test --workspace and node test suites with 0 failures | M6 | ORIGINAL_REQUEST §Acceptance Criteria |
 
 ## Milestones
 | # | Name | Scope | Dependencies | Status |
 |---|------|-------|-------------|--------|
-| M0 | v86 Boot Baseline | Real v86 guest boot, kernel, BinderFS, ServiceManager | none | DONE |
-| M1 | VINTF Manifest | Target-Level 7 device manifest & validation | M0 | DONE |
-| M2 | Virtio-Binder Transport | Raw ioctl & virtqueue descriptor processing | M0, M1 | DONE |
-| M3 | Shared Memory Buffers | Audio ring buffers & camera buffer pools | M2 | DONE |
-| M4 | Virtual Sensors HAL | ISensors stable-AIDL & devicemotion bridge | M1, M2 | DONE |
-| M5 | Virtual Audio HAL | IModule AIDL HAL & WebAudio bridge | M1, M3 | DONE |
-| M6 | binder-sys Kernel Transport | BINDER_WRITE_READ & spawn-before-block threadpool | M2 | DONE |
-| M7 | pms-rs Package Manager | Binary AXML/ARSC & F-Droid APK ingestion | M6 | DONE |
-| M8 | ams-rs & zygote-client | Zygote socket fork & Activity lifecycle | M6, M7 | DONE |
-| M9 | wms-rs Window Manager | SurfaceControl session & WebGPU composition | M6, M8 | DONE |
-| M10 | inputflinger-rs Input Subsystem | InputChannel socketpairs & evdev dispatching | M6, M9 | DONE |
-| M11 | ISensors Production HAL | Frozen AIDL descriptor & VINTF registration | M1, M4 | DONE |
-| M12 | IModule Production HAL | Stable-AIDL routing & 48kHz PCM playback/mic | M1, M5 | DONE |
-| M13 | ICameraProvider Production HAL | Stable-AIDL YUV420 frame streaming & buffer pool | M1, M3 | DONE |
-| M14 | IMediaCodecService Bridge | WebCodecs Annex-B NALU parser & AV sync | M6, M9 | DONE |
-| M15 | Full E2E & Gate Certification | 30 crates cargo test + adversarial bench verifier | M0–M14 | DONE |
+| M1 | Real Guest Build Artifacts | `guest/build/bzImage`, `guest/build/initrd.img`, `boot.art`, `framework.jar` | none | DONE |
+| M2 | Real GraphicBufferProducer Bridge | `crates/virtio_gpu_bridge/src/bridge.rs` handles 10, 20, 30 with real `GraphicBufferProducerService` | none | DONE |
+| M3 | Real System Services Wiring | Wire PMS, AMS, WMS, InputFlinger in `crates/virtio_gpu_bridge` and system service crates | M2 | DONE |
+| M4 | Single-Set Offscreen Swapchain | `crates/webgpu_swapchain/src/swapchain.rs` unified triple-buffered offscreen target | M2, M3 | DONE |
+| M5 | Real Browser Canvas & Rasterization | `index.html`, `src/raster_worker.js`, `src/v86_guest_manager.js` WebGPU canvas binding & mock removal | M1, M4 | DONE |
+| M6 | Full Workspace & E2E Verification | Run full verification across `cargo test --workspace` and all 10 `node tests/*.mjs` suites | M1..M5 | IN_PROGRESS |
+
+## Interface Contracts
+
+### 1. VirtIO-GPU Bridge ↔ GraphicBufferProducerService (Handles 10, 20, 30)
+- **Binder Descriptor**: `android.gui.IGraphicBufferProducer`
+- **Transactions**:
+  - `CONNECT (code 1)`: Returns status code 0 and connection token.
+  - `DISCONNECT (code 2)`: Releases allocated slots.
+  - `SET_BUFFER_COUNT (code 3)`: Resizes buffer slots vector.
+  - `DEQUEUE_BUFFER (code 4)`: Returns slot index, fence, and buffer properties.
+  - `QUEUE_BUFFER (code 5)`: Takes pixel bytes, writes to `wgpu::Texture` via `wgpu::Queue::write_texture`, signals frame available.
+  - `CANCEL_BUFFER (code 6)`: Returns buffer slot to available pool.
+  - `ALLOCATE_BUFFERS (code 7)`: Pre-allocates textures for slots.
+
+### 2. WMS ↔ SurfaceComposerService (SurfaceBridge)
+- **AIDL Descriptors**: `android.view.IWindowManager` ↔ `android.gui.ISurfaceComposer`
+- **Transactions**:
+  - `allocate_surface(title, width, height, format, flags)` -> Returns `SurfaceControl` with allocated producer handle.
+  - `apply_transaction(tx)` -> Translates layer position, size, alpha, z-order into `ComposerState` and commits to `SurfaceComposerService`.
+
+### 3. WebGpuSwapchain ↔ Browser Presentation
+- **Format**: `wgpu::TextureFormat::Rgba8UnormSrgb`
+- **Usages**: `RENDER_ATTACHMENT | TEXTURE_BINDING | COPY_SRC | COPY_DST`
+- **Readback Contract**: Dense RGBA unpadded buffer with length `width * height * 4`.
+- **Canvas Presentation**: `OffscreenCanvas` bound via `GPUCanvasContext` in `src/raster_worker.js` with damage rect scissoring.
 
 ## Code Layout
-- `crates/binder_sys`: Raw ioctl bindings to `/dev/binder` and looper threadpool.
-- `crates/pms_rs`: Native package manager with AXML and ARSC parsing.
-- `crates/ams_rs`: Native activity manager and process lifecycle state machine.
-- `crates/zygote_client`: Zygote abstract Unix socket client for app process forks.
-- `crates/wms_rs`: Native window manager and SurfaceControl window sessions.
-- `crates/inputflinger_rs`: Input event reader and focus-targeted dispatcher.
-- `crates/input_channel`: Low-latency Unix socketpair input communication channel.
-- `crates/sensors_hal_virtual`: Virtual ISensors AIDL HAL implementation.
-- `crates/audio_hal_virtual`: Virtual IModule / IStreamOut / IStreamIn AIDL HAL implementation.
-- `crates/camera_hal_virtual`: Virtual ICameraProvider / ICameraDevice AIDL HAL implementation.
-- `crates/media_host_rs`: Framework IMediaCodecService bridge and WebCodecs Annex-B parser.
-- `crates/vintf_validator`: VINTF device manifest parser and validator.
-- `crates/virtio_binder`: VirtIO queue transport device and descriptor processor.
-- `crates/surfaceflinger_gpu_service`: SurfaceFlinger ISurfaceComposer and buffer queue.
-- `crates/webgpu_compositor` & `crates/webgpu_swapchain`: WebGPU presentation pipelines.
-- `src/v86_guest_manager.js`: v86 browser VM manager and boot lifecycle monitor.
-- `guest/initrd/init`: Guest userspace root init script.
-- `guest/kernel/android_x86_defconfig`: Linux kernel config for x86 guest.
+- `guest/`: Linux kernel defconfig, initrd scripts, AOSP ART/DEX generators, guest HAL patches.
+- `guest/build/`: `bzImage`, `initrd.img` binary artifacts.
+- `crates/virtio_gpu_bridge/`: VirtIO-GPU command decoder and VirtIO-Binder router.
+- `crates/surfaceflinger_gpu_service/`: `GraphicBufferProducerService` and `SurfaceComposerService`.
+- `crates/pms_rs/`, `crates/ams_rs/`, `crates/wms_rs/`, `crates/inputflinger_rs/`: Native Android system services.
+- `crates/webgpu_compositor/`, `crates/webgpu_swapchain/`: Multi-layer composition and offscreen swapchain.
+- `src/`: Browser frontend scripts (`v86_guest_manager.js`, `raster_worker.js`, `apk_launcher.js`, etc.).
+- `tests/`: Automated Node.js integration, adversarial fuzzer, and verification test suites.

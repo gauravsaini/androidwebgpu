@@ -196,7 +196,6 @@ impl GraphicBufferProducerService {
         width: u32,
         height: u32,
     ) -> Result<(), BufferQueueError> {
-        eprintln!("[BQ] slot {} {}x{} bytes {}", slot, width, height, data.len());
         let mut slots = self.slots.lock().unwrap();
         let slot_ref = slots.get_mut(&slot).ok_or(BufferQueueError::InvalidSlot(slot))?;
 
@@ -365,19 +364,23 @@ impl GraphicBufferProducerService {
 
     /// Acquire the most recently queued `wgpu::TextureView` for compositor presentation.
     pub fn acquire_latest_texture_view(&self) -> Option<wgpu::TextureView> {
-        let last_slot = *self.last_queued_slot.lock().unwrap();
+        let last_slot = self.last_queued_slot.lock().unwrap().take();
         if let Some(slot) = last_slot {
             let mut slots = self.slots.lock().unwrap();
-            for (id, s) in slots.iter_mut() {
-                if *id != slot && s.state == SlotState::Acquired {
-                    s.state = SlotState::Free;
-                }
-            }
             if let Some(slot_ref) = slots.get_mut(&slot) {
-                if let Some(tex) = &slot_ref.texture {
-                    let view = tex.create_view(&wgpu::TextureViewDescriptor::default());
-                    slot_ref.state = SlotState::Acquired;
-                    return Some(view);
+                if slot_ref.state == SlotState::Queued {
+                    for (id, s) in slots.iter_mut() {
+                        if *id != slot && (s.state == SlotState::Acquired || s.state == SlotState::Queued) {
+                            s.state = SlotState::Free;
+                        }
+                    }
+                    if let Some(slot_ref) = slots.get_mut(&slot) {
+                        if let Some(tex) = &slot_ref.texture {
+                            let view = tex.create_view(&wgpu::TextureViewDescriptor::default());
+                            slot_ref.state = SlotState::Acquired;
+                            return Some(view);
+                        }
+                    }
                 }
             }
         }

@@ -430,3 +430,44 @@ fn test_vulkan_oversized_allocation_protection() {
         assert_eq!(res, Err(VK_ERROR_OUT_OF_DEVICE_MEMORY));
     });
 }
+
+#[test]
+fn test_vulkan_with_shared_device_queue() {
+    pollster::block_on(async {
+        let instance = wgpu::Instance::default();
+        let adapter = match instance.request_adapter(&wgpu::RequestAdapterOptions {
+            power_preference: wgpu::PowerPreference::HighPerformance,
+            compatible_surface: None,
+            force_fallback_adapter: false,
+        }).await {
+            Some(a) => a,
+            None => return,
+        };
+
+        let (device, queue) = match adapter.request_device(
+            &wgpu::DeviceDescriptor {
+                label: Some("Shared Device Test"),
+                required_features: wgpu::Features::empty(),
+                required_limits: adapter.limits(),
+                memory_hints: wgpu::MemoryHints::default(),
+            },
+            None,
+        ).await {
+            Ok(pair) => pair,
+            Err(_) => return,
+        };
+
+        let dev_arc = std::sync::Arc::new(device);
+        let queue_arc = std::sync::Arc::new(queue);
+
+        let mut vk_device = VkDevice::with_device_queue(std::sync::Arc::clone(&dev_arc), std::sync::Arc::clone(&queue_arc))
+            .expect("Failed to initialize VkDevice with shared device and queue");
+
+        assert_eq!(std::sync::Arc::strong_count(&dev_arc), 2);
+        assert_eq!(std::sync::Arc::strong_count(&queue_arc), 2);
+
+        let buf_id = vk_device.vk_create_buffer(512, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT);
+        assert!(buf_id > 0);
+    });
+}
+

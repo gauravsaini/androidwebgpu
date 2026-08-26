@@ -160,33 +160,11 @@ impl InputChannel {
 
     /// Receive an `InputMessage` across the transport (blocking / loop until available or timeout).
     pub fn receive_message(&self) -> Result<InputMessage> {
-        let backend = self.backend.lock().unwrap();
-        match &*backend {
-            #[cfg(unix)]
-            TransportBackend::Socket(sock) => {
-                let mut buf = [0u8; INPUT_MESSAGE_WIRE_SIZE];
-                // Loop with small yield if nonblocking
-                loop {
-                    match sock.recv(&mut buf) {
-                        Ok(n) => {
-                            return InputMessage::decode(&buf[..n]);
-                        }
-                        Err(ref e) if e.kind() == std::io::ErrorKind::WouldBlock => {
-                            std::thread::yield_now();
-                        }
-                        Err(e) => return Err(InputChannelError::Io(e)),
-                    }
-                }
+        loop {
+            if let Some(msg) = self.try_receive_message()? {
+                return Ok(msg);
             }
-            TransportBackend::Memory { recv_queue, .. } => loop {
-                {
-                    let mut queue = recv_queue.lock().unwrap();
-                    if let Some(bytes) = queue.pop_front() {
-                        return InputMessage::decode(&bytes);
-                    }
-                }
-                std::thread::yield_now();
-            },
+            std::thread::yield_now();
         }
     }
 

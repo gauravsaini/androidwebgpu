@@ -263,14 +263,22 @@ impl IActivityManager for ActivityManagerService {
         Ok(START_SUCCESS)
     }
 
-    fn attach_application(&self, thread: SpIBinder, _start_seq: i64) -> AidlResult<()> {
+    fn attach_application(&self, thread: SpIBinder, start_seq: i64) -> AidlResult<()> {
         let app_thread: Arc<dyn IApplicationThread> =
             Arc::new(ApplicationThreadProxy::new(thread));
 
-        // Pop pending launch
+        // Match pending launch by PID or fall back to FIFO head
         let pending = {
             let mut lock = self.pending_launches.write().unwrap();
-            lock.pop_front()
+            if start_seq > 0 {
+                if let Some(pos) = lock.iter().position(|p| p.pid == start_seq as u32) {
+                    lock.remove(pos)
+                } else {
+                    lock.pop_front()
+                }
+            } else {
+                lock.pop_front()
+            }
         };
 
         if let Some(pending) = pending {

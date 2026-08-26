@@ -9,10 +9,11 @@ use crate::pipeline::{
 use crate::spirv::SpirvTranslator;
 use crate::types::*;
 use std::collections::HashMap;
+use std::sync::Arc;
 
 pub struct VkDevice {
-    pub device: wgpu::Device,
-    pub queue: wgpu::Queue,
+    pub device: Arc<wgpu::Device>,
+    pub queue: Arc<wgpu::Queue>,
     pub next_id: u64,
     pub memories: HashMap<u64, VkDeviceMemory>,
     pub buffers: HashMap<u64, VkBuffer>,
@@ -31,35 +32,7 @@ pub struct VkDevice {
 }
 
 impl VkDevice {
-    pub async fn new() -> Result<Self, String> {
-        let instance = wgpu::Instance::default();
-        let adapter = instance
-            .request_adapter(&wgpu::RequestAdapterOptions {
-                power_preference: wgpu::PowerPreference::HighPerformance,
-                compatible_surface: None,
-                force_fallback_adapter: false,
-            })
-            .await
-            .ok_or_else(|| "Failed to find suitable GPU adapter".to_string())?;
-
-        let mut required_features = wgpu::Features::empty();
-        if adapter.features().contains(wgpu::Features::TIMESTAMP_QUERY) {
-            required_features |= wgpu::Features::TIMESTAMP_QUERY;
-        }
-
-        let (device, queue) = adapter
-            .request_device(
-                &wgpu::DeviceDescriptor {
-                    label: Some("Vulkan2WGPU Device"),
-                    required_features,
-                    required_limits: adapter.limits(),
-                    memory_hints: wgpu::MemoryHints::default(),
-                },
-                None,
-            )
-            .await
-            .map_err(|e| format!("Failed to create device: {:?}", e))?;
-
+    pub fn with_device_queue(device: Arc<wgpu::Device>, queue: Arc<wgpu::Queue>) -> Result<Self, String> {
         let push_constant_bgl = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             label: Some("VkPushConstants_BGL"),
             entries: &[wgpu::BindGroupLayoutEntry {
@@ -109,6 +82,38 @@ impl VkDevice {
             push_constant_bg,
             spirv_translator: SpirvTranslator::new(),
         })
+    }
+
+    pub async fn new() -> Result<Self, String> {
+        let instance = wgpu::Instance::default();
+        let adapter = instance
+            .request_adapter(&wgpu::RequestAdapterOptions {
+                power_preference: wgpu::PowerPreference::HighPerformance,
+                compatible_surface: None,
+                force_fallback_adapter: false,
+            })
+            .await
+            .ok_or_else(|| "Failed to find suitable GPU adapter".to_string())?;
+
+        let mut required_features = wgpu::Features::empty();
+        if adapter.features().contains(wgpu::Features::TIMESTAMP_QUERY) {
+            required_features |= wgpu::Features::TIMESTAMP_QUERY;
+        }
+
+        let (device, queue) = adapter
+            .request_device(
+                &wgpu::DeviceDescriptor {
+                    label: Some("Vulkan2WGPU Device"),
+                    required_features,
+                    required_limits: adapter.limits(),
+                    memory_hints: wgpu::MemoryHints::default(),
+                },
+                None,
+            )
+            .await
+            .map_err(|e| format!("Failed to create device: {:?}", e))?;
+
+        Self::with_device_queue(Arc::new(device), Arc::new(queue))
     }
 
     fn gen_id(&mut self) -> u64 {

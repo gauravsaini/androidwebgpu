@@ -72,6 +72,8 @@ export class V86GuestManager {
         this.milestones = new Set();
         this.serialLogs = [];
         this.allocatedMemory = null;
+        this.gpuDevice = null;
+        this.gpuFeatures = [];
 
         this.stats = {
             ips: 0,
@@ -191,6 +193,11 @@ export class V86GuestManager {
                     this.fetchBuffer(this.config.kernelUrl, 'Kernel'),
                     this.fetchBuffer(this.config.initrdUrl, 'Initrd')
                 ]);
+
+                // Validate Linux x86 kernel bzImage header
+                if (!this.verifyBzImage(kernelBuf)) {
+                    throw new Error("Invalid bzImage: failed Linux x86 boot header validation ('HdrS' / 0xAA55)");
+                }
 
                 this.setState(VM_STATES.BOOTING);
                 this.recordMilestone(BOOT_MILESTONES.BIOS_POST);
@@ -513,6 +520,25 @@ export class V86GuestManager {
      */
     async fetchBuffer(url, label) {
         this.log(`Fetching ${label} from ${url}...`, 'info');
+        if (typeof process !== 'undefined' && process.versions && process.versions.node) {
+            try {
+                const fs = await import('fs');
+                const path = await import('path');
+                const cleanUrl = url.replace(/^\.\//, '').replace(/^\//, '');
+                const candidates = [
+                    url,
+                    path.resolve(process.cwd(), cleanUrl),
+                    path.resolve(process.cwd(), 'guest/build', path.basename(cleanUrl)),
+                    path.resolve(process.cwd(), 'guest/bios', path.basename(cleanUrl)),
+                ];
+                for (const cand of candidates) {
+                    if (fs.existsSync(cand) && fs.statSync(cand).isFile()) {
+                        const buf = fs.readFileSync(cand);
+                        return buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength);
+                    }
+                }
+            } catch (_) {}
+        }
         if (typeof fetch === 'undefined') {
             return new ArrayBuffer(1024);
         }
@@ -535,6 +561,71 @@ export class V86GuestManager {
     }
 
     /**
+     * Verify Linux x86 bzImage binary header
+     * Validates:
+     * - 0x1FE == 0xAA55 (boot sector signature)
+     * - 0x202 == 'HdrS' (header magic 0x53726448)
+     * - 0x206 >= 0x0200 (boot protocol version >= 2.00)
+     * @param {ArrayBuffer|Uint8Array|Buffer} buffer
+     * @returns {boolean}
+     */
+    verifyBzImage(buffer) {
+        if (!buffer) return false;
+        const view = (buffer instanceof Uint8Array || (typeof Buffer !== 'undefined' && Buffer.isBuffer(buffer)))
+            ? buffer
+            : new Uint8Array(buffer);
+        if (view.length < 0x208) return false;
+
+        // Boot sector signature at 0x01FE (0xAA55)
+        const bootSig = (view[0x1FE]) | (view[0x1FF] << 8);
+        if (bootSig !== 0xAA55) return false;
+
+        // Header magic "HdrS" at 0x0202 (0x53726448)
+        const magic = String.fromCharCode(view[0x202], view[0x203], view[0x204], view[0x205]);
+        if (magic !== 'HdrS') return false;
+
+        // Boot protocol version at 0x0206 (must be >= 0x0200)
+        const protocol = (view[0x206]) | (view[0x207] << 8);
+        if (protocol < 0x0200) return false;
+
+        return true;
+    }
+
+    /**
+     * Initialize WebGPU Device with optional TIMESTAMP_QUERY feature enabled
+     * @param {GPUAdapter} [adapter]
+     * @returns {Promise<GPUDevice>}
+     */
+    async initWebGpuDevice(adapter = null) {
+        let selectedAdapter = adapter;
+        if (!selectedAdapter) {
+            if (typeof navigator !== 'undefined' && navigator.gpu && typeof navigator.gpu.requestAdapter === 'function') {
+                selectedAdapter = await navigator.gpu.requestAdapter();
+            }
+        }
+        if (!selectedAdapter) {
+            this.log('WebGPU adapter not available in environment', 'warn');
+            return null;
+        }
+
+        const requiredFeatures = [];
+        if (selectedAdapter.features && typeof selectedAdapter.features.has === 'function') {
+            if (selectedAdapter.features.has('timestamp-query')) {
+                requiredFeatures.push('timestamp-query');
+            }
+        }
+
+        const device = await selectedAdapter.requestDevice({
+            requiredFeatures: requiredFeatures
+        });
+
+        this.gpuDevice = device;
+        this.gpuFeatures = requiredFeatures;
+        this.log(`WebGPU device initialized with features: [${requiredFeatures.join(', ')}]`, 'info');
+        return device;
+    }
+
+    /**
      * Return VM runtime statistics
      */
     getStats() {
@@ -544,7 +635,8 @@ export class V86GuestManager {
             bootDurationMs: this.stats.bootDurationMs,
             memoryAllocatedMb: this.config.memorySizeMb,
             vgaMemoryAllocatedMb: this.config.vgaMemorySizeMb,
-            logLinesCount: this.serialLogs.length
+            logLinesCount: this.serialLogs.length,
+            gpuFeatures: this.gpuFeatures
         };
     }
 }

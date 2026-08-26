@@ -775,6 +775,10 @@ impl GlContext {
     }
 
     pub fn gl_draw_arrays(&mut self, _mode: u32, first: u32, count: u32) {
+        if self.current_program_id == 0 {
+            return;
+        }
+
         self.metrics.record_draw(count / 3);
 
         let target_view = if self.bound_framebuffer_id != 0 {
@@ -794,7 +798,7 @@ impl GlContext {
         if let Some(view) = target_view {
             let attrib_keys = self.build_attrib_keys();
 
-            let pipeline_result = self.pipeline_cache.get_or_create_pipeline(
+            let pipeline = match self.pipeline_cache.get_or_create_pipeline(
                 &self.device,
                 self.current_program_id,
                 self.surface_format,
@@ -803,7 +807,10 @@ impl GlContext {
                 self.depth_test_enabled,
                 self.cull_face_enabled,
                 self.depth_func,
-            );
+            ) {
+                Ok(p) => p,
+                Err(_) => return,
+            };
 
             let mut encoder =
                 self.device
@@ -861,9 +868,7 @@ impl GlContext {
                     );
                 }
 
-                if let Ok(pipeline) = pipeline_result {
-                    render_pass.set_pipeline(pipeline);
-                }
+                render_pass.set_pipeline(pipeline);
 
                 let bind_group_layout = self.pipeline_cache.get_or_create_main_bind_group_layout(&self.device);
                 let (wgpu_view, sampler) = if let Some(tex) = self.textures.get(&self.bound_texture_2d_id) {
@@ -928,6 +933,10 @@ impl GlContext {
     }
 
     pub fn gl_draw_elements(&mut self, _mode: u32, count: u32, type_: u32, offset: usize) {
+        if self.current_program_id == 0 {
+            return;
+        }
+
         self.metrics.record_draw(count / 3);
 
         let target_view = if self.bound_framebuffer_id != 0 {
@@ -947,7 +956,7 @@ impl GlContext {
         if let Some(view) = target_view {
             let attrib_keys = self.build_attrib_keys();
 
-            let pipeline_result = self.pipeline_cache.get_or_create_pipeline(
+            let pipeline = match self.pipeline_cache.get_or_create_pipeline(
                 &self.device,
                 self.current_program_id,
                 self.surface_format,
@@ -956,7 +965,10 @@ impl GlContext {
                 self.depth_test_enabled,
                 self.cull_face_enabled,
                 self.depth_func,
-            );
+            ) {
+                Ok(p) => p,
+                Err(_) => return,
+            };
 
             let mut encoder =
                 self.device
@@ -1014,9 +1026,7 @@ impl GlContext {
                     );
                 }
 
-                if let Ok(pipeline) = pipeline_result {
-                    render_pass.set_pipeline(pipeline);
-                }
+                render_pass.set_pipeline(pipeline);
 
                 let bind_group_layout = self.pipeline_cache.get_or_create_main_bind_group_layout(&self.device);
                 let (wgpu_view, sampler) = if let Some(tex) = self.textures.get(&self.bound_texture_2d_id) {

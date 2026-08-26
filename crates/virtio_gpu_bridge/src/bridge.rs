@@ -48,7 +48,7 @@ pub struct VirtioGpuBridge {
 impl VirtioGpuBridge {
     pub async fn new(width: u32, height: u32) -> Result<Self, String> {
         let gl_context = GlContext::new(width, height).await?;
-        let vk_device = VkDevice::new().await.ok();
+        let vk_device = VkDevice::with_device_queue(Arc::clone(&gl_context.device), Arc::clone(&gl_context.queue)).ok();
 
         let binder_device = Arc::new(VirtioBinderDevice::new());
         let handle_bridge = Arc::new(Mutex::new(HandleBridge::new()));
@@ -99,7 +99,12 @@ impl VirtioGpuBridge {
         routing_policy.allow_host_offload(inputflinger_rs::IINPUT_MANAGER_DESCRIPTOR);
 
         // 3. WindowManagerService from wms_rs (Handle 3)
-        let wms_service = Arc::new(wms_rs::WindowManagerService::new());
+        let wms_service = if let Some(ref sf) = surface_composer {
+            let surface_bridge = Arc::new(wms_rs::SurfaceBridge::with_compositor(Arc::clone(sf)));
+            Arc::new(wms_rs::WindowManagerService::with_surface_bridge(surface_bridge))
+        } else {
+            Arc::new(wms_rs::WindowManagerService::new())
+        };
         binder_device.register_service(3, Arc::clone(&wms_service) as Arc<dyn IBinder>);
         handle_bridge
             .lock()
@@ -155,6 +160,9 @@ impl VirtioGpuBridge {
                 Arc::clone(&dev),
                 Arc::clone(&q),
             ));
+            if let Some(ref sf) = surface_composer {
+                sf.register_producer(h as u64, &format!("Surface_{}", h), Arc::clone(&producer), width, height);
+            }
             binder_device.register_service(h, Arc::clone(&producer) as Arc<dyn IBinder>);
             handle_bridge
                 .lock()
