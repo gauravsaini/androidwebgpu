@@ -396,4 +396,141 @@ mod tests {
             assert!(deq_resp.hdr.is_success());
         });
     }
+
+    #[test]
+    fn test_virtqueue_descriptor_processing_and_dma() {
+        pollster::block_on(async {
+            let mut bridge = match VirtioGpuBridge::new(64, 64).await {
+                Ok(b) => b,
+                Err(_) => return,
+            };
+
+            // 1MB guest physical memory buffer
+            let mut guest_mem = vec![0u8; 1024 * 1024];
+
+            // 1. Setup ResourceCreate2D command in guest memory
+            let create_cmd = VirtioGpuResourceCreate2d {
+                hdr: VirtioGpuCtrlHdr {
+                    type_: VIRTIO_GPU_CMD_RESOURCE_CREATE_2D,
+                    flags: 0,
+                    fence_id: 10,
+                    ctx_id: 0,
+                    padding: 0,
+                },
+                resource_id: 42,
+                format: VIRTIO_GPU_FORMAT_R8G8B8A8_UNORM,
+                width: 8,
+                height: 8,
+            };
+            let cmd_bytes = bytemuck::bytes_of(&create_cmd);
+            guest_mem[0x2000..0x2000 + cmd_bytes.len()].copy_from_slice(cmd_bytes);
+
+            // Descriptor 0: In (Command)
+            let desc0 = VirtqDesc {
+                addr: 0x2000,
+                len: cmd_bytes.len() as u32,
+                flags: VRING_DESC_F_NEXT,
+                next: 1,
+            };
+            // Descriptor 1: Out (Response)
+            let desc1 = VirtqDesc {
+                addr: 0x3000,
+                len: 24,
+                flags: VRING_DESC_F_WRITE,
+                next: 0,
+            };
+
+            guest_mem[0x1000..0x1010].copy_from_slice(bytemuck::bytes_of(&desc0));
+            guest_mem[0x1010..0x1020].copy_from_slice(bytemuck::bytes_of(&desc1));
+
+            // Execute virtqueue descriptor chain 0
+            let written = bridge
+                .process_virtqueue_descriptor(&mut guest_mem, 0x1000, 0)
+                .expect("Failed to process virtqueue descriptor");
+            assert_eq!(written, 24);
+
+            let resp_hdr: &VirtioGpuCtrlHdr = bytemuck::from_bytes(&guest_mem[0x3000..0x3018]);
+            assert_eq!(resp_hdr.type_, VIRTIO_GPU_RESP_OK_NODATA);
+            assert_eq!(resp_hdr.fence_id, 10);
+            assert!(bridge.resources.contains_key(&42));
+
+            // 2. Attach backing DMA pages
+            let attach_cmd = VirtioGpuResourceAttachBacking {
+                hdr: VirtioGpuCtrlHdr {
+                    type_: VIRTIO_GPU_CMD_RESOURCE_ATTACH_BACKING,
+                    flags: 0,
+                    fence_id: 11,
+                    ctx_id: 0,
+                    padding: 0,
+                },
+                resource_id: 42,
+                nr_entries: 1,
+            };
+            let mem_entry = VirtioGpuMemEntry {
+                addr: 0x5000,
+                length: 8 * 8 * 4,
+                padding: 0,
+            };
+            let mut attach_pkt = bytemuck::bytes_of(&attach_cmd).to_vec();
+            attach_pkt.extend_from_slice(bytemuck::bytes_of(&mem_entry));
+            guest_mem[0x2000..0x2000 + attach_pkt.len()].copy_from_slice(&attach_pkt);
+
+            let desc0_attach = VirtqDesc {
+                addr: 0x2000,
+                len: attach_pkt.len() as u32,
+                flags: VRING_DESC_F_NEXT,
+                next: 1,
+            };
+            guest_mem[0x1000..0x1010].copy_from_slice(bytemuck::bytes_of(&desc0_attach));
+
+            bridge
+                .process_virtqueue_descriptor(&mut guest_mem, 0x1000, 0)
+                .expect("Failed to attach backing");
+            assert_eq!(bridge.resources.get(&42).unwrap().backing_entries.len(), 1);
+
+            // 3. Write red pixels to DMA memory at 0x5000 and send TransferToHost2D (empty inline payload)
+            for pixel in guest_mem[0x5000..0x5000 + 256].chunks_exact_mut(4) {
+                pixel[0] = 255; // R
+                pixel[1] = 0;   // G
+                pixel[2] = 0;   // B
+                pixel[3] = 255; // A
+            }
+
+            let xfer_cmd = VirtioGpuTransferToHost2d {
+                hdr: VirtioGpuCtrlHdr {
+                    type_: VIRTIO_GPU_CMD_TRANSFER_TO_HOST_2D,
+                    flags: 0,
+                    fence_id: 12,
+                    ctx_id: 0,
+                    padding: 0,
+                },
+                r: VirtioGpuRect {
+                    x: 0,
+                    y: 0,
+                    width: 8,
+                    height: 8,
+                },
+                offset: 0,
+                resource_id: 42,
+                padding: 0,
+            };
+            let xfer_bytes = bytemuck::bytes_of(&xfer_cmd);
+            guest_mem[0x2000..0x2000 + xfer_bytes.len()].copy_from_slice(xfer_bytes);
+
+            let desc0_xfer = VirtqDesc {
+                addr: 0x2000,
+                len: xfer_bytes.len() as u32,
+                flags: VRING_DESC_F_NEXT,
+                next: 1,
+            };
+            guest_mem[0x1000..0x1010].copy_from_slice(bytemuck::bytes_of(&desc0_xfer));
+
+            bridge
+                .process_virtqueue_descriptor(&mut guest_mem, 0x1000, 0)
+                .expect("Failed TransferToHost2D DMA");
+
+            let res = bridge.resources.get(&42).unwrap();
+            assert_eq!(res.backing_data[0..4], [255, 0, 0, 255]);
+        });
+    }
 }

@@ -218,8 +218,12 @@ async function main() {
 
         // 2.3 Boot execution
         await manager.start();
-        assert(manager.getState() === VM_STATES.RUNNING, "After start, state must reach RUNNING");
-        assert(stateTransitions.length >= 4, "State transitions must occur during boot");
+        assert(manager.getState() === VM_STATES.BOOTING, "After start without simulated lines, state must reach BOOTING");
+        
+        // Feed serial to transition to RUNNING
+        manager.feedSerial("SeaBIOS (version 1.14.0)\nLinux version 5.10.0-android-x86\nZygote: listening on socket /dev/socket/zygote\n");
+        assert(manager.getState() === VM_STATES.RUNNING, "After serial feed, state reaches RUNNING");
+        assert(stateTransitions.length >= 3, "State transitions must occur during boot and serial progression");
 
         // 2.4 Pause & Resume
         manager.pause();
@@ -383,7 +387,7 @@ async function main() {
         // 3.2 Adversarial Panic / SIGILL Error Detector Tests
         const panicManager = new V86GuestManager();
         await panicManager.start();
-        assert(panicManager.getState() === VM_STATES.RUNNING, "Panic manager started in RUNNING");
+        assert(panicManager.getState() === VM_STATES.BOOTING, "Panic manager started in BOOTING");
 
         panicManager.feedSerial("Kernel panic - not syncing: Fatal exception in interrupt\n");
         assert(panicManager.getState() === VM_STATES.ERROR, "Kernel panic line must transition VM to ERROR");
@@ -405,6 +409,7 @@ async function main() {
     await runStage(4, "/dev/binder Device Nodes, Protocol V8, & ServiceManager Handle 0 Ping", async () => {
         const manager = new V86GuestManager();
         await manager.start();
+        manager.setState(VM_STATES.RUNNING);
 
         // 4.1 Check /dev/binder nodes via guest exec
         const binderCheck = await manager.exec('test -c /dev/binder && test -c /dev/hwbinder && echo BINDER_NODES_OK');
@@ -461,6 +466,13 @@ async function main() {
         // 5.2 Attached test suite certifies Phase 0
         const realManager = new V86GuestManager();
         await realManager.start();
+        realManager.feedSerial(
+            "SeaBIOS (version 1.14.0)\n" +
+            "Linux version 5.10.0-android-x86\n" +
+            "Android Binder IPC Driver initialized (protocol version 8)\n" +
+            "[init] servicemanager started (handle 0 context manager)\n" +
+            "Zygote: listening on socket /dev/socket/zygote\n"
+        );
 
         const suiteWithVM = new BinderTestSuite(null, null, () => {}, realManager);
         const attachedRes = await suiteWithVM.runPhase0_GuestBaseline();

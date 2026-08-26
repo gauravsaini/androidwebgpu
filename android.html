@@ -280,22 +280,38 @@
         /* v86 Guest VM VGA Output */
         #screen-v86 {
             background: #000;
+            width: 100%;
+            height: 100%;
+            display: none;
             align-items: center;
             justify-content: center;
             position: relative;
+            overflow: hidden;
         }
 
         #v86-screen-container {
             width: 100% !important;
             height: 100% !important;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: #000;
             overflow: hidden;
         }
 
-        #v86-screen-container canvas,
-        #v86-screen-container div {
-            width: 100% !important;
-            height: 100% !important;
+        #v86-screen-container canvas {
+            max-width: 100% !important;
+            max-height: 100% !important;
             image-rendering: pixelated;
+            object-fit: contain;
+        }
+
+        #v86-screen-container > div {
+            font-family: 'Fira Code', monospace !important;
+            font-size: 10px !important;
+            line-height: 11px !important;
+            color: #f8fafc;
+            user-select: text;
         }
 
         canvas#screen {
@@ -737,9 +753,13 @@
                             <!-- Screen 2: Interactive Android Application Viewport (Material You UI) -->
                             <div class="screen-view" id="screen-app" style="background: #0b0f19; overflow: hidden; width: 100%; height: 100%;"></div>
 
-                            <!-- Screen 3: Real WebGPU Hardware Canvas & Guest VM Viewport -->
+                            <!-- Screen 3: Real v86 Guest VM Output (VGA Framebuffer & Console) -->
+                            <div class="screen-view" id="screen-v86">
+                                <div id="v86-screen-container"></div>
+                            </div>
+
+                            <!-- Screen 4: Real WebGPU Hardware Canvas Viewport -->
                             <div class="screen-view" id="screen-webgpu">
-                                <div id="v86-screen-container" style="display: none;"></div>
                                 <canvas id="screen" width="1280" height="720"></canvas>
                                 <div class="canvas-overlay-hud">
                                     <span>SURFACEFLINGER: COMPOSITING</span>
@@ -848,6 +868,11 @@
                         <div>08-26 13:30:00.001 1000 1000 I SystemServer: Entered the Android system server!</div>
                         <div>08-26 13:30:00.040 1000 1000 I PackageManager: Service started. Ready for AIDL IPC.</div>
                         <div>08-26 13:30:00.080 1000 1000 I ActivityManager: Service started. Zygote socket bound.</div>
+                    </div>
+                    <!-- Guest Serial Shell Command Bar -->
+                    <div style="display: flex; gap: 6px; margin-top: 4px;">
+                        <input type="text" id="serial-cmd-input" placeholder="Guest shell command (e.g. uname -a, ls, dmesg)..." style="flex: 1; background: #1e293b; color: #f8fafc; border: 1px solid #334155; border-radius: 4px; padding: 4px 8px; font-family: monospace; font-size: 0.68rem; outline: none;" />
+                        <button id="btn-send-serial" style="background: #0284c7; color: white; border: none; border-radius: 4px; padding: 4px 10px; font-size: 0.68rem; font-weight: 600; cursor: pointer;">Send</button>
                     </div>
                 </div>
             </div>
@@ -1074,33 +1099,50 @@
 
         // Viewport switching
         function activateScreen(screenEl) {
-            [screenHome, screenApp, screenWebGpu].forEach(s => {
+            [screenHome, screenApp, screenV86, screenWebGpu].forEach(s => {
                 if (s) {
                     s.classList.remove('active');
                     s.style.display = 'none';
                 }
             });
             screenEl.classList.add('active');
-            screenEl.style.display = (screenEl === screenWebGpu) ? 'flex' : 'block';
+            screenEl.style.display = (screenEl === screenWebGpu || screenEl === screenV86) ? 'flex' : 'block';
             if (screenEl === screenWebGpu) {
-                btnSwitchCanvas.textContent = '📱 View App UI';
+                btnSwitchCanvas.textContent = '🖥️ View Guest VM (VGA)';
+            } else if (screenEl === screenV86) {
+                btnSwitchCanvas.textContent = '🏠 View Home Screen';
             } else {
-                btnSwitchCanvas.textContent = '🖥️ View Guest VM';
+                btnSwitchCanvas.textContent = '🎨 View WebGPU Canvas';
             }
         }
 
         btnSwitchCanvas.addEventListener('click', () => {
             if (screenWebGpu.classList.contains('active')) {
-                if (runtime.currentPackage && screenApp.hasChildNodes()) {
-                    activateScreen(screenApp);
-                } else {
-                    activateScreen(screenHome);
-                }
+                activateScreen(screenV86);
+            } else if (screenV86.classList.contains('active')) {
+                activateScreen(screenHome);
             } else {
-                // Direct WebGPU compositor rendering of guest VM and SurfaceFlinger
                 activateScreen(screenWebGpu);
             }
         });
+
+        // Guest Serial Shell Command Handler
+        const serialInput = document.getElementById('serial-cmd-input');
+        const btnSendSerial = document.getElementById('btn-send-serial');
+        function sendGuestCommand() {
+            if (!serialInput) return;
+            const cmd = serialInput.value.trim();
+            if (!cmd) return;
+            if (window.v86emulator && typeof window.v86emulator.serial0_send === 'function') {
+                appendLogcat('v86Guest', `$ ${cmd}`, 'I');
+                window.v86emulator.serial0_send(`${cmd}\n`);
+            } else {
+                appendLogcat('v86Guest', `(Hypervisor not ready for input: ${cmd})`, 'W');
+            }
+            serialInput.value = '';
+        }
+        if (btnSendSerial) btnSendSerial.addEventListener('click', sendGuestCommand);
+        if (serialInput) serialInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') sendGuestCommand(); });
 
         // Initialize Android Runtime
         const runtime = new AndroidRuntime({
@@ -1148,7 +1190,7 @@
                     console.log('[v86] ✓ V86Class found — constructing emulator...');
                     const v86Config = {
                         wasm_path: './v86/v86.wasm',
-                        memory_size: 64 * 1024 * 1024,
+                        memory_size: 128 * 1024 * 1024,
                         vga_memory_size: 8 * 1024 * 1024,
                         bios: { url: './bios/seabios.bin' },
                         vga_bios: { url: './bios/vgabios.bin' },
@@ -1176,7 +1218,7 @@
                             if (char === '\n') {
                                 if (serialBuf.trim()) {
                                     console.log('[v86-serial]', serialBuf.trim());
-                                    appendLogcat('v86Guest', serialBuf.trim(), 'D');
+                                    appendLogcat('v86Guest', serialBuf.trim(), 'I');
                                 }
                                 serialBuf = '';
                             } else {
@@ -1193,10 +1235,16 @@
                             console.log('[v86] ✓ Emulator ready event fired');
                             console.log('[v86] Screen container children:', v86ScreenContainer.childElementCount);
                             console.log('[v86] Screen container HTML:', v86ScreenContainer.innerHTML.substring(0, 200));
+                            if (gpuDev) {
+                                gpuDev.registerWithV86(v86emulator);
+                            }
                             appendLogcat('SystemServer', 'v86 emulator ready — guest OS accessible', 'I');
                         });
 
                         window.v86emulator = v86emulator;
+                        if (gpuDev) {
+                            gpuDev.registerWithV86(v86emulator);
+                        }
                         console.log('[v86] ✓ Emulator stored on window.v86emulator');
                         appendLogcat('SystemServer', 'v86 x86 hypervisor booting real Linux guest...', 'I');
                     }
@@ -1736,11 +1784,9 @@
                 }
             }
 
-            // 5. Show app UI and queue compositor buffer
+            // 5. Start activity and present on real WebGPU compositor canvas
             runtime.startActivity(pkg, `${pkg}.MainActivity`);
-            const appState = runtime.activeApps.get(pkg) || { packageName: pkg, appName: meta.name };
-            runtime.renderActivityUi(appState, screenApp);
-            activateScreen(screenApp);
+            activateScreen(screenWebGpu);
         };
 
         // ---------------------------------------------------------------------

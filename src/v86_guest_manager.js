@@ -247,7 +247,6 @@ export class V86GuestManager {
                 } else if (this.config.mockMode === true) {
                     this.setState(VM_STATES.BOOTING);
                     this.recordMilestone(BOOT_MILESTONES.BIOS_POST);
-                    await this.simulateBootProgression();
                 }
             } else {
                 // Headless baseline driver (Node.js or test harness)
@@ -268,7 +267,6 @@ export class V86GuestManager {
 
                 this.setState(VM_STATES.BOOTING);
                 this.recordMilestone(BOOT_MILESTONES.BIOS_POST);
-                await this.simulateBootProgression();
             }
 
             const duration = ((typeof performance !== 'undefined' ? performance.now() : Date.now()) - this.bootStartTime).toFixed(1);
@@ -284,36 +282,10 @@ export class V86GuestManager {
 
     /**
      * Deterministic progression through kernel and Android userspace milestones
+     * Note: Simulated boot lines removed. Milestones advance only via real serial/dmesg parsing.
      */
     async simulateBootProgression() {
-        const bootLines = [
-            "SeaBIOS (version rel-1.14.0-0-g155821a)",
-            "Linux version 5.10.0-android-x86 (androidwebgpu@v86) (gcc 10.2.1) #1 SMP PREEMPT",
-            "Command line: console=ttyS0 root=/dev/ram0 androidboot.hardware=android_x86 androidboot.selinux=permissive",
-            "x86/fpu: Supporting XSAVE feature 0x001: 'x87 floating point registers'",
-            "Memory: 515072K/524288K available (10240K kernel code, 1204K rwdata, 3072K rodata, 1024K init, 512K bss)",
-            "virtio_gpu virtio0: [drm] fb0: virtio_gpudrmfb frame buffer device",
-            "Android Binder IPC Driver initialized (protocol version 8)",
-            "binderfs: created /dev/binderfs/binder",
-            "binderfs: created /dev/binderfs/hwbinder",
-            "binderfs: created /dev/binderfs/vndbinder",
-            "Run /init as init process",
-            "[init] binderfs mounted successfully at /dev/binderfs",
-            "[init] servicemanager started (handle 0 context manager)",
-            "binder: 0:0 context manager registered successfully",
-            "[init] pms_rs: ready (package manager registered)",
-            "[init] ams_rs: registered \"activity\" service with handle 0",
-            "[init] wms_rs: ready (window manager registered)",
-            "[init] inputflinger_rs: ready (input channel listening)",
-            "[init] native Rust services and virtual HALs started",
-            "Zygote: listening on socket /dev/socket/zygote",
-            "ART: Initialized boot classpath (/system/framework/boot.art)",
-            "[init] system boot completed successfully"
-        ];
-
-        for (const line of bootLines) {
-            this.handleSerialLine(line);
-        }
+        // Simulated lines removed. Milestones must be certified via real dmesg in browser/runtime.
     }
 
     /**

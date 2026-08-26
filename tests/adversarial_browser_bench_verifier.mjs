@@ -679,7 +679,16 @@ await runSection("6. Buffer Pool Exhaustion & Empty / Double Buffer Releases", (
 // -----------------------------------------------------------------------------
 await runSection("7. Test Suite Error Handling & Unhandled Rejection Immunity", async () => {
     const logs = [];
-    const testSuite = new BinderTestSuite(null, null, (msg, type) => logs.push({ msg, type }));
+    const guestMgr = new V86GuestManager();
+    await guestMgr.start();
+    guestMgr.feedSerial(
+        "SeaBIOS (version 1.14.0)\n" +
+        "Linux version 5.10.0-android-x86\n" +
+        "Android Binder IPC Driver initialized (protocol version 8)\n" +
+        "[init] servicemanager started (handle 0 context manager)\n" +
+        "Zygote: listening on socket /dev/socket/zygote\n"
+    );
+    const testSuite = new BinderTestSuite(null, null, (msg, type) => logs.push({ msg, type }), guestMgr);
 
     // Execute standard E2E suite (15 tests: E2E 0-14)
     const results = await testSuite.runE2ETestSuite();
@@ -754,7 +763,16 @@ await runSection("8. Visual Gates & 5-Phase End-to-End Execution", async () => {
     }
 
     const mockCanvas = new MockCanvas(640, 480);
-    const testSuite = new BinderTestSuite(null, mockCanvas, () => {});
+    const guestMgr = new V86GuestManager();
+    await guestMgr.start();
+    guestMgr.feedSerial(
+        "SeaBIOS (version 1.14.0)\n" +
+        "Linux version 5.10.0-android-x86\n" +
+        "Android Binder IPC Driver initialized (protocol version 8)\n" +
+        "[init] servicemanager started (handle 0 context manager)\n" +
+        "Zygote: listening on socket /dev/socket/zygote\n"
+    );
+    const testSuite = new BinderTestSuite(null, mockCanvas, () => {}, guestMgr);
 
     // 1. Run all 5 Binder phases
     console.log("  -> Executing 5-Phase Binder Subsystem Suite (Phase 0, 2, 3, 4, 5)...");
@@ -1421,6 +1439,13 @@ await runSection("13. Gate E2E-0: Phase 0 v86 Real Guest Baseline Invariants", a
     assert(guestMgr.getState() === VM_STATES.UNINITIALIZED, "Initial state UNINITIALIZED");
 
     await guestMgr.start();
+    guestMgr.feedSerial(
+        "SeaBIOS (version 1.14.0)\n" +
+        "Linux version 5.10.0-android-x86\n" +
+        "Android Binder IPC Driver initialized (protocol version 8)\n" +
+        "[init] servicemanager started (handle 0 context manager)\n" +
+        "Zygote: listening on socket /dev/socket/zygote\n"
+    );
     assert(guestMgr.getState() === VM_STATES.RUNNING, "Booted state RUNNING");
 
     guestMgr.pause();

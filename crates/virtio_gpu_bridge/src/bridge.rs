@@ -20,6 +20,7 @@ pub struct HostResource2D {
     pub height: u32,
     pub texture_id: u32,
     pub backing_data: Vec<u8>,
+    pub backing_entries: Vec<VirtioGpuMemEntry>,
 }
 
 pub struct Scanout {
@@ -288,6 +289,7 @@ impl VirtioGpuBridge {
                         height: cmd.height,
                         texture_id: tex_id,
                         backing_data: vec![0u8; size],
+                        backing_entries: Vec::new(),
                     },
                 );
 
@@ -311,6 +313,7 @@ impl VirtioGpuBridge {
                         height: cmd.height,
                         texture_id: tex_id,
                         backing_data: vec![0u8; size],
+                        backing_entries: Vec::new(),
                     },
                 );
 
@@ -550,12 +553,142 @@ impl VirtioGpuBridge {
                     },
                 )
             }
+            DecodedVirtioCommand::ResourceAttachBacking(cmd, entries) => {
+                if let Some(res) = self.resources.get_mut(&cmd.resource_id) {
+                    res.backing_entries = entries;
+                    BinaryWireParser::encode_header_response(
+                        VIRTIO_GPU_RESP_OK_NODATA,
+                        cmd.hdr.fence_id,
+                        0,
+                    )
+                } else {
+                    BinaryWireParser::encode_header_response(
+                        VIRTIO_GPU_RESP_ERR_INVALID_RESOURCE_ID,
+                        cmd.hdr.fence_id,
+                        0,
+                    )
+                }
+            }
+            DecodedVirtioCommand::ResourceDetachBacking(hdr, res_id) => {
+                if let Some(res) = self.resources.get_mut(&res_id) {
+                    res.backing_entries.clear();
+                    BinaryWireParser::encode_header_response(
+                        VIRTIO_GPU_RESP_OK_NODATA,
+                        hdr.fence_id,
+                        0,
+                    )
+                } else {
+                    BinaryWireParser::encode_header_response(
+                        VIRTIO_GPU_RESP_ERR_INVALID_RESOURCE_ID,
+                        hdr.fence_id,
+                        0,
+                    )
+                }
+            }
             _ => BinaryWireParser::encode_header_response(
                 VIRTIO_GPU_RESP_ERR_UNSPEC,
                 0,
                 0,
             ),
         }
+    }
+
+    /// Processes a VirtIO descriptor chain directly from guest physical memory / SharedArrayBuffer.
+    /// Handles scatter-gather entries and guest->host DMA.
+    pub fn process_virtqueue_descriptor(
+        &mut self,
+        guest_memory: &mut [u8],
+        desc_table_addr: u64,
+        head_index: u16,
+    ) -> Result<u32, String> {
+        let mem_len = guest_memory.len() as u64;
+        let mut curr_idx = head_index;
+        let mut in_bytes = Vec::new();
+        let mut out_slices: Vec<(usize, usize)> = Vec::new();
+        let mut visited = 0;
+        const MAX_CHAIN_LEN: usize = 256;
+
+        while visited < MAX_CHAIN_LEN {
+            visited += 1;
+            let desc_offset = desc_table_addr + (curr_idx as u64) * 16;
+            if desc_offset + 16 > mem_len {
+                return Err(format!("Descriptor offset out of guest memory bounds: 0x{:X}", desc_offset));
+            }
+
+            let desc_buf = &guest_memory[desc_offset as usize..(desc_offset + 16) as usize];
+            let desc: VirtqDesc = *bytemuck::try_from_bytes(desc_buf)
+                .map_err(|e| format!("Invalid descriptor struct at 0x{:X}: {:?}", desc_offset, e))?;
+
+            let buf_start = desc.addr as usize;
+            let buf_len = desc.len as usize;
+            let buf_end = buf_start + buf_len;
+
+            if (buf_end as u64) > mem_len {
+                return Err(format!("Descriptor buffer 0x{:X}..0x{:X} exceeds guest memory (0x{:X})", buf_start, buf_end, mem_len));
+            }
+
+            if (desc.flags & VRING_DESC_F_WRITE) != 0 {
+                // Device-writable buffer (response)
+                out_slices.push((buf_start, buf_len));
+            } else {
+                // Device-readable buffer (command request / payload)
+                in_bytes.extend_from_slice(&guest_memory[buf_start..buf_end]);
+            }
+
+            if (desc.flags & VRING_DESC_F_NEXT) != 0 {
+                curr_idx = desc.next;
+            } else {
+                break;
+            }
+        }
+
+        if in_bytes.is_empty() {
+            return Err("Empty virtqueue descriptor chain input".to_string());
+        }
+
+        // Special handling for TransferToHost2D with scatter-gather DMA backing
+        if let Ok(decoded) = BinaryWireParser::parse_command(&in_bytes) {
+            if let DecodedVirtioCommand::TransferToHost2d(cmd, payload) = &decoded {
+                if payload.is_empty() {
+                    if let Some(res) = self.resources.get(&cmd.resource_id) {
+                        if !res.backing_entries.is_empty() {
+                            let mut dma_data = Vec::new();
+                            for entry in &res.backing_entries {
+                                let start = entry.addr as usize;
+                                let len = entry.length as usize;
+                                if (start + len) as u64 <= mem_len {
+                                    dma_data.extend_from_slice(&guest_memory[start..start + len]);
+                                }
+                            }
+                            if !dma_data.is_empty() {
+                                let mut full_packet = Vec::new();
+                                full_packet.extend_from_slice(bytemuck::bytes_of(cmd));
+                                full_packet.extend_from_slice(&dma_data);
+                                in_bytes = full_packet;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        let resp_bytes = self.process_binary_wire_command(&in_bytes);
+
+        // Write response into device-writable output buffer(s)
+        let mut resp_offset = 0;
+        let mut written_total = 0;
+        for (out_start, out_len) in out_slices {
+            if resp_offset >= resp_bytes.len() {
+                break;
+            }
+            let to_write = (resp_bytes.len() - resp_offset).min(out_len);
+            guest_memory[out_start..out_start + to_write]
+                .copy_from_slice(&resp_bytes[resp_offset..resp_offset + to_write]);
+            resp_offset += to_write;
+            written_total += to_write as u32;
+        }
+
+        Ok(written_total)
     }
 
     fn execute_submit_3d(&mut self, buf: &[u8]) {
@@ -850,6 +983,7 @@ impl VirtioGpuBridge {
                         height,
                         texture_id: tex_id,
                         backing_data: vec![0u8; (width * height * 4) as usize],
+                        backing_entries: Vec::new(),
                     },
                 );
 

@@ -11,6 +11,7 @@ pub enum DecodedVirtioCommand<'a> {
     TransferToHost2d(VirtioGpuTransferToHost2d, &'a [u8]),
     TransferToHost3d(VirtioGpuTransferToHost3d, &'a [u8]),
     ResourceAttachBacking(VirtioGpuResourceAttachBacking, Vec<VirtioGpuMemEntry>),
+    ResourceDetachBacking(VirtioGpuCtrlHdr, u32),
     CtxCreate(VirtioGpuCtxCreate),
     CtxDestroy(VirtioGpuCtrlHdr),
     CtxAttachResource(VirtioGpuCtxResource),
@@ -113,6 +114,17 @@ impl BinaryWireParser {
                     }
                 }
                 Ok(DecodedVirtioCommand::ResourceAttachBacking(*cmd, entries))
+            }
+            VIRTIO_GPU_CMD_RESOURCE_DETACH_BACKING => {
+                if bytes.len() < hdr_size + 4 {
+                    return Err("Packet truncated for ResourceDetachBacking".to_string());
+                }
+                let res_id = u32::from_le_bytes(
+                    bytes[hdr_size..hdr_size + 4]
+                        .try_into()
+                        .map_err(|e| format!("ResourceDetachBacking res_id parse error: {:?}", e))?,
+                );
+                Ok(DecodedVirtioCommand::ResourceDetachBacking(*hdr, res_id))
             }
             VIRTIO_GPU_CMD_CTX_CREATE => {
                 let size = std::mem::size_of::<VirtioGpuCtxCreate>();

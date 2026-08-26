@@ -93,7 +93,8 @@ async function main() {
         for (let i = 0; i < 5000; i++) {
             const mgr = new V86GuestManager({ memorySizeMb: 16 });
             await mgr.start();
-            assert(mgr.getState() === VM_STATES.RUNNING, `Iteration ${i}: Must reach RUNNING`);
+            assert(mgr.getState() === VM_STATES.BOOTING, `Iteration ${i}: Must reach BOOTING`);
+            mgr.feedSerial("SeaBIOS\n[init] system boot completed successfully\n");
             assert(mgr.hasMilestone(BOOT_MILESTONES.SYSTEM_BOOT_COMPLETED), `Iteration ${i}: Must complete boot`);
             mgr.destroy();
             assert(mgr.getState() === VM_STATES.UNINITIALIZED, `Iteration ${i}: Must reset to UNINITIALIZED`);
@@ -107,6 +108,7 @@ async function main() {
     await runTest("3. Rapid Pause / Resume & Out-of-Order Lifecycle Handling (10,000 cycles)", async () => {
         const mgr = new V86GuestManager();
         await mgr.start();
+        mgr.setState(VM_STATES.RUNNING);
         assert(mgr.getState() === VM_STATES.RUNNING, "Initial state RUNNING");
 
         // 3.1 10,000 rapid pause/resume cycles
@@ -196,6 +198,7 @@ async function main() {
     await runTest("5. ANSI Escape Sequences, Unicode & Binary Garbage Fuzzing (10,000 inputs)", async () => {
         const fuzzMgr = new V86GuestManager();
         await fuzzMgr.start();
+        fuzzMgr.setState(VM_STATES.RUNNING);
 
         const noisePatterns = [
             "\x1b[31;1mERROR: color code\x1b[0m\n",
@@ -240,6 +243,7 @@ async function main() {
             const trigger = panicTriggers[i % panicTriggers.length];
             const mgr = new V86GuestManager();
             await mgr.start();
+            mgr.setState(VM_STATES.RUNNING);
             assert(mgr.getState() === VM_STATES.RUNNING, `Panic cycle ${i}: Started in RUNNING`);
 
             // Inject panic
@@ -260,6 +264,7 @@ async function main() {
             mgr.destroy();
             assert(mgr.getState() === VM_STATES.UNINITIALIZED, `Panic cycle ${i}: Reset to UNINITIALIZED`);
             await mgr.start();
+            mgr.feedSerial("SeaBIOS\n[init] system boot completed successfully\n");
             assert(mgr.getState() === VM_STATES.RUNNING, `Panic cycle ${i}: Recovered to RUNNING`);
             assert(mgr.hasMilestone(BOOT_MILESTONES.SYSTEM_BOOT_COMPLETED), `Panic cycle ${i}: Clean boot milestones`);
             mgr.destroy();
@@ -359,6 +364,13 @@ async function main() {
         // 7.6 Real V86GuestManager attached -> Must certify
         const realMgr = new V86GuestManager();
         await realMgr.start();
+        realMgr.feedSerial(
+            "SeaBIOS (version 1.14.0)\n" +
+            "Linux version 5.10.0-android-x86\n" +
+            "Android Binder IPC Driver initialized (protocol version 8)\n" +
+            "[init] servicemanager started (handle 0 context manager)\n" +
+            "Zygote: listening on socket /dev/socket/zygote\n"
+        );
         const suiteReal = new BinderTestSuite(null, null, () => {}, realMgr);
         const resReal = await suiteReal.runPhase0_GuestBaseline();
         assert(resReal.certified === true, "Real guest manager must be certified");

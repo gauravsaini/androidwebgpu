@@ -234,3 +234,17 @@ pub struct VirtioGpuRespCapsetInfo {
     pub capset_max_size: u32,
     pub padding: u32,
 }
+
+// Virtqueue Ring Descriptors (OASIS VirtIO 1.2 Specification)
+pub const VRING_DESC_F_NEXT: u16 = 1;
+pub const VRING_DESC_F_WRITE: u16 = 2;
+pub const VRING_DESC_F_INDIRECT: u16 = 4;
+
+#[repr(C)]
+#[derive(Debug, Clone, Copy, Default, Pod, Zeroable)]
+pub struct VirtqDesc {
+    pub addr: u64,
+    pub len: u32,
+    pub flags: u16,
+    pub next: u16,
+}

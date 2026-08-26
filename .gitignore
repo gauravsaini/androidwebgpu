@@ -8,3 +8,5 @@ firefox.apk
 /v86/
 /bios/
 guest/build/linux4.iso
+__pycache__/
+*.pyc

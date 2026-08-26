@@ -84,6 +84,26 @@ impl WasmVirtioGpuBridge {
     }
 
     #[wasm_bindgen]
+    pub fn process_virtqueue_descriptor(
+        &self,
+        guest_memory: &mut [u8],
+        desc_table_addr: f64,
+        head_index: u16,
+    ) -> Result<u32, JsValue> {
+        wasm_log("bridge", "D", &format!("Processing Virtqueue descriptor (table: 0x{:X}, head: {})", desc_table_addr as u64, head_index));
+        if let Ok(mut cell) = self.bridge.try_borrow_mut() {
+            if let Some(bridge) = cell.as_mut() {
+                return bridge.process_virtqueue_descriptor(
+                    guest_memory,
+                    desc_table_addr as u64,
+                    head_index,
+                ).map_err(|e| JsValue::from_str(&e));
+            }
+        }
+        Err(JsValue::from_str("VirtioGpuBridge is not available"))
+    }
+
+    #[wasm_bindgen]
     pub fn process_binder_packet(&self, packet: &[u8]) -> Vec<u8> {
         if let Ok(cell) = self.bridge.try_borrow() {
             if let Some(bridge) = cell.as_ref() {
