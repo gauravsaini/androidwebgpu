@@ -141,6 +141,11 @@ impl SurfaceComposerService {
         }
     }
 
+    /// Add or update a composition layer directly in the SurfaceFlinger compositor.
+    pub fn add_or_update_composition_layer(&self, layer: CompositionLayer) {
+        self.compositor.lock().unwrap().add_or_update_layer(layer);
+    }
+
     /// Construct service with an attached `HandleBridge` for cross-VM handle management.
     pub fn with_handle_bridge(
         device: Arc<wgpu::Device>,

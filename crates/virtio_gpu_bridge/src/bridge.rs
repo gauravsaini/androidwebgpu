@@ -121,6 +121,45 @@ impl VirtioGpuBridge {
 
         // 4. PackageManagerService from pms_rs (Handle 5)
         let pms_service = Arc::new(pms_rs::PackageManagerService::new());
+        for (pkg_name, app_name, act_name) in &[
+            ("org.fdroid.fdroid", "F-Droid", "org.fdroid.fdroid.views.main.MainActivity"),
+            ("org.mozilla.firefox", "Firefox", "org.mozilla.firefox.App"),
+            ("com.android.chrome", "Chrome", "com.google.android.apps.chrome.Main"),
+            ("com.android.settings", "Settings", "com.android.settings.SettingsActivity"),
+            ("com.android.terminal", "Terminal", "com.android.terminal.TerminalActivity"),
+            ("com.android.files", "Files", "com.android.documentsui.files.FilesActivity"),
+            ("com.android.glbenchmark", "3D Arcade", "com.android.glbenchmark.MainActivity"),
+        ] {
+            let mut pkg = pms_rs::types::PackageInfo {
+                package_name: pkg_name.to_string(),
+                version_code: 1,
+                version_name: Some("14.0.0".to_string()),
+                ..Default::default()
+            };
+            let app_info = pms_rs::types::ApplicationInfo {
+                package_name: pkg_name.to_string(),
+                name: Some(app_name.to_string()),
+                label: Some(app_name.to_string()),
+                enabled: true,
+                ..Default::default()
+            };
+            pkg.application_info = Some(app_info);
+            let act = pms_rs::types::ActivityInfo {
+                package_name: pkg_name.to_string(),
+                name: act_name.to_string(),
+                label: Some(app_name.to_string()),
+                exported: true,
+                enabled: true,
+                intent_filters: vec![pms_rs::types::IntentFilter {
+                    actions: vec!["android.intent.action.MAIN".to_string()],
+                    categories: vec!["android.intent.category.LAUNCHER".to_string()],
+                    ..Default::default()
+                }],
+                ..Default::default()
+            };
+            pkg.activities.push(act);
+            pms_service.install_package_info(pkg, None);
+        }
         binder_device.register_service(5, Arc::clone(&pms_service) as Arc<dyn IBinder>);
         handle_bridge
             .lock()

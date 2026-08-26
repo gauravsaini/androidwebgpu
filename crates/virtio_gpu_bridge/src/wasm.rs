@@ -114,6 +114,22 @@ impl WasmVirtioGpuBridge {
             .and_then(|b| b.surface_composer.as_ref())
             .is_some()
     }
+
+    #[wasm_bindgen]
+    pub fn update_status_bar_layer(&mut self, r: f32, g: f32, b: f32, a: f32) {
+        if let Some(bridge) = &mut self.bridge {
+            if let Some(sf) = &bridge.surface_composer {
+                let layer = webgpu_compositor::CompositionLayer::new_color(
+                    9999,
+                    "StatusBar",
+                    [-1.0, 0.88, 2.0, 0.12],
+                    9999,
+                    [r, g, b, a],
+                );
+                sf.add_or_update_composition_layer(layer);
+            }
+        }
+    }
 }
 
 

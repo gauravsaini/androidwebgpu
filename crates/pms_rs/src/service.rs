@@ -33,6 +33,7 @@ pub mod ipackage_manager_codes {
     pub const GET_INSTALLED_PACKAGES: u32 = FIRST_CALL_TRANSACTION + 6; // 7
     pub const GET_INSTALLED_APPLICATIONS: u32 = FIRST_CALL_TRANSACTION + 7; // 8
     pub const RESOLVE_CONTENT_PROVIDER: u32 = FIRST_CALL_TRANSACTION + 8; // 9
+    pub const INSTALL_PACKAGE: u32 = FIRST_CALL_TRANSACTION + 9; // 10
 }
 
 // -----------------------------------------------------------------------------
@@ -356,6 +357,67 @@ impl Remotable for PackageManagerService {
                         .write_bool(false)
                         .map_err(|_| Status::from_status(STATUS_BAD_VALUE))?;
                 }
+                Ok(())
+            }
+            ipackage_manager_codes::INSTALL_PACKAGE => {
+                let pkg_name = data
+                    .read_utf8(&mut offset)
+                    .map_err(|_| Status::from_status(STATUS_BAD_VALUE))?
+                    .unwrap_or_default();
+                let app_name = data
+                    .read_utf8(&mut offset)
+                    .map_err(|_| Status::from_status(STATUS_BAD_VALUE))?
+                    .unwrap_or_default();
+                let version_name = data
+                    .read_utf8(&mut offset)
+                    .map_err(|_| Status::from_status(STATUS_BAD_VALUE))?
+                    .unwrap_or_default();
+                let version_code = data
+                    .read_i32(&mut offset)
+                    .map_err(|_| Status::from_status(STATUS_BAD_VALUE))?;
+                let main_act = data
+                    .read_utf8(&mut offset)
+                    .map_err(|_| Status::from_status(STATUS_BAD_VALUE))?
+                    .unwrap_or_default();
+
+                let mut pkg = PackageInfo {
+                    package_name: pkg_name.clone(),
+                    version_code,
+                    version_name: Some(version_name),
+                    ..Default::default()
+                };
+                let app_info = ApplicationInfo {
+                    package_name: pkg_name.clone(),
+                    name: Some(app_name.clone()),
+                    label: Some(app_name.clone()),
+                    enabled: true,
+                    ..Default::default()
+                };
+                pkg.application_info = Some(app_info);
+                if !main_act.is_empty() {
+                    let act = ActivityInfo {
+                        package_name: pkg_name.clone(),
+                        name: main_act.clone(),
+                        label: Some(app_name.clone()),
+                        exported: true,
+                        enabled: true,
+                        intent_filters: vec![IntentFilter {
+                            actions: vec!["android.intent.action.MAIN".to_string()],
+                            categories: vec!["android.intent.category.LAUNCHER".to_string()],
+                            ..Default::default()
+                        }],
+                        ..Default::default()
+                    };
+                    pkg.activities.push(act);
+                }
+                self.install_package_info(pkg, None);
+
+                reply
+                    .write_status(&Status::ok())
+                    .map_err(|_| Status::from_status(STATUS_BAD_VALUE))?;
+                reply
+                    .write_i32(1) // 1 = INSTALL_SUCCEEDED
+                    .map_err(|_| Status::from_status(STATUS_BAD_VALUE))?;
                 Ok(())
             }
             _ => Err(Status::from_status(STATUS_UNKNOWN_TRANSACTION)),

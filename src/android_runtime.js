@@ -110,6 +110,35 @@ export class AndroidRuntime {
 
         // Register default system apps into PMS
         this.initSystemPackages();
+        this.syncPackagesWithPms();
+    }
+
+    syncPackagesWithPms() {
+        const pkgs = this.pms && this.pms.packages ? Array.from(this.pms.packages.values()) : [];
+        for (const pkg of pkgs) {
+            this.installedApps.add(pkg.packageName);
+            if (!this.repoApps.some(a => a.pkg === pkg.packageName)) {
+                this.repoApps.unshift({
+                    id: pkg.packageName.replace(/\./g, '_'),
+                    name: pkg.appName,
+                    pkg: pkg.packageName,
+                    author: 'Installed Application',
+                    version: pkg.versionName,
+                    versionCode: pkg.versionCode,
+                    cat: 'Installed',
+                    icon: pkg.icon || '📦',
+                    desc: `Package installed in Dalvik VM (${pkg.packageName}).`,
+                    fullDesc: `Native package registered in Android PackageManagerService.`,
+                    size: '24 MB',
+                    license: 'Open Source',
+                    updated: 'Just now',
+                    downloads: 'Local',
+                    apkUrl: '',
+                    permissions: pkg.permissions || ['INTERNET'],
+                    sourceUrl: ''
+                });
+            }
+        }
     }
 
     initSystemPackages() {
@@ -414,6 +443,7 @@ export class AndroidRuntime {
         };
         this.pms.registerPackage(packageInfo);
         this.installedApps.add(pkgName);
+        this.syncPackagesWithPms();
 
         // 5. Instantiate Main Activity in Dalvik VM
         const activityInstance = this.vm.startActivity(mainActivity, { packageName: pkgName });
