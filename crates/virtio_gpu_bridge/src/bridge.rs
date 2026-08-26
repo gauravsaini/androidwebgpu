@@ -31,6 +31,18 @@ pub struct Scanout {
     pub height: u32,
     pub fb_data: Vec<u8>,
     pub damage_rect: Option<[u32; 4]>,
+    pub format: u32,
+}
+
+pub fn swizzle_bgrx_to_rgba(bgrx: &[u8]) -> Vec<u8> {
+    let mut rgba = vec![0u8; bgrx.len()];
+    for (src, dst) in bgrx.chunks_exact(4).zip(rgba.chunks_exact_mut(4)) {
+        dst[0] = src[2]; // R
+        dst[1] = src[1]; // G
+        dst[2] = src[0]; // B
+        dst[3] = 255;    // A (full alpha)
+    }
+    rgba
 }
 
 pub struct VirtioGpuBridge {
@@ -320,6 +332,7 @@ impl VirtioGpuBridge {
             }
             DecodedVirtioCommand::SetScanout(cmd) => {
                 let fb_size = (cmd.r.width * cmd.r.height * 4) as usize;
+                let format = self.resources.get(&cmd.resource_id).map(|r| r.format).unwrap_or(VIRTIO_GPU_FORMAT_B8G8R8X8_UNORM);
                 self.scanouts.insert(
                     cmd.scanout_id,
                     Scanout {
@@ -331,6 +344,7 @@ impl VirtioGpuBridge {
                         height: cmd.r.height,
                         fb_data: vec![0u8; fb_size],
                         damage_rect: Some([cmd.r.x, cmd.r.y, cmd.r.width, cmd.r.height]),
+                        format,
                     },
                 );
                 BinaryWireParser::encode_header_response(
@@ -977,6 +991,7 @@ impl VirtioGpuBridge {
                 width,
                 height,
             } => {
+                let format = self.resources.get(&resource_id).map(|r| r.format).unwrap_or(VIRTIO_GPU_FORMAT_B8G8R8X8_UNORM);
                 self.scanouts.insert(
                     scanout_id,
                     Scanout {
@@ -988,6 +1003,7 @@ impl VirtioGpuBridge {
                         height,
                         fb_data: vec![0u8; (width * height * 4) as usize],
                         damage_rect: Some([x, y, width, height]),
+                        format,
                     },
                 );
                 CommandResponse {
@@ -1084,6 +1100,23 @@ impl VirtioGpuBridge {
             }
         }
         self.scanouts.get(&scanout_id).map(|s| s.fb_data.clone())
+    }
+
+    pub fn get_scanout_format(&self, scanout_id: u32) -> u32 {
+        self.scanouts.get(&scanout_id).map(|s| s.format).unwrap_or(0)
+    }
+
+    pub fn get_scanout_framebuffer_rgba(&self, scanout_id: u32) -> Option<Vec<u8>> {
+        if let Some(fb) = self.get_scanout_framebuffer(scanout_id) {
+            let format = self.get_scanout_format(scanout_id);
+            if format == VIRTIO_GPU_FORMAT_B8G8R8X8_UNORM || format == VIRTIO_GPU_FORMAT_B8G8R8A8_UNORM {
+                Some(swizzle_bgrx_to_rgba(&fb))
+            } else {
+                Some(fb)
+            }
+        } else {
+            None
+        }
     }
 
     pub fn get_scanout_damage(&self, scanout_id: u32) -> Option<[u32; 4]> {

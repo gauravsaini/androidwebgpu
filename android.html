@@ -277,6 +277,27 @@
             position: relative;
         }
 
+        /* v86 Guest VM VGA Output */
+        #screen-v86 {
+            background: #000;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+        }
+
+        #v86-screen-container {
+            width: 100% !important;
+            height: 100% !important;
+            overflow: hidden;
+        }
+
+        #v86-screen-container canvas,
+        #v86-screen-container div {
+            width: 100% !important;
+            height: 100% !important;
+            image-rendering: pixelated;
+        }
+
         canvas#screen {
             width: 100%;
             height: 100%;
@@ -716,8 +737,9 @@
                             <!-- Screen 2: Interactive Android Application Viewport (Material You UI) -->
                             <div class="screen-view" id="screen-app" style="background: #0b0f19; overflow: hidden; width: 100%; height: 100%;"></div>
 
-                            <!-- Screen 3: Real WebGPU Hardware Canvas Viewport -->
+                            <!-- Screen 3: Real WebGPU Hardware Canvas & Guest VM Viewport -->
                             <div class="screen-view" id="screen-webgpu">
+                                <div id="v86-screen-container" style="display: none;"></div>
                                 <canvas id="screen" width="1280" height="720"></canvas>
                                 <div class="canvas-overlay-hud">
                                     <span>SURFACEFLINGER: COMPOSITING</span>
@@ -795,6 +817,32 @@
 
                 <!-- True Logcat from ART / Dalvik VM Tab Content -->
                 <div id="content-vm" style="display: none; flex-direction: column; gap: 8px;">
+                    <!-- Logcat Filter Toolbar -->
+                    <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap; background: #0f172a; padding: 6px 8px; border-radius: 6px; border: 1px solid #1e293b; font-size: 0.65rem;">
+                        <select id="logcat-prio" style="background: #1e293b; color: #f8fafc; border: 1px solid #334155; border-radius: 4px; padding: 2px 6px; font-size: 0.65rem; outline: none;">
+                            <option value="V">Priority: V (All)</option>
+                            <option value="D">Debug (D+)</option>
+                            <option value="I" selected>Info (I+)</option>
+                            <option value="W">Warn (W+)</option>
+                            <option value="E">Error (E)</option>
+                        </select>
+                        <select id="logcat-tag" style="background: #1e293b; color: #f8fafc; border: 1px solid #334155; border-radius: 4px; padding: 2px 6px; font-size: 0.65rem; outline: none;">
+                            <option value="all">Tags: All</option>
+                            <option value="v86">[v86] Hypervisor</option>
+                            <option value="bridge">[bridge] Virtio-GPU</option>
+                            <option value="compositor">[compositor] WebGPU</option>
+                            <option value="v86Guest">v86Guest Kernel</option>
+                            <option value="SystemServer">SystemServer</option>
+                            <option value="PackageManager">PackageManager</option>
+                            <option value="ActivityManager">ActivityManager</option>
+                            <option value="SurfaceComposer">SurfaceComposer</option>
+                            <option value="InputDispatcher">InputDispatcher</option>
+                        </select>
+                        <input type="text" id="logcat-search" placeholder="Filter message/tag..." style="flex: 1; min-width: 90px; background: #1e293b; color: #f8fafc; border: 1px solid #334155; border-radius: 4px; padding: 2px 6px; font-size: 0.65rem; outline: none;" />
+                        <button id="logcat-autoscroll" style="background: #0284c7; color: white; border: none; border-radius: 4px; padding: 2px 8px; font-size: 0.65rem; cursor: pointer;">Auto-Scroll: ON</button>
+                        <button id="logcat-clear" style="background: #334155; color: #f8fafc; border: none; border-radius: 4px; padding: 2px 8px; font-size: 0.65rem; cursor: pointer;">Clear</button>
+                        <span id="logcat-counter" style="font-size: 0.62rem; color: #94a3b8; margin-left: auto;">0 / 0</span>
+                    </div>
                     <div style="font-family: monospace; font-size: 0.66rem; color: #cbd5e1; background: #131929; padding: 10px; border-radius: 8px; max-height: 400px; overflow-y: auto; display: flex; flex-direction: column; gap: 3px;" id="vm-log-view">
                         <div style="color: #38bdf8;">--------- beginning of main</div>
                         <div>08-26 13:30:00.001 1000 1000 I SystemServer: Entered the Android system server!</div>
@@ -806,6 +854,8 @@
         </aside>
     </main>
 
+    <script src="./v86/libv86.js"></script>
+    <script>window.V86Starter = window.V86Starter || window.V86;</script>
     <script type="module">
         import init, { WasmVirtioGpuBridge } from './pkg/virtio_gpu_bridge.js?v=3';
         import { VirtioGpuDevice } from './src/virtio_gpu_device.js?v=3';
@@ -814,10 +864,13 @@
         import { defaultHttpClient } from './src/android_network.js?v=3';
         import { defaultPackageManager } from './src/apk_client_parser.js?v=3';
         import { BinderParcel, VirtioBinderFraming } from './src/binder_test_suite.js?v=3';
+        import { logger, globalLogcat, logDebug, LogcatBuffer, PRIORITY_ORDER } from './src/logger.js?v=3';
 
         // DOM elements
         const screenHome = document.getElementById('screen-home');
         const screenApp = document.getElementById('screen-app');
+        const screenV86 = document.getElementById('screen-v86');
+        const v86ScreenContainer = document.getElementById('v86-screen-container');
         const screenWebGpu = document.getElementById('screen-webgpu');
         const homeAppGrid = document.getElementById('home-app-grid');
         const homeDock = document.getElementById('home-dock');
@@ -844,6 +897,23 @@
         const toast = document.getElementById('android-toast');
         const toastText = document.getElementById('toast-text');
 
+        // Logcat Toolbar Controls
+        const logcatPrio = document.getElementById('logcat-prio');
+        const logcatTag = document.getElementById('logcat-tag');
+        const logcatSearch = document.getElementById('logcat-search');
+        const logcatAutoscroll = document.getElementById('logcat-autoscroll');
+        const logcatClear = document.getElementById('logcat-clear');
+        const logcatCounter = document.getElementById('logcat-counter');
+        let isAutoScrollEnabled = true;
+
+        const PRIO_COLORS = {
+            'E': '#ef4444',
+            'W': '#f59e0b',
+            'D': '#38bdf8',
+            'V': '#94a3b8',
+            'I': '#10b981'
+        };
+
         // Toast Helper
         function showToast(msg) {
             toastText.textContent = msg;
@@ -851,24 +921,93 @@
             setTimeout(() => toast.classList.remove('show'), 3000);
         }
 
+        function createLogcatElement(entry) {
+            const line = document.createElement('div');
+            line.style.color = PRIO_COLORS[entry.priority] || '#cbd5e1';
+            line.style.whiteSpace = 'pre-wrap';
+            line.style.wordBreak = 'break-word';
+            line.textContent = entry.formatted;
+            return line;
+        }
+
+        function renderLogcat() {
+            vmLogView.innerHTML = '<div style="color: #38bdf8;">--------- beginning of main</div>';
+            const minPriority = logcatPrio ? logcatPrio.value : 'V';
+            const tag = logcatTag ? logcatTag.value : 'all';
+            const search = logcatSearch ? logcatSearch.value : '';
+
+            const filtered = globalLogcat.filter({ minPriority, tag, search });
+            for (const entry of filtered) {
+                vmLogView.appendChild(createLogcatElement(entry));
+            }
+            if (logcatCounter) {
+                logcatCounter.textContent = `${filtered.length} / ${globalLogcat.entries.length}`;
+            }
+            if (isAutoScrollEnabled) {
+                vmLogView.scrollTop = vmLogView.scrollHeight;
+            }
+        }
+
         // True Logcat Formatter
         function appendLogcat(tag, msg, priority = 'I') {
-            const now = new Date();
-            const timeStr = `${String(now.getMonth()+1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')} ${now.toTimeString().split(' ')[0]}.${String(now.getMilliseconds()).padStart(3, '0')}`;
-            const pid = 10042;
-            const tid = 10042;
-            const line = document.createElement('div');
-            let color = '#cbd5e1';
-            if (priority === 'E') color = '#ef4444';
-            else if (priority === 'W') color = '#f59e0b';
-            else if (priority === 'D') color = '#38bdf8';
-            else if (priority === 'V') color = '#94a3b8';
-            else if (priority === 'I') color = '#10b981';
+            const entry = globalLogcat.append(tag, msg, priority);
+            const minRank = PRIORITY_ORDER[logcatPrio ? logcatPrio.value : 'V'] ?? 0;
+            const entryRank = PRIORITY_ORDER[entry.priority] ?? 0;
+            const selectedTag = (logcatTag ? logcatTag.value : 'all').toLowerCase();
+            const searchStr = (logcatSearch ? logcatSearch.value : '').toLowerCase();
 
-            line.style.color = color;
-            line.textContent = `${timeStr} ${pid} ${tid} ${priority} ${tag}: ${msg}`;
-            vmLogView.appendChild(line);
-            vmLogView.scrollTop = vmLogView.scrollHeight;
+            const matches = entryRank >= minRank &&
+                            (selectedTag === 'all' || entry.tag.toLowerCase().includes(selectedTag)) &&
+                            (!searchStr || entry.formatted.toLowerCase().includes(searchStr));
+
+            if (matches) {
+                vmLogView.appendChild(createLogcatElement(entry));
+                while (vmLogView.childElementCount > 5001) {
+                    vmLogView.removeChild(vmLogView.children[1]); // Keep header
+                }
+                if (isAutoScrollEnabled) {
+                    vmLogView.scrollTop = vmLogView.scrollHeight;
+                }
+            }
+            if (logcatCounter) {
+                const visibleCount = Math.max(0, vmLogView.childElementCount - 1);
+                logcatCounter.textContent = `${visibleCount} / ${globalLogcat.entries.length}`;
+            }
+        }
+
+        if (logcatPrio) logcatPrio.addEventListener('change', renderLogcat);
+        if (logcatTag) logcatTag.addEventListener('change', renderLogcat);
+        if (logcatSearch) logcatSearch.addEventListener('input', renderLogcat);
+        if (logcatClear) logcatClear.addEventListener('click', () => { globalLogcat.clear(); renderLogcat(); });
+        if (logcatAutoscroll) {
+            logcatAutoscroll.addEventListener('click', () => {
+                isAutoScrollEnabled = !isAutoScrollEnabled;
+                logcatAutoscroll.textContent = isAutoScrollEnabled ? 'Auto-Scroll: ON' : 'PAUSED';
+                logcatAutoscroll.style.background = isAutoScrollEnabled ? '#0284c7' : '#d97706';
+                if (isAutoScrollEnabled) vmLogView.scrollTop = vmLogView.scrollHeight;
+            });
+        }
+        if (vmLogView) {
+            vmLogView.addEventListener('scroll', () => {
+                const dist = vmLogView.scrollHeight - vmLogView.scrollTop - vmLogView.clientHeight;
+                if (dist > 24) {
+                    if (isAutoScrollEnabled) {
+                        isAutoScrollEnabled = false;
+                        if (logcatAutoscroll) {
+                            logcatAutoscroll.textContent = 'PAUSED';
+                            logcatAutoscroll.style.background = '#d97706';
+                        }
+                    }
+                } else {
+                    if (!isAutoScrollEnabled) {
+                        isAutoScrollEnabled = true;
+                        if (logcatAutoscroll) {
+                            logcatAutoscroll.textContent = 'Auto-Scroll: ON';
+                            logcatAutoscroll.style.background = '#0284c7';
+                        }
+                    }
+                }
+            });
         }
 
         // True Binder Transaction Inspector Logger
@@ -935,9 +1074,19 @@
 
         // Viewport switching
         function activateScreen(screenEl) {
-            [screenHome, screenApp, screenWebGpu].forEach(s => s.classList.remove('active'));
+            [screenHome, screenApp, screenWebGpu].forEach(s => {
+                if (s) {
+                    s.classList.remove('active');
+                    s.style.display = 'none';
+                }
+            });
             screenEl.classList.add('active');
-            btnSwitchCanvas.textContent = screenEl === screenWebGpu ? '📱 View App UI' : '🎨 View Hardware Canvas';
+            screenEl.style.display = (screenEl === screenWebGpu) ? 'flex' : 'block';
+            if (screenEl === screenWebGpu) {
+                btnSwitchCanvas.textContent = '📱 View App UI';
+            } else {
+                btnSwitchCanvas.textContent = '🖥️ View Guest VM';
+            }
         }
 
         btnSwitchCanvas.addEventListener('click', () => {
@@ -948,6 +1097,7 @@
                     activateScreen(screenHome);
                 }
             } else {
+                // Direct WebGPU compositor rendering of guest VM and SurfaceFlinger
                 activateScreen(screenWebGpu);
             }
         });
@@ -976,6 +1126,11 @@
                 bridge = new WasmVirtioGpuBridge();
                 await bridge.initialize(1280, 720);
                 gpuDev = new VirtioGpuDevice(null, bridge, canvas);
+                gpuDev.onScanoutUpdate = (scanoutId, damageRect) => {
+                    if (bridge && typeof bridge.compose_and_present === 'function') {
+                        try { bridge.compose_and_present(); } catch (_) {}
+                    }
+                };
                 console.log("[AndroidOS] WebGPU Virtio-GPU Bridge initialized successfully.");
 
                 // Initialize SystemUI compositor layers (wallpaper, statusbar, navbar)
@@ -983,16 +1138,72 @@
                     bridge.enable_system_ui();
                 }
 
-                // Initialize V86 Guest Manager
-                guestManager = new V86GuestManager({
-                    kernelUrl: './guest/build/bzImage',
-                    initrdUrl: './guest/build/initrd.img',
-                    onLog: (msg, type) => {
-                        appendLogcat('v86Guest', msg, type === 'err' ? 'E' : 'D');
+                // Initialize real v86 x86 emulator with Buildroot Linux
+                let v86emulator = null;
+                const V86Class = (typeof window !== 'undefined' && (window.V86Starter || window.V86)) || (typeof V86Starter !== 'undefined' ? V86Starter : (typeof V86 !== 'undefined' ? V86 : null));
+                console.log('[v86] Checking V86Class availability:', typeof V86Class);
+                console.log('[v86] v86ScreenContainer element:', v86ScreenContainer);
+
+                if (V86Class) {
+                    console.log('[v86] ✓ V86Class found — constructing emulator...');
+                    const v86Config = {
+                        wasm_path: './v86/v86.wasm',
+                        memory_size: 64 * 1024 * 1024,
+                        vga_memory_size: 8 * 1024 * 1024,
+                        bios: { url: './bios/seabios.bin' },
+                        vga_bios: { url: './bios/vgabios.bin' },
+                        cdrom: { url: './guest/build/linux4.iso' },
+                        autostart: true,
+                        screen_container: v86ScreenContainer,
+                        disable_keyboard: false,
+                        disable_mouse: false
+                    };
+                    console.log('[v86] Config:', JSON.stringify({...v86Config, screen_container: '(DOM element)'}, null, 2));
+
+                    try {
+                        v86emulator = new V86Class(v86Config);
+                        console.log('[v86] ✓ V86 emulator constructed successfully');
+                    } catch (v86err) {
+                        console.error('[v86] ✗ V86 construction FAILED:', v86err);
+                        appendLogcat('v86', 'V86 construction failed: ' + v86err.message, 'E');
                     }
-                });
-                await guestManager.start();
-                appendLogcat('SystemServer', 'x86 Guest VM booted with real bzImage and boot.art.', 'I');
+
+                    if (v86emulator) {
+                        // Pipe serial console to logcat
+                        let serialBuf = '';
+                        v86emulator.add_listener('serial0-output-char', (char) => {
+                            if (char === '\r') return;
+                            if (char === '\n') {
+                                if (serialBuf.trim()) {
+                                    console.log('[v86-serial]', serialBuf.trim());
+                                    appendLogcat('v86Guest', serialBuf.trim(), 'D');
+                                }
+                                serialBuf = '';
+                            } else {
+                                serialBuf += char;
+                            }
+                        });
+
+                        v86emulator.add_listener('emulator-started', () => {
+                            console.log('[v86] ✓ Emulator started event fired');
+                            appendLogcat('SystemServer', 'Real x86 guest VM started (V86Starter)', 'I');
+                        });
+
+                        v86emulator.add_listener('emulator-ready', () => {
+                            console.log('[v86] ✓ Emulator ready event fired');
+                            console.log('[v86] Screen container children:', v86ScreenContainer.childElementCount);
+                            console.log('[v86] Screen container HTML:', v86ScreenContainer.innerHTML.substring(0, 200));
+                            appendLogcat('SystemServer', 'v86 emulator ready — guest OS accessible', 'I');
+                        });
+
+                        window.v86emulator = v86emulator;
+                        console.log('[v86] ✓ Emulator stored on window.v86emulator');
+                        appendLogcat('SystemServer', 'v86 x86 hypervisor booting real Linux guest...', 'I');
+                    }
+                } else {
+                    console.warn('[v86] ✗ V86Starter hypervisor class not found');
+                    appendLogcat('SystemServer', 'Real x86 hypervisor (V86Starter) waiting to be loaded.', 'I');
+                }
 
                 // Start WebGPU Render Loop — calls real SurfaceFlinger compose_and_present each frame
                 let lastFpsCheck = performance.now();
@@ -1327,28 +1538,23 @@
         async function queueAppBufferToSurfaceFlinger(pkg, appName) {
             if (!bridge || typeof bridge.process_binder_packet !== 'function') return;
             try {
-                const offscreen = document.createElement('canvas');
-                offscreen.width = 1280;
-                offscreen.height = 720;
-                const ctx = offscreen.getContext('2d');
-
-                // Honest placeholder — synthetic buffer until guest Skia renders real pixels
-                ctx.fillStyle = '#131929';
-                ctx.fillRect(0, 0, 1280, 720);
-
-                // Centered app name
-                ctx.fillStyle = '#e3f2fd';
-                ctx.font = 'bold 28px Inter, sans-serif';
-                ctx.textAlign = 'center';
-                ctx.fillText(appName || pkg, 640, 340);
-
-                // Subtitle
-                ctx.fillStyle = '#546e7a';
-                ctx.font = '14px Inter, sans-serif';
-                ctx.fillText('Synthetic placeholder — awaiting guest rendering', 640, 375);
-
-                const imgData = ctx.getImageData(0, 0, 1280, 720);
-                const rawBytes = new Uint8Array(imgData.data.buffer);
+                // Extract live guest framebuffer pixels from VirtioGpuDevice / Wasm Bridge
+                let rawBytes = null;
+                if (gpuDev && typeof gpuDev.getScanoutFramebuffer === 'function') {
+                    const fb = gpuDev.getScanoutFramebuffer(0);
+                    if (fb && fb.length >= 1280 * 720 * 4) {
+                        rawBytes = fb.subarray(0, 1280 * 720 * 4);
+                    }
+                }
+                if (!rawBytes && typeof bridge.get_scanout_framebuffer === 'function') {
+                    const fb = bridge.get_scanout_framebuffer(0);
+                    if (fb && fb.length >= 1280 * 720 * 4) {
+                        rawBytes = fb.subarray(0, 1280 * 720 * 4);
+                    }
+                }
+                if (!rawBytes) {
+                    rawBytes = new Uint8Array(1280 * 720 * 4);
+                }
 
                 const deqParcel = new BinderParcel(32);
                 deqParcel.writeUint32(1280);

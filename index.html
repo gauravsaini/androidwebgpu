@@ -2078,12 +2078,34 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
 
             <!-- Execution Logs Card -->
             <div class="log-card">
-                <div class="card-title">📟 Execution Logs</div>
+                <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; flex-wrap: wrap; gap: 6px;">
+                    <div class="card-title" style="margin-bottom: 0;">📟 Execution Logs</div>
+                    <div style="display: flex; align-items: center; gap: 6px; font-size: 0.7rem;">
+                        <select id="index-log-prio" style="background: #1e293b; color: #f8fafc; border: 1px solid #334155; border-radius: 4px; padding: 2px 6px; font-size: 0.65rem; outline: none;">
+                            <option value="V">Priority: V (All)</option>
+                            <option value="D">Debug (D+)</option>
+                            <option value="I" selected>Info (I+)</option>
+                            <option value="W">Warn (W+)</option>
+                            <option value="E">Error (E)</option>
+                        </select>
+                        <select id="index-log-tag" style="background: #1e293b; color: #f8fafc; border: 1px solid #334155; border-radius: 4px; padding: 2px 6px; font-size: 0.65rem; outline: none;">
+                            <option value="all">Subsystems: All</option>
+                            <option value="v86">[v86] Hypervisor</option>
+                            <option value="bridge">[bridge] Virtio-GPU</option>
+                            <option value="compositor">[compositor] WebGPU</option>
+                            <option value="v86Guest">v86Guest Kernel</option>
+                        </select>
+                        <input type="text" id="index-log-search" placeholder="Filter logs..." style="background: #1e293b; color: #f8fafc; border: 1px solid #334155; border-radius: 4px; padding: 2px 6px; font-size: 0.65rem; outline: none; width: 110px;" />
+                        <button id="index-log-clear" style="background: #334155; color: #f8fafc; border: none; border-radius: 4px; padding: 2px 6px; font-size: 0.65rem; cursor: pointer;">Clear</button>
+                    </div>
+                </div>
                 <div class="log-terminal" id="log-term"></div>
             </div>
         </div>
     </main>
 
+    <script src="./v86/libv86.js"></script>
+    <script>window.V86Starter = window.V86Starter || window.V86;</script>
     <script type="module">
         import init, { WasmVirtioGpuBridge } from './pkg/virtio_gpu_bridge.js';
         import { VirtioGpuDevice } from './src/virtio_gpu_device.js';
@@ -2096,6 +2118,7 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
         // Import Dalvik VM & Android Runtime Engine
         import { DexParser, DalvikVM } from './src/dex_vm.js';
         import { AndroidRuntime } from './src/android_runtime.js';
+        import { logger, globalLogcat, logDebug, LogcatBuffer, PRIORITY_ORDER } from './src/logger.js';
 
         const androidRuntime = new AndroidRuntime();
         window.AndroidRuntime = androidRuntime;
@@ -2205,12 +2228,65 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
         const inspectorWmsWindows = document.getElementById('inspector-wms-windows');
         const inspectorBinderStatus = document.getElementById('inspector-binder-status');
 
+        // Log Filter Controls
+        const indexLogPrio = document.getElementById('index-log-prio');
+        const indexLogTag = document.getElementById('index-log-tag');
+        const indexLogSearch = document.getElementById('index-log-search');
+        const indexLogClear = document.getElementById('index-log-clear');
+
+        function appendLogToTerminal(entry) {
+            if (!logTerm) return;
+            const minRank = PRIORITY_ORDER[indexLogPrio ? indexLogPrio.value : 'V'] ?? 0;
+            const entryRank = PRIORITY_ORDER[entry.level] ?? 0;
+            const tagFilter = (indexLogTag ? indexLogTag.value : 'all').toLowerCase();
+            const searchFilter = (indexLogSearch ? indexLogSearch.value : '').toLowerCase();
+
+            const matches = entryRank >= minRank &&
+                            (tagFilter === 'all' || entry.prefix.toLowerCase().includes(tagFilter) || entry.subsystem.toLowerCase().includes(tagFilter)) &&
+                            (!searchFilter || entry.formatted.toLowerCase().includes(searchFilter));
+
+            if (matches) {
+                const line = document.createElement('div');
+                const typeClass = entry.level === 'E' ? 'error' : (entry.level === 'W' ? 'warn' : (entry.level === 'D' ? 'debug' : 'info'));
+                line.className = `log-line ${typeClass}`;
+                line.textContent = `[${new Date(entry.timestamp).toISOString().substring(11, 19)}] ${entry.formatted}`;
+                logTerm.appendChild(line);
+                while (logTerm.childElementCount > 5000) {
+                    logTerm.removeChild(logTerm.firstElementChild);
+                }
+                logTerm.scrollTop = logTerm.scrollHeight;
+            }
+        }
+
+        function renderIndexLogs() {
+            if (!logTerm) return;
+            logTerm.innerHTML = '';
+            for (const entry of logger.logs) {
+                appendLogToTerminal(entry);
+            }
+        }
+
+        logger.addListener((entry) => {
+            appendLogToTerminal(entry);
+        });
+
+        if (indexLogPrio) indexLogPrio.addEventListener('change', renderIndexLogs);
+        if (indexLogTag) indexLogTag.addEventListener('change', renderIndexLogs);
+        if (indexLogSearch) indexLogSearch.addEventListener('input', renderIndexLogs);
+        if (indexLogClear) {
+            indexLogClear.addEventListener('click', () => {
+                logger.clear();
+                globalLogcat.clear();
+                logTerm.innerHTML = '';
+            });
+        }
+
         function appendLog(msg, type = 'info') {
-            const line = document.createElement('div');
-            line.className = `log-line ${type}`;
-            line.textContent = `[${new Date().toISOString().substring(11, 19)}] ${msg}`;
-            logTerm.appendChild(line);
-            logTerm.scrollTop = logTerm.scrollHeight;
+            const priority = (type === 'error' || type === 'err') ? 'E' :
+                             (type === 'warn' ? 'W' :
+                             (type === 'debug' ? 'D' : 'I'));
+            logger.log('v86', priority, msg);
+            globalLogcat.append('v86', msg, priority);
         }
 
         let bridge = null;
@@ -3481,6 +3557,11 @@ fn fs_normals(in: VertexOutput) -> @location(0) vec4<f32> {
                 await bridge.initialize(640, 480);
 
                 gpuDev = new VirtioGpuDevice(null, bridge, canvas);
+                gpuDev.onScanoutUpdate = (scanoutId, damageRect) => {
+                    if (bridge && typeof bridge.compose_and_present === 'function') {
+                        try { bridge.compose_and_present(); } catch (_) {}
+                    }
+                };
                 suite = new VisualTestSuite(gpuDev, canvas, appendLog);
                 vulkanSuite = new VulkanTestSuite(canvas, appendLog);
                 if (typeof BinderTestSuite !== 'undefined') {
@@ -3626,7 +3707,7 @@ fn fs_normals(in: VertexOutput) -> @location(0) vec4<f32> {
         // v86 Hypervisor Integration & Lifecycle Management
         // -----------------------------------------------------------------------------
         const guestManager = new V86GuestManager({
-            wasmPath: './pkg/v86.wasm',
+            wasmPath: './v86/v86.wasm',
             screenContainer: document.getElementById('screen-native-surface'),
             canvas: document.getElementById('screen'),
             onStateChange: (newState) => {

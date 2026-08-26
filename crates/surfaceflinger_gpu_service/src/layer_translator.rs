@@ -331,6 +331,7 @@ impl LayerTranslator {
             color: state.color,
             texture_view,
             visible: state.visible,
+            swizzle_bgrx: false,
         }
     }
 

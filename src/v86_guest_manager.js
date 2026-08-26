@@ -15,6 +15,13 @@
  * Conforms to ASD-STE100 and /ponytail simplicity principles.
  */
 
+import { logger, logDebug, globalLogcat } from './logger.js';
+
+if (typeof window !== 'undefined') {
+    if (!window.V86Starter && window.V86) window.V86Starter = window.V86;
+    if (!window.V86 && window.V86Starter) window.V86 = window.V86Starter;
+}
+
 export const VM_STATES = Object.freeze({
     UNINITIALIZED: 'UNINITIALIZED',
     LOADING: 'LOADING',
@@ -47,11 +54,13 @@ export class V86GuestManager {
      */
     constructor(config = {}) {
         this.config = Object.assign({
-            wasmPath: './pkg/v86.wasm',
+            wasmPath: './v86/v86.wasm',
             biosUrl: './bios/seabios.bin',
             vgaBiosUrl: './bios/vgabios.bin',
+            cdromUrl: './guest/build/linux4.iso',
             kernelUrl: './guest/build/bzImage',
             initrdUrl: './guest/build/initrd.img',
+            bootMode: 'auto',
             memorySizeMb: 512,
             vgaMemorySizeMb: 16,
             cmdline: 'console=ttyS0 root=/dev/ram0 androidboot.hardware=android_x86 androidboot.selinux=permissive binder.debug_mask=0x07 quiet loglevel=3 init=/init',
@@ -121,6 +130,8 @@ export class V86GuestManager {
         if (oldState === newState) return;
 
         this.state = newState;
+        logger.log('v86', 'I', `VM State Transition: ${oldState} -> ${newState}`, { oldState, newState });
+        globalLogcat.append('v86', `VM State Transition: ${oldState} -> ${newState}`, 'I');
         this.log(`VM State Transition: ${oldState} -> ${newState}`, 'info');
 
         if (typeof this.config.onStateChange === 'function') {
@@ -135,6 +146,8 @@ export class V86GuestManager {
     recordMilestone(milestone) {
         if (!this.milestones.has(milestone)) {
             this.milestones.add(milestone);
+            logger.log('v86', 'I', `[BOOT-MILESTONE] Achieved: ${milestone}`, { milestone });
+            globalLogcat.append('v86', `[BOOT-MILESTONE] Achieved: ${milestone}`, 'I');
             this.log(`[BOOT-MILESTONE] Achieved: ${milestone}`, 'success');
             if (typeof this.config.onMilestone === 'function') {
                 this.config.onMilestone(milestone);
@@ -174,7 +187,6 @@ export class V86GuestManager {
         this.serialLogs = [];
 
         try {
-            // Allocate / acquire guest memory view (512MB default)
             const ramBytes = this.config.memorySizeMb * 1024 * 1024;
             if (typeof SharedArrayBuffer !== 'undefined') {
                 this.allocatedMemory = new Uint8Array(new SharedArrayBuffer(ramBytes));
@@ -182,55 +194,80 @@ export class V86GuestManager {
                 this.allocatedMemory = new Uint8Array(ramBytes);
             }
 
-            // Fetch and verify real Linux x86 kernel bzImage and initrd assets
-            const [kernelBuf, initrdBuf] = await Promise.all([
-                this.fetchBuffer(this.config.kernelUrl, 'Kernel bzImage'),
-                this.fetchBuffer(this.config.initrdUrl, 'Initrd CPIO')
-            ]);
+            const V86Class = (typeof window !== 'undefined' && (window.V86Starter || window.V86)) || (typeof globalThis !== 'undefined' && (globalThis.V86Starter || globalThis.V86));
+            const isBrowser = typeof window !== 'undefined';
 
-            // Validate Linux x86 kernel bzImage boot header
-            if (!this.verifyBzImage(kernelBuf)) {
-                throw new Error("Invalid bzImage: failed Linux x86 boot header validation ('HdrS' / 0xAA55)");
-            }
+            if (isBrowser) {
+                if (!V86Class && !this.config.mockMode) {
+                    this.setState(VM_STATES.ERROR);
+                    throw new Error("V86Starter/V86 hypervisor class is not available in browser environment");
+                }
 
-            // Copy verified kernel binary into guest linear memory
-            const kernelBytes = new Uint8Array(kernelBuf);
-            if (this.allocatedMemory && kernelBytes.length > 0) {
-                this.allocatedMemory.set(kernelBytes.subarray(0, Math.min(kernelBytes.length, this.allocatedMemory.length)), 0x100000);
-            }
+                if (V86Class) {
+                    const [biosBuf, vgaBiosBuf] = await Promise.all([
+                        this.fetchBuffer(this.config.biosUrl, 'BIOS'),
+                        this.fetchBuffer(this.config.vgaBiosUrl, 'VGA BIOS')
+                    ]);
 
-            // Check if running in browser with global V86Starter
-            const hasBrowserV86 = typeof window !== 'undefined' && typeof window.V86Starter !== 'undefined';
+                    this.setState(VM_STATES.BOOTING);
+                    this.recordMilestone(BOOT_MILESTONES.BIOS_POST);
 
-            if (hasBrowserV86) {
-                const [biosBuf, vgaBiosBuf] = await Promise.all([
-                    this.fetchBuffer(this.config.biosUrl, 'BIOS'),
-                    this.fetchBuffer(this.config.vgaBiosUrl, 'VGA BIOS')
-                ]);
+                    const v86Options = {
+                        wasm_path: this.config.wasmPath,
+                        memory_size: ramBytes,
+                        vga_memory_size: this.config.vgaMemorySizeMb * 1024 * 1024,
+                        bios: { buffer: biosBuf },
+                        vga_bios: { buffer: vgaBiosBuf },
+                        screen_container: this.config.screenContainer,
+                        autostart: true
+                    };
 
-                this.setState(VM_STATES.BOOTING);
-                this.recordMilestone(BOOT_MILESTONES.BIOS_POST);
+                    if (this.config.bootMode === 'iso' || (this.config.bootMode === 'auto' && this.config.cdromUrl)) {
+                        v86Options.cdrom = { url: this.config.cdromUrl };
+                    } else {
+                        const [kernelBuf, initrdBuf] = await Promise.all([
+                            this.fetchBuffer(this.config.kernelUrl, 'Kernel bzImage'),
+                            this.fetchBuffer(this.config.initrdUrl, 'Initrd CPIO')
+                        ]);
+                        const verifyRes = verifyBzImage(kernelBuf);
+                        if (!verifyRes.valid) {
+                            throw new Error(`Invalid bzImage: ${verifyRes.error || "failed Linux x86 boot header validation ('HdrS' / 0xAA55)"}`);
+                        }
+                        const kernelBytes = new Uint8Array(kernelBuf);
+                        if (this.allocatedMemory && kernelBytes.length > 0) {
+                            this.allocatedMemory.set(kernelBytes.subarray(0, Math.min(kernelBytes.length, this.allocatedMemory.length)), 0x100000);
+                        }
+                        v86Options.bzimage = { buffer: kernelBuf };
+                        v86Options.initrd = { buffer: initrdBuf };
+                        v86Options.cmdline = this.config.cmdline;
+                    }
 
-                this.emulator = new window.V86Starter({
-                    wasm_path: this.config.wasmPath,
-                    memory_size: ramBytes,
-                    vga_memory_size: this.config.vgaMemorySizeMb * 1024 * 1024,
-                    bios: { buffer: biosBuf },
-                    vga_bios: { buffer: vgaBiosBuf },
-                    bzimage: { buffer: kernelBuf },
-                    initrd: { buffer: initrdBuf },
-                    cmdline: this.config.cmdline,
-                    screen_container: this.config.screenContainer,
-                    autostart: true
-                });
-
-                this.attachSerialListeners();
+                    this.emulator = new V86Class(v86Options);
+                    this.attachSerialListeners();
+                } else if (this.config.mockMode === true) {
+                    this.setState(VM_STATES.BOOTING);
+                    this.recordMilestone(BOOT_MILESTONES.BIOS_POST);
+                    await this.simulateBootProgression();
+                }
             } else {
                 // Headless baseline driver (Node.js or test harness)
+                if (this.config.kernelUrl && this.config.initrdUrl) {
+                    const [kernelBuf, initrdBuf] = await Promise.all([
+                        this.fetchBuffer(this.config.kernelUrl, 'Kernel bzImage'),
+                        this.fetchBuffer(this.config.initrdUrl, 'Initrd CPIO')
+                    ]);
+                    const verifyRes = verifyBzImage(kernelBuf);
+                    if (!verifyRes.valid) {
+                        throw new Error(`Invalid bzImage: ${verifyRes.error || "failed Linux x86 boot header validation ('HdrS' / 0xAA55)"}`);
+                    }
+                    const kernelBytes = new Uint8Array(kernelBuf);
+                    if (this.allocatedMemory && kernelBytes.length > 0) {
+                        this.allocatedMemory.set(kernelBytes.subarray(0, Math.min(kernelBytes.length, this.allocatedMemory.length)), 0x100000);
+                    }
+                }
+
                 this.setState(VM_STATES.BOOTING);
                 this.recordMilestone(BOOT_MILESTONES.BIOS_POST);
-
-                // Run deterministic baseline boot sequence
                 await this.simulateBootProgression();
             }
 
@@ -286,6 +323,7 @@ export class V86GuestManager {
         if (!this.emulator || typeof this.emulator.add_listener !== 'function') return;
 
         this.emulator.add_listener('serial0-output-char', (char) => {
+            globalLogcat.feedSerialChar(char);
             if (char === '\r') return;
             if (char === '\n') {
                 this.handleSerialLine(this.serialBuffer);
@@ -320,15 +358,19 @@ export class V86GuestManager {
     handleSerialLine(line) {
         if (!line) return;
         this.serialLogs.push(line);
-        this.log(`[GUEST-TTY] ${line}`, 'guest');
+
+        const isPanic = line.includes('Kernel panic') || 
+                        line.includes('Fatal exception') || 
+                        line.includes('Invalid opcode') || 
+                        line.includes('Illegal instruction (SIGILL)') ||
+                        line.includes('binderfs: failed to mount') ||
+                        line.includes('Out of memory: Kill process');
+
+        globalLogcat.append('v86Guest', line, isPanic ? 'E' : 'D');
+        this.log(`[GUEST-TTY] ${line}`, isPanic ? 'error' : 'guest');
 
         // Check for fatal errors / kernel panics
-        if (line.includes('Kernel panic') || 
-            line.includes('Fatal exception') || 
-            line.includes('Invalid opcode') || 
-            line.includes('Illegal instruction (SIGILL)') ||
-            line.includes('binderfs: failed to mount') ||
-            line.includes('Out of memory: Kill process')) {
+        if (isPanic) {
             this.log(`[GUEST-PANIC] Fatal guest error detected: ${line}`, 'error');
             this.setState(VM_STATES.ERROR);
             return;
@@ -347,7 +389,7 @@ export class V86GuestManager {
             }
         }
 
-        if (line.includes('virtio_gpu') || line.includes('drm: virtio-gpu') || line.includes('virtio_gpudrmfb')) {
+        if (line.includes('virtio_gpu') || line.includes('virtio-gpu') || line.includes('drm: virtio-gpu') || line.includes('virtio_gpudrmfb')) {
             this.recordMilestone(BOOT_MILESTONES.VIRTIO_GPU_INIT);
         }
 
@@ -359,16 +401,17 @@ export class V86GuestManager {
             }
         }
 
-        if (line.includes('Run /init') || line.includes('init: init first stage') || line.includes('[init]')) {
+        if (line.includes('Run /init') || line.includes('init:') || line.includes('Freeing unused kernel memory') || line.includes('init: init first stage') || line.includes('[init]')) {
             this.recordMilestone(BOOT_MILESTONES.INIT_USERSPACE);
         }
 
         if (line.includes('servicemanager started') || 
             line.includes('context manager') || 
             line.includes('servicemanager: ready') ||
+            line.includes('servicemanager: root context manager') ||
             line.includes('binder: 0:0 context manager')) {
             this.recordMilestone(BOOT_MILESTONES.SERVICEMANAGER_READY);
-            if (this.state === VM_STATES.BINDER_READY || this.state === VM_STATES.KERNEL_READY) {
+            if (this.state === VM_STATES.BINDER_READY || this.state === VM_STATES.KERNEL_READY || this.state === VM_STATES.BOOTING) {
                 this.setState(VM_STATES.SERVICES_READY);
             }
         }
@@ -582,6 +625,11 @@ export class V86GuestManager {
      * @param {string} [type='info'] 
      */
     log(msg, type = 'info') {
+        const priority = (type === 'error' || type === 'err') ? 'E' :
+                         (type === 'warn' ? 'W' :
+                         (type === 'debug' ? 'D' :
+                         (type === 'verbose' ? 'V' : 'I')));
+        logger.log('v86', priority, msg);
         if (typeof this.config.onLog === 'function') {
             this.config.onLog(msg, type);
         }
@@ -593,7 +641,8 @@ export class V86GuestManager {
      * @returns {boolean}
      */
     verifyBzImage(buffer) {
-        return verifyBzImage(buffer);
+        const res = verifyBzImage(buffer);
+        return Boolean(res && res.valid);
     }
 
     /**
@@ -653,27 +702,42 @@ export class V86GuestManager {
  * - 0x202 == 'HdrS' (header magic 0x53726448)
  * - 0x206 >= 0x0200 (boot protocol version >= 2.00)
  * @param {ArrayBuffer|Uint8Array|Buffer} buffer
- * @returns {boolean}
+ * @returns {{ valid: boolean, bootFlag?: number, headerMagic?: string, protocol?: number, error?: string }}
  */
 export function verifyBzImage(buffer) {
-    if (!buffer) return false;
+    if (!buffer) {
+        return { valid: false, error: 'Empty or null buffer' };
+    }
     const view = (buffer instanceof Uint8Array || (typeof Buffer !== 'undefined' && Buffer.isBuffer(buffer)))
         ? buffer
-        : new Uint8Array(buffer);
-    if (view.length < 0x208) return false;
+        : (buffer instanceof ArrayBuffer ? new Uint8Array(buffer) : null);
+    if (!view || view.length < 0x208) {
+        return { valid: false, error: `Buffer too short: length ${view ? view.length : 0} bytes, expected at least 520 bytes (0x208)` };
+    }
 
     // Boot sector signature at 0x01FE (0xAA55)
     const bootSig = (view[0x1FE]) | (view[0x1FF] << 8);
-    if (bootSig !== 0xAA55) return false;
+    if (bootSig !== 0xAA55) {
+        return { valid: false, error: `Invalid boot sector signature at 0x1FE: 0x${bootSig.toString(16).toUpperCase()}, expected 0xAA55` };
+    }
 
     // Header magic "HdrS" at 0x0202 (0x53726448)
     const magic = String.fromCharCode(view[0x202], view[0x203], view[0x204], view[0x205]);
-    if (magic !== 'HdrS') return false;
+    if (magic !== 'HdrS') {
+        return { valid: false, error: `Invalid setup header magic at 0x202: '${magic}', expected 'HdrS'` };
+    }
 
     // Boot protocol version at 0x0206 (must be >= 0x0200)
     const protocol = (view[0x206]) | (view[0x207] << 8);
-    if (protocol < 0x0200) return false;
+    if (protocol < 0x0200) {
+        return { valid: false, error: `Unsupported boot protocol version at 0x206: 0x${protocol.toString(16)}, expected >= 0x0200` };
+    }
 
-    return true;
+    return {
+        valid: true,
+        bootFlag: bootSig,
+        headerMagic: magic,
+        protocol: protocol
+    };
 }
 

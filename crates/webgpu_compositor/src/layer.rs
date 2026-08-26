@@ -22,6 +22,7 @@ pub struct CompositionLayer {
     pub color: Option<[f32; 4]>,
     pub texture_view: Option<wgpu::TextureView>,
     pub visible: bool,
+    pub swizzle_bgrx: bool,
 }
 
 impl CompositionLayer {
@@ -46,6 +47,7 @@ impl CompositionLayer {
             color: Some(color),
             texture_view: None,
             visible: true,
+            swizzle_bgrx: false,
         }
     }
 
@@ -71,6 +73,12 @@ impl CompositionLayer {
             color: None,
             texture_view: Some(texture_view),
             visible: true,
+            swizzle_bgrx: false,
         }
+    }
+
+    pub fn with_swizzle_bgrx(mut self, swizzle: bool) -> Self {
+        self.swizzle_bgrx = swizzle;
+        self
     }
 }

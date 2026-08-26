@@ -126,7 +126,7 @@ impl WebGpuCompositor {
             let params = [
                 layer.alpha,
                 if layer.texture_view.is_some() { 1.0 } else { 0.0 },
-                0.0,
+                if layer.swizzle_bgrx { 1.0 } else { 0.0 },
                 0.0,
             ];
             let source_crop = layer.source_crop;

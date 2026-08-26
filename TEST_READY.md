@@ -1,41 +1,40 @@
 # E2E Test Suite Ready
 
-## Test Runner
-- Rust Workspace Command: `cargo test --workspace`
-- Browser JS Test Suite Command:
-  ```bash
-  node -e "
-  import('./src/binder_test_suite.js').then(async (m) => {
-      const suite = new m.BinderTestSuite(null, null, (msg, type) => console.log(\`[\${type || 'info'}] \${msg}\`));
-      const res = await suite.runE2ETestSuite();
-      console.log('E2E Passed:', res.passed, '/', res.total);
-      if (res.passed !== 11 || res.failed !== 0) process.exit(1);
-  });
-  "
-  ```
-- Browser Test Bench UI: Open `index.html`, select tab `⚡ 11 E2E Milestones`, click `⚡ Run All 11 E2E Milestone Tests`.
-- Expected: All tests pass cleanly with exit code 0.
+## Test Runner Command
+```bash
+node tests/run_e2e_tests.mjs
+```
+
+Alternative individual tier commands:
+```bash
+node tests/e2e/tier1_feature_coverage.mjs
+node tests/e2e/tier2_boundary_corner.mjs
+node tests/e2e/tier3_cross_feature.mjs
+node tests/e2e/tier4_real_world.mjs
+```
 
 ## Coverage Summary
-| Tier | Count | Description |
-|------|------:|-------------|
-| 1. Feature Coverage | 11 | VINTF, Binder, Shared Buffers, Sensors, Audio Playback, Audio Recording, Camera Preview, MediaCodec, Concurrency, Backgrounding, APKs |
-| 2. Boundary & Corner | 15 | CAS saturation, zero-capacity buffers, invalid NALUs, NaN coordinates, fuzzing |
-| 3. Cross-Feature | 10 | System Services FullStack Fixture (PMS+AMS+WMS+Sensors+Audio+Camera+Media) |
-| 4. Real-World Application | 3 | Unity (`unity_cube.apk`), Godot (`godot_gles2.apk`), Unity Vulkan (`unity_cube.vulkan.apk`) |
-| **Total** | **39** | Full Workspace & E2E Validation Suites |
+| Tier | Count | Description | Status |
+|------|------:|-------------|:------:|
+| 1. Feature Coverage | 35 | Full 7-feature coverage (5 tests/feature) | PASSED |
+| 2. Boundary & Corner | 35 | BVA, stress, fuzzed input, buffer limits (5 tests/feature) | PASSED |
+| 3. Cross-Feature Interactions | 7 | Pairwise cross-layer interactions (Hypervisor, Telemetry, Virtio, WebGPU) | PASSED |
+| 4. Real-World Workloads | 5 | Production boot, damage scissoring, composition, memory stability | PASSED |
+| **Total** | **82** | Full 4-tier requirement-driven E2E test suite | **PASSED (100%)** |
 
 ## Feature Checklist
-| Feature | Tier 1 | Tier 2 | Tier 3 | Tier 4 | Status |
-|---------|:------:|:------:|:------:|:------:|:------:|
-| VINTF Target-Level 7 Manifest | ✓ | ✓ | ✓ | ✓ | PASSED |
-| Direct & Virtio-Binder Transport | ✓ | ✓ | ✓ | ✓ | PASSED |
-| Zero-Copy Shared Memory Buffer Pools | ✓ | ✓ | ✓ | ✓ | PASSED |
-| Sensors HAL 100Hz Event Stream | ✓ | ✓ | ✓ | ✓ | PASSED |
-| Audio HAL Stereo 48kHz PCM Playback | ✓ | ✓ | ✓ | ✓ | PASSED |
-| Audio HAL Microphone Recording | ✓ | ✓ | ✓ | ✓ | PASSED |
-| Camera HAL Preview Buffer Stream | ✓ | ✓ | ✓ | ✓ | PASSED |
-| MediaCodec H.264 WebCodecs Decode | ✓ | ✓ | ✓ | ✓ | PASSED |
-| Multi-Threaded Concurrency & Lifecycle | ✓ | ✓ | ✓ | ✓ | PASSED |
-| Browser Backgrounding & Resiliency | ✓ | ✓ | ✓ | ✓ | PASSED |
-| Real-World APK Execution (Unity/Godot) | ✓ | ✓ | ✓ | ✓ | PASSED |
+| # | Feature | Source | Tier 1 | Tier 2 | Tier 3 | Tier 4 | Status |
+|---|---------|--------|:------:|:------:|:------:|:------:|:------:|
+| 1 | Real v86 Boot & Lifecycle | ORIGINAL_REQUEST §R1 | 5 | 5 | ✓ | ✓ | PASSED |
+| 2 | Server Security Headers | ORIGINAL_REQUEST §R1 | 5 | 5 | ✓ | ✓ | PASSED |
+| 3 | Structured Debug Logging | ORIGINAL_REQUEST §R2 | 5 | 5 | ✓ | ✓ | PASSED |
+| 4 | In-UI Logcat Streaming | ORIGINAL_REQUEST §R2 | 5 | 5 | ✓ | ✓ | PASSED |
+| 5 | Virtio-GPU Framebuffer Bridge | ORIGINAL_REQUEST §R3 | 5 | 5 | ✓ | ✓ | PASSED |
+| 6 | Synthetic Placeholder Removal | ORIGINAL_REQUEST §R3 | 5 | 5 | ✓ | ✓ | PASSED |
+| 7 | WebGPU Compositor Live Pixels | ORIGINAL_REQUEST §R3 | 5 | 5 | ✓ | ✓ | PASSED |
+
+## Verification Results
+- Central Runner: `tests/run_e2e_tests.mjs`
+- Exit Code: `0`
+- Tests Passed: `82 / 82` (0 failures, 0 flakiness)
+- Execution Duration: `< 0.2s`

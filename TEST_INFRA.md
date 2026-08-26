@@ -1,27 +1,42 @@
-# E2E Test Infra: AndroidWebGPU
+# E2E Test Infra: androidwebgpu
 
 ## Test Philosophy
-- Multi-tier validation: Unit & subsystem tests, Multi-threaded concurrency stress tests, Crash recovery & death recipient tests, Real-world APK binary tests, and In-Browser UI Test Bench tests.
-- 100% clean execution across all 30 workspace member crates (`cargo test --workspace`).
-- 1:1 validation of all 11 Acceptance Criteria in `ORIGINAL_REQUEST.md`.
+- Opaque-box, requirement-driven. No dependency on implementation internals.
+- Methodology: Category-Partition + Boundary Value Analysis (BVA) + Pairwise Combinatorial + Real-World Workload Testing.
 
-## Feature Inventory & Test Mapping
-| # | Feature | Requirement | Test Suite / Location | Verification Method |
-|---|---------|-------------|-----------------------|---------------------|
-| 1 | VINTF Declarations | R1, Criterion 1 | `crates/vintf_validator` | `cargo test -p vintf_validator` |
-| 2 | Binder Transport | R1, Criterion 2 | `crates/binder_sys`, `crates/virtio_binder` | `cargo test -p binder_sys -p virtio_binder` |
-| 3 | Shared Buffer Pool | R1, Criterion 3 | `crates/camera_host_rs`, `crates/audio_host_rs` | `cargo test -p camera_host_rs -p audio_host_rs` |
-| 4 | Sensors HAL E2E | R2, Criterion 4 | `crates/sensors_hal_virtual`, `crates/sensor_host_rs` | `cargo test -p sensors_hal_virtual -p sensor_host_rs` |
-| 5 | Audio Playback E2E | R2, Criterion 5 | `crates/audio_hal_virtual`, `crates/audio_host_rs` | `cargo test -p audio_hal_virtual -p audio_host_rs` |
-| 6 | Audio Recording E2E | R2, Criterion 6 | `crates/audio_hal_virtual`, `crates/audio_host_rs` | `cargo test -p audio_hal_virtual -p audio_host_rs` |
-| 7 | Camera Preview E2E | R2, Criterion 7 | `crates/camera_hal_virtual`, `crates/camera_host_rs` | `cargo test -p camera_hal_virtual -p camera_host_rs` |
-| 8 | Media Decode E2E | R2, Criterion 8 | `crates/media_host_rs` | `cargo test -p media_host_rs` |
-| 9 | Concurrency/Lifecycle | R3, Criterion 9 | `crates/tests_e2e_system_services`, `crates/ams_rs` | `cargo test -p tests_e2e_system_services` |
-| 10 | Browser Backgrounding | R3, Criterion 10 | `src/binder_test_suite.js`, `index.html` | Browser Test Bench UI / JS runner |
-| 11 | Real APK Execution | R3, Criterion 11 | `crates/apk_gpu_analyzer`, `crates/tests_e2e_system_services` | `cargo test -p apk_gpu_analyzer -p tests_e2e_system_services` |
+## Feature Inventory
+| # | Feature | Source (requirement) | Tier 1 | Tier 2 | Tier 3 | Tier 4 |
+|---|---------|---------------------|:------:|:------:|:------:|:------:|
+| 1 | Real v86 Boot & Lifecycle | ORIGINAL_REQUEST §R1 | 5 | 5 | ✓ | ✓ |
+| 2 | Server Security Headers | ORIGINAL_REQUEST §R1 | 5 | 5 | ✓ | ✓ |
+| 3 | Structured Debug Logging | ORIGINAL_REQUEST §R2 | 5 | 5 | ✓ | ✓ |
+| 4 | In-UI Logcat Streaming | ORIGINAL_REQUEST §R2 | 5 | 5 | ✓ | ✓ |
+| 5 | Virtio-GPU Framebuffer Bridge | ORIGINAL_REQUEST §R3 | 5 | 5 | ✓ | ✓ |
+| 6 | Synthetic Placeholder Removal | ORIGINAL_REQUEST §R3 | 5 | 5 | ✓ | ✓ |
+| 7 | WebGPU Compositor Live Pixels | ORIGINAL_REQUEST §R3 | 5 | 5 | ✓ | ✓ |
 
 ## Test Architecture
-- **Rust Integration Suites**: `crates/tests_e2e_system_services/tests/`, `crates/tests_e2e_binder/tests/`.
-- **Browser JS Test Suite**: `src/binder_test_suite.js`, `src/test_suite.js`.
-- **Browser Test Bench UI**: `index.html`.
-- **Verification Gates**: `GATES.md`.
+- Test runner: `tests/run_e2e_tests.mjs`
+- Invocation: `node tests/run_e2e_tests.mjs`
+- Test case format: ESM test modules with structured assertion runners and pass/fail exit code semantics.
+- Directory layout:
+  - `tests/e2e/tier1_feature_coverage.mjs`
+  - `tests/e2e/tier2_boundary_corner.mjs`
+  - `tests/e2e/tier3_cross_feature.mjs`
+  - `tests/e2e/tier4_real_world.mjs`
+
+## Real-World Application Scenarios (Tier 4)
+| # | Scenario | Features Exercised | Complexity |
+|---|----------|--------------------|------------|
+| 1 | Cold Boot to Shell with Logcat Streaming | F1, F2, F3, F4 | Medium |
+| 2 | Virtio-GPU Framebuffer Scanout & WebGPU Damage Scissoring | F1, F3, F5, F7 | High |
+| 3 | Full Android Framework & SurfaceFlinger Composition | F1, F3, F5, F6, F7 | High |
+| 4 | Logcat Filter & Circular Buffer Stress under Live Boot | F1, F3, F4 | Medium |
+| 5 | Long-Running VM Execution & Memory Stability | F1, F5, F7 | High |
+
+## Coverage Thresholds
+- Tier 1: >=35 test cases (5 per feature * 7 features)
+- Tier 2: >=35 test cases (5 per feature * 7 features)
+- Tier 3: >=7 cross-feature interaction test cases
+- Tier 4: >=5 realistic application scenarios
+- Total minimum: >=82 test cases

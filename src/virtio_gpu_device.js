@@ -4,6 +4,8 @@
  * Enhanced with 120 FPS OffscreenCanvas Worker Raster and Damage Rect Scissoring
  */
 
+import { logger } from './logger.js';
+
 export class VirtioGpuDevice {
     /**
      * @param {Object} v86 - Reference to v86 emulator instance
@@ -25,6 +27,7 @@ export class VirtioGpuDevice {
         this.io_bar = new Uint8Array(64);
         this.num_scanouts = 1;
         this.damage_rects_count = 0;
+        this.onScanoutUpdate = null;
         this.initPci();
     }
 
@@ -52,6 +55,12 @@ export class VirtioGpuDevice {
         // BAR1: MMIO Space
         this.pci_space[20] = 0x00;
         this.pci_space[21] = 0xD0;
+
+        logger.log('bridge', 'I', 'Virtio-GPU PCI device (0x1AF4:0x1050) initialized with 1 scanout', {
+            vendorId: 0x1AF4,
+            deviceId: 0x1050,
+            scanouts: this.num_scanouts
+        });
     }
 
     /**
@@ -80,6 +89,11 @@ export class VirtioGpuDevice {
      * @returns {Uint8Array} Response packet to return to guest kernel
      */
     processControlQueue(commandBuffer) {
+        const cmdLen = commandBuffer ? commandBuffer.length : 0;
+        logger.log('bridge', 'D', `Processing control queue packet (${cmdLen} bytes)`, {
+            bytes: cmdLen
+        });
+
         if (!this.rustBridge) {
             return new Uint8Array([0x00, 0x11, 0x00, 0x00]); // VIRTIO_GPU_RESP_OK_NODATA
         }
@@ -132,6 +146,18 @@ export class VirtioGpuDevice {
                 const subW = Math.min(dw, width - dx);
                 const subH = Math.min(dh, height - dy);
 
+                logger.log('bridge', 'I', `Scanout ${scanoutId} damaged rect [${dx}, ${dy}, ${subW}, ${subH}] presented`, {
+                    scanoutId,
+                    rect: [dx, dy, subW, subH],
+                    bytes: subW * subH * 4
+                });
+
+                if (typeof this.onScanoutUpdate === "function") {
+                    try {
+                        this.onScanoutUpdate(scanoutId, [dx, dy, subW, subH]);
+                    } catch (_) {}
+                }
+
                 if (this.worker && this.offscreenTransferred) {
                     this.worker.postMessage({
                         type: "UPDATE_DAMAGE_RECT",
@@ -153,6 +179,18 @@ export class VirtioGpuDevice {
             }
         }
 
+        logger.log('bridge', 'D', `Scanout ${scanoutId} full blit [0, 0, ${width}, ${height}] presented`, {
+            scanoutId,
+            rect: [0, 0, width, height],
+            bytes: width * height * 4
+        });
+
+        if (typeof this.onScanoutUpdate === "function") {
+            try {
+                this.onScanoutUpdate(scanoutId, [0, 0, width, height]);
+            } catch (_) {}
+        }
+
         // Full blit fallback
         if (this.worker && this.offscreenTransferred) {
             this.worker.postMessage({
@@ -165,6 +203,40 @@ export class VirtioGpuDevice {
             });
         } else if (this.ctx2d && fb.length >= width * height * 4) {
             this.ctx2d.putImageData(this.cachedImageData, 0, 0);
+        }
+    }
+
+    /**
+     * Get live scanout framebuffer byte buffer from WASM bridge
+     * @param {number} [scanoutId=0]
+     * @returns {Uint8Array}
+     */
+    getScanoutFramebuffer(scanoutId = 0) {
+        if (this.rustBridge && typeof this.rustBridge.get_scanout_framebuffer === "function") {
+            return this.rustBridge.get_scanout_framebuffer(scanoutId);
+        }
+        return new Uint8Array(0);
+    }
+
+    /**
+     * Get live scanout damage rect [x, y, w, h] from WASM bridge
+     * @param {number} [scanoutId=0]
+     * @returns {number[]|null}
+     */
+    getScanoutDamage(scanoutId = 0) {
+        if (this.rustBridge && typeof this.rustBridge.get_scanout_damage === "function") {
+            return this.rustBridge.get_scanout_damage(scanoutId);
+        }
+        return null;
+    }
+
+    /**
+     * Clear damage rect for specified scanout
+     * @param {number} [scanoutId=0]
+     */
+    clearScanoutDamage(scanoutId = 0) {
+        if (this.rustBridge && typeof this.rustBridge.clear_scanout_damage === "function") {
+            this.rustBridge.clear_scanout_damage(scanoutId);
         }
     }
 

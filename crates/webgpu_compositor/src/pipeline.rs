@@ -47,7 +47,7 @@ struct VertexOutput {
 struct LayerUniform {
     bounds: vec4<f32>, // x, y, width, height
     color: vec4<f32>,
-    params: vec4<f32>, // x: alpha, y: use_texture
+    params: vec4<f32>, // x: alpha, y: use_texture, z: swizzle_bgrx (if > 0.5 swizzle BGRX to RGBA with full alpha)
     source_crop: vec4<f32>, // u_min, v_min, u_max, v_max
     transform: mat4x4<f32>,
 };
@@ -80,6 +80,9 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     var base_color: vec4<f32>;
     if (u_layer.params.y > 0.5) {
         base_color = textureSample(t_diffuse, s_diffuse, in.tex_coords);
+        if (u_layer.params.z > 0.5) {
+            base_color = vec4<f32>(base_color.b, base_color.g, base_color.r, 1.0);
+        }
     } else {
         base_color = u_layer.color;
     }

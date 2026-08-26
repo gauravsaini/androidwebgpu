@@ -236,27 +236,41 @@ async function main() {
         assert(typeof manager.verifyBzImage === 'function', "V86GuestManager must implement verifyBzImage(buffer)");
         assert(typeof verifyBzImage === 'function', "v86_guest_manager must export standalone verifyBzImage(buffer)");
         const bzImageBuf = fs.readFileSync(path.join(rootDir, 'guest/build/bzImage'));
-        assert(manager.verifyBzImage(bzImageBuf) === true, "verifyBzImage must return true for valid bzImage binary");
-        assert(verifyBzImage(bzImageBuf) === true, "standalone verifyBzImage must return true for valid bzImage binary");
+        assert(manager.verifyBzImage(bzImageBuf) === true, "manager.verifyBzImage must return boolean true for valid bzImage binary");
+        
+        const standaloneRes = verifyBzImage(bzImageBuf);
+        assert(typeof standaloneRes === 'object' && standaloneRes !== null, "standalone verifyBzImage must return structured object");
+        assert(standaloneRes.valid === true, "standalone verifyBzImage valid property must be true");
+        assert(standaloneRes.bootFlag === 0xAA55, `standalone verifyBzImage bootFlag must be 0xAA55, got 0x${standaloneRes.bootFlag ? standaloneRes.bootFlag.toString(16) : ''}`);
+        assert(standaloneRes.headerMagic === 'HdrS', `standalone verifyBzImage headerMagic must be 'HdrS', got '${standaloneRes.headerMagic}'`);
+        assert(typeof standaloneRes.protocol === 'number' && standaloneRes.protocol >= 0x0200, "standalone verifyBzImage protocol version must be >= 0x0200");
 
         // Corrupted boot signature at 0x1FE
         const badSigBuf = Buffer.from(bzImageBuf);
         badSigBuf.writeUInt16LE(0x0000, 0x1FE);
         assert(manager.verifyBzImage(badSigBuf) === false, "verifyBzImage must reject invalid boot sector signature");
+        const badSigRes = verifyBzImage(badSigBuf);
+        assert(badSigRes.valid === false && typeof badSigRes.error === 'string', "standalone verifyBzImage must return valid=false with error for bad boot sig");
 
         // Corrupted magic at 0x202
         const badMagicBuf = Buffer.from(bzImageBuf);
         badMagicBuf.write('BAD!', 0x202, 'ascii');
         assert(manager.verifyBzImage(badMagicBuf) === false, "verifyBzImage must reject invalid setup header magic");
+        const badMagicRes = verifyBzImage(badMagicBuf);
+        assert(badMagicRes.valid === false && typeof badMagicRes.error === 'string', "standalone verifyBzImage must return valid=false with error for bad magic");
 
         // Corrupted boot protocol at 0x206
         const badProtoBuf = Buffer.from(bzImageBuf);
         badProtoBuf.writeUInt16LE(0x0100, 0x206);
         assert(manager.verifyBzImage(badProtoBuf) === false, "verifyBzImage must reject boot protocol < 0x0200");
+        const badProtoRes = verifyBzImage(badProtoBuf);
+        assert(badProtoRes.valid === false && typeof badProtoRes.error === 'string', "standalone verifyBzImage must return valid=false with error for bad protocol");
 
         // Null and truncated buffer handling
         assert(manager.verifyBzImage(null) === false, "verifyBzImage must reject null");
+        assert(verifyBzImage(null).valid === false, "standalone verifyBzImage must return valid=false for null");
         assert(manager.verifyBzImage(new Uint8Array(100)) === false, "verifyBzImage must reject truncated buffer");
+        assert(verifyBzImage(new Uint8Array(100)).valid === false, "standalone verifyBzImage must return valid=false for truncated buffer");
 
         // 2.7 V86GuestManager initWebGpuDevice() method tests with TIMESTAMP_QUERY
         assert(typeof manager.initWebGpuDevice === 'function', "V86GuestManager must implement initWebGpuDevice()");
@@ -290,6 +304,12 @@ async function main() {
 
         const nullDevice = await manager.initWebGpuDevice(null);
         assert(nullDevice === null, "initWebGpuDevice with null adapter returns null gracefully");
+
+        // 2.8 Default configuration values check
+        const defaultMgr = new V86GuestManager();
+        assert(defaultMgr.config.wasmPath === './v86/v86.wasm', "Default wasmPath must be './v86/v86.wasm'");
+        assert(defaultMgr.config.cdromUrl === './guest/build/linux4.iso', "Default cdromUrl must be './guest/build/linux4.iso'");
+        assert(defaultMgr.config.bootMode === 'auto', "Default bootMode must be 'auto'");
     });
 
     // -------------------------------------------------------------------------
@@ -313,13 +333,48 @@ async function main() {
         manager.feedSerial("virtio_gpu virtio0: [drm] fb0: virtio_gpudrmfb\n");
         assert(manager.hasMilestone(BOOT_MILESTONES.VIRTIO_GPU_INIT), "Milestone VIRTIO_GPU_INIT must be recorded");
 
+        // Test alternate virtio-gpu patterns
+        const altMgr1 = new V86GuestManager();
+        altMgr1.setState(VM_STATES.BOOTING);
+        altMgr1.feedSerial("virtio-gpu 0000:00:02.0: vgaarb: deactivate vga console\n");
+        assert(altMgr1.hasMilestone(BOOT_MILESTONES.VIRTIO_GPU_INIT), "Milestone VIRTIO_GPU_INIT on 'virtio-gpu'");
+
+        const altMgr2 = new V86GuestManager();
+        altMgr2.setState(VM_STATES.BOOTING);
+        altMgr2.feedSerial("[drm: virtio-gpu] modeset initialized\n");
+        assert(altMgr2.hasMilestone(BOOT_MILESTONES.VIRTIO_GPU_INIT), "Milestone VIRTIO_GPU_INIT on 'drm: virtio-gpu'");
+
         manager.feedSerial("Android Binder IPC Driver initialized (protocol version 8)\n");
         assert(manager.hasMilestone(BOOT_MILESTONES.BINDERFS_MOUNT), "Milestone BINDERFS_MOUNT must be recorded");
         assert(manager.getState() === VM_STATES.BINDER_READY, "State must transition to BINDER_READY");
 
+        // Test alternate init milestone patterns
+        const initMgr1 = new V86GuestManager();
+        initMgr1.setState(VM_STATES.BOOTING);
+        initMgr1.feedSerial("Freeing unused kernel memory: 1024K\n");
+        assert(initMgr1.hasMilestone(BOOT_MILESTONES.INIT_USERSPACE), "Milestone INIT_USERSPACE on 'Freeing unused kernel memory'");
+
+        const initMgr2 = new V86GuestManager();
+        initMgr2.setState(VM_STATES.BOOTING);
+        initMgr2.feedSerial("init: init first stage started\n");
+        assert(initMgr2.hasMilestone(BOOT_MILESTONES.INIT_USERSPACE), "Milestone INIT_USERSPACE on 'init:'");
+
         manager.feedSerial("[init] servicemanager started (handle 0 context manager)\n");
         assert(manager.hasMilestone(BOOT_MILESTONES.SERVICEMANAGER_READY), "Milestone SERVICEMANAGER_READY must be recorded");
         assert(manager.getState() === VM_STATES.SERVICES_READY, "State must transition to SERVICES_READY");
+
+        // Test alternate servicemanager milestone patterns
+        const smMgr1 = new V86GuestManager();
+        smMgr1.setState(VM_STATES.BINDER_READY);
+        smMgr1.feedSerial("servicemanager: ready for binder transactions\n");
+        assert(smMgr1.hasMilestone(BOOT_MILESTONES.SERVICEMANAGER_READY), "Milestone SERVICEMANAGER_READY on 'servicemanager: ready'");
+        assert(smMgr1.getState() === VM_STATES.SERVICES_READY, "State transitions to SERVICES_READY on 'servicemanager: ready'");
+
+        const smMgr2 = new V86GuestManager();
+        smMgr2.setState(VM_STATES.BINDER_READY);
+        smMgr2.feedSerial("servicemanager: root context manager registered\n");
+        assert(smMgr2.hasMilestone(BOOT_MILESTONES.SERVICEMANAGER_READY), "Milestone SERVICEMANAGER_READY on 'servicemanager: root context manager'");
+        assert(smMgr2.getState() === VM_STATES.SERVICES_READY, "State transitions to SERVICES_READY on 'servicemanager: root context manager'");
 
         manager.feedSerial("Zygote: listening on socket /dev/socket/zygote\n");
         assert(manager.hasMilestone(BOOT_MILESTONES.ZYGOTE_ART_READY), "Milestone ZYGOTE_ART_READY must be recorded");
