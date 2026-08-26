@@ -3572,16 +3572,20 @@ fn fs_normals(in: VertexOutput) -> @location(0) vec4<f32> {
                 statusPill.style.color = 'var(--success)';
                 appendLog('Virtio-GPU Stack online (Mailbox VSync). Material You Android OS Ready.', 'success');
 
-                // Launch 3D Arcade Engine with 120 FPS pacing
-                arcade = new Arcade3DScene(gpuDev, canvas, (stats) => {
-                    fpsCounter.textContent = `${stats.fps.toFixed(1)} FPS`;
-                    if (stats.frameTimeMs && frameTimeVal) {
-                        frameTimeVal.textContent = `${stats.frameTimeMs} ms`;
-                    }
-                    if (stats.gpuTimeMs && gpuTimeVal) {
-                        gpuTimeVal.textContent = `${stats.gpuTimeMs} ms`;
-                    }
-                });
+                // Launch 3D Arcade Engine with 120 FPS pacing (gated behind ?demo=1)
+                const urlParams = new URLSearchParams(window.location.search);
+                const isDemoEnabled = urlParams.get('demo') === '1';
+                if (isDemoEnabled) {
+                    arcade = new Arcade3DScene(gpuDev, canvas, (stats) => {
+                        fpsCounter.textContent = `${stats.fps.toFixed(1)} FPS`;
+                        if (stats.frameTimeMs && frameTimeVal) {
+                            frameTimeVal.textContent = `${stats.frameTimeMs} ms`;
+                        }
+                        if (stats.gpuTimeMs && gpuTimeVal) {
+                            gpuTimeVal.textContent = `${stats.gpuTimeMs} ms`;
+                        }
+                    });
+                }
 
                 // Pre-load and execute F-Droid.apk in Dalvik VM Runtime
                 try {

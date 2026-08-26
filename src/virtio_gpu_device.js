@@ -430,7 +430,7 @@ export class VirtioGpuDevice {
                 const subW = Math.min(dw, width - dx);
                 const subH = Math.min(dh, height - dy);
 
-                logger.log('bridge', 'I', `Scanout ${scanoutId} damaged rect [${dx}, ${dy}, ${subW}, ${subH}] presented`, {
+                logger.log('bridge', 'D', `Scanout ${scanoutId} damaged rect [${dx}, ${dy}, ${subW}, ${subH}] presented`, {
                     scanoutId,
                     rect: [dx, dy, subW, subH],
                     bytes: subW * subH * 4

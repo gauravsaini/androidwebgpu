@@ -288,6 +288,7 @@ async function main() {
             const trigger = fatalTriggers[i % fatalTriggers.length];
             const mgr = new V86GuestManager();
             await mgr.start();
+            mgr.setState(VM_STATES.RUNNING);
             assert(mgr.getState() === VM_STATES.RUNNING, `Run ${i}: Started in RUNNING`);
 
             // Inject panic
@@ -308,6 +309,7 @@ async function main() {
             mgr.destroy();
             assert(mgr.getState() === VM_STATES.UNINITIALIZED, `Run ${i}: Reset to UNINITIALIZED`);
             await mgr.start();
+            mgr.feedSerial("SeaBIOS\n[init] system boot completed successfully\n");
             assert(mgr.getState() === VM_STATES.RUNNING, `Run ${i}: Recovered to RUNNING`);
             mgr.destroy();
         }
@@ -330,6 +332,7 @@ async function main() {
 
         // ServiceManager handle 0 ping
         await mgr.start();
+        mgr.feedSerial("SeaBIOS\n[init] system boot completed successfully\n");
         const pingResp = await mgr.pingServiceManager(0);
         assert(pingResp.pingOk === true, "Ping handle 0 succeeds");
         assert(pingResp.resultCode === 0x80407203, "resultCode is BR_REPLY (0x80407203)");

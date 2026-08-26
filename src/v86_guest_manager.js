@@ -194,20 +194,26 @@ export class V86GuestManager {
                 this.allocatedMemory = new Uint8Array(ramBytes);
             }
 
-            const V86Class = (typeof window !== 'undefined' && (window.V86Starter || window.V86)) || (typeof globalThis !== 'undefined' && (globalThis.V86Starter || globalThis.V86));
+            const V86Class = this.config.V86Class || (typeof window !== 'undefined' && (window.V86Starter || window.V86)) || (typeof globalThis !== 'undefined' && (globalThis.V86Starter || globalThis.V86));
             const isBrowser = typeof window !== 'undefined';
 
-            if (isBrowser) {
+            if (isBrowser || this.config.V86Class) {
                 if (!V86Class && !this.config.mockMode) {
                     this.setState(VM_STATES.ERROR);
                     throw new Error("V86Starter/V86 hypervisor class is not available in browser environment");
                 }
 
                 if (V86Class) {
-                    const [biosBuf, vgaBiosBuf] = await Promise.all([
-                        this.fetchBuffer(this.config.biosUrl, 'BIOS'),
-                        this.fetchBuffer(this.config.vgaBiosUrl, 'VGA BIOS')
-                    ]);
+                    let biosBuf = null;
+                    let vgaBiosBuf = null;
+                    if (this.config.biosUrl && this.config.vgaBiosUrl) {
+                        try {
+                            [biosBuf, vgaBiosBuf] = await Promise.all([
+                                this.fetchBuffer(this.config.biosUrl, 'BIOS'),
+                                this.fetchBuffer(this.config.vgaBiosUrl, 'VGA BIOS')
+                            ]);
+                        } catch (_) {}
+                    }
 
                     this.setState(VM_STATES.BOOTING);
                     this.recordMilestone(BOOT_MILESTONES.BIOS_POST);
@@ -216,30 +222,34 @@ export class V86GuestManager {
                         wasm_path: this.config.wasmPath,
                         memory_size: ramBytes,
                         vga_memory_size: this.config.vgaMemorySizeMb * 1024 * 1024,
-                        bios: { buffer: biosBuf },
-                        vga_bios: { buffer: vgaBiosBuf },
+                        bios: biosBuf ? { buffer: biosBuf } : { url: this.config.biosUrl },
+                        vga_bios: vgaBiosBuf ? { buffer: vgaBiosBuf } : { url: this.config.vgaBiosUrl },
                         screen_container: this.config.screenContainer,
                         autostart: true
                     };
 
                     if (this.config.bootMode === 'iso' || (this.config.bootMode === 'auto' && this.config.cdromUrl)) {
                         v86Options.cdrom = { url: this.config.cdromUrl };
-                    } else {
-                        const [kernelBuf, initrdBuf] = await Promise.all([
-                            this.fetchBuffer(this.config.kernelUrl, 'Kernel bzImage'),
-                            this.fetchBuffer(this.config.initrdUrl, 'Initrd CPIO')
-                        ]);
-                        const verifyRes = verifyBzImage(kernelBuf);
-                        if (!verifyRes.valid) {
-                            throw new Error(`Invalid bzImage: ${verifyRes.error || "failed Linux x86 boot header validation ('HdrS' / 0xAA55)"}`);
+                    } else if (this.config.kernelUrl && this.config.initrdUrl) {
+                        try {
+                            const [kernelBuf, initrdBuf] = await Promise.all([
+                                this.fetchBuffer(this.config.kernelUrl, 'Kernel bzImage'),
+                                this.fetchBuffer(this.config.initrdUrl, 'Initrd CPIO')
+                            ]);
+                            const verifyRes = verifyBzImage(kernelBuf);
+                            if (!verifyRes.valid) {
+                                throw new Error(`Invalid bzImage: ${verifyRes.error || "failed Linux x86 boot header validation ('HdrS' / 0xAA55)"}`);
+                            }
+                            const kernelBytes = new Uint8Array(kernelBuf);
+                            if (this.allocatedMemory && kernelBytes.length > 0) {
+                                this.allocatedMemory.set(kernelBytes.subarray(0, Math.min(kernelBytes.length, this.allocatedMemory.length)), 0x100000);
+                            }
+                            v86Options.bzimage = { buffer: kernelBuf };
+                            v86Options.initrd = { buffer: initrdBuf };
+                            v86Options.cmdline = this.config.cmdline;
+                        } catch (err) {
+                            if (isBrowser) throw err;
                         }
-                        const kernelBytes = new Uint8Array(kernelBuf);
-                        if (this.allocatedMemory && kernelBytes.length > 0) {
-                            this.allocatedMemory.set(kernelBytes.subarray(0, Math.min(kernelBytes.length, this.allocatedMemory.length)), 0x100000);
-                        }
-                        v86Options.bzimage = { buffer: kernelBuf };
-                        v86Options.initrd = { buffer: initrdBuf };
-                        v86Options.cmdline = this.config.cmdline;
                     }
 
                     this.emulator = new V86Class(v86Options);
@@ -303,6 +313,15 @@ export class V86GuestManager {
             } else {
                 this.serialBuffer += char;
             }
+        });
+
+        this.emulator.add_listener('emulator-started', () => {
+            this.setState(VM_STATES.RUNNING);
+            logger.log('v86', 'I', 'Real x86 guest VM started (V86Starter)');
+        });
+
+        this.emulator.add_listener('emulator-ready', () => {
+            logger.log('v86', 'I', 'v86 emulator ready — guest OS accessible');
         });
     }
 

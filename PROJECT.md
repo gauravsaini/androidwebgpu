@@ -1,59 +1,60 @@
-# Project: Android WebGPU with Real x86 Linux Guest
+# Project: Android WebGPU Frontend Architecture Refactor
 
 ## Architecture
-- **Hypervisor Layer**: v86 x86-32 PC emulator running in WebAssembly with SeaBIOS, SeaVGABIOS, Linux kernel (`bzImage` / `linux4.iso`), and initrd.
-- **I/O & IPC Layer**: Serial UART (`ttyS0`) streaming to logcat, Virtio-GPU PCI device (`0x1AF4:0x1050`), Android Binder IPC bridge (`binderfs`).
-- **GPU & Framebuffer Bridge**: `virtio_gpu_bridge` WebAssembly bridge translating Virtio-GPU 2D/3D wire commands, scanout framebuffer updates, and damage rects.
-- **Rendering & Compositing Layer**: `webgpu_compositor`, `webgpu_swapchain`, and `surfaceflinger_gpu_service` composing live guest OS framebuffer and Android SystemUI layers into a hardware-accelerated WebGPU canvas (`#screen`).
-- **Telemetry & Logging**: Structured log emitter (`[v86]`, `[bridge]`, `[compositor]`) with live in-UI Android logcat streaming viewer.
+- **DOM & Styling Layer**: Minimal semantic HTML skeleton (`android.html` 146 lines) with external CSS token architecture (`css/tokens.css`, `css/android.css`), zero inline script blocks, and zero inline styles.
+- **Entry & Lifecycle Coordination Layer**: `src/main_android.js` binding DOM elements and user interactions to `SystemBootstrap` and `AppController`.
+- **System Bootstrap & Hypervisor Layer**: `src/system_bootstrap.js` as the single source of truth for V86 guest lifecycle, asset loading/verification, serial listener attachment, dmesg milestone dispatch, and injectable `V86Class` mock support.
+- **Application & IPC Controller Layer**: `src/app_controller.js` handling Activity lifecycle, backstack navigation, package manager (PMS), activity manager (AMS), window manager (WMS), and Binder IPC calls.
+- **Pure State UI Rendering Layer**: `src/ui_render.js` providing stateless rendering functions for launcher app grid, dock, status bar, logcat HUD, metrics, and DOM updates.
+- **Truthful Display & Compositor Layer**: WebGPU canvas (`#screen`) as sole display target, eliminating synthetic `#screen-app` DOM overlays and gating `arcade_demo.js` behind `?demo=1`.
+- **Logging & Telemetry**: Structured log emitter (`src/logger.js`, `src/virtio_gpu_device.js`) with strict separation of high-frequency events (`[D]`) and discrete state transitions (`[I]`).
 
 ## Feature Inventory
 | # | Feature | Description | Milestone | Source |
 |---|---------|-------------|-----------|--------|
-| 1 | Real v86 Boot & Lifecycle | `libv86.js` export harmonization, `./v86/v86.wasm` path fix, SeaBIOS/VGABIOS/ISO/bzImage boot, 9 lifecycle states, serial TTY milestone tracking | M1 | Survey 1, R1 |
-| 2 | Server Security Headers | `serve.py` with COOP (`same-origin`), COEP (`require-corp`), CSP (`wasm-unsafe-eval`, `unsafe-eval`) | M1 | Survey 1, R1 |
-| 3 | Structured Debug Logging | Unified logger emitting `[v86]`, `[bridge]`, `[compositor]` prefixes across JS and Rust layers | M2 | Survey 3, R2 |
-| 4 | In-UI Logcat Streaming | Real-time formatted logcat streaming UI with priority filter (V/D/I/W/E), tag search, and 5000-line circular buffer | M2 | Survey 3, R2 |
-| 5 | Virtio-GPU Framebuffer Bridge | OASIS Virtio 1.2 PCI device command processing, scanout framebuffer tracking, color channel mapping (BGRX/RGBA), damage rect calculation | M3 | Survey 2, R3 |
-| 6 | Synthetic Placeholder Removal | Eliminate `queueAppBufferToSurfaceFlinger` synthetic canvas drawing (`"Synthetic placeholder — awaiting guest rendering"`), mock overlays, and fake boot simulation | M3 | Survey 2, R3 |
-| 7 | WebGPU Compositor Live Pixels | Pipe live guest framebuffer pixels into WebGPU textures (`queue.write_texture` with dirty damage bounds) and composite with SystemUI layers | M4 | Survey 2, R3 |
-| 8 | Opaque-Box E2E Test Suite | 4-tier requirement-driven E2E test suite (Tiers 1-4) with automated runner generating `TEST_READY.md` | M-TEST | Survey 3, R4 |
-| 9 | E2E Pass & Adversarial Hardening | 100% pass of E2E test suite (Tiers 1-4) followed by Tier 5 adversarial stress testing, bug fixes, and clean Forensic Audit | M5 | Survey 1-3, R4 |
+| 1 | CSS Token & Style Extraction | Extract all inline CSS into `css/tokens.css` and `css/android.css`; remove all inline `style="..."` attributes | M1 | Survey 1, R1 |
+| 2 | Minimal HTML Skeleton | Refactor `android.html` to <= 150 lines with zero inline `<script>` blocks and zero inline styles | M1 | Survey 1, R1 |
+| 3 | Modular ES Boundaries | Implement `src/main_android.js`, `src/system_bootstrap.js`, `src/app_controller.js`, `src/ui_render.js` | M1 | Survey 2, R1 |
+| 4 | Single Hypervisor Instantiation | Ensure only `src/system_bootstrap.js` (or `src/v86_guest_manager.js`) instantiates `V86Class` / `V86Starter` | M1 | Survey 2, R1 |
+| 5 | Synthetic DOM Overlay Removal | Eliminate `#screen-app` container and remove `renderActivityUi` synthetic DOM overlays from primary render path | M2 | Survey 1/2, R2 |
+| 6 | Arcade Demo Gating | Gate `arcade_demo.js` behind explicit `?demo=1` query parameter | M2 | Survey 1, R2 |
+| 7 | Logging Level Demotion | Demote scanout damaged rect logs in `src/virtio_gpu_device.js` to `[D]`; eliminate idle `[I]` log spam | M3 | Survey 3, R3 |
+| 8 | Automated Bootstrap Integration Test | Implement `tests/test_bootstrap.mjs` with injectable `V86Class` mock verifying serial listener, milestones, and single instance | M4 | Survey 3, R4 |
+| 9 | Package & Test Suite Harmonization | Add root `package.json` with `pnpm test` script executing full test suite without regression | M4 | Survey 3, R4 |
+| 10 | Multi-Axis Verification & Audit | Comprehensive review, adversarial stress testing, and Forensic Integrity Audit | M5 | R1-R4, Audit |
 
 ## Milestones
 | # | Name | Scope | Dependencies | Status |
 |---|------|-------|-------------|--------|
-| M-TEST | E2E Testing Track | Requirement-driven test harness and test cases (Tiers 1-4) publishing `TEST_READY.md` | None | DONE |
-| M1 | Hypervisor & v86 Boot Pipeline | Real v86 guest booting, BIOS/kernel/ISO loading, server headers, serial UART | None | DONE |
-| M2 | Structured Debug Logging & In-UI Logcat | Standardized `[v86]`, `[bridge]`, `[compositor]` logging across all modules, live in-UI logcat streaming console with filtering & circular buffer | M1 | DONE |
-| M3 | Virtio-GPU & Framebuffer Bridge | Wire protocol, scanout damage buffer, elimination of synthetic placeholders | M1, M2 | PLANNED |
-| M4 | WebGPU Compositor & Live Guest Pixel Rendering | Multi-layer compositor, texture upload, SystemUI composition, unified WebGPU viewport | M3 | PLANNED |
-| M5 | E2E Verification & Adversarial Hardening | Phase 1: 100% E2E test pass (Tiers 1-4); Phase 2: Tier 5 white-box adversarial coverage hardening & Forensic Audit | M-TEST, M4 | PLANNED |
+| M1 | HTML Skeleton & ES Modularization | `css/tokens.css`, `css/android.css`, `android.html`, `src/main_android.js`, `src/system_bootstrap.js`, `src/app_controller.js`, `src/ui_render.js`, single `V86Class` instantiation | None | DONE |
+| M2 | Truthful Canvas & Fake UI Removal | Remove `#screen-app`, remove `renderActivityUi` from primary path, gate `arcade_demo.js` behind `?demo=1` | M1 | DONE |
+| M3 | Logging Discipline & Hot-path Fix | Demote scanout damaged rect log to `[D]`, verify zero `[I]` spam per idle frame | M1 | DONE |
+| M4 | Automated Integration Tests & Regression Suite | `tests/test_bootstrap.mjs` with mock `V86Class`, `package.json`, `pnpm test` pass | M1, M2, M3 | DONE |
+| M5 | Multi-Axis Verification & Forensic Audit | Reviewers × 2, Challengers × 2, Forensic Auditor × 1, Gate verification | M1, M2, M3, M4 | DONE |
 
 ## Interface Contracts
-### `v86_guest_manager` ↔ `v86` Runtime
-- Global constructor: `window.V86Starter = window.V86Starter || window.V86`
-- Configuration options: `bios: { url: './bios/seabios.bin' }`, `vga_bios: { url: './bios/vgabios.bin' }`, `cdrom: { url: './guest/build/linux4.iso' }`, `wasm_path: './v86/v86.wasm'`
-- Serial listener: `emulator.add_listener('serial0-output-char', (char) => handleSerialChar(char))`
-- Lifecycle callbacks: `onStateChange(newState)`, `onMilestone(milestoneName)`, `onError(error)`
+### `main_android.js` ↔ `system_bootstrap.js`
+- Bootstrap initialization: `const bootstrap = new SystemBootstrap(options)`
+- Boot guest: `await bootstrap.init(domElements)`
+- Subscriptions: `bootstrap.on('milestone', cb)`, `bootstrap.on('stateChange', cb)`, `bootstrap.on('serial', cb)`
 
-### `virtio_gpu_device` ↔ `WasmVirtioGpuBridge` ↔ `WebGpuCompositor`
-- Command queue transfer: `bridge.process_control_queue(cmd_bytes: Uint8Array) -> Uint8Array`
-- Scanout buffer retrieval: `bridge.get_scanout_framebuffer(scanout_id: u32) -> Uint8Array`
-- Scanout damage rect: `bridge.get_scanout_damage(scanout_id: u32) -> { x: u32, y: u32, width: u32, height: u32 }`
-- WebGPU texture upload: `queue.write_texture({ texture: guestLayerTexture, origin: { x, y } }, damage_bytes, { bytesPerRow, rowsPerImage }, { width, height })`
+### `main_android.js` ↔ `app_controller.js`
+- Controller instantiation: `const appController = new AppController({ bootstrap, runtime, pms, ams, wms })`
+- Activity launch: `await appController.launchActivity(packageName, activityName)`
+- Back navigation: `appController.handleBackPress()`
 
-### Logging Abstraction ↔ UI Streaming
-- Emitter API: `logDebug(subsystem: 'v86' | 'bridge' | 'compositor', level: 'V' | 'D' | 'I' | 'W' | 'E', message: string, metadata?: object)`
-- Prefix format: `[v86]`, `[bridge]`, `[compositor]`
-- Logcat UI listener: `appendLogcat(tag, message, priority)` with circular buffer (max 5000 entries) and filter predicates.
+### `main_android.js` / `app_controller.js` ↔ `ui_render.js`
+- Pure render methods: `renderAppLauncherItem(container, pkg, onLaunch)`, `renderDockItems(container, dockItems, onLaunch)`, `renderLogcatList(container, logs, filter)`, `updateMetrics(container, metrics)`
+
+### `system_bootstrap.js` ↔ `V86Class` Mock (for Testing)
+- Injectable constructor: `new SystemBootstrap({ V86Class: MockV86Starter, ... })`
+- Listener contract: `emulator.add_listener('serial0-output-char', fn)`
+- Event emission: `emulator.emitSerialString(text)`
 
 ## Code Layout
-- `v86/`: v86 runtime assets (`libv86.js`, `v86.wasm`)
-- `bios/`: BIOS ROM images (`seabios.bin`, `vgabios.bin`)
-- `guest/`: Guest kernel, initrd scripts, defconfigs, tools
-- `src/`: JavaScript core modules (`v86_guest_manager.js`, `virtio_gpu_device.js`, `android_runtime.js`, `binder_test_suite.js`, `logger.js`)
-- `crates/`: Rust crates (`webgpu_compositor`, `webgpu_swapchain`, `surfaceflinger_gpu_service`, `virtio_gpu_bridge`, `binder_sys`, `ams_rs`, etc.)
-- `tests/`: Unit, integration, challenger, and E2E test suites
-- `serve.py`: Dev HTTP server with security headers
-- `index.html` & `android.html`: Web application entrypoints
+- `css/`: Styling stylesheets (`tokens.css`, `android.css`)
+- `src/`: JavaScript ES modules (`main_android.js`, `system_bootstrap.js`, `app_controller.js`, `ui_render.js`, `v86_guest_manager.js`, `virtio_gpu_device.js`, `android_runtime.js`, `logger.js`)
+- `tests/`: Automated test suites (`test_bootstrap.mjs`, `run_e2e_tests.mjs`, `test_v86_guest_boot.mjs`, `test_logger_m2.mjs`, `test_v86_virtqueue_integration.mjs`, `test_m1_m5_adversarial_challenger.mjs`, `adversarial_virtio_logging_stress.mjs`)
+- `android.html`: Minimal DOM skeleton (146 lines)
+- `index.html`: Developer testbed with gated arcade demo (`?demo=1`)
+- `package.json`: Project manifest with pnpm test scripts

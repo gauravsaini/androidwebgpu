@@ -1,0 +1,18 @@
+/**
+ * Android WebGPU Design Tokens & CSS Variables
+ */
+:root {
+    --bg: #06080e;
+    --surface: #0e1320;
+    --surface-border: #1d253b;
+    --surface-hover: #161e32;
+    --primary: #38bdf8;
+    --primary-glow: rgba(56, 189, 248, 0.4);
+    --accent-green: #10b981;
+    --accent-purple: #a855f7;
+    --accent-pink: #ec4899;
+    --text-main: #f8fafc;
+    --text-muted: #94a3b8;
+    --font-ui: 'Outfit', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    --font-mono: 'Fira Code', monospace;
+}

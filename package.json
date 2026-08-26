@@ -1,0 +1,10 @@
+{
+  "name": "androidwebgpu",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Android 14 Material You OS Runtime on WebGPU and x86 Guest VM",
+  "scripts": {
+    "test": "node tests/test_bootstrap.mjs && node tests/test_m1_m5_adversarial_challenger.mjs && node tests/run_e2e_tests.mjs && node tests/test_v86_guest_boot.mjs && node tests/test_logger_m2.mjs && node tests/test_v86_virtqueue_integration.mjs",
+    "test:all": "node tests/test_bootstrap.mjs && node tests/test_m1_m5_adversarial_challenger.mjs && node tests/run_e2e_tests.mjs && node tests/test_v86_guest_boot.mjs && node tests/test_logger_m2.mjs && node tests/test_v86_virtqueue_integration.mjs && node tests/test_dex_vm_apk.mjs && node tests/test_v86_adversarial_challenger.mjs && node tests/test_v86_rendering_empirical_challenge.mjs && node tests/test_m2_adversarial_challenger.mjs && node tests/test_m2_adversarial_stress_challenger.mjs && node tests/test_challenger_1_dom_nav_fdroid.mjs && node tests/test_challenger_2_edge_fuzz.mjs"
+  }
+}
