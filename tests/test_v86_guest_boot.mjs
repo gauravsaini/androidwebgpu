@@ -15,7 +15,7 @@ import fs from 'fs';
 import path from 'path';
 import zlib from 'zlib';
 import { fileURLToPath } from 'url';
-import { V86GuestManager, VM_STATES, BOOT_MILESTONES } from '../src/v86_guest_manager.js';
+import { V86GuestManager, VM_STATES, BOOT_MILESTONES, verifyBzImage } from '../src/v86_guest_manager.js';
 import { BinderTestSuite } from '../src/binder_test_suite.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -77,6 +77,24 @@ function parseCpioNewc(buffer) {
     return files;
 }
 
+function parseZipEntries(zipBuf) {
+    const entries = new Map();
+    let offset = 0;
+    while (offset + 30 <= zipBuf.length) {
+        const sig = zipBuf.readUInt32LE(offset);
+        if (sig !== 0x04034B50) break;
+        const compressedSize = zipBuf.readUInt32LE(offset + 18);
+        const nameLen = zipBuf.readUInt16LE(offset + 26);
+        const extraLen = zipBuf.readUInt16LE(offset + 28);
+        const name = zipBuf.toString('utf8', offset + 30, offset + 30 + nameLen);
+        const dataStart = offset + 30 + nameLen + extraLen;
+        const data = zipBuf.subarray(dataStart, dataStart + compressedSize);
+        entries.set(name, { offset: dataStart, data, size: compressedSize });
+        offset = dataStart + compressedSize;
+    }
+    return entries;
+}
+
 async function main() {
     console.log("⚡ Starting Phase 0 v86 Guest Boot & Baseline Test Runner...\n");
 
@@ -109,6 +127,7 @@ async function main() {
         assert(initContent.includes('/system/bin/ams_rs'), "Init script must start ams_rs");
         assert(initContent.includes('/system/bin/wms_rs'), "Init script must start wms_rs");
         assert(initContent.includes('/system/bin/inputflinger_rs'), "Init script must start inputflinger_rs");
+        assert(!initContent.includes('media_host_rs'), "Init script must NOT reference media_host_rs");
 
         // 1.3 Initrd packaging script
         const buildInitrdPath = path.join(rootDir, 'guest/tools/build_initrd.sh');
@@ -155,15 +174,21 @@ async function main() {
         const frameworkJar = cpioEntries.get('system/framework/framework.jar');
         assert(frameworkJar.length >= 30, "framework.jar must have at least ZIP header");
         assert(frameworkJar.readUInt32LE(0) === 0x04034B50, "framework.jar must be a valid ZIP archive (magic PK\\x03\\x04)");
-        assert(frameworkJar.includes(Buffer.from('classes.dex')), "framework.jar must contain classes.dex entry");
 
-        // Validate classes.dex inside framework.jar
         const dexOffset = 30 + 11; // 30 bytes local header + 11 bytes 'classes.dex'
         const dexMagic = frameworkJar.toString('ascii', dexOffset, dexOffset + 8);
         assert(dexMagic === 'dex\n035\0', `classes.dex magic must be 'dex\\n035\\0', got ${JSON.stringify(dexMagic)}`);
-        assert(frameworkJar.includes(Buffer.from('Landroid/app/Activity;')), "classes.dex must contain descriptor Landroid/app/Activity;");
-        assert(frameworkJar.includes(Buffer.from('Landroid/os/ServiceManager;')), "classes.dex must contain descriptor Landroid/os/ServiceManager;");
-        assert(frameworkJar.includes(Buffer.from('Landroid/view/SurfaceControl;')), "classes.dex must contain descriptor Landroid/view/SurfaceControl;");
+
+        const jarEntries = parseZipEntries(frameworkJar);
+        assert(jarEntries.has('META-INF/MANIFEST.MF'), "framework.jar must contain META-INF/MANIFEST.MF entry");
+        assert(jarEntries.has('classes.dex'), "framework.jar must contain classes.dex entry");
+
+        // Validate classes.dex inside framework.jar
+        const dexEntry = jarEntries.get('classes.dex');
+        assert(dexEntry && dexEntry.data.length >= 0x70, "classes.dex must have valid DEX binary payload");
+        assert(dexEntry.data.includes(Buffer.from('Landroid/app/Activity;')), "classes.dex must contain descriptor Landroid/app/Activity;");
+        assert(dexEntry.data.includes(Buffer.from('Landroid/os/ServiceManager;')), "classes.dex must contain descriptor Landroid/os/ServiceManager;");
+        assert(dexEntry.data.includes(Buffer.from('Landroid/view/SurfaceControl;')), "classes.dex must contain descriptor Landroid/view/SurfaceControl;");
     });
 
     // -------------------------------------------------------------------------
@@ -209,8 +234,10 @@ async function main() {
 
         // 2.6 V86GuestManager verifyBzImage() method tests
         assert(typeof manager.verifyBzImage === 'function', "V86GuestManager must implement verifyBzImage(buffer)");
+        assert(typeof verifyBzImage === 'function', "v86_guest_manager must export standalone verifyBzImage(buffer)");
         const bzImageBuf = fs.readFileSync(path.join(rootDir, 'guest/build/bzImage'));
         assert(manager.verifyBzImage(bzImageBuf) === true, "verifyBzImage must return true for valid bzImage binary");
+        assert(verifyBzImage(bzImageBuf) === true, "standalone verifyBzImage must return true for valid bzImage binary");
 
         // Corrupted boot signature at 0x1FE
         const badSigBuf = Buffer.from(bzImageBuf);

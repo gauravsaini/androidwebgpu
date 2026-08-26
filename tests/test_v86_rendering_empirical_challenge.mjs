@@ -102,6 +102,24 @@ function parseCpioNewc(buffer) {
     return files;
 }
 
+function parseZipEntries(zipBuf) {
+    const entries = new Map();
+    let offset = 0;
+    while (offset + 30 <= zipBuf.length) {
+        const sig = zipBuf.readUInt32LE(offset);
+        if (sig !== 0x04034B50) break;
+        const compressedSize = zipBuf.readUInt32LE(offset + 18);
+        const nameLen = zipBuf.readUInt16LE(offset + 26);
+        const extraLen = zipBuf.readUInt16LE(offset + 28);
+        const name = zipBuf.toString('utf8', offset + 30, offset + 30 + nameLen);
+        const dataStart = offset + 30 + nameLen + extraLen;
+        const data = zipBuf.subarray(dataStart, dataStart + compressedSize);
+        entries.set(name, { offset: dataStart, data, size: compressedSize });
+        offset = dataStart + compressedSize;
+    }
+    return entries;
+}
+
 async function main() {
     console.log("⚡ Starting Comprehensive Rendering & Guest Boot Empirical Challenger Suite...\n");
 
@@ -265,18 +283,20 @@ async function main() {
 
         // 2.6 Framework.jar ZIP structure and classes.dex DEX Header Verification
         const frameworkJar = entries.get('system/framework/framework.jar');
-        assert(frameworkJar.length >= 30, "framework.jar must have ZIP header");
-        assert(frameworkJar.readUInt32LE(0) === 0x04034B50, "ZIP Local Header Magic PK\\x03\\x04");
+        const jarEntries = parseZipEntries(frameworkJar);
+        assert(jarEntries.has('META-INF/MANIFEST.MF'), "framework.jar must contain META-INF/MANIFEST.MF entry");
+        assert(jarEntries.has('classes.dex'), "framework.jar must contain classes.dex entry");
 
-        const dexOffset = 30 + 11;
-        const dexMagic = frameworkJar.toString('ascii', dexOffset, dexOffset + 8);
+        const dexEntry = jarEntries.get('classes.dex');
+        assert(dexEntry && dexEntry.data.length >= 0x70, "classes.dex must have valid DEX binary payload");
+        const dexMagic = dexEntry.data.toString('ascii', 0, 8);
         assert(dexMagic === 'dex\n035\0', "DEX header magic must be 'dex\\n035\\0'");
 
         // DEX header field checks (checksum, signature, file_size, header_size)
-        const dexHeaderSize = frameworkJar.readUInt32LE(dexOffset + 0x24);
+        const dexHeaderSize = dexEntry.data.readUInt32LE(0x24);
         assert(dexHeaderSize === 0x70, "DEX header size must be 0x70 (112 bytes)");
 
-        const dexEndianTag = frameworkJar.readUInt32LE(dexOffset + 0x28);
+        const dexEndianTag = dexEntry.data.readUInt32LE(0x28);
         assert(dexEndianTag === 0x12345678, "DEX endian tag must be 0x12345678 (ENDIAN_CONSTANT)");
     });
 

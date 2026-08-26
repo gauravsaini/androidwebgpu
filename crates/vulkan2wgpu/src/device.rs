@@ -32,6 +32,10 @@ pub struct VkDevice {
 }
 
 impl VkDevice {
+    pub fn with_device_and_queue(device: Arc<wgpu::Device>, queue: Arc<wgpu::Queue>) -> Self {
+        Self::with_device_queue(device, queue).expect("Failed to create VkDevice with shared device and queue")
+    }
+
     pub fn with_device_queue(device: Arc<wgpu::Device>, queue: Arc<wgpu::Queue>) -> Result<Self, String> {
         let push_constant_bgl = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             label: Some("VkPushConstants_BGL"),

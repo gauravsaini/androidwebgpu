@@ -48,15 +48,15 @@ pub struct VirtioGpuBridge {
 impl VirtioGpuBridge {
     pub async fn new(width: u32, height: u32) -> Result<Self, String> {
         let gl_context = GlContext::new(width, height).await?;
-        let vk_device = VkDevice::with_device_queue(Arc::clone(&gl_context.device), Arc::clone(&gl_context.queue)).ok();
+        let dev = Arc::clone(&gl_context.device);
+        let q = Arc::clone(&gl_context.queue);
+        let vk_device = Some(VkDevice::with_device_and_queue(Arc::clone(&dev), Arc::clone(&q)));
 
         let binder_device = Arc::new(VirtioBinderDevice::new());
         let handle_bridge = Arc::new(Mutex::new(HandleBridge::new()));
         let mut routing_policy = RoutingPolicy::new_default_local();
 
         // 1. SurfaceComposerService (Handle 1) - unified device sharing gl_context.device & queue
-        let dev = Arc::clone(&gl_context.device);
-        let q = Arc::clone(&gl_context.queue);
         let surface_composer = {
             let sf = Arc::new(SurfaceComposerService::with_handle_bridge(
                 Arc::clone(&dev),

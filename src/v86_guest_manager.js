@@ -464,6 +464,24 @@ export class V86GuestManager {
     }
 
     /**
+     * Set target canvas and initialize WebGPU rendering context
+     * @param {HTMLCanvasElement} canvas
+     * @returns {OffscreenCanvas|HTMLCanvasElement}
+     */
+    setCanvas(canvas) {
+        this.config.canvas = canvas;
+        if (canvas && typeof canvas.transferControlToOffscreen === 'function') {
+            try {
+                this.offscreenCanvas = canvas.transferControlToOffscreen();
+                return this.offscreenCanvas;
+            } catch (_) {
+                return canvas;
+            }
+        }
+        return canvas;
+    }
+
+    /**
      * Attach Virtio-GPU device
      * @param {Object} device 
      */
@@ -562,33 +580,11 @@ export class V86GuestManager {
 
     /**
      * Verify Linux x86 bzImage binary header
-     * Validates:
-     * - 0x1FE == 0xAA55 (boot sector signature)
-     * - 0x202 == 'HdrS' (header magic 0x53726448)
-     * - 0x206 >= 0x0200 (boot protocol version >= 2.00)
      * @param {ArrayBuffer|Uint8Array|Buffer} buffer
      * @returns {boolean}
      */
     verifyBzImage(buffer) {
-        if (!buffer) return false;
-        const view = (buffer instanceof Uint8Array || (typeof Buffer !== 'undefined' && Buffer.isBuffer(buffer)))
-            ? buffer
-            : new Uint8Array(buffer);
-        if (view.length < 0x208) return false;
-
-        // Boot sector signature at 0x01FE (0xAA55)
-        const bootSig = (view[0x1FE]) | (view[0x1FF] << 8);
-        if (bootSig !== 0xAA55) return false;
-
-        // Header magic "HdrS" at 0x0202 (0x53726448)
-        const magic = String.fromCharCode(view[0x202], view[0x203], view[0x204], view[0x205]);
-        if (magic !== 'HdrS') return false;
-
-        // Boot protocol version at 0x0206 (must be >= 0x0200)
-        const protocol = (view[0x206]) | (view[0x207] << 8);
-        if (protocol < 0x0200) return false;
-
-        return true;
+        return verifyBzImage(buffer);
     }
 
     /**
@@ -640,3 +636,35 @@ export class V86GuestManager {
         };
     }
 }
+
+/**
+ * Verify Linux x86 bzImage binary header
+ * Validates:
+ * - 0x1FE == 0xAA55 (boot sector signature)
+ * - 0x202 == 'HdrS' (header magic 0x53726448)
+ * - 0x206 >= 0x0200 (boot protocol version >= 2.00)
+ * @param {ArrayBuffer|Uint8Array|Buffer} buffer
+ * @returns {boolean}
+ */
+export function verifyBzImage(buffer) {
+    if (!buffer) return false;
+    const view = (buffer instanceof Uint8Array || (typeof Buffer !== 'undefined' && Buffer.isBuffer(buffer)))
+        ? buffer
+        : new Uint8Array(buffer);
+    if (view.length < 0x208) return false;
+
+    // Boot sector signature at 0x01FE (0xAA55)
+    const bootSig = (view[0x1FE]) | (view[0x1FF] << 8);
+    if (bootSig !== 0xAA55) return false;
+
+    // Header magic "HdrS" at 0x0202 (0x53726448)
+    const magic = String.fromCharCode(view[0x202], view[0x203], view[0x204], view[0x205]);
+    if (magic !== 'HdrS') return false;
+
+    // Boot protocol version at 0x0206 (must be >= 0x0200)
+    const protocol = (view[0x206]) | (view[0x207] << 8);
+    if (protocol < 0x0200) return false;
+
+    return true;
+}
+

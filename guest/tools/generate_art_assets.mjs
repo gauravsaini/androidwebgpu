@@ -299,66 +299,85 @@ export function generateClassesDex() {
 // 3. Package framework.jar as Valid ZIP Archive
 // -----------------------------------------------------------------------------
 export function generateFrameworkJar() {
-    const dexBuffer = generateClassesDex();
-    const entryName = 'classes.dex';
-    const entryNameBuf = Buffer.from(entryName, 'utf8');
+    const entries = [
+        {
+            name: 'classes.dex',
+            data: generateClassesDex()
+        },
+        {
+            name: 'META-INF/MANIFEST.MF',
+            data: Buffer.from('Manifest-Version: 1.0\r\nCreated-By: AndroidWebGPU ART Generator\r\n\r\n', 'utf8')
+        }
+    ];
 
-    const dexCrc = crc32(dexBuffer);
-    const dexSize = dexBuffer.length;
+    const localParts = [];
+    const cdParts = [];
+    let currentOffset = 0;
 
-    // 3.1 Local File Header (30 bytes + name length)
-    const localHeader = Buffer.alloc(30 + entryNameBuf.length);
-    localHeader.writeUInt32LE(0x04034B50, 0);  // Local file header signature (PK\x03\x04)
-    localHeader.writeUInt16LE(20, 4);          // Version needed to extract (2.0)
-    localHeader.writeUInt16LE(0, 6);           // General purpose bit flag
-    localHeader.writeUInt16LE(0, 8);           // Compression method (0 = STORED)
-    localHeader.writeUInt16LE(0x0000, 10);     // Last mod file time
-    localHeader.writeUInt16LE(0x5821, 12);     // Last mod file date (2024-01-01)
-    localHeader.writeUInt32LE(dexCrc, 14);     // CRC-32
-    localHeader.writeUInt32LE(dexSize, 18);    // Compressed size
-    localHeader.writeUInt32LE(dexSize, 22);    // Uncompressed size
-    localHeader.writeUInt16LE(entryNameBuf.length, 26); // File name length
-    localHeader.writeUInt16LE(0, 28);          // Extra field length
-    entryNameBuf.copy(localHeader, 30);
+    for (const entry of entries) {
+        const nameBuf = Buffer.from(entry.name, 'utf8');
+        const entryCrc = crc32(entry.data);
+        const entrySize = entry.data.length;
+        const entryOffset = currentOffset;
 
-    const localHeaderOffset = 0;
-    const centralDirectoryOffset = localHeader.length + dexSize;
+        // 3.1 Local File Header (30 bytes + name length)
+        const localHeader = Buffer.alloc(30 + nameBuf.length);
+        localHeader.writeUInt32LE(0x04034B50, 0);  // Local file header signature (PK\x03\x04)
+        localHeader.writeUInt16LE(20, 4);          // Version needed to extract (2.0)
+        localHeader.writeUInt16LE(0, 6);           // General purpose bit flag
+        localHeader.writeUInt16LE(0, 8);           // Compression method (0 = STORED)
+        localHeader.writeUInt16LE(0x0000, 10);     // Last mod file time
+        localHeader.writeUInt16LE(0x5821, 12);     // Last mod file date (2024-01-01)
+        localHeader.writeUInt32LE(entryCrc, 14);   // CRC-32
+        localHeader.writeUInt32LE(entrySize, 18);  // Compressed size
+        localHeader.writeUInt32LE(entrySize, 22);  // Uncompressed size
+        localHeader.writeUInt16LE(nameBuf.length, 26); // File name length
+        localHeader.writeUInt16LE(0, 28);          // Extra field length
+        nameBuf.copy(localHeader, 30);
 
-    // 3.2 Central Directory Header (46 bytes + name length)
-    const cdHeader = Buffer.alloc(46 + entryNameBuf.length);
-    cdHeader.writeUInt32LE(0x02014B50, 0);     // Central directory header signature (PK\x01\x02)
-    cdHeader.writeUInt16LE(20, 4);             // Version made by
-    cdHeader.writeUInt16LE(20, 6);             // Version needed to extract
-    cdHeader.writeUInt16LE(0, 8);              // General purpose bit flag
-    cdHeader.writeUInt16LE(0, 10);             // Compression method (0 = STORED)
-    cdHeader.writeUInt16LE(0x0000, 12);        // Last mod file time
-    cdHeader.writeUInt16LE(0x5821, 14);        // Last mod file date
-    cdHeader.writeUInt32LE(dexCrc, 16);        // CRC-32
-    cdHeader.writeUInt32LE(dexSize, 20);       // Compressed size
-    cdHeader.writeUInt32LE(dexSize, 24);       // Uncompressed size
-    cdHeader.writeUInt16LE(entryNameBuf.length, 28); // File name length
-    cdHeader.writeUInt16LE(0, 30);             // Extra field length
-    cdHeader.writeUInt16LE(0, 32);             // File comment length
-    cdHeader.writeUInt16LE(0, 34);             // Disk number start
-    cdHeader.writeUInt16LE(0, 36);             // Internal file attributes
-    cdHeader.writeUInt32LE(0, 38);             // External file attributes
-    cdHeader.writeUInt32LE(localHeaderOffset, 42); // Relative offset of local header
-    entryNameBuf.copy(cdHeader, 46);
+        localParts.push(localHeader, entry.data);
+        currentOffset += localHeader.length + entrySize;
 
-    const cdSize = cdHeader.length;
+        // 3.2 Central Directory Header (46 bytes + name length)
+        const cdHeader = Buffer.alloc(46 + nameBuf.length);
+        cdHeader.writeUInt32LE(0x02014B50, 0);     // Central directory header signature (PK\x01\x02)
+        cdHeader.writeUInt16LE(20, 4);             // Version made by
+        cdHeader.writeUInt16LE(20, 6);             // Version needed to extract
+        cdHeader.writeUInt16LE(0, 8);              // General purpose bit flag
+        cdHeader.writeUInt16LE(0, 10);             // Compression method (0 = STORED)
+        cdHeader.writeUInt16LE(0x0000, 12);        // Last mod file time
+        cdHeader.writeUInt16LE(0x5821, 14);        // Last mod file date
+        cdHeader.writeUInt32LE(entryCrc, 16);      // CRC-32
+        cdHeader.writeUInt32LE(entrySize, 20);     // Compressed size
+        cdHeader.writeUInt32LE(entrySize, 24);     // Uncompressed size
+        cdHeader.writeUInt16LE(nameBuf.length, 28); // File name length
+        cdHeader.writeUInt16LE(0, 30);             // Extra field length
+        cdHeader.writeUInt16LE(0, 32);             // File comment length
+        cdHeader.writeUInt16LE(0, 34);             // Disk number start
+        cdHeader.writeUInt16LE(0, 36);             // Internal file attributes
+        cdHeader.writeUInt32LE(0, 38);             // External file attributes
+        cdHeader.writeUInt32LE(entryOffset, 42);   // Relative offset of local header
+        nameBuf.copy(cdHeader, 46);
+
+        cdParts.push(cdHeader);
+    }
+
+    const cdBuffer = Buffer.concat(cdParts);
+    const cdOffset = currentOffset;
+    const cdSize = cdBuffer.length;
 
     // 3.3 End of Central Directory Record (22 bytes)
     const eocd = Buffer.alloc(22);
     eocd.writeUInt32LE(0x06054B50, 0);         // EOCD signature (PK\x05\x06)
     eocd.writeUInt16LE(0, 4);                  // Disk number
     eocd.writeUInt16LE(0, 6);                  // Disk where CD starts
-    eocd.writeUInt16LE(1, 8);                  // Number of CD records on this disk
-    eocd.writeUInt16LE(1, 10);                 // Total number of CD records
+    eocd.writeUInt16LE(entries.length, 8);     // Number of CD records on this disk
+    eocd.writeUInt16LE(entries.length, 10);    // Total number of CD records
     eocd.writeUInt32LE(cdSize, 12);            // Size of central directory
-    eocd.writeUInt32LE(centralDirectoryOffset, 16); // Offset of start of CD
+    eocd.writeUInt32LE(cdOffset, 16);          // Offset of start of CD
     eocd.writeUInt16LE(0, 20);                 // Comment length
 
-    return Buffer.concat([localHeader, dexBuffer, cdHeader, eocd]);
+    return Buffer.concat([...localParts, cdBuffer, eocd]);
 }
 
 // -----------------------------------------------------------------------------
