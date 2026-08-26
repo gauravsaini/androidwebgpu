@@ -1332,41 +1332,20 @@
                 offscreen.height = 720;
                 const ctx = offscreen.getContext('2d');
 
-                const grad = ctx.createLinearGradient(0, 0, 0, 720);
-                grad.addColorStop(0, '#10141d');
-                grad.addColorStop(1, '#1b2234');
-                ctx.fillStyle = grad;
+                // Honest placeholder — synthetic buffer until guest Skia renders real pixels
+                ctx.fillStyle = '#131929';
                 ctx.fillRect(0, 0, 1280, 720);
 
-                ctx.fillStyle = '#222b40';
-                ctx.fillRect(0, 0, 1280, 56);
-                ctx.fillStyle = '#64b5f6';
-                ctx.font = 'bold 18px Inter, sans-serif';
-                ctx.fillText(appName || pkg, 24, 35);
-
-                ctx.fillStyle = '#90caf9';
-                ctx.font = '12px Inter, sans-serif';
-                ctx.fillText(`Package: ${pkg} • PID: 1042 • HW Accelerated WebGPU`, 24, 86);
-
-                ctx.fillStyle = 'rgba(255, 255, 255, 0.05)';
-                ctx.strokeStyle = 'rgba(100, 181, 246, 0.3)';
-                ctx.lineWidth = 1;
-                ctx.beginPath();
-                ctx.roundRect(24, 106, 1232, 580, 12);
-                ctx.fill();
-                ctx.stroke();
-
+                // Centered app name
                 ctx.fillStyle = '#e3f2fd';
-                ctx.font = '16px Inter, sans-serif';
-                ctx.fillText(`Live Window Surface: ${pkg}`, 48, 145);
+                ctx.font = 'bold 28px Inter, sans-serif';
+                ctx.textAlign = 'center';
+                ctx.fillText(appName || pkg, 640, 340);
 
-                ctx.fillStyle = '#90a4ae';
-                ctx.font = '13px monospace';
-                ctx.fillText(`Activity: ${pkg}.MainActivity`, 48, 175);
-                ctx.fillText(`Window: SurfaceView[1280x720@120Hz RGBA_8888]`, 48, 198);
-                ctx.fillText(`BufferQueue: GraphicBufferProducer Handle #10 (Slot 0)`, 48, 221);
-                ctx.fillText(`Compositor: SurfaceFlinger WebGPU Mailbox Swapchain`, 48, 244);
-                ctx.fillText(`State: Resumed | Focused | VSync Active`, 48, 267);
+                // Subtitle
+                ctx.fillStyle = '#546e7a';
+                ctx.font = '14px Inter, sans-serif';
+                ctx.fillText('Synthetic placeholder — awaiting guest rendering', 640, 375);
 
                 const imgData = ctx.getImageData(0, 0, 1280, 720);
                 const rawBytes = new Uint8Array(imgData.data.buffer);
