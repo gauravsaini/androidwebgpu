@@ -978,9 +978,9 @@
                 gpuDev = new VirtioGpuDevice(null, bridge, canvas);
                 console.log("[AndroidOS] WebGPU Virtio-GPU Bridge initialized successfully.");
 
-                // Initialize SurfaceFlinger StatusBar CompositionLayer
-                if (typeof bridge.update_status_bar_layer === 'function') {
-                    bridge.update_status_bar_layer(0.03, 0.05, 0.09, 0.92);
+                // Initialize SystemUI compositor layers (wallpaper, statusbar, navbar)
+                if (typeof bridge.enable_system_ui === 'function') {
+                    bridge.enable_system_ui();
                 }
 
                 // Initialize V86 Guest Manager
@@ -1551,11 +1551,9 @@
                 }
             }
 
-            // 5. Render Authentic Material You App UI in screenApp & activate screen
+            // 5. Show real WebGPU compositor output (SurfaceFlinger composited frame)
             runtime.startActivity(pkg, `${pkg}.MainActivity`);
-            const appState = runtime.activeApps.get(pkg) || { packageName: pkg, appName: meta.name };
-            runtime.renderActivityUi(appState, screenApp);
-            activateScreen(screenApp);
+            activateScreen(screenWebGpu);
         };
 
         // ---------------------------------------------------------------------
@@ -1660,10 +1658,11 @@
             await sendAmsLifecycleViaBinder(6, 'finishActivity'); // FINISH_ACTIVITY
 
             if (screenWebGpu.classList.contains('active')) {
-                if (runtime.currentPackage && screenApp.hasChildNodes()) {
-                    activateScreen(screenApp);
-                    return;
+                const hasMore = runtime.goBack();
+                if (!hasMore) {
+                    activateScreen(screenHome);
                 }
+                return;
             }
             const hasMore = runtime.goBack();
             if (!hasMore) {

@@ -150,6 +150,17 @@ impl WasmVirtioGpuBridge {
             }
         }
     }
+
+    #[wasm_bindgen]
+    pub fn enable_system_ui(&self) {
+        if let Ok(cell) = self.bridge.try_borrow() {
+            if let Some(bridge) = cell.as_ref() {
+                if let Some(sf) = &bridge.surface_composer {
+                    sf.enable_system_ui();
+                }
+            }
+        }
+    }
 }
 
 

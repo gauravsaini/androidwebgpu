@@ -482,6 +482,42 @@ impl SurfaceComposerService {
     pub fn display_dimensions(&self) -> (u32, u32) {
         (self.display_width, self.display_height)
     }
+
+    /// Create fixed SystemUI layers: wallpaper, status bar, and navigation bar.
+    /// Opt-in — call from browser path after boot. Tests skip this.
+    pub fn enable_system_ui(&self) {
+        let w = self.display_width as f32;
+        let h = self.display_height as f32;
+
+        // Wallpaper: z=-100, fullscreen, dark Material You background #131929
+        let mut wallpaper = LayerState::new(9001, "Wallpaper");
+        wallpaper.set_bounds_pixels([0.0, 0.0, w, h]);
+        wallpaper.set_z_order(-100);
+        wallpaper.set_color([0.075, 0.098, 0.161, 1.0]); // #131929
+        wallpaper.set_blend_mode(BlendMode::None);
+
+        // StatusBar: z=1000, top 48px, semi-transparent dark
+        let mut statusbar = LayerState::new(9002, "StatusBar");
+        statusbar.set_bounds_pixels([0.0, 0.0, w, 48.0]);
+        statusbar.set_z_order(1000);
+        statusbar.set_color([0.0, 0.0, 0.0, 0.6]);
+        statusbar.set_blend_mode(BlendMode::Premultiplied);
+
+        // NavBar: z=1000, bottom 96px
+        let nav_y = h - 96.0;
+        let mut navbar = LayerState::new(9003, "NavigationBar");
+        navbar.set_bounds_pixels([0.0, nav_y, w, 96.0]);
+        navbar.set_z_order(1000);
+        navbar.set_color([0.0, 0.0, 0.0, 0.6]);
+        navbar.set_blend_mode(BlendMode::Premultiplied);
+
+        let updates = vec![
+            ComposerState::new(9001, wallpaper),
+            ComposerState::new(9002, statusbar),
+            ComposerState::new(9003, navbar),
+        ];
+        let _ = self.set_transaction_state(updates, 0);
+    }
 }
 
 impl Remotable for SurfaceComposerService {
