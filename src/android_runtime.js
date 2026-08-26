@@ -9,10 +9,10 @@
  *    - Activity Navigation: MainActivity, AppDetailsActivity, SettingsActivity, SwapActivity, UpdatesActivity.
  *    - True in-browser APK installation into Dalvik VM & Android Home Screen.
  * 3. Android System Applications:
+ *    - Browser / Firefox / Chrome (com.android.chrome, org.mozilla.firefox): Web browsing, bookmarks, WebGPU preview.
  *    - Settings (com.android.settings): Android 14 specs, WebGPU hardware, Dalvik VM monitor, Developer options.
- *    - Chrome / Browser (com.android.chrome): Web browsing, APK download portals (F-Droid, APKPure).
  *    - Files (com.android.files): Storage explorer (/data/app, /sdcard/Download) and APK installer.
- *    - Terminal (com.android.terminal): Interactive Linux/Android shell (pm, am, logcat, getprop, ps).
+ *    - Terminal (com.android.terminal, com.termux): Interactive Linux/Android shell (pm, am, logcat, getprop, ps).
  * 4. Universal APK Layout Inflater:
  *    - Dynamic view hierarchy construction for any loaded or uploaded Android APK.
  * 5. Dalvik VM Bytecode & Logcat HUD:
@@ -24,6 +24,63 @@
 import { ApkZipReader, AxmlDecoder, ArscStringPoolParser, defaultPackageManager } from './apk_client_parser.js';
 import { DexParser, DalvikVM } from './dex_vm.js';
 import { defaultHttpClient } from './android_network.js';
+
+export function resolveAppMetadata(pkgName, manifest = {}, arsc = null) {
+    const knownApps = {
+        'org.mozilla.firefox': { name: 'Firefox', icon: '🦊' },
+        'org.fdroid.fdroid': { name: 'F-Droid', icon: '🤖' },
+        'com.android.chrome': { name: 'Chrome', icon: '🌐' },
+        'com.android.settings': { name: 'Settings', icon: '⚙️' },
+        'com.android.files': { name: 'Files', icon: '📁' },
+        'com.android.terminal': { name: 'Terminal', icon: '💻' },
+        'com.termux': { name: 'Termux', icon: '💻' },
+        'org.schabi.newpipe': { name: 'NewPipe', icon: '▶️' },
+        'org.videolan.vlc': { name: 'VLC', icon: '🎬' },
+        'com.duckduckgo.mobile.android': { name: 'DuckDuckGo', icon: '🦆' },
+        'com.android.glbenchmark': { name: '3D Arcade', icon: '🎮' },
+        'net.cozic.joplin': { name: 'Joplin Notes', icon: '📝' },
+        'com.kunzisoft.keepass.free': { name: 'KeePassDX', icon: '🔑' },
+        'net.osmand.plus': { name: 'OsmAnd~', icon: '🗺️' }
+    };
+
+    if (knownApps[pkgName]) {
+        return knownApps[pkgName];
+    }
+
+    let name = manifest.applicationLabel;
+    if (!name || name.startsWith('@0x') || name.startsWith('@string/')) {
+        if (arsc && arsc.globalStrings) {
+            try {
+                const resolved = arsc.resolveStringRef ? arsc.resolveStringRef(name) : null;
+                if (resolved && !resolved.startsWith('@0x')) {
+                    name = resolved;
+                }
+            } catch (_) {}
+        }
+    }
+
+    if (!name || name.startsWith('@0x') || name.startsWith('@string/')) {
+        const parts = pkgName.split('.');
+        const last = parts[parts.length - 1] || 'App';
+        name = last.charAt(0).toUpperCase() + last.slice(1);
+    }
+
+    let icon = '📦';
+    const lower = (pkgName + ' ' + name).toLowerCase();
+    if (lower.includes('firefox') || lower.includes('browser') || lower.includes('chrome') || lower.includes('web')) icon = '🦊';
+    else if (lower.includes('music') || lower.includes('audio') || lower.includes('sound')) icon = '🎵';
+    else if (lower.includes('video') || lower.includes('media') || lower.includes('player') || lower.includes('vlc')) icon = '🎬';
+    else if (lower.includes('game') || lower.includes('play')) icon = '🎮';
+    else if (lower.includes('term') || lower.includes('shell')) icon = '💻';
+    else if (lower.includes('file') || lower.includes('storage')) icon = '📁';
+    else if (lower.includes('setting') || lower.includes('config')) icon = '⚙️';
+    else if (lower.includes('calc')) icon = '🧮';
+    else if (lower.includes('map') || lower.includes('nav')) icon = '🗺️';
+    else if (lower.includes('note') || lower.includes('edit')) icon = '📝';
+    else if (lower.includes('key') || lower.includes('pass')) icon = '🔑';
+
+    return { name, icon };
+}
 
 export class AndroidRuntime {
     constructor(options = {}) {
@@ -127,6 +184,25 @@ export class AndroidRuntime {
 
     getInitialRepoApps() {
         return [
+            {
+                id: 'firefox',
+                name: 'Firefox Browser',
+                pkg: 'org.mozilla.firefox',
+                author: 'Mozilla',
+                version: '124.0.1',
+                versionCode: 2016010000,
+                cat: 'Internet',
+                icon: '🦊',
+                desc: 'Fast, private and secure web browser with tracking protection and WebGPU acceleration.',
+                fullDesc: 'Get the privacy you need and the speed you want. Firefox is built by an independent non-profit that fights for your online rights and provides fast browsing with Total Cookie Protection.',
+                size: '88.4 MB',
+                license: 'MPL-2.0',
+                updated: 'Just now',
+                downloads: '100M+',
+                apkUrl: 'https://f-droid.org/repo/org.mozilla.firefox_124.apk',
+                permissions: ['INTERNET', 'ACCESS_NETWORK_STATE', 'CAMERA', 'RECORD_AUDIO', 'WRITE_EXTERNAL_STORAGE'],
+                sourceUrl: 'https://github.com/mozilla-mobile/firefox-android'
+            },
             {
                 id: 'termux',
                 name: 'Termux',
@@ -250,41 +326,22 @@ export class AndroidRuntime {
                 versionCode: 4613,
                 cat: 'Navigation',
                 icon: '🗺️',
-                desc: 'Global mobile map viewing & offline turn-by-turn navigation based on OpenStreetMap.',
-                fullDesc: 'OsmAnd is an offline world map application based on OpenStreetMap (OSM), which allows you to navigate taking into account the preferred roads and vehicle dimensions. Plan routes based on inclines and record GPX tracks without an internet connection.',
-                size: '112 MB',
-                license: 'GPL-3.0-only',
-                updated: '4 days ago',
-                downloads: '1M+',
+                desc: 'Offline maps and turn-by-turn navigation based on OpenStreetMap data.',
+                fullDesc: 'OsmAnd is an offline navigation application with access to free, worldwide, and high-quality OpenStreetMap (OSM) data. Enjoy voice and optical navigation, viewing POIs, creating and managing GPX tracks, using contour lines visualization and altitude info.',
+                size: '124.5 MB',
+                license: 'GPL-3.0-or-later',
+                updated: '3 days ago',
+                downloads: '4M+',
                 apkUrl: 'https://f-droid.org/repo/net.osmand.plus_4613.apk',
-                permissions: ['ACCESS_FINE_LOCATION', 'ACCESS_COARSE_LOCATION', 'FOREGROUND_SERVICE', 'INTERNET'],
+                permissions: ['ACCESS_FINE_LOCATION', 'ACCESS_COARSE_LOCATION', 'WRITE_EXTERNAL_STORAGE', 'RECORD_AUDIO'],
                 sourceUrl: 'https://github.com/osmandapp/OsmAnd'
-            },
-            {
-                id: 'simple_gallery',
-                name: 'Simple Gallery Pro',
-                pkg: 'com.simplemobiletools.gallery.pro',
-                author: 'Simple Mobile Tools',
-                version: '6.27.0',
-                versionCode: 627,
-                cat: 'System Tools',
-                icon: '🖼️',
-                desc: 'Highly customizable offline photo and video gallery without ads or trackers.',
-                fullDesc: 'Simple Gallery Pro is a highly customizable offline photo and video gallery. Organize & edit your photos, recover deleted files with the recycle bin, protect & hide files and view a huge variety of different photo & video formats including RAW, SVG, GIF, panoramic and more.',
-                size: '14.2 MB',
-                license: 'GPL-3.0-only',
-                updated: '2 weeks ago',
-                downloads: '2M+',
-                apkUrl: 'https://f-droid.org/repo/com.simplemobiletools.gallery.pro_627.apk',
-                permissions: ['READ_EXTERNAL_STORAGE', 'WRITE_EXTERNAL_STORAGE', 'MANAGE_EXTERNAL_STORAGE'],
-                sourceUrl: 'https://github.com/SimpleMobileTools/Simple-Gallery'
             }
         ];
     }
 
     /**
-     * Loads and executes a real APK binary buffer in user-space sandbox.
-     * @param {ArrayBuffer | Uint8Array} apkBuffer
+     * Ingests and executes a real Android APK binary archive into Dalvik VM.
+     * @param {ArrayBuffer} apkBuffer
      * @param {HTMLElement} hostContainer
      * @returns {Promise<object>}
      */
@@ -334,8 +391,11 @@ export class AndroidRuntime {
             }
         }
 
-        // 4. Register in PMS Registry
-        const appLabel = manifest.applicationLabel || (pkgName === 'org.fdroid.fdroid' ? 'F-Droid' : pkgName.split('.').pop());
+        // 4. Resolve clean Metadata & Register in PMS Registry
+        const meta = resolveAppMetadata(pkgName, manifest, arsc);
+        const appLabel = meta.name;
+        const appIcon = meta.icon;
+
         const packageInfo = {
             packageName: pkgName,
             appName: appLabel,
@@ -350,7 +410,7 @@ export class AndroidRuntime {
             receiversCount: manifest.receivers.length,
             permissions: manifest.permissions,
             installed: true,
-            icon: pkgName === 'org.fdroid.fdroid' ? '🤖' : '📦'
+            icon: appIcon
         };
         this.pms.registerPackage(packageInfo);
         this.installedApps.add(pkgName);
@@ -361,6 +421,7 @@ export class AndroidRuntime {
         const appState = {
             packageName: pkgName,
             appName: appLabel,
+            packageInfo,
             manifest,
             zip,
             arsc,
@@ -371,9 +432,16 @@ export class AndroidRuntime {
         this.activeApps.set(pkgName, appState);
         this.currentPackage = pkgName;
 
+        // Notify UI of package installation (adds to Home Screen grid)
+        if (typeof window !== 'undefined' && window.AndroidEmulatorOnPackageInstalled) {
+            window.AndroidEmulatorOnPackageInstalled(pkgName, appLabel, appIcon);
+        }
+
         // 6. Push to AMS Stack & Render Activity UI
         this.activityStack.push({ packageName: pkgName, activityName: mainActivity });
-        this.renderActivityUi(appState, hostContainer);
+        if (hostContainer) {
+            this.renderActivityUi(appState, hostContainer);
+        }
 
         return appState;
     }
@@ -387,11 +455,13 @@ export class AndroidRuntime {
     startActivity(packageName, activityName, extras = {}) {
         let appState = this.activeApps.get(packageName);
         if (!appState) {
-            const pkgInfo = this.pms.getPackage(packageName);
+            const pkgInfo = this.pms.getPackage(packageName) || this.pms.getPackageInfo(packageName);
+            const meta = resolveAppMetadata(packageName, {}, null);
             appState = {
                 packageName,
-                appName: pkgInfo ? pkgInfo.appName : packageName,
-                manifest: { activities: [] },
+                appName: pkgInfo ? pkgInfo.appName : meta.name,
+                packageInfo: pkgInfo || { icon: meta.icon, packageName },
+                manifest: { activities: [], targetSdkVersion: 34 },
                 activityInstance: null,
                 currentActivity: activityName,
                 containerEl: null
@@ -462,11 +532,11 @@ export class AndroidRuntime {
             this.renderFdroidActivity(appState, container);
         } else if (pkg === 'com.android.settings') {
             this.renderSettingsActivity(appState, container);
-        } else if (pkg === 'com.android.chrome') {
-            this.renderChromeActivity(appState, container);
+        } else if (pkg === 'com.android.chrome' || pkg === 'org.mozilla.firefox' || pkg.includes('browser') || pkg.includes('firefox')) {
+            this.renderBrowserActivity(appState, container);
         } else if (pkg === 'com.android.files') {
             this.renderFilesActivity(appState, container);
-        } else if (pkg === 'com.android.terminal') {
+        } else if (pkg === 'com.android.terminal' || pkg === 'com.termux') {
             this.renderTerminalActivity(appState, container);
         } else {
             this.renderGenericApkActivity(appState, container);
@@ -599,233 +669,203 @@ export class AndroidRuntime {
         // Bottom Navigation Bar
         const bottomNav = document.createElement('div');
         bottomNav.style.cssText = `
+            height: 52px;
+            background: #111827;
+            border-top: 1px solid rgba(255, 255, 255, 0.08);
             display: flex;
             align-items: center;
             justify-content: space-around;
-            padding: 8px 4px 6px 4px;
-            background: #111827;
-            border-top: 1px solid rgba(255, 255, 255, 0.08);
-            z-index: 20;
             flex-shrink: 0;
+            z-index: 20;
         `;
 
         const tabs = [
             { id: 'latest', icon: '🌟', label: 'Latest' },
-            { id: 'categories', icon: '🗂️', label: 'Categories' },
+            { id: 'categories', icon: '📁', label: 'Categories' },
             { id: 'nearby', icon: '🔄', label: 'Nearby' },
             { id: 'updates', icon: '⬇️', label: 'Updates' },
             { id: 'settings', icon: '⚙️', label: 'Settings' }
         ];
 
-        tabs.forEach(t => {
+        tabs.forEach(tab => {
             const btn = document.createElement('button');
-            const isActive = this.activeAppTab === t.id && !this.showDalvikInspector;
+            const isActive = this.activeAppTab === tab.id;
             btn.style.cssText = `
                 background: transparent;
                 border: none;
+                color: ${isActive ? '#38bdf8' : '#94a3b8'};
                 display: flex;
                 flex-direction: column;
                 align-items: center;
                 gap: 2px;
                 cursor: pointer;
-                color: ${isActive ? '#38bdf8' : '#94a3b8'};
-                font-family: inherit;
                 padding: 4px 10px;
-                border-radius: 12px;
+                border-radius: 8px;
                 transition: all 0.15s ease;
             `;
-            if (isActive) btn.style.background = 'rgba(56, 189, 248, 0.12)';
-
             btn.innerHTML = `
-                <span style="font-size: 1.15rem;">${t.icon}</span>
-                <span style="font-size: 0.62rem; font-weight: 600;">${t.label}</span>
+                <span style="font-size: 1.05rem;">${tab.icon}</span>
+                <span style="font-size: 0.62rem; font-weight: ${isActive ? '700' : '500'};">${tab.label}</span>
             `;
-
             btn.addEventListener('click', () => {
-                this.activeAppTab = t.id;
+                this.activeAppTab = tab.id;
                 this.showDalvikInspector = false;
-                this.vm.log(`[F-Droid] Tab switched to: ${t.label}`, 'info');
-                this.renderActivityUi(appState, container);
+                this.renderFdroidActivity(appState, container);
             });
             bottomNav.appendChild(btn);
         });
         root.appendChild(bottomNav);
 
-        // Event Bindings
-        const btnSearch = topAppBar.querySelector('#btn-fdroid-search');
+        // Wire up Top App Bar Search & Sync listeners
+        const btnSearch = root.querySelector('#btn-fdroid-search');
+        const btnSync = root.querySelector('#btn-fdroid-sync');
+        const btnToggleHud = root.querySelector('#btn-toggle-vm-hud');
+        const searchInput = root.querySelector('#fdroid-search-input');
+        const btnClearSearch = root.querySelector('#btn-fdroid-clear-search');
+
         btnSearch.addEventListener('click', () => {
             searchBanner.style.display = searchBanner.style.display === 'none' ? 'flex' : 'none';
-            if (searchBanner.style.display === 'flex') {
-                const inp = searchBanner.querySelector('#fdroid-search-input');
-                if (inp) inp.focus();
-            }
+            if (searchBanner.style.display === 'flex' && searchInput) searchInput.focus();
         });
 
-        const searchInput = searchBanner.querySelector('#fdroid-search-input');
-        searchInput.addEventListener('input', (e) => {
-            this.searchQuery = e.target.value;
-            renderTab();
-        });
+        if (searchInput) {
+            searchInput.addEventListener('input', (e) => {
+                this.searchQuery = e.target.value;
+                renderTab();
+            });
+        }
 
-        const btnClearSearch = searchBanner.querySelector('#btn-fdroid-clear-search');
-        btnClearSearch.addEventListener('click', () => {
-            this.searchQuery = '';
-            searchInput.value = '';
-            searchBanner.style.display = 'none';
-            renderTab();
-        });
+        if (btnClearSearch) {
+            btnClearSearch.addEventListener('click', () => {
+                this.searchQuery = '';
+                if (searchInput) searchInput.value = '';
+                renderTab();
+            });
+        }
 
-        const btnSync = topAppBar.querySelector('#btn-fdroid-sync');
         btnSync.addEventListener('click', async () => {
             btnSync.style.transform = 'rotate(360deg)';
             btnSync.style.transition = 'transform 0.6s ease';
-            this.logCallback('[F-Droid] Syncing repository indexes from official endpoints...', 'info');
             if (this.http) {
                 await this.http.syncFdroidRepository();
             }
             setTimeout(() => {
                 btnSync.style.transform = 'none';
-                btnSync.style.transition = 'none';
-                this.logCallback(`[F-Droid] Repository index synced: ${this.repoApps.length} applications validated.`, 'success');
                 renderTab();
             }, 600);
         });
 
-        const btnToggleHud = topAppBar.querySelector('#btn-toggle-vm-hud');
         btnToggleHud.addEventListener('click', () => {
             this.showDalvikInspector = !this.showDalvikInspector;
-            this.renderActivityUi(appState, container);
+            this.renderFdroidActivity(appState, container);
         });
 
         container.appendChild(root);
     }
 
     renderFdroidAppList(viewport) {
-        // Category Pills if in Categories tab
-        if (this.activeAppTab === 'categories') {
-            const catHeader = document.createElement('div');
-            catHeader.style.cssText = `
-                display: flex;
-                gap: 6px;
-                padding: 10px 12px;
-                overflow-x: auto;
-                background: #0f172a;
-                border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-                flex-shrink: 0;
-            `;
-            const categories = ['All', 'Development', 'Multimedia', 'Internet', 'Reading & Notes', 'Security & Privacy', 'Navigation', 'System Tools'];
-            categories.forEach(c => {
-                const pill = document.createElement('button');
-                const isSel = this.selectedCategory === c;
-                pill.style.cssText = `
-                    background: ${isSel ? '#38bdf8' : 'rgba(255,255,255,0.06)'};
+        // Filter apps by Category and Search Query
+        let list = this.repoApps;
+        if (this.selectedCategory !== 'All') {
+            list = list.filter(a => a.cat === this.selectedCategory);
+        }
+        if (this.searchQuery) {
+            const q = this.searchQuery.toLowerCase();
+            list = list.filter(a => a.name.toLowerCase().includes(q) || a.desc.toLowerCase().includes(q) || a.pkg.toLowerCase().includes(q));
+        }
+
+        const container = document.createElement('div');
+        container.style.cssText = 'padding: 12px; display: flex; flex-direction: column; gap: 10px;';
+
+        // Category Filter Chips
+        if (this.activeAppTab === 'categories' || !this.searchQuery) {
+            const chipRow = document.createElement('div');
+            chipRow.style.cssText = 'display: flex; gap: 6px; overflow-x: auto; padding-bottom: 6px; scrollbar-width: none; flex-shrink: 0;';
+            const categories = ['All', 'Internet', 'Development', 'Multimedia', 'Security & Privacy', 'Reading & Notes', 'Navigation'];
+            categories.forEach(cat => {
+                const chip = document.createElement('button');
+                const isSel = this.selectedCategory === cat;
+                chip.style.cssText = `
+                    background: ${isSel ? 'var(--primary, #38bdf8)' : 'rgba(255,255,255,0.06)'};
                     color: ${isSel ? '#090e17' : '#cbd5e1'};
-                    border: 1px solid ${isSel ? '#38bdf8' : 'rgba(255,255,255,0.1)'};
+                    border: 1px solid ${isSel ? 'transparent' : 'rgba(255,255,255,0.1)'};
                     border-radius: 16px;
                     padding: 4px 10px;
                     font-size: 0.68rem;
-                    font-weight: 600;
+                    font-weight: 700;
                     cursor: pointer;
                     white-space: nowrap;
-                    font-family: inherit;
+                    flex-shrink: 0;
                 `;
-                pill.textContent = c;
-                pill.addEventListener('click', () => {
-                    this.selectedCategory = c;
+                chip.textContent = cat;
+                chip.addEventListener('click', () => {
+                    this.selectedCategory = cat;
+                    viewport.innerHTML = '';
                     this.renderFdroidAppList(viewport);
                 });
-                catHeader.appendChild(pill);
+                chipRow.appendChild(chip);
             });
-            viewport.appendChild(catHeader);
+            container.appendChild(chipRow);
         }
 
-        // App List Container
-        const listContainer = document.createElement('div');
-        listContainer.style.cssText = `
-            padding: 12px;
-            display: flex;
-            flex-direction: column;
-            gap: 10px;
-        `;
-
-        let filtered = this.repoApps;
-        if (this.selectedCategory !== 'All') {
-            filtered = filtered.filter(a => a.cat === this.selectedCategory);
-        }
-        if (this.searchQuery.trim()) {
-            const q = this.searchQuery.toLowerCase();
-            filtered = filtered.filter(a => a.name.toLowerCase().includes(q) || a.desc.toLowerCase().includes(q) || a.pkg.toLowerCase().includes(q));
-        }
-
-        if (filtered.length === 0) {
-            listContainer.innerHTML = `
+        if (list.length === 0) {
+            container.innerHTML += `
                 <div style="text-align: center; padding: 40px 20px; color: #94a3b8;">
                     <div style="font-size: 2rem; margin-bottom: 8px;">🔍</div>
-                    <div style="font-weight: 700; font-size: 0.90rem; color: #f8fafc;">No applications found</div>
-                    <div style="font-size: 0.72rem; margin-top: 4px;">Try searching for another keyword or sync repository.</div>
+                    <div style="font-weight: 700; font-size: 0.9rem; color: #f8fafc;">No packages found</div>
+                    <div style="font-size: 0.72rem; margin-top: 4px;">No matching apps in F-Droid official index.</div>
                 </div>
             `;
-            viewport.appendChild(listContainer);
+            viewport.appendChild(container);
             return;
         }
 
-        filtered.forEach(app => {
+        list.forEach(app => {
             const isInstalled = this.installedApps.has(app.pkg);
             const card = document.createElement('div');
+            card.className = 'fdroid-app-card';
             card.style.cssText = `
                 background: #151d30;
-                border: 1px solid rgba(255, 255, 255, 0.07);
-                border-radius: 16px;
+                border: 1px solid rgba(255, 255, 255, 0.06);
+                border-radius: 14px;
                 padding: 12px;
                 display: flex;
-                align-items: center;
                 gap: 12px;
                 cursor: pointer;
                 transition: transform 0.15s ease, border-color 0.15s ease;
             `;
-            card.addEventListener('mouseenter', () => {
-                card.style.borderColor = '#38bdf8';
-                card.style.transform = 'translateY(-1px)';
-            });
-            card.addEventListener('mouseleave', () => {
-                card.style.borderColor = 'rgba(255, 255, 255, 0.07)';
-                card.style.transform = 'none';
-            });
 
             card.innerHTML = `
                 <div style="
-                    width: 48px;
-                    height: 48px;
-                    border-radius: 14px;
-                    background: linear-gradient(135deg, rgba(56, 189, 248, 0.2), rgba(16, 185, 129, 0.2));
-                    border: 1px solid rgba(255, 255, 255, 0.12);
+                    width: 44px;
+                    height: 44px;
+                    border-radius: 12px;
+                    background: rgba(255, 255, 255, 0.06);
+                    border: 1px solid rgba(255, 255, 255, 0.1);
                     display: flex;
                     align-items: center;
                     justify-content: center;
                     font-size: 1.5rem;
                     flex-shrink: 0;
                 ">${app.icon}</div>
-                <div style="flex: 1; min-width: 0;">
-                    <div style="display: flex; align-items: center; justify-content: space-between; gap: 6px;">
-                        <div style="font-weight: 700; font-size: 0.88rem; color: #f8fafc; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${app.name}</div>
-                        <span style="font-size: 0.60rem; color: #38bdf8; font-weight: 600;">${app.version}</span>
+                <div style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px;">
+                    <div style="display: flex; align-items: baseline; justify-content: space-between;">
+                        <span style="font-weight: 700; font-size: 0.85rem; color: #f8fafc; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${app.name}</span>
+                        <span style="font-size: 0.62rem; color: #94a3b8; font-family: monospace;">v${app.version}</span>
                     </div>
-                    <div style="font-size: 0.65rem; color: #94a3b8; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 2px;">${app.desc}</div>
-                    <div style="display: flex; align-items: center; gap: 8px; margin-top: 4px; font-size: 0.58rem; color: #64748b;">
-                        <span>📦 ${app.size}</span>
-                        <span>⚖️ ${app.license}</span>
-                    </div>
+                    <div style="font-size: 0.64rem; color: #38bdf8; font-weight: 600;">${app.author} • ${app.cat}</div>
+                    <div style="font-size: 0.68rem; color: #94a3b8; line-height: 1.3; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; margin-top: 2px;">${app.desc}</div>
                 </div>
                 <button class="btn-install-card" style="
-                    background: ${isInstalled ? 'rgba(16, 185, 129, 0.15)' : 'rgba(56, 189, 248, 0.18)'};
+                    align-self: center;
+                    background: ${isInstalled ? 'rgba(16, 185, 129, 0.15)' : 'rgba(56, 189, 248, 0.15)'};
                     border: 1px solid ${isInstalled ? '#10b981' : '#38bdf8'};
                     color: ${isInstalled ? '#10b981' : '#38bdf8'};
-                    padding: 6px 12px;
                     border-radius: 10px;
-                    font-size: 0.70rem;
+                    padding: 6px 10px;
+                    font-size: 0.68rem;
                     font-weight: 700;
                     cursor: pointer;
-                    font-family: inherit;
                     flex-shrink: 0;
                 ">
                     ${isInstalled ? 'OPEN' : 'INSTALL'}
@@ -845,156 +885,150 @@ export class AndroidRuntime {
                 if (isInstalled) {
                     this.startActivity(app.pkg, `${app.pkg}.MainActivity`);
                 } else {
-                    btnInstall.textContent = 'DOWNLOADING...';
+                    btnInstall.textContent = 'INSTALLING...';
                     btnInstall.disabled = true;
-                    this.logCallback(`[PMS] Downloading APK package: [${app.pkg}] (${app.size})...`, 'info');
+                    this.logCallback(`[PMS] Installing package: [${app.pkg}] (${app.size})...`, 'info');
+                    
                     if (this.http) {
-                        await this.http.fetch(app.apkUrl, { mode: 'GET' });
+                        await this.http.fetch(app.apkUrl, { method: 'GET' });
                     }
-                    setTimeout(() => {
-                        this.pms.installPackage({
-                            packageName: app.pkg,
-                            appName: app.name,
-                            versionName: app.version,
-                            versionCode: app.versionCode || 1,
-                            mainActivity: `${app.pkg}.MainActivity`,
-                            targetSdk: 'Android 14',
-                            minSdk: 'Android 26',
-                            activitiesCount: 8,
-                            providersCount: 1,
-                            servicesCount: 2,
-                            receiversCount: 2,
-                            permissions: app.permissions || [],
-                            installed: true,
-                            icon: app.icon
-                        });
-                        this.installedApps.add(app.pkg);
-                        btnInstall.textContent = 'OPEN';
-                        btnInstall.disabled = false;
-                        btnInstall.style.background = 'rgba(16, 185, 129, 0.15)';
-                        btnInstall.style.borderColor = '#10b981';
-                        btnInstall.style.color = '#10b981';
-                        this.logCallback(`[PMS] Successfully installed [${app.pkg}] to Dalvik VM & Android Home Screen.`, 'success');
+                    
+                    this.pms.registerPackage({
+                        packageName: app.pkg,
+                        appName: app.name,
+                        versionName: app.version,
+                        versionCode: app.versionCode || 1,
+                        mainActivity: `${app.pkg}.MainActivity`,
+                        targetSdk: 'Android 14',
+                        minSdk: 'Android 26',
+                        activitiesCount: 8,
+                        providersCount: 1,
+                        servicesCount: 2,
+                        receiversCount: 2,
+                        permissions: app.permissions || [],
+                        installed: true,
+                        icon: app.icon
+                    });
+                    this.installedApps.add(app.pkg);
+                    btnInstall.textContent = 'OPEN';
+                    btnInstall.disabled = false;
+                    btnInstall.style.background = 'rgba(16, 185, 129, 0.15)';
+                    btnInstall.style.borderColor = '#10b981';
+                    btnInstall.style.color = '#10b981';
+                    this.logCallback(`[PMS] Successfully installed [${app.pkg}] to Dalvik VM & Android Home Screen.`, 'success');
 
-                        if (typeof window !== 'undefined' && window.AndroidEmulatorOnPackageInstalled) {
-                            window.AndroidEmulatorOnPackageInstalled(app.pkg, app.name, app.icon);
-                        }
-                    }, 500);
+                    if (typeof window !== 'undefined' && window.AndroidEmulatorOnPackageInstalled) {
+                        window.AndroidEmulatorOnPackageInstalled(app.pkg, app.name, app.icon);
+                    }
                 }
             });
 
-            listContainer.appendChild(card);
+            container.appendChild(card);
         });
 
-        viewport.appendChild(listContainer);
+        viewport.appendChild(container);
     }
 
     renderFdroidAppDetailsView(app, root) {
-        const topBar = document.createElement('div');
-        topBar.style.cssText = `
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            padding: 10px 14px;
-            background: #111827;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-            z-index: 20;
-            flex-shrink: 0;
-        `;
-        topBar.innerHTML = `
-            <div style="display: flex; align-items: center; gap: 10px;">
-                <button id="btn-back-details" style="background: transparent; border: none; color: #38bdf8; font-size: 1.2rem; cursor: pointer;">←</button>
-                <div style="font-weight: 700; font-size: 0.95rem; color: #f8fafc;">${app.name}</div>
-            </div>
-            <button id="btn-share-details" style="background: transparent; border: none; color: #cbd5e1; font-size: 1rem; cursor: pointer;">🔗</button>
-        `;
-        root.appendChild(topBar);
-
-        const content = document.createElement('div');
-        content.style.cssText = `
+        const isInstalled = this.installedApps.has(app.pkg);
+        const detailsContainer = document.createElement('div');
+        detailsContainer.style.cssText = `
             flex: 1;
             overflow-y: auto;
-            padding: 16px;
             display: flex;
             flex-direction: column;
-            gap: 16px;
+            background: #0d121f;
         `;
 
-        const isInstalled = this.installedApps.has(app.pkg);
-        content.innerHTML = `
-            <div style="display: flex; gap: 14px; align-items: center;">
-                <div style="
-                    width: 64px;
-                    height: 64px;
-                    border-radius: 18px;
-                    background: linear-gradient(135deg, rgba(56, 189, 248, 0.25), rgba(16, 185, 129, 0.25));
-                    border: 1px solid rgba(255, 255, 255, 0.15);
-                    display: flex;
-                    align-items: center;
-                    justify-content: center;
-                    font-size: 2.2rem;
-                    box-shadow: 0 4px 16px rgba(0,0,0,0.3);
-                ">${app.icon}</div>
-                <div style="flex: 1;">
-                    <div style="font-weight: 800; font-size: 1.15rem; color: #f8fafc;">${app.name}</div>
-                    <div style="font-size: 0.75rem; color: #38bdf8; font-weight: 600;">${app.author}</div>
-                    <div style="font-size: 0.65rem; color: #94a3b8; font-family: monospace; margin-top: 2px;">${app.pkg}</div>
+        detailsContainer.innerHTML = `
+            <div style="padding: 12px 14px; background: #111827; border-bottom: 1px solid rgba(255, 255, 255, 0.08); display: flex; align-items: center; gap: 12px; z-index: 20;">
+                <button id="btn-details-back" style="background: transparent; border: none; color: #cbd5e1; font-size: 1.1rem; cursor: pointer; display: flex; align-items: center;">←</button>
+                <div style="font-weight: 700; font-size: 0.90rem; color: #f8fafc;">${app.name}</div>
+            </div>
+
+            <div style="padding: 16px; display: flex; flex-direction: column; gap: 16px;">
+                <div style="display: flex; gap: 14px; align-items: center;">
+                    <div style="width: 58px; height: 58px; border-radius: 16px; background: #151d30; border: 1px solid rgba(255, 255, 255, 0.1); display: flex; align-items: center; justify-content: center; font-size: 2.2rem; box-shadow: 0 4px 14px rgba(0,0,0,0.3);">${app.icon}</div>
+                    <div style="flex: 1;">
+                        <div style="font-weight: 800; font-size: 1.05rem; color: #f8fafc;">${app.name}</div>
+                        <div style="font-size: 0.70rem; color: #38bdf8; font-weight: 600;">${app.author}</div>
+                        <div style="font-size: 0.64rem; color: #94a3b8; font-family: monospace;">${app.pkg}</div>
+                    </div>
                 </div>
-            </div>
 
-            <div style="display: flex; gap: 8px;">
-                <button id="btn-action-install-detail" style="
-                    flex: 1;
-                    background: ${isInstalled ? '#10b981' : '#38bdf8'};
-                    color: #090e17;
-                    border: none;
-                    border-radius: 12px;
-                    padding: 10px;
-                    font-weight: 800;
-                    font-size: 0.85rem;
-                    cursor: pointer;
-                    box-shadow: 0 4px 12px ${isInstalled ? 'rgba(16, 185, 129, 0.3)' : 'rgba(56, 189, 248, 0.3)'};
-                ">
-                    ${isInstalled ? 'LAUNCH APPLICATION' : `INSTALL (${app.size})`}
-                </button>
-            </div>
+                <div style="display: flex; gap: 10px;">
+                    <button id="btn-details-install" style="
+                        flex: 1;
+                        background: ${isInstalled ? 'rgba(16, 185, 129, 0.2)' : '#38bdf8'};
+                        border: 1px solid ${isInstalled ? '#10b981' : '#38bdf8'};
+                        color: ${isInstalled ? '#10b981' : '#090e17'};
+                        border-radius: 12px;
+                        padding: 10px;
+                        font-size: 0.82rem;
+                        font-weight: 800;
+                        cursor: pointer;
+                        text-align: center;
+                    ">
+                        ${isInstalled ? 'OPEN' : 'INSTALL (FREE)'}
+                    </button>
+                    ${isInstalled ? `
+                        <button id="btn-details-uninstall" style="
+                            background: rgba(239, 68, 68, 0.15);
+                            border: 1px solid #ef4444;
+                            color: #ef4444;
+                            border-radius: 12px;
+                            padding: 10px 14px;
+                            font-size: 0.80rem;
+                            font-weight: 700;
+                            cursor: pointer;
+                        ">UNINSTALL</button>
+                    ` : ''}
+                </div>
 
-            <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; background: #151d30; padding: 10px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.06); text-align: center;">
+                <div style="background: #151d30; border-radius: 14px; padding: 12px; border: 1px solid rgba(255, 255, 255, 0.06); display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; text-align: center;">
+                    <div>
+                        <div style="font-size: 0.60rem; color: #94a3b8; text-transform: uppercase;">Version</div>
+                        <div style="font-weight: 700; font-size: 0.78rem; color: #f8fafc; font-family: monospace;">${app.version}</div>
+                    </div>
+                    <div>
+                        <div style="font-size: 0.60rem; color: #94a3b8; text-transform: uppercase;">Package Size</div>
+                        <div style="font-weight: 700; font-size: 0.78rem; color: #f8fafc;">${app.size}</div>
+                    </div>
+                    <div>
+                        <div style="font-size: 0.60rem; color: #94a3b8; text-transform: uppercase;">License</div>
+                        <div style="font-weight: 700; font-size: 0.78rem; color: #10b981;">${app.license}</div>
+                    </div>
+                </div>
+
                 <div>
-                    <div style="font-size: 0.60rem; color: #64748b;">VERSION</div>
-                    <div style="font-weight: 700; font-size: 0.78rem; color: #f8fafc; margin-top: 2px;">${app.version}</div>
+                    <div style="font-weight: 700; font-size: 0.85rem; color: #f8fafc; margin-bottom: 6px;">About this app</div>
+                    <div style="font-size: 0.74rem; color: #cbd5e1; line-height: 1.45;">${app.fullDesc}</div>
                 </div>
-                <div>
-                    <div style="font-size: 0.60rem; color: #64748b;">LICENSE</div>
-                    <div style="font-weight: 700; font-size: 0.78rem; color: #f8fafc; margin-top: 2px;">${app.license}</div>
-                </div>
-                <div>
-                    <div style="font-size: 0.60rem; color: #64748b;">CATEGORY</div>
-                    <div style="font-weight: 700; font-size: 0.78rem; color: #38bdf8; margin-top: 2px;">${app.cat}</div>
-                </div>
-            </div>
 
-            <div style="background: #151d30; padding: 14px; border-radius: 14px; border: 1px solid rgba(255,255,255,0.06);">
-                <div style="font-weight: 700; font-size: 0.82rem; color: #f8fafc; margin-bottom: 6px;">Description</div>
-                <div style="font-size: 0.74rem; color: #cbd5e1; line-height: 1.5;">${app.fullDesc || app.desc}</div>
-            </div>
-
-            <div style="background: #151d30; padding: 14px; border-radius: 14px; border: 1px solid rgba(255,255,255,0.06);">
-                <div style="font-weight: 700; font-size: 0.82rem; color: #f8fafc; margin-bottom: 6px;">Declared Permissions (${(app.permissions || []).length})</div>
-                <div style="display: flex; flex-wrap: wrap; gap: 6px;">
-                    ${(app.permissions || ['INTERNET']).map(p => `
-                        <span style="font-size: 0.62rem; background: rgba(56, 189, 248, 0.12); color: #38bdf8; padding: 3px 8px; border-radius: 6px; border: 1px solid rgba(56, 189, 248, 0.25); font-family: monospace;">${p}</span>
-                    `).join('')}
+                <div style="background: #151d30; border-radius: 14px; padding: 12px; border: 1px solid rgba(255, 255, 255, 0.06);">
+                    <div style="font-weight: 700; font-size: 0.78rem; color: #38bdf8; margin-bottom: 6px;">Permissions Declared (${app.permissions.length})</div>
+                    <div style="display: flex; flex-wrap: wrap; gap: 4px;">
+                        ${app.permissions.map(p => `
+                            <span style="font-size: 0.60rem; font-family: monospace; background: rgba(255,255,255,0.06); padding: 2px 6px; border-radius: 4px; color: #94a3b8;">${p}</span>
+                        `).join('')}
+                    </div>
                 </div>
             </div>
         `;
 
-        topBar.querySelector('#btn-back-details').addEventListener('click', () => this.goBack());
-        content.querySelector('#btn-action-install-detail').addEventListener('click', () => {
+        const btnBack = detailsContainer.querySelector('#btn-details-back');
+        btnBack.addEventListener('click', () => {
+            this.goBack();
+        });
+
+        const btnAction = detailsContainer.querySelector('#btn-details-install');
+        btnAction.addEventListener('click', async () => {
             if (isInstalled) {
                 this.startActivity(app.pkg, `${app.pkg}.MainActivity`);
             } else {
-                this.pms.installPackage({
+                btnAction.textContent = 'INSTALLING...';
+                btnAction.disabled = true;
+                this.pms.registerPackage({
                     packageName: app.pkg,
                     appName: app.name,
                     versionName: app.version,
@@ -1014,39 +1048,34 @@ export class AndroidRuntime {
                 if (typeof window !== 'undefined' && window.AndroidEmulatorOnPackageInstalled) {
                     window.AndroidEmulatorOnPackageInstalled(app.pkg, app.name, app.icon);
                 }
-                this.renderActivityUi(this.activeApps.get('org.fdroid.fdroid'), this.activeApps.get('org.fdroid.fdroid').containerEl);
+                this.renderFdroidAppDetailsView(app, root);
             }
         });
 
-        root.appendChild(content);
+        const btnUninstall = detailsContainer.querySelector('#btn-details-uninstall');
+        if (btnUninstall) {
+            btnUninstall.addEventListener('click', () => {
+                this.installedApps.delete(app.pkg);
+                this.pms.packages.delete(app.pkg);
+                this.renderFdroidAppDetailsView(app, root);
+            });
+        }
+
+        root.innerHTML = '';
+        root.appendChild(detailsContainer);
     }
 
     renderFdroidSwapView(viewport) {
         viewport.innerHTML = `
-            <div style="padding: 20px; display: flex; flex-direction: column; align-items: center; text-align: center; gap: 16px;">
-                <div style="
-                    width: 72px;
-                    height: 72px;
-                    border-radius: 50%;
-                    background: linear-gradient(135deg, rgba(56, 189, 248, 0.2), rgba(16, 185, 129, 0.2));
-                    border: 2px dashed #38bdf8;
-                    display: flex;
-                    align-items: center;
-                    justify-content: center;
-                    font-size: 2.2rem;
-                    animation: spin 8s linear infinite;
-                ">🔄</div>
-                <div>
-                    <div style="font-weight: 800; font-size: 1.1rem; color: #f8fafc;">Nearby P2P App Swap</div>
-                    <div style="font-size: 0.74rem; color: #94a3b8; margin-top: 4px; max-width: 280px;">
-                        Exchange installed APK packages directly with nearby Android devices via Wi-Fi Direct and Bluetooth offline.
-                    </div>
-                </div>
-
-                <div style="width: 100%; background: #151d30; border-radius: 16px; padding: 14px; border: 1px solid rgba(255,255,255,0.06); text-align: left;">
-                    <div style="font-weight: 700; font-size: 0.82rem; color: #f8fafc; margin-bottom: 8px;">P2P Discovery Status</div>
+            <div style="padding: 16px; display: flex; flex-direction: column; gap: 14px; text-align: center;">
+                <div style="font-size: 2.2rem;">📡</div>
+                <div style="font-weight: 800; font-size: 1rem; color: #f8fafc;">Nearby App Swap</div>
+                <div style="font-size: 0.74rem; color: #94a3b8; line-height: 1.4;">Exchange installed APK packages directly over local Wi-Fi and Bluetooth without an internet connection.</div>
+                
+                <div style="background: #151d30; border-radius: 14px; padding: 14px; border: 1px solid rgba(255,255,255,0.06); text-align: left;">
+                    <div style="font-weight: 700; font-size: 0.78rem; color: #38bdf8; margin-bottom: 6px;">Nearby Radios Active</div>
                     <div style="display: flex; align-items: center; justify-content: space-between; font-size: 0.72rem; color: #cbd5e1; padding: 4px 0;">
-                        <span>Wi-Fi Direct Hotspot</span>
+                        <span>Wi-Fi Direct Peer</span>
                         <span style="color: #10b981; font-weight: 700;">BROADCASTING</span>
                     </div>
                     <div style="display: flex; align-items: center; justify-content: space-between; font-size: 0.72rem; color: #cbd5e1; padding: 4px 0;">
@@ -1150,17 +1179,12 @@ export class AndroidRuntime {
                     </div>
                 </div>
 
-                <div style="background: #151d30; padding: 10px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.06);">
-                    <div style="color: #38bdf8; font-weight: 700; margin-bottom: 4px;">Active Process & Activity</div>
-                    <div>PKG: <span style="color: #f8fafc;">${this.currentPackage}</span></div>
-                    <div>ACT: <span style="color: #10b981;">${this.activeApps.get(this.currentPackage)?.currentActivity || 'MainActivity'}</span></div>
-                </div>
-
-                <div style="background: #151d30; padding: 10px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.06); flex: 1; overflow-y: auto; max-height: 200px;">
-                    <div style="color: #38bdf8; font-weight: 700; margin-bottom: 6px;">Live Execution Logcat</div>
-                    ${this.vm.logcat.slice(-10).map(l => `
-                        <div style="padding: 2px 0; border-bottom: 1px solid rgba(255,255,255,0.03); color: ${l.type === 'error' ? '#ef4444' : l.type === 'success' ? '#10b981' : '#cbd5e1'};">
-                            [${new Date(l.timestamp).toLocaleTimeString()}] ${l.msg}
+                <div style="background: #151d30; border-radius: 8px; padding: 10px; border: 1px solid rgba(255,255,255,0.06);">
+                    <div style="color: #38bdf8; font-weight: 700; margin-bottom: 4px;">Active Processes (${stats.processes})</div>
+                    ${Array.from(this.activeApps.keys()).map(p => `
+                        <div style="display: flex; justify-content: space-between; padding: 2px 0;">
+                            <span style="color: #f8fafc;">${p}</span>
+                            <span style="color: #10b981;">PID ${(Math.abs(p.split('').reduce((a,b)=>((a<<5)-a)+b.charCodeAt(0),0)) % 8000 + 1000)}</span>
                         </div>
                     `).join('')}
                 </div>
@@ -1182,53 +1206,43 @@ export class AndroidRuntime {
             overflow-y: auto;
             padding: 16px;
             gap: 12px;
-            user-select: none;
         `;
 
         root.innerHTML = `
-            <div style="display: flex; align-items: center; justify-content: space-between; padding-bottom: 10px; border-bottom: 1px solid rgba(255,255,255,0.08);">
-                <div style="font-weight: 800; font-size: 1.1rem; color: #f8fafc;">⚙️ Android Settings</div>
-                <span style="font-size: 0.65rem; background: rgba(56, 189, 248, 0.15); color: #38bdf8; padding: 2px 6px; border-radius: 4px;">API 34</span>
-            </div>
+            <div style="font-weight: 800; font-size: 1.1rem; color: #f8fafc; padding-bottom: 8px; border-bottom: 1px solid rgba(255,255,255,0.08);">⚙️ Android 14 Settings</div>
 
-            <div style="background: #151d30; border-radius: 14px; padding: 14px; border: 1px solid rgba(255,255,255,0.06);">
-                <div style="font-weight: 700; font-size: 0.85rem; color: #38bdf8; margin-bottom: 8px;">About Virtual Device</div>
-                <div style="display: flex; justify-content: space-between; padding: 4px 0; font-size: 0.72rem;">
-                    <span style="color: #94a3b8;">Device Model</span>
-                    <span style="color: #f8fafc; font-weight: 600;">Google Pixel 8 Pro (WebGPU VM)</span>
-                </div>
-                <div style="display: flex; justify-content: space-between; padding: 4px 0; font-size: 0.72rem;">
-                    <span style="color: #94a3b8;">Android Version</span>
-                    <span style="color: #10b981; font-weight: 700;">Android 14 (UpsideDownCake)</span>
-                </div>
-                <div style="display: flex; justify-content: space-between; padding: 4px 0; font-size: 0.72rem;">
-                    <span style="color: #94a3b8;">Dalvik VM Runtime</span>
-                    <span style="color: #f8fafc; font-weight: 600;">Dalvik 2.1.0 Bytecode Engine</span>
-                </div>
-                <div style="display: flex; justify-content: space-between; padding: 4px 0; font-size: 0.72rem;">
-                    <span style="color: #94a3b8;">GPU Renderer</span>
-                    <span style="color: #38bdf8; font-weight: 600;">WebGPU VirtIO-GPU / SurfaceFlinger</span>
+            <div style="background: #151d30; border-radius: 14px; padding: 12px; border: 1px solid rgba(255,255,255,0.06);">
+                <div style="font-weight: 700; font-size: 0.80rem; color: #38bdf8; margin-bottom: 4px;">About Device</div>
+                <div style="font-size: 0.72rem; color: #cbd5e1; display: grid; grid-template-columns: 1fr 1fr; gap: 4px;">
+                    <div>Model: <span style="color: #f8fafc; font-weight: 600;">Pixel 8 Pro (Virt)</span></div>
+                    <div>Android: <span style="color: #10b981; font-weight: 700;">14 (API 34)</span></div>
+                    <div>VM Engine: <span style="color: #38bdf8;">Dalvik 2.1.0</span></div>
+                    <div>Graphics: <span style="color: #f59e0b;">WebGPU 120 FPS</span></div>
                 </div>
             </div>
 
-            <div style="background: #151d30; border-radius: 14px; padding: 14px; border: 1px solid rgba(255,255,255,0.06);">
-                <div style="font-weight: 700; font-size: 0.85rem; color: #38bdf8; margin-bottom: 8px;">Installed Applications (${this.installedApps.size})</div>
-                ${Array.from(this.installedApps).map(pkg => `
-                    <div style="display: flex; align-items: center; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid rgba(255,255,255,0.03); font-size: 0.72rem;">
-                        <span style="color: #f8fafc; font-weight: 600;">${pkg}</span>
-                        <span style="color: #10b981;">INSTALLED</span>
-                    </div>
-                `).join('')}
+            <div style="background: #151d30; border-radius: 14px; padding: 12px; border: 1px solid rgba(255,255,255,0.06);">
+                <div style="font-weight: 700; font-size: 0.80rem; color: #38bdf8; margin-bottom: 4px;">Hardware & Architecture</div>
+                <div style="font-size: 0.70rem; color: #94a3b8; line-height: 1.4;">
+                    <div>Architecture: <span style="color: #f8fafc;">x86 (32-bit v86 VM)</span></div>
+                    <div>GPU Driver: <span style="color: #f8fafc;">Virtio-GPU WebGPU Bridge</span></div>
+                    <div>IPC Transport: <span style="color: #f8fafc;">BinderFS Protocol V8</span></div>
+                </div>
             </div>
         `;
         container.appendChild(root);
     }
 
     /**
-     * 3. Chrome Web Browser (com.android.chrome)
+     * 3. Browser Application (com.android.chrome, org.mozilla.firefox)
      */
-    renderChromeActivity(appState, container) {
+    renderBrowserActivity(appState, container) {
         const root = document.createElement('div');
+        const isFirefox = appState.packageName.includes('firefox');
+        const browserName = isFirefox ? 'Firefox Browser' : 'Chrome Browser';
+        const browserIcon = isFirefox ? '🦊' : '🌐';
+        const browserTheme = isFirefox ? '#ff7139' : '#38bdf8';
+
         root.style.cssText = `
             display: flex;
             flex-direction: column;
@@ -1239,37 +1253,99 @@ export class AndroidRuntime {
         `;
 
         root.innerHTML = `
-            <div style="display: flex; align-items: center; gap: 8px; padding: 8px 12px; background: #151d30; border-bottom: 1px solid rgba(255,255,255,0.08);">
-                <button id="btn-browser-back" style="background: transparent; border: none; color: #cbd5e1; cursor: pointer;">←</button>
-                <div style="flex: 1; background: rgba(0,0,0,0.3); border-radius: 18px; padding: 6px 12px; display: flex; align-items: center; gap: 6px; border: 1px solid rgba(255,255,255,0.1);">
+            <!-- Top Address Bar -->
+            <div style="display: flex; align-items: center; gap: 8px; padding: 8px 12px; background: #151d30; border-bottom: 1px solid rgba(255,255,255,0.08); flex-shrink: 0;">
+                <button id="btn-browser-back" style="background: transparent; border: none; color: #cbd5e1; cursor: pointer; font-size: 0.95rem;">←</button>
+                <div style="flex: 1; background: rgba(0,0,0,0.35); border-radius: 18px; padding: 6px 12px; display: flex; align-items: center; gap: 6px; border: 1px solid rgba(255,255,255,0.1);">
                     <span style="font-size: 0.75rem; color: #10b981;">🔒</span>
-                    <input type="text" id="browser-url-input" value="https://f-droid.org" style="flex: 1; background: transparent; border: none; outline: none; color: #f8fafc; font-size: 0.75rem;">
+                    <input type="text" id="browser-url-input" value="https://f-droid.org" placeholder="Search or type URL..." style="flex: 1; background: transparent; border: none; outline: none; color: #f8fafc; font-size: 0.75rem; font-family: inherit;">
                 </div>
-                <button id="btn-browser-go" style="background: #38bdf8; border: none; color: #090e17; border-radius: 8px; padding: 4px 8px; font-weight: 700; font-size: 0.70rem; cursor: pointer;">GO</button>
+                <button id="btn-browser-go" style="background: ${browserTheme}; border: none; color: #090e17; border-radius: 8px; padding: 4px 10px; font-weight: 700; font-size: 0.70rem; cursor: pointer;">GO</button>
             </div>
 
-            <div style="flex: 1; padding: 20px; display: flex; flex-direction: column; gap: 14px; overflow-y: auto;">
-                <div style="font-weight: 800; font-size: 1.1rem; color: #f8fafc;">🌐 Android Web Browser</div>
-                <div style="font-size: 0.75rem; color: #94a3b8;">Quick Access Portals:</div>
+            <!-- Main Content Area -->
+            <div style="flex: 1; padding: 16px; display: flex; flex-direction: column; gap: 14px; overflow-y: auto;">
+                <div style="display: flex; align-items: center; gap: 10px;">
+                    <div style="font-size: 2rem;">${browserIcon}</div>
+                    <div>
+                        <div style="font-weight: 800; font-size: 1.1rem; color: #f8fafc;">${browserName}</div>
+                        <div style="font-size: 0.65rem; color: #10b981; font-weight: 600;">Hardware Accelerated WebGPU Engine • Online</div>
+                    </div>
+                </div>
+
+                <div style="font-size: 0.75rem; color: #94a3b8; font-weight: 600;">Quick Bookmarks & Portals:</div>
                 
                 <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px;">
-                    <a href="https://f-droid.org" target="_blank" style="background: #151d30; padding: 12px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.06); text-decoration: none; color: #f8fafc; display: flex; align-items: center; gap: 8px;">
+                    <div class="browser-bookmark-card" data-url="https://f-droid.org" style="background: #151d30; padding: 12px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.06); cursor: pointer; display: flex; align-items: center; gap: 8px;">
                         <span style="font-size: 1.5rem;">🤖</span>
                         <div>
-                            <div style="font-weight: 700; font-size: 0.82rem;">F-Droid Repository</div>
+                            <div style="font-weight: 700; font-size: 0.80rem; color: #f8fafc;">F-Droid</div>
                             <div style="font-size: 0.60rem; color: #94a3b8;">f-droid.org</div>
                         </div>
-                    </a>
-                    <a href="https://apkpure.net" target="_blank" style="background: #151d30; padding: 12px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.06); text-decoration: none; color: #f8fafc; display: flex; align-items: center; gap: 8px;">
-                        <span style="font-size: 1.5rem;">📦</span>
+                    </div>
+                    <div class="browser-bookmark-card" data-url="https://mozilla.org" style="background: #151d30; padding: 12px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.06); cursor: pointer; display: flex; align-items: center; gap: 8px;">
+                        <span style="font-size: 1.5rem;">🦊</span>
                         <div>
-                            <div style="font-weight: 700; font-size: 0.82rem;">APKPure Portal</div>
-                            <div style="font-size: 0.60rem; color: #94a3b8;">apkpure.net</div>
+                            <div style="font-weight: 700; font-size: 0.80rem; color: #f8fafc;">Mozilla</div>
+                            <div style="font-size: 0.60rem; color: #94a3b8;">mozilla.org</div>
                         </div>
-                    </a>
+                    </div>
+                    <div class="browser-bookmark-card" data-url="https://duckduckgo.com" style="background: #151d30; padding: 12px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.06); cursor: pointer; display: flex; align-items: center; gap: 8px;">
+                        <span style="font-size: 1.5rem;">🦆</span>
+                        <div>
+                            <div style="font-weight: 700; font-size: 0.80rem; color: #f8fafc;">DuckDuckGo</div>
+                            <div style="font-size: 0.60rem; color: #94a3b8;">duckduckgo.com</div>
+                        </div>
+                    </div>
+                    <div class="browser-bookmark-card" data-url="https://github.com" style="background: #151d30; padding: 12px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.06); cursor: pointer; display: flex; align-items: center; gap: 8px;">
+                        <span style="font-size: 1.5rem;">🐙</span>
+                        <div>
+                            <div style="font-weight: 700; font-size: 0.80rem; color: #f8fafc;">GitHub</div>
+                            <div style="font-size: 0.60rem; color: #94a3b8;">github.com</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Web Page Surface Container -->
+                <div id="browser-viewport" style="background: #151d30; border-radius: 14px; padding: 14px; border: 1px solid rgba(255,255,255,0.06); display: flex; flex-direction: column; gap: 8px;">
+                    <div style="font-weight: 700; font-size: 0.82rem; color: #38bdf8;">Web Viewport Active</div>
+                    <div style="font-size: 0.72rem; color: #cbd5e1;">Connected to Android Network Stack. All HTTP requests monitored in real time.</div>
+                    <div id="browser-page-status" style="font-size: 0.68rem; color: #10b981; font-family: monospace;">✓ Ready. Loaded https://f-droid.org</div>
                 </div>
             </div>
         `;
+
+        const urlInput = root.querySelector('#browser-url-input');
+        const btnGo = root.querySelector('#btn-browser-go');
+        const btnBack = root.querySelector('#btn-browser-back');
+        const pageStatus = root.querySelector('#browser-page-status');
+
+        const navigateUrl = async (url) => {
+            if (!url.startsWith('http://') && !url.startsWith('https://')) {
+                url = 'https://' + url;
+            }
+            urlInput.value = url;
+            pageStatus.textContent = `⏳ Connecting to ${url}...`;
+            if (this.http) {
+                const res = await this.http.fetch(url);
+                pageStatus.textContent = `✓ Loaded ${url} (HTTP ${res.status} • ${res.durationMs} ms)`;
+            }
+        };
+
+        btnGo.addEventListener('click', () => navigateUrl(urlInput.value));
+        urlInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') navigateUrl(urlInput.value);
+        });
+
+        btnBack.addEventListener('click', () => this.goBack());
+
+        root.querySelectorAll('.browser-bookmark-card').forEach(c => {
+            c.addEventListener('click', () => {
+                const u = c.getAttribute('data-url');
+                navigateUrl(u);
+            });
+        });
+
         container.appendChild(root);
     }
 
@@ -1390,6 +1466,7 @@ export class AndroidRuntime {
      */
     renderGenericApkActivity(appState, container) {
         const root = document.createElement('div');
+        const icon = appState.packageInfo?.icon || '📦';
         root.style.cssText = `
             display: flex;
             flex-direction: column;
@@ -1403,8 +1480,8 @@ export class AndroidRuntime {
 
         root.innerHTML = `
             <div style="display: flex; align-items: center; justify-content: space-between; padding-bottom: 10px; border-bottom: 1px solid rgba(255,255,255,0.08);">
-                <div style="display: flex; align-items: center; gap: 8px;">
-                    <div style="font-size: 1.6rem;">${appState.packageInfo?.icon || '📦'}</div>
+                <div style="display: flex; align-items: center; gap: 10px;">
+                    <div style="font-size: 1.8rem;">${icon}</div>
                     <div>
                         <div style="font-weight: 800; font-size: 1rem; color: #f8fafc;">${appState.appName}</div>
                         <div style="font-size: 0.65rem; color: #38bdf8; font-family: monospace;">${appState.packageName}</div>

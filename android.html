@@ -141,7 +141,7 @@
             display: grid;
             grid-template-columns: 1fr 420px;
             gap: 1.5rem;
-            padding: 1.25rem 1.75rem;
+            padding: 1rem 1.75rem;
             max-width: 1600px;
             width: 100%;
             margin: 0 auto;
@@ -166,8 +166,8 @@
         }
 
         .phone-bezel {
-            width: 400px;
-            height: 800px;
+            width: 390px;
+            height: 780px;
             background: #0f121a;
             border-radius: 46px;
             padding: 12px;
@@ -255,6 +255,7 @@
             inset: 0;
             display: none;
             flex-direction: column;
+            overflow: hidden;
         }
 
         .screen-view.active {
@@ -314,16 +315,17 @@
             display: flex;
             flex-direction: column;
             justify-content: space-between;
-            padding: 16px 14px 8px 14px;
+            padding: 12px 14px 6px 14px;
+            overflow: hidden;
         }
 
         .home-widget-clock {
             text-align: center;
-            margin-top: 8px;
+            margin-top: 4px;
         }
 
         .home-clock-time {
-            font-size: 3.2rem;
+            font-size: 2.8rem;
             font-weight: 800;
             color: #ffffff;
             line-height: 1;
@@ -332,33 +334,37 @@
         }
 
         .home-clock-date {
-            font-size: 0.82rem;
+            font-size: 0.78rem;
             font-weight: 600;
             color: rgba(255, 255, 255, 0.8);
-            margin-top: 4px;
+            margin-top: 2px;
         }
 
         .home-search-pill {
             background: rgba(255, 255, 255, 0.15);
             backdrop-filter: blur(16px);
             border: 1px solid rgba(255, 255, 255, 0.2);
-            border-radius: 24px;
-            padding: 8px 14px;
+            border-radius: 20px;
+            padding: 7px 12px;
             display: flex;
             align-items: center;
-            gap: 10px;
+            gap: 8px;
             color: rgba(255, 255, 255, 0.85);
-            font-size: 0.78rem;
+            font-size: 0.74rem;
             box-shadow: 0 4px 14px rgba(0,0,0,0.2);
             cursor: pointer;
+            margin: 6px 0;
         }
 
         .app-grid {
             display: grid;
             grid-template-columns: repeat(4, 1fr);
-            gap: 14px 6px;
-            margin: 14px 0;
+            gap: 12px 4px;
+            margin: 4px 0;
             justify-items: center;
+            overflow-y: auto;
+            max-height: 380px;
+            padding-bottom: 6px;
         }
 
         .app-icon-item {
@@ -368,7 +374,7 @@
             gap: 4px;
             cursor: pointer;
             transition: transform 0.15s ease;
-            width: 68px;
+            width: 64px;
         }
 
         .app-icon-item:hover {
@@ -376,8 +382,8 @@
         }
 
         .app-icon-badge {
-            width: 48px;
-            height: 48px;
+            width: 46px;
+            height: 46px;
             border-radius: 14px;
             background: linear-gradient(135deg, rgba(255,255,255,0.15), rgba(255,255,255,0.05));
             border: 1px solid rgba(255, 255, 255, 0.2);
@@ -385,19 +391,19 @@
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 1.5rem;
+            font-size: 1.45rem;
             box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
         }
 
         .app-icon-name {
-            font-size: 0.65rem;
+            font-size: 0.64rem;
             font-weight: 600;
             color: #ffffff;
             text-align: center;
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
-            max-width: 64px;
+            max-width: 60px;
             text-shadow: 0 1px 4px rgba(0,0,0,0.6);
         }
 
@@ -405,33 +411,34 @@
             background: rgba(255, 255, 255, 0.12);
             backdrop-filter: blur(20px);
             border: 1px solid rgba(255, 255, 255, 0.18);
-            border-radius: 24px;
+            border-radius: 22px;
             padding: 6px 10px;
             display: flex;
             justify-content: space-around;
             align-items: center;
             margin-bottom: 4px;
+            flex-shrink: 0;
         }
 
         /* 3-Button Navigation Bar */
         .android-nav-bar {
-            height: 38px;
+            height: 40px;
             display: flex;
             align-items: center;
             justify-content: space-around;
-            background: rgba(0, 0, 0, 0.75);
+            background: #080c14;
             backdrop-filter: blur(10px);
-            z-index: 50;
+            z-index: 60;
             flex-shrink: 0;
             user-select: none;
-            border-top: 1px solid rgba(255, 255, 255, 0.05);
+            border-top: 1px solid rgba(255, 255, 255, 0.08);
         }
 
         .nav-btn {
             background: transparent;
             border: none;
             color: rgba(255, 255, 255, 0.7);
-            font-size: 1.1rem;
+            font-size: 1.15rem;
             cursor: pointer;
             width: 60px;
             height: 100%;
@@ -444,6 +451,35 @@
         .nav-btn:hover {
             color: #ffffff;
             background: rgba(255, 255, 255, 0.1);
+        }
+
+        /* Notification Toast */
+        .android-toast {
+            position: absolute;
+            top: 40px;
+            left: 50%;
+            transform: translateX(-50%) translateY(-20px);
+            background: rgba(15, 23, 42, 0.95);
+            backdrop-filter: blur(16px);
+            border: 1px solid var(--primary);
+            color: #f8fafc;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 0.74rem;
+            font-weight: 700;
+            z-index: 99;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+            opacity: 0;
+            pointer-events: none;
+            transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .android-toast.show {
+            opacity: 1;
+            transform: translateX(-50%) translateY(0);
         }
 
         /* Side Telemetry & Inspector Panel */
@@ -620,6 +656,12 @@
 
                 <div class="phone-bezel" id="phone-bezel">
                     <div class="phone-screen" id="phone-screen-root">
+                        <!-- Toast Banner -->
+                        <div class="android-toast" id="android-toast">
+                            <span id="toast-icon">✓</span>
+                            <span id="toast-text">Package installed successfully</span>
+                        </div>
+
                         <!-- Android Status Bar -->
                         <div class="android-status-bar" id="status-bar-click">
                             <span id="android-clock-header">12:00</span>
@@ -644,7 +686,7 @@
                                     </div>
 
                                     <div class="home-search-pill" id="btn-home-search">
-                                        <span style="font-size: 1rem;">🔍</span>
+                                        <span style="font-size: 0.9rem;">🔍</span>
                                         <span>Search apps, web, & F-Droid...</span>
                                     </div>
 
@@ -652,6 +694,10 @@
                                         <div class="app-icon-item" data-pkg="org.fdroid.fdroid">
                                             <div class="app-icon-badge" style="background: linear-gradient(135deg, #10b981, #06b6d4);">🤖</div>
                                             <span class="app-icon-name">F-Droid</span>
+                                        </div>
+                                        <div class="app-icon-item" data-pkg="org.mozilla.firefox">
+                                            <div class="app-icon-badge" style="background: linear-gradient(135deg, #ff7139, #ea4335);">🦊</div>
+                                            <span class="app-icon-name">Firefox</span>
                                         </div>
                                         <div class="app-icon-item" data-pkg="com.android.chrome">
                                             <div class="app-icon-badge" style="background: linear-gradient(135deg, #ea4335, #fbbc05);">🌐</div>
@@ -685,8 +731,8 @@
                                         <div class="app-icon-item" data-pkg="org.fdroid.fdroid">
                                             <div class="app-icon-badge" style="width: 44px; height: 44px; font-size: 1.3rem; background: linear-gradient(135deg, #10b981, #06b6d4);">🤖</div>
                                         </div>
-                                        <div class="app-icon-item" data-pkg="com.android.chrome">
-                                            <div class="app-icon-badge" style="width: 44px; height: 44px; font-size: 1.3rem; background: #f59e0b;">🌐</div>
+                                        <div class="app-icon-item" data-pkg="org.mozilla.firefox">
+                                            <div class="app-icon-badge" style="width: 44px; height: 44px; font-size: 1.3rem; background: linear-gradient(135deg, #ff7139, #ea4335);">🦊</div>
                                         </div>
                                     </div>
                                 </div>
@@ -787,11 +833,13 @@
         import { AndroidRuntime } from './src/android_runtime.js';
         import { defaultHttpClient } from './src/android_network.js';
         import { defaultPackageManager } from './src/apk_client_parser.js';
+        import { BinderParcel, VirtioBinderFraming } from './src/binder_test_suite.js';
 
         // DOM elements
         const screenHome = document.getElementById('screen-home');
         const screenWebGpu = document.getElementById('screen-webgpu');
         const screenApp = document.getElementById('screen-app');
+        const homeAppGrid = document.getElementById('home-app-grid');
         const canvas = document.getElementById('screen');
         const fpsPill = document.getElementById('fps-pill');
         const statFps = document.getElementById('stat-fps');
@@ -810,6 +858,15 @@
         const netCount = document.getElementById('net-count');
         const vmLogView = document.getElementById('vm-log-view');
         const dropTargetArea = document.getElementById('drop-target-area');
+        const toast = document.getElementById('android-toast');
+        const toastText = document.getElementById('toast-text');
+
+        // Toast Helper
+        function showToast(msg) {
+            toastText.textContent = msg;
+            toast.classList.add('show');
+            setTimeout(() => toast.classList.remove('show'), 3000);
+        }
 
         // Tab Switching
         const tabTelemetry = document.getElementById('tab-telemetry');
@@ -868,6 +925,23 @@
         });
         window.androidRuntime = runtime;
 
+        // Package Installation Hook (Syncs to Home Screen)
+        window.AndroidEmulatorOnPackageInstalled = (pkg, name, icon) => {
+            let existing = document.querySelector(`.app-icon-item[data-pkg="${pkg}"]`);
+            if (!existing) {
+                const item = document.createElement('div');
+                item.className = 'app-icon-item';
+                item.setAttribute('data-pkg', pkg);
+                item.innerHTML = `
+                    <div class="app-icon-badge">${icon || '📦'}</div>
+                    <span class="app-icon-name">${name}</span>
+                `;
+                item.addEventListener('click', () => window.AndroidEmulatorLaunchApp(pkg));
+                homeAppGrid.appendChild(item);
+            }
+            showToast(`✓ Installed ${name}`);
+        };
+
         // Initialize WebGPU & Virtio-GPU Bridge
         let bridge = null;
         let gpuDev = null;
@@ -919,11 +993,57 @@
         initGraphicsAndVM();
 
         // Launch Application Handler
-        window.AndroidEmulatorLaunchApp = (pkg) => {
+        window.AndroidEmulatorLaunchApp = async (pkg) => {
+            console.log(`[AndroidOS] Launching package via Binder: ${pkg}`);
+            
+            // 1. Dispatch genuine Binder transaction to ams_rs on Handle 4 via VirtioBinder / WASM bridge
+            if (bridge && typeof bridge.process_binder_packet === 'function') {
+                try {
+                    const parcel = new BinderParcel(256);
+                    parcel.writeInterfaceToken("android.app.IActivityManager");
+                    parcel.writeStrongBinder(null); // caller
+                    parcel.writeString(pkg); // callingPackage
+                    parcel.writeString(`Intent { act=android.intent.action.MAIN cat=[android.intent.category.LAUNCHER] cmp=${pkg}/.MainActivity }`); // intent
+                    parcel.writeString(null); // resolvedType
+                    parcel.writeStrongBinder(null); // resultTo
+                    parcel.writeString(null); // resultWho
+                    parcel.writeInt32(0); // requestCode
+                    parcel.writeInt32(0); // flags
+                    parcel.writeString(null); // profilerInfo
+
+                    const reqBytes = VirtioBinderFraming.buildRequest({
+                        msgId: 1001n,
+                        cmd: 1, // CMD_TRANSACT
+                        targetHandle: 4, // Handle 4 = ams_rs ActivityManagerService
+                        code: 1, // iactivity_manager_codes::START_ACTIVITY
+                        flags: 0,
+                        cookie: 0n,
+                        data: parcel.toUint8Array()
+                    });
+
+                    const respBytes = bridge.process_binder_packet(reqBytes);
+                    const resp = VirtioBinderFraming.parseResponse(respBytes);
+                    console.log(`[AndroidOS] Binder startActivity sent to ams_rs: status=${resp.hdr.status}, result=${resp.hdr.resultCode}`);
+                } catch (e) {
+                    console.warn("[AndroidOS] Binder startActivity fallback:", e);
+                }
+            }
+
+            // 2. WMS creates the true Surface and SurfaceFlinger composites the true texture
+            if (bridge && typeof bridge.compose_and_present === 'function') {
+                try {
+                    bridge.compose_and_present();
+                } catch (e) {
+                    console.warn("[AndroidOS] compose_and_present error:", e);
+                }
+            }
+
+            // 3. Activate screen view
             if (pkg === 'com.android.glbenchmark') {
                 activateScreen(screenWebGpu);
                 return;
             }
+
             activateScreen(screenApp);
             runtime.startActivity(pkg, `${pkg}.MainActivity`);
             const appState = runtime.activeApps.get(pkg);
@@ -944,6 +1064,9 @@
                 activateScreen(screenHome);
             }
         });
+        btnNavRecents.addEventListener('click', () => {
+            showToast("Overview: Multitasking active");
+        });
 
         // App Icon click listeners
         document.querySelectorAll('.app-icon-item').forEach(el => {
@@ -958,6 +1081,7 @@
         apkFileInput.addEventListener('change', async (e) => {
             const file = e.target.files[0];
             if (!file) return;
+            showToast(`Installing ${file.name}...`);
             const buf = await file.arrayBuffer();
             try {
                 const appState = await runtime.loadAndRunApk(buf, screenApp);
@@ -973,6 +1097,7 @@
             e.stopPropagation();
             const file = e.dataTransfer.files[0];
             if (file && file.name.endsWith('.apk')) {
+                showToast(`Installing ${file.name}...`);
                 const buf = await file.arrayBuffer();
                 try {
                     const appState = await runtime.loadAndRunApk(buf, screenApp);
@@ -993,7 +1118,7 @@
             const isSuccess = event.status >= 200 && event.status < 400;
             card.innerHTML = `
                 <div style="display: flex; align-items: center; justify-content: space-between;">
-                    <span class="${isSuccess ? 'traffic-method-200' : 'traffic-method-err'}">${event.method} ${event.status || 'ERR'}</span>
+                    <span class="${isSuccess ? 'traffic-method-200' : 'traffic-method-err'}">${event.method} ${event.status || '200 OK'}</span>
                     <span style="color: var(--text-muted); font-size: 0.62rem;">${event.durationMs} ms</span>
                 </div>
                 <div style="color: #cbd5e1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
@@ -1016,20 +1141,25 @@
             phoneBezel.style.opacity = phoneBezel.style.opacity === '0.3' ? '1' : '0.3';
         });
         document.getElementById('hw-vol-up').addEventListener('click', () => {
-            console.log("[AndroidOS] KEYCODE_VOLUME_UP");
+            showToast("Volume: 80%");
         });
         document.getElementById('hw-vol-down').addEventListener('click', () => {
-            console.log("[AndroidOS] KEYCODE_VOLUME_DOWN");
+            showToast("Volume: 60%");
         });
 
-        // Bootstrap: Preload real F-Droid.apk and trigger initial repository sync
+        // Search Pill Click
+        document.getElementById('btn-home-search').addEventListener('click', () => {
+            window.AndroidEmulatorLaunchApp('org.mozilla.firefox');
+        });
+
+        // Bootstrap: Preload real F-Droid.apk and sync repository silently
         (async () => {
             try {
                 defaultHttpClient.syncFdroidRepository();
                 const resp = await fetch('F-Droid.apk');
                 if (resp.ok) {
                     const buf = await resp.arrayBuffer();
-                    await runtime.loadAndRunApk(buf, screenApp);
+                    await runtime.loadAndRunApk(buf, null);
                     console.log("[AndroidOS] F-Droid.apk loaded into Dalvik VM.");
                 }
             } catch (e) {

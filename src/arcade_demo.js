@@ -40,6 +40,8 @@ export class Arcade3DScene {
         this.lastTime = performance.now();
         this.frameCount = 0;
         this.fps = 60.0;
+        this.hasTrueWindow = false;
+        this.hideGrid = false;
 
         this.initVirtioResources();
     }
@@ -268,7 +270,7 @@ export class Arcade3DScene {
                 let bgB = Math.max(16, Math.floor(34 - dist * 16));
 
                 // Horizon Perspective Grid Floor (Bottom half)
-                if (y > h / 2 + 30) {
+                if ((!this.hasTrueWindow && !this.hideGrid) && y > h / 2 + 30) {
                     const depthY = (y - (h / 2 + 30)) / (h / 2 - 30);
                     const gridX = Math.abs((x - w / 2) / (depthY + 0.1));
                     const isLineX = (gridX % 40) < 1.8;
