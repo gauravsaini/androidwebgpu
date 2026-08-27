@@ -232,9 +232,7 @@ export class V86GuestManager {
                         autostart: true
                     };
 
-                    if (this.config.bootMode === 'iso' || (this.config.bootMode === 'auto' && this.config.cdromUrl)) {
-                        v86Options.cdrom = { url: this.config.cdromUrl };
-                    } else if (this.config.kernelUrl && this.config.initrdUrl) {
+                    if (this.config.bootMode === 'direct' || this.config.bootMode === 'kernel' || (this.config.bootMode !== 'iso' && this.config.kernelUrl && this.config.initrdUrl)) {
                         try {
                             const [kernelBuf, initrdBuf] = await Promise.all([
                                 this.fetchBuffer(this.config.kernelUrl, 'Kernel bzImage'),
@@ -250,10 +248,12 @@ export class V86GuestManager {
                             }
                             v86Options.bzimage = { buffer: kernelBuf };
                             v86Options.initrd = { buffer: initrdBuf };
-                            v86Options.cmdline = this.config.cmdline;
+                            v86Options.cmdline = this.config.cmdline || 'console=ttyS0 earlyprintk=serial,ttyS0,115200 root=/dev/ram0 rdinit=/init panic=1 loglevel=8';
                         } catch (err) {
                             if (isBrowser) throw err;
                         }
+                    } else if (this.config.bootMode === 'iso' || (this.config.bootMode === 'auto' && this.config.cdromUrl)) {
+                        v86Options.cdrom = { url: this.config.cdromUrl };
                     }
 
                     this.emulator = new V86Class(v86Options);

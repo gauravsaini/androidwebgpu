@@ -112,6 +112,8 @@ export class SystemBootstrap {
      * @param {boolean} [domElements.isHeadless=false]
      */
     async init(domElements = {}) {
+        if (this.isInitialized) return this;
+        this.isInitialized = true;
         const { canvas, v86ScreenContainer, isHeadless = false } = domElements;
 
         // 1. Initialize WebGPU Graphics Bridge if not in pure headless mode without canvas
@@ -231,8 +233,8 @@ export class SystemBootstrap {
                 this.metrics.lastFpsCheck = now;
 
                 if (!this.metrics.lastLogTime) this.metrics.lastLogTime = now;
-                if (now - this.metrics.lastLogTime >= 5000) {
-                    logger.log('compositor', 'I', `WebGPU Telemetry: ${fps.toFixed(1)} FPS • GPU Time: ${this.metrics.gpuTimeMs.toFixed(2)}ms`);
+                if (now - this.metrics.lastLogTime >= 10000) {
+                    logger.log('compositor', 'D', `WebGPU Telemetry: ${fps.toFixed(1)} FPS • GPU Time: ${this.metrics.gpuTimeMs.toFixed(2)}ms`);
                     this.metrics.lastLogTime = now;
                 }
             }

@@ -141,7 +141,11 @@ const bootstrap = new SystemBootstrap({
     wasmPath: './v86/v86.wasm',
     biosUrl: './bios/seabios.bin',
     vgaBiosUrl: './bios/vgabios.bin',
+    kernelUrl: './guest/build/bzImage',
+    initrdUrl: './guest/build/initrd.img',
     cdromUrl: './guest/build/linux4.iso',
+    cmdline: 'console=ttyS0 earlyprintk=serial,ttyS0,115200 root=/dev/ram0 rdinit=/init panic=1 loglevel=8',
+    bootMode: 'direct',
     onMilestone: (milestone) => {
         // Milestone already recorded into globalLogcat and logger by v86_guest_manager
     },
@@ -344,7 +348,11 @@ function bindEventListeners() {
 }
 
 // 7. Lifecycle Startup & Initialization
+let isSystemStarted = false;
 async function startSystem() {
+    if (isSystemStarted) return;
+    isSystemStarted = true;
+
     bindEventListeners();
 
     // Clock update ticker
