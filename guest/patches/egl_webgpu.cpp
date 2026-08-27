@@ -16,6 +16,13 @@
 #include <drm/drm.h>
 #include <drm/virtgpu_drm.h>
 
+#ifndef VIRTGPU_EXECBUF_FENCE
+#define VIRTGPU_EXECBUF_FENCE 1
+#endif
+#ifndef VIRTGPU_EXECBUF_RING_IDX
+#define VIRTGPU_EXECBUF_RING_IDX 2
+#endif
+
 struct egl_display_t {
     int magic;
     int drm_fd;

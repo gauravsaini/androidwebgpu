@@ -65,6 +65,17 @@ else
     echo "[init] synthetic_virtio_probe not present (run guest/tools/build_synthetic_probe.sh)" > /dev/ttyS0 2>/dev/null || true
 fi
 
+# 5c. Phase 4 Graphics and 2D Skia Rasterization tests
+if [ -x /system/bin/skia_fb_test ]; then
+    echo "[init] running skia_fb_test (Phase 4b 2D rasterization)..." > /dev/ttyS0 2>/dev/null || true
+    /system/bin/skia_fb_test > /dev/ttyS0 2>&1 || true
+fi
+
+if [ -x /system/bin/test_triangle ]; then
+    echo "[init] running test_triangle (Phase 4a GPU triangle)..." > /dev/ttyS0 2>/dev/null || true
+    /system/bin/test_triangle > /dev/ttyS0 2>&1 || true
+fi
+
 echo "[init] system boot completed successfully" > /dev/ttyS0 2>/dev/null || true
 
 # 6. Interactive console - keep PID 1 alive even if /bin/sh missing (TinyCore/Alpine fix)

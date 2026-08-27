@@ -169,14 +169,12 @@ int main(int argc, char** argv) {
             0x0104, 0, 0, 0, 0, 0, (uint32_t)width, (uint32_t)height, 1, 0,
             0, 0
         };
-        struct drm_virtgpu_execbuffer exec = {
-            .flags = 0,
-            .size = 22 * sizeof(uint32_t),
-            .command = (uintptr_t)cmds,
-            .fence_fd = -1,
-            .num_bo_handles = 0,
-            .bo_handles = 0,
-        };
+        struct drm_virtgpu_execbuffer exec;
+        memset(&exec, 0, sizeof(exec));
+        exec.flags = 0;
+        exec.size = 22 * sizeof(uint32_t);
+        exec.command = (uintptr_t)cmds;
+        exec.fence_fd = -1;
         ioctl(drm_fd, DRM_IOCTL_VIRTGPU_EXECBUFFER, &exec);
         close(drm_fd);
         printf("[skia_fb_test] Submitted TRANSFER_TO_HOST_2D + RESOURCE_FLUSH to DRM\n");
