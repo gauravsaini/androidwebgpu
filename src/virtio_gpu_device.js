@@ -43,9 +43,20 @@ export class VirtioGpuDevice {
         this.isrStatus = 0;
         this.hostFeatures = (1 << 0) | (1 << 1); // VIRGL + EDID
         this.guestFeatures = 0;
-        this.pciSlot = 0x05;
-        this.ioBase = 0xC000;
-        this.irqLine = 10;
+        this.pciSlot = 0x07;
+        this.pci_id = this.pciSlot << 3;
+        this.pci_bars = [{ size: 64 }];
+        this.name = "virtio-gpu";
+        this.ioBase = 0xC040;
+        this.bar0Value = 0xC041;
+        this.ioBase = 0xC100;
+        this.irqLine = 11;
+        this.bar0Size = 64;
+        this.bar0Value = 0xC101;
+        this.bar0Sizing = false;
+        this.bar1Size = 16 * 1024 * 1024;
+        this.bar1Value = 0xD1000000;
+        this.bar1Sizing = false;
 
         this.initPci();
         if (this.v86) {
@@ -70,13 +81,17 @@ export class VirtioGpuDevice {
         this.pci_space[10] = 0x00;
         this.pci_space[11] = 0x03;
 
-        // BAR0: I/O Space (64 bytes)
-        this.pci_space[16] = 0x01; // I/O indicator
+        // BAR0: I/O Space (64 bytes) at 0xC040 (avoid ne2k at 0xC000)
+        this.pci_space[16] = 0x41;
         this.pci_space[17] = 0xC0;
+        this.pci_space[18] = 0x00;
+        this.pci_space[19] = 0x00;
 
-        // BAR1: MMIO Space
+        // BAR1: MMIO Space at 0xD1000000
         this.pci_space[20] = 0x00;
-        this.pci_space[21] = 0xD0;
+        this.pci_space[21] = 0x00;
+        this.pci_space[22] = 0x10;
+        this.pci_space[23] = 0xD1;
 
         // Subsystem Vendor ID (0x1AF4) & Subsystem ID (0x0010 for VirtIO GPU)
         this.pci_space[44] = 0xF4;
@@ -97,37 +112,62 @@ export class VirtioGpuDevice {
 
     /**
      * Register Virtio-GPU device on v86 PCI bus and I/O ports
+     * Handles both immediate and deferred registration (emulator-ready)
      * @param {Object} v86 - v86 emulator instance
      */
     registerWithV86(v86) {
         if (!v86) return;
         this.v86 = v86;
-
-        try {
-            const cpu = v86.cpu || (v86.v86 && v86.v86.cpu);
-            const io = v86.io || (v86.v86 && v86.v86.io);
-
-            // Register on PCI bus if accessible
-            if (cpu && cpu.devices && cpu.devices.pci) {
-                cpu.devices.pci.register_device(this.pciSlot << 3, this);
-            }
-
-            // Register I/O port handlers for BAR0 (0xC000..0xC03F)
-            if (io && typeof io.register_read === 'function' && typeof io.register_write === 'function') {
-                for (let port = this.ioBase; port < this.ioBase + 64; port++) {
-                    const offset = port - this.ioBase;
-                    io.register_read(port, this, () => this.ioRead(offset, 1));
-                    io.register_write(port, this, (val) => this.ioWrite(offset, val, 1));
+        const tryRegister = () => {
+            try {
+                const cpu = v86.cpu || (v86.v86 && v86.v86.cpu);
+                const io = v86.io || (v86.v86 && v86.v86.io);
+                if (cpu && cpu.devices && cpu.devices.pci) {
+                    // Avoid double-registration
+                    if (cpu.devices.pci.devices[this.pci_id]) {
+                        logger.log('bridge', 'D', `PCI bdf=0x${this.pci_id.toString(16)} already registered`);
+                        return true;
+                    }
+                    const ret = cpu.devices.pci.register_device(this);
+                    const check = cpu.devices.pci.devices[this.pci_id];
+                    logger.log('bridge', 'I', `PCI register bdf=0x${this.pci_id.toString(16)} (${this.name}) -> ${check ? 'OK' : 'FAIL'}`, {
+                        pci_id: this.pci_id,
+                        found: !!check
+                    });
+                    if (check) {
+                        // Register I/O port handlers for BAR0
+                        if (io && typeof io.register_read === 'function' && typeof io.register_write === 'function') {
+                            for (let port = this.ioBase; port < this.ioBase + 64; port++) {
+                                const offset = port - this.ioBase;
+                                io.register_read(port, this, () => this.ioRead(offset, 1));
+                                io.register_write(port, this, (val) => this.ioWrite(offset, val, 1));
+                            }
+                        }
+                        logger.log('bridge', 'I', `Virtio-GPU device attached to v86 (slot 0x${this.pciSlot.toString(16)}, I/O 0x${this.ioBase.toString(16)})`, {
+                            pciSlot: this.pciSlot,
+                            ioBase: this.ioBase,
+                            irqLine: this.irqLine
+                        });
+                        return true;
+                    }
+                } else {
+                    logger.log('bridge', 'D', `PCI bus not ready for bdf=0x${this.pci_id.toString(16)}, deferring`);
                 }
+            } catch (e) {
+                logger.log('bridge', 'W', `v86 registration notice: ${e.message}`);
             }
-
-            logger.log('bridge', 'I', `Virtio-GPU device attached to v86 (slot 0x${this.pciSlot.toString(16)}, I/O 0x${this.ioBase.toString(16)})`, {
-                pciSlot: this.pciSlot,
-                ioBase: this.ioBase,
-                irqLine: this.irqLine
-            });
-        } catch (e) {
-            logger.log('bridge', 'W', `v86 registration notice: ${e.message}`);
+            return false;
+        };
+        if (!tryRegister()) {
+            // Defer until emulator-ready when cpu.devices is populated
+            const onReady = () => { try { tryRegister(); } catch (_) {} };
+            try {
+                if (typeof v86.add_listener === 'function') v86.add_listener('emulator-ready', onReady);
+                else if (v86.v86 && typeof v86.v86.add_listener === 'function') v86.v86.add_listener('emulator-ready', onReady);
+            } catch (_) {}
+            // Also retry after a short delay as fallback
+            setTimeout(tryRegister, 500);
+            setTimeout(tryRegister, 1500);
         }
     }
 
@@ -311,24 +351,13 @@ export class VirtioGpuDevice {
         }
     }
 
-    /**
-     * Read from PCI Configuration space or BARs
-     */
     pciRead(addr, size) {
         let val = 0;
-        for (let i = 0; i < size; i++) {
-            val |= (this.pci_space[addr + i] || 0) << (i * 8);
-        }
+        for (let i = 0; i < size; i++) val |= (this.pci_space[addr + i] || 0) << (i * 8);
         return val >>> 0;
     }
-
-    /**
-     * Write to PCI Configuration space or BARs
-     */
     pciWrite(addr, val, size) {
-        for (let i = 0; i < size; i++) {
-            this.pci_space[addr + i] = (val >>> (i * 8)) & 0xFF;
-        }
+        for (let i = 0; i < size; i++) this.pci_space[addr + i] = (val >>> (i * 8)) & 0xFF;
     }
 
     /**
