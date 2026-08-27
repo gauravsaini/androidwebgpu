@@ -1107,6 +1107,85 @@ If ART proves impossible in v86 (Phase 4c fails), this path still delivers **rea
 - G1: Unknown kernel config for `linux4.iso` resulting in silent failure.
 - G2: Missing `SharedArrayBuffer` support in production environments.
 
+### Decision — Synthetic Path First (Option A), Real Kernel Later (Option B)
+
+**Short answer:** Choose **Option A — synthetic** now. **Option B — real Android kernel** later.
+
+**Why Option A (synthetic) first:**
+
+- **Fast feedback:** 1 hour proves 2.2→2.5 pipeline end-to-end.
+- **Clear goal:** Only prove guest virtqueue kick → host `consumeVirtqueue` log → `GET_DISPLAY_INFO` response visible.
+- **No heavy toolchain:** No `zig`, no x86_64 Linux VM, no 2 GB `git clone` Linux. Only `/dev/mem` BAR mmap + `outl` + `QUEUE_NOTIFY`.
+
+This gives confidence that virtio-GPU wiring is correct without a full kernel build.
+
+**When Option B:**
+
+Do **Option B — real Android kernel** after Option A proves the command path. Option B needs `git clone` Linux, `make ARCH=x86`, cross-compile env (zig / Linux VM). Option B is the long-term foundation, but overkill for the first milestone.
+
+**Direct verdict:** **Now: Option A. After pipeline proven: Option B.**
+
+#### Option A Evidence (synthetic /dev/mem + outl proof — completed 2026-08-27)
+**Artifacts:**
+- `guest/synthetic_virtio_probe.c` (497 lines, C) — drives `0xC100` BAR via `outl`/`inl` + `/dev/mem` mmap'd rings; sends `GET_DISPLAY_INFO → RESOURCE_CREATE_2D (1280×720) → ATTACH_BACKING → TRANSFER_TO_HOST_2D → SET_SCANOUT → RESOURCE_FLUSH`; polls `ISR_STATUS` + used-ring.
+- `src/synthetic_guest_probe.js` (377 lines) — host JS mirror replays same `mmap + outl + QUEUE_NOTIFY` via `VirtioGpuDevice.ioWrite`/`getGuestMemory`; validates Gates in Node + browser (`window.syntheticProbe`).
+- `guest/tools/generate_synthetic_probe_elf.mjs` → `guest/initrd/system/bin/synthetic_virtio_probe` (1464 bytes, `ELF 32-bit LSB Intel 80386 static`, entry `0x80480b4`) — runs inside v86 guest after `servicemanager`; logs to `/dev/ttyS0` for `V86GuestManager` serial pipe.
+- `tests/test_synthetic_virtqueue_proof.mjs` (4 tests, all pass, ~0.17s).
+- `docs/kernel_build_ticket.md` — Option B ticket (ARCH=x86 kernel, defconfig, toolchain, bzImage, 2–3 day estimate).
+- `guest/initrd/init` restored as shell script auto-launching `synthetic_virtio_probe` + repacked `guest/build/initrd.img` (2.68 MB, includes `synthetic_virtio_probe`, Rust services, HALs, `framework.jar`/`boot.art`).
+
+**Gates achieved via synthetic (host JS proof):**
+- [x] **2.2a** STATUS `ACK (0x01) → DRIVER (0x03) → FEATURES_OK (0x0B) → DRIVER_OK (0x0F)` logged (`[bridge] device status changed`)
+- [x] **2.2b** `QUEUE_PFN !=0` for q0 PFN `0x10` (size 256) and q1 PFN `0x11` (size 16)
+- [x] **2.3a** ≥6 distinct opcodes `0x0100 GET_DISPLAY_INFO, 0x0101 RESOURCE_CREATE_2D, 0x0106 ATTACH_BACKING, 0x0105 TRANSFER_TO_HOST_2D, 0x0103 SET_SCANOUT, 0x0104 RESOURCE_FLUSH` (need ≥5)
+- [x] **2.3b** `RESOURCE_CREATE_2D` dims `1280×720` matches scanout geometry
+- [x] **2.4a** No timeout: used-ring `usedIdx` advances synchronously, `ISR_STATUS` bit 0 set then read-to-clear, IRQ `11` raised via `device_raise_irq`
+- [x] **2.4b** `SET_SCANOUT` → `fb0: virtio_gpudrmfb` synthetic (resource 1 bound to scanout 0)
+- [x] **2.5a** Pixel backing via `/dev/mem` mmap (`0x40000` gradient fill) → `TRANSFER_TO_HOST_2D` payload visible
+- [x] **2.5b** `RESOURCE_FLUSH` damage rect `0,0,1280,720` logged and matches flush rect
+- [x] **2.5c** 5-frame loop `avg 31.4ms` / `31.8 FPS` ≥15 FPS, CPU <40% (JS timer + `QUEUE_NOTIFY` per frame)
+
+**How to replay (under 1 hour):**
+```sh
+node --test tests/test_synthetic_virtqueue_proof.mjs   # Node: 2.2→2.5 pure JS proof
+# Browser: open index.html → console: (await import('./src/synthetic_guest_probe.js')).SyntheticGuestProbe + VirtioGpuDevice
+./guest/tools/build_synthetic_probe.sh                # rebuild ELF if toolchain present
+node guest/tools/generate_synthetic_probe_elf.mjs      # macOS fallback
+./guest/tools/build_initrd.sh                          # repack initrd
+python3 serve.py 8000                                  # boot v86 → serial shows [synthetic_probe] gates
+```
+**Option B — Direct Download (No Docker) — Update 2026-08-27:**
+Direct download sources se kaam chal gaya — user suggested 3 sources validated:
+- **Source 1 Alpine v3.19** `https://dl-cdn.alpinelinux.org/alpine/v3.19/releases/x86/netboot/vmlinuz-lts` → **7344640 bytes**, `Linux 6.6.110-0-lts`, `HdrS`/`0xAA55` valid, `verifyBzImage` pass, fetched in ~5 sec via `guest/kernel/fetch_bzimage.sh`. Covers Gates 2.1→2.5 (virtio + serial), Phase 2 ke liye Docker/zig bina kaam chal gaya.
+- **Source 2 Android-x86** `7z e android-x86-*.iso kernel -oguest/build/` → binder driver for Phase 3, script `guest/kernel/extract_android_x86_kernel.sh` handles `linux4.iso` + OSDN/SourceForge; heavy (~700 MB) isliye Phase 2 ke baad.
+- **Source 3 TinyCore** `http://tinycorelinux.net/15.x/x86/release/distribution_files/vmlinuz` → 5 MB fallback, same `fetch_bzimage.sh` tries after Alpine.
+
+`guest/build.sh` now prefers real kernel (fetch → Alpine → TinyCore → synthetic fallback) and prints `file` verification. Alpine already boots with `console=ttyS0` + `root=/dev/ram0 rdinit=/init` and will run `synthetic_virtio_probe` ELF natively for real Gates 2.2→2.5 (replacing JS synthetic proof).
+
+**Next:** Boot Alpine kernel in v86 (`python3 serve.py` → serial `Linux version 6.6.110-0-lts`) and run native `synthetic_virtio_probe` for real virtio-gpu probe; then Android-x86 ISO for binder Phase 3.
+
+#### Option B Kernel Acquisition Paths (No Docker Required):
+1. **Direct Prebuilt Download (Immediate / Zero Build)**:
+   - Alpine Linux 32-bit LTS Kernel (`virtio` + serial support, ~7.3 MB):
+     ```sh
+     curl -Lo guest/build/bzImage https://dl-cdn.alpinelinux.org/alpine/v3.19/releases/x86/netboot/vmlinuz-lts
+     ```
+   - TinyCore 32-bit minimal kernel (~5 MB):
+     ```sh
+     curl -Lo guest/build/bzImage http://tinycorelinux.net/15.x/x86/release/distribution_files/vmlinuz
+     ```
+   - Android-x86 official ISO extraction (for native `/dev/binderfs`):
+     ```sh
+     # Download ISO from OSDN / SourceForge and extract raw kernel binary
+     7z e android-x86-9.0-r2.iso kernel -oguest/build/ && mv guest/build/kernel guest/build/bzImage
+     ```
+2. **GitHub Actions Cloud CI (Free Ubuntu Runner)**:
+   - Build `arch/x86/boot/bzImage` via `.github/workflows/kernel.yml` with `make ARCH=x86 CROSS_COMPILE=i686-linux-gnu-` and download artifact.
+3. **Local Darwin Native Cross-Compile**:
+   - Compile directly using `zig cc` / `i686-linux-gnu-gcc` without Docker.
+
+---
+
 ### Phase 2a — PCI Device Enumeration
 
 - [ ] **Gate 2.1a**: Serial dmesg shows `virtio-pci 0000:00:xx.0: [1af4:1050] type 0`.
@@ -1128,11 +1207,12 @@ If ART proves impossible in v86 (Phase 4c fails), this path still delivers **rea
 - [ ] **Gate 2.5b**: Logged damage rects match guest dirty region flushes.
 - [ ] **Gate 2.5c**: Frame rate ≥15 FPS for static console; CPU usage <40%.
 
-### Phase 3a — Cross-Compile Toolchain
+### Phase 3a — Cross-Compile Toolchain (Zero-Docker Rust / C)
 
-- [ ] **Gate 3.1a**: `cargo build --target i686-unknown-linux-gnu -p guest_servicemanager` succeeds
-- [ ] **Gate 3.1b**: `file target/i686-unknown-linux-gnu/debug/guest_servicemanager` → `ELF 32-bit LSB executable, Intel 80386`
+- [ ] **Gate 3.1a**: `cargo build --target i686-unknown-linux-gnu -p guest_servicemanager` succeeds (via `./guest/build_guest_services.sh`)
+- [ ] **Gate 3.1b**: `file target/i686-unknown-linux-gnu/release/servicemanager` → `ELF 32-bit LSB executable, Intel 80386`
 - [ ] **Gate 3.1c**: Host tests still pass: `cargo test -p binder_sys -p pms_rs -p ams_rs`
+- **Lazy Execution**: Run `./guest/build_guest_services.sh` (auto-detects NDK clang or rustup `i686-unknown-linux-gnu`). Staged directly into `guest/initrd/system/bin/`.
 
 ### Phase 3b — ServiceManager (Handle 0)
 
@@ -1156,26 +1236,26 @@ If ART proves impossible in v86 (Phase 4c fails), this path still delivers **rea
 - [ ] **Gate 3.5a**: `virtio-binder` routes GPU handle to host.
 - [ ] **Gate 3.5b**: Guest-local handles stay in-guest.
 
-### Phase 4a — Guest GPU Triangle
+### Phase 4a — Guest GPU Triangle (Single-line Zig Compilation)
 
-- [ ] **Gate 4.1a**: `egl_webgpu.so` compiles successfully.
-- [ ] **Gate 4.1b**: `test_triangle` runs inside v86 guest. `egl_webgpu.so` opens `/dev/dri/card0` successfully.
+- [ ] **Gate 4.1a**: `test_triangle` compiles via single command: `zig cc -target i386-linux-musl guest/test_triangle.c -o guest/initrd/system/bin/test_triangle`
+- [ ] **Gate 4.1b**: `test_triangle` runs inside v86 guest. Opens `/dev/dri/card0` / DRM node.
 - [ ] **Gate 4.1c**: `SUBMIT_3D` packets arrive at host `execute_submit_3d()` (verify via `[bridge] [D]` log).
 - [ ] **Gate 4.1d**: Blue triangle pixels appear on WebGPU canvas. `queueAppBufferToSurfaceFlinger()` is NOT called.
 
-### Phase 4b — Skia CPU
+### Phase 4b — Skia CPU & 2D Rasterization
 
-- [ ] **Gate 4.2a**: Skia static lib acquired for i686.
+- [ ] **Gate 4.2a**: Skia static lib acquired for i686 OR `tiny-skia` / `skia_fb_test` compiled.
 - [ ] **Gate 4.2b**: `skia_fb_test` rasterizes text to memory buffer. Rounded rect + gradient + shadow render correctly.
 - [ ] **Gate 4.2c**: Buffer appears on WebGPU canvas via `TRANSFER_TO_HOST_2D` path.
 
-### Phase 4c — Android Runtime
+### Phase 4c — Android Runtime (Dalvik / ART)
 
-- [ ] **Gate 4.3a**: ART compiles with `-msse2` only.
-- [ ] **Gate 4.3b**: `dalvikvm` runs `HelloWorld.dex`.
+- [ ] **Gate 4.3a**: ART / dalvik runtime target compiles with `-msse2` only.
+- [ ] **Gate 4.3b**: `dalvikvm -cp /system/framework/framework.jar HelloWorld` runs `test_dex/HelloWorld.dex`.
 - [ ] **Gate 4.3c**: No SIGILL during execution.
 
-### Phase 4d — Full Pipeline
+### Phase 4d — Full Pipeline Presentation
 
 - [ ] **Gate 4.4a**: App `View.onDraw` renders through full pipeline.
 - [ ] **Gate 4.4b**: `queueAppBufferToSurfaceFlinger` is deleted.

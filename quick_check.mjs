@@ -1,0 +1,22 @@
+import puppeteer from 'puppeteer-core';
+const CHROME='/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
+const URL='http://localhost:8080/android.html';
+const b=await puppeteer.launch({executablePath:CHROME, headless:true, args:['--no-sandbox','--disable-setuid-sandbox']});
+const p=await b.newPage();
+const logs=[];
+p.on('console',m=>logs.push(m.text()));
+p.on('pageerror',e=>console.log('pageerror',e.message.slice(0,400)));
+await p.goto(URL,{waitUntil:'domcontentloaded', timeout:20000});
+await new Promise(r=>setTimeout(r,6000));
+console.log('title',await p.title());
+const r=await p.evaluate(async()=>{
+  const a=await import('./src/virtio_gpu_device.js');
+  const b=await import('./src/synthetic_guest_probe.js');
+  const dev=new a.VirtioGpuDevice(null,{},document.createElement('canvas'));
+  const probe=new b.SyntheticGuestProbe(dev);
+  const res=await probe.runFullProof();
+  return {res, virtio:{slot:dev.pciSlot, irq:dev.irqLine}};
+});
+console.log(JSON.stringify(r,null,2));
+console.log('logs',logs.filter(l=>l.includes('virtio')||l.includes('panic')||l.includes('BIOS')).slice(0,10).join('\n'));
+await b.close();
