@@ -169,9 +169,11 @@ export class AndroidRuntime {
                 const dexParser = new DexParser(dexEntry.data);
                 const dex = dexParser.parse();
                 this.vm.loadDex(dex);
-                totalClasses += dex.classDefs.length;
-                totalMethods += dex.methodIds.length;
-                this.logCallback(`Loaded ${dexEntry.name}: ${dex.classDefs.length} classes, ${dex.methodIds.length} methods into Dalvik VM`, 'success');
+                const numClasses = dex.classDefs ? dex.classDefs.length : (dex.classes ? dex.classes.size : 0);
+                const numMethods = dex.methodIds ? dex.methodIds.length : (dex.methods ? dex.methods.length : 0);
+                totalClasses += numClasses;
+                totalMethods += numMethods;
+                this.logCallback(`Loaded ${dexEntry.name}: ${numClasses} classes, ${numMethods} methods into Dalvik VM`, 'success');
             } catch (dexErr) {
                 this.logCallback(`Warning loading ${dexEntry.name}: ${dexErr.message}`, 'warn');
             }
