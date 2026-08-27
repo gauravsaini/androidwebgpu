@@ -29,6 +29,7 @@ if [ -n "$NDK_CLANG" ] && [ -x "$NDK_CLANG" ]; then
         -p guest_servicemanager \
         -p pms_rs \
         -p ams_rs \
+        -p wms_rs \
         -p inputflinger_rs \
         -p sensors_hal_virtual \
         -p audio_hal_virtual \
@@ -42,6 +43,7 @@ else
         -p guest_servicemanager \
         -p pms_rs \
         -p ams_rs \
+        -p wms_rs \
         -p inputflinger_rs \
         -p sensors_hal_virtual \
         -p audio_hal_virtual \
@@ -56,6 +58,7 @@ cp "$TARGET_DIR/servicemanager" "$BIN_DIR/"
 cp "$TARGET_DIR/service_check" "$BIN_DIR/"
 cp "$TARGET_DIR/pms_rs" "$BIN_DIR/"
 cp "$TARGET_DIR/ams_rs" "$BIN_DIR/"
+cp "$TARGET_DIR/wms_rs" "$BIN_DIR/"
 cp "$TARGET_DIR/inputflinger_rs" "$BIN_DIR/"
 cp "$TARGET_DIR/sensors_hal_virtual" "$BIN_DIR/"
 cp "$TARGET_DIR/audio_hal_virtual" "$BIN_DIR/"

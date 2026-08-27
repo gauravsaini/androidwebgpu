@@ -43,3 +43,29 @@ Integrity mode: development
 ### Interactive Input & Navigation
 - [ ] Clicks and scrolling on the WebGPU canvas trigger hit-tested callbacks in the inflated View hierarchy.
 - [ ] Activity backstack (goBack(), finish()) properly pops inflated activity views and restores the previous view state.
+
+## 2026-08-27T01:34:48Z
+
+Configure and verify direct boot of the real Android x86 Linux kernel (bzImage) with initrd.img in the v86 hypervisor, establishing real serial milestone streaming and BinderFS initialization.
+
+Working directory: /Users/ektasaini/Desktop/androidwebgpu
+Integrity mode: development
+
+## Requirements
+
+### R1. Direct Kernel Boot Configuration
+Configure the v86 hypervisor in SystemBootstrap and V86GuestManager to boot directly from guest/build/bzImage and guest/build/initrd.img using explicit kernel cmdline (console=ttyS0 earlyprintk=serial,ttyS0,115200 root=/dev/ram0 rdinit=/init panic=1 loglevel=8).
+
+### R2. Real Serial Milestone Streaming & Lifecycle Progression
+Ensure real serial output from /dev/ttyS0 is streamed into Logcat ([v86Guest]) and drives the VM state machine milestones (BIOS_POST -> KERNEL_BOOT -> KERNEL_UNCOMPRESS -> KERNEL_READY -> BINDERFS_MOUNT -> INIT_USERSPACE -> SERVICEMANAGER_READY -> RUST_SERVICES_READY -> SYSTEM_BOOT_COMPLETED -> RUNNING).
+
+### R3. BinderFS and Native AOSP Services Standup
+Validate that the guest init system mounts BinderFS at /dev/binderfs, links /dev/binder, starts servicemanager (Handle 0), and initializes native Rust system services (pms_rs, ams_rs, wms_rs, inputflinger_rs).
+
+## Acceptance Criteria
+
+### Boot Verification
+- [ ] v86 hypervisor loads guest/build/bzImage and guest/build/initrd.img with zero reliance on linux4.iso.
+- [ ] Kernel boot messages (dmesg) stream to the serial console listener and appear in Logcat under tag v86Guest.
+- [ ] State transitions advance through real parsed milestones without artificial delays or synthetic transitions.
+- [ ] All automated E2E tests in tests/run_e2e_tests.mjs and tests/test_v86_guest_boot.mjs pass.

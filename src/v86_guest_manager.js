@@ -57,13 +57,13 @@ export class V86GuestManager {
             wasmPath: './v86/v86.wasm',
             biosUrl: './bios/seabios.bin',
             vgaBiosUrl: './bios/vgabios.bin',
-            cdromUrl: './guest/build/linux4.iso',
+            cdromUrl: null,
             kernelUrl: './guest/build/bzImage',
             initrdUrl: './guest/build/initrd.img',
-            bootMode: 'auto',
+            bootMode: 'direct',
             memorySizeMb: 512,
             vgaMemorySizeMb: 16,
-            cmdline: 'console=ttyS0 root=/dev/ram0 androidboot.hardware=android_x86 androidboot.selinux=permissive binder.debug_mask=0x07 quiet loglevel=3 init=/init',
+            cmdline: 'console=ttyS0 earlyprintk=serial,ttyS0,115200 root=/dev/ram0 rdinit=/init panic=1 loglevel=8 androidboot.hardware=android_x86 androidboot.selinux=permissive binder.debug_mask=0x07',
             screenContainer: null,
             canvas: null,
             autostart: false,
@@ -248,7 +248,7 @@ export class V86GuestManager {
                             }
                             v86Options.bzimage = { buffer: kernelBuf };
                             v86Options.initrd = { buffer: initrdBuf };
-                            v86Options.cmdline = this.config.cmdline || 'console=ttyS0 earlyprintk=serial,ttyS0,115200 root=/dev/ram0 rdinit=/init panic=1 loglevel=8';
+                            v86Options.cmdline = this.config.cmdline || 'console=ttyS0 earlyprintk=serial,ttyS0,115200 root=/dev/ram0 rdinit=/init panic=1 loglevel=8 androidboot.hardware=android_x86 androidboot.selinux=permissive binder.debug_mask=0x07';
                         } catch (err) {
                             if (isBrowser) throw err;
                         }
@@ -388,7 +388,7 @@ export class V86GuestManager {
             this.recordMilestone(BOOT_MILESTONES.BIOS_POST);
         }
 
-        if (line.includes('Linux version') || line.includes('Linux version 5.')) {
+        if (line.includes('Uncompressing Linux') || line.includes('Extracting Linux') || line.includes('done, booting the kernel') || line.includes('Linux version') || line.includes('Linux version 5.') || line.includes('Booting Linux') || line.includes('Kernel command line:') || line.includes('earlyprintk')) {
             this.recordMilestone(BOOT_MILESTONES.KERNEL_BOOT);
             this.recordMilestone(BOOT_MILESTONES.KERNEL_UNCOMPRESS);
             if (this.state === VM_STATES.BOOTING || this.state === VM_STATES.LOADING) {
@@ -423,7 +423,7 @@ export class V86GuestManager {
             }
         }
 
-        if (line.includes('pms_rs: ready') || line.includes('ams_rs:') || line.includes('native Rust services')) {
+        if (line.includes('pms_rs: ready') || line.includes('ams_rs:') || line.includes('wms_rs:') || line.includes('inputflinger_rs:') || line.includes('native Rust services')) {
             this.recordMilestone(BOOT_MILESTONES.RUST_SERVICES_READY);
         }
 

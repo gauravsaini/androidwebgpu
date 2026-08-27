@@ -143,8 +143,7 @@ const bootstrap = new SystemBootstrap({
     vgaBiosUrl: './bios/vgabios.bin',
     kernelUrl: './guest/build/bzImage',
     initrdUrl: './guest/build/initrd.img',
-    cdromUrl: './guest/build/linux4.iso',
-    cmdline: 'console=ttyS0 earlyprintk=serial,ttyS0,115200 root=/dev/ram0 rdinit=/init panic=1 loglevel=8',
+    cmdline: 'console=ttyS0 earlyprintk=serial,ttyS0,115200 root=/dev/ram0 rdinit=/init panic=1 loglevel=8 androidboot.hardware=android_x86 androidboot.selinux=permissive binder.debug_mask=0x07',
     bootMode: 'direct',
     onMilestone: (milestone) => {
         // Milestone already recorded into globalLogcat and logger by v86_guest_manager

@@ -312,8 +312,8 @@ async function main() {
         // 2.8 Default configuration values check
         const defaultMgr = new V86GuestManager();
         assert(defaultMgr.config.wasmPath === './v86/v86.wasm', "Default wasmPath must be './v86/v86.wasm'");
-        assert(defaultMgr.config.cdromUrl === './guest/build/linux4.iso', "Default cdromUrl must be './guest/build/linux4.iso'");
-        assert(defaultMgr.config.bootMode === 'auto', "Default bootMode must be 'auto'");
+        assert(defaultMgr.config.cdromUrl === null, "Default cdromUrl must be null");
+        assert(defaultMgr.config.bootMode === 'direct' || defaultMgr.config.bootMode === 'kernel', "Default bootMode must be 'direct' or 'kernel'");
     });
 
     // -------------------------------------------------------------------------

@@ -4,6 +4,10 @@ version = "0.1.0"
 edition = "2021"
 description = "Native Android Window Manager Service (WMS), IWindowSession AIDL, and SurfaceBridge for AndroidWebGPU"
 
+[[bin]]
+name = "wms_rs"
+path = "src/bin/wms_rs.rs"
+
 [dependencies]
 aidl_compat = { path = "../aidl_compat" }
 binder_rt = { path = "../binder_rt" }

@@ -25,15 +25,17 @@ export class SystemBootstrap {
      */
     constructor(options = {}) {
         this.options = {
-            memorySizeMb: 128,
-            vgaMemorySizeMb: 8,
+            memorySizeMb: 512,
+            vgaMemorySizeMb: 16,
             autostart: true,
             wasmPath: './v86/v86.wasm',
             biosUrl: './bios/seabios.bin',
             vgaBiosUrl: './bios/vgabios.bin',
-            cdromUrl: './guest/build/linux4.iso',
+            cdromUrl: null,
             kernelUrl: './guest/build/bzImage',
             initrdUrl: './guest/build/initrd.img',
+            bootMode: 'direct',
+            cmdline: 'console=ttyS0 earlyprintk=serial,ttyS0,115200 root=/dev/ram0 rdinit=/init panic=1 loglevel=8 androidboot.hardware=android_x86 androidboot.selinux=permissive binder.debug_mask=0x07',
             ...options
         };
 
