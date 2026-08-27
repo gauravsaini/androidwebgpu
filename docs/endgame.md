@@ -15,14 +15,14 @@ Rust WASM host (VirtioGpuBridge) → SurfaceFlinger compositor → WebGPU canvas
 
 | Component                    | Status                                                              |
 | ---------------------------- | ------------------------------------------------------------------- |
-| v86 hypervisor               | Downloaded — `v86.wasm` and `libv86.js` ready                       |
-| SeaBIOS / VGA BIOS           | Downloaded — `seabios.bin` and `vgabios.bin` in `bios/`             |
-| Linux kernel / ISO           | Downloaded — `linux4.iso` in `guest/build/`                         |
-| Dev Server & CSP             | Updated — `serve.py` with `unsafe-eval`, `wasm-unsafe-eval`, COOP/COEP |
-| Debug Logs                   | In Progress — structured `[v86]`, `[bridge]`, serial pipe logging   |
-| Virtio-GPU wire parser       | ✅ Functional — tested in Rust crates                               |
-| SurfaceFlinger compositor    | ✅ Functional — composites layers, presents to WebGPU swapchain     |
-| Guest userland               | Pending — compiling i686 binaries                                   |
+| v86 hypervisor               | ✅ Functional — `v86.wasm` and `libv86.js` (POST in 26.7ms)        |
+| SeaBIOS / VGA BIOS           | ✅ Functional — `seabios.bin` and `vgabios.bin` in `bios/`          |
+| Linux kernel / bzImage       | ✅ Functional — `linux-5.10.266` custom `bzImage` (3.4M) + `linux4.iso` |
+| Dev Server & CSP             | ✅ Functional — `serve.py` with `wasm-unsafe-eval`, COOP/COEP, Google Fonts |
+| Debug Logs & Observability   | ✅ Functional — structured `[v86]`, `[bridge]`, `[compositor]`, serial pipe |
+| Virtio-GPU wire parser       | ✅ Functional — `virtio_gpu_bridge` + `gles2wgpu` Naga translator   |
+| SurfaceFlinger compositor    | ✅ Functional — composites layers, presents to WebGPU swapchain (32.5 FPS) |
+| Guest userland & services    | ✅ Functional — `servicemanager`, `pms_rs`, `ams_rs`, HALs, `test_triangle`, `skia_fb_test` |
 
 ## Logging & Observability Standard
 
