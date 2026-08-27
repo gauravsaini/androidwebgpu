@@ -1489,6 +1489,36 @@ export class PackageManagerRegistry {
     }
 
     /**
+     * Installs a package from structured metadata into the PMS registry.
+     * Alias used by AndroidRuntime.loadAndRunApk().
+     * @param {object} pkgMeta - Package metadata object.
+     * @returns {object} Installed package info.
+     */
+    installPackage(pkgMeta) {
+        if (!pkgMeta) throw new Error("installPackage: null metadata");
+        // Normalize field names: caller may use appName vs applicationLabel
+        const pkg = {
+            packageName: pkgMeta.packageName,
+            applicationLabel: pkgMeta.appName || pkgMeta.applicationLabel || pkgMeta.packageName,
+            versionCode: pkgMeta.versionCode || 1,
+            versionName: pkgMeta.versionName || '1.0',
+            targetSdkVersion: pkgMeta.targetSdkVersion || 34,
+            launcherActivity: (pkgMeta.activities && pkgMeta.activities[0])
+                ? pkgMeta.activities[0].name || pkgMeta.activities[0]
+                : `${pkgMeta.packageName}.MainActivity`,
+            activities: pkgMeta.activities || [],
+            services: pkgMeta.services || [],
+            receivers: pkgMeta.receivers || [],
+            providers: pkgMeta.providers || [],
+            permissions: pkgMeta.permissions || [],
+            icon: pkgMeta.icon || null,
+            isSystemApp: false,
+            installTime: Date.now()
+        };
+        return this.registerPackage(pkg, true);
+    }
+
+    /**
      * Checks if a package is installed.
      * @param {string} packageName
      * @returns {boolean}

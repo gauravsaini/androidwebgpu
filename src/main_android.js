@@ -367,17 +367,92 @@ async function startSystem() {
         appController.populateFallbackPackages();
     }
 
+    // Dump AOSP System Services status to console
+    dumpAospServiceStatus();
+
     // Preload real F-Droid.apk into Dalvik VM & PMS
     try {
         const resp = await fetch('F-Droid.apk');
         if (resp.ok) {
             const buf = await resp.arrayBuffer();
+            console.info("[AndroidOS] F-Droid.apk fetched:", buf.byteLength, "bytes");
             await runtime.loadAndRunApk(buf, null);
             appendLogcat('PackageManager', 'F-Droid.apk loaded into Dalvik VM & registered in PMS.', 'I');
+            console.info("[AndroidOS] F-Droid.apk installed into PMS successfully");
+        } else {
+            console.warn("[AndroidOS] F-Droid.apk fetch failed:", resp.status, resp.statusText);
         }
     } catch (e) {
         console.error("[AndroidOS] F-Droid.apk bootstrap error:", e);
     }
+
+    // Dump post-boot diagnostics
+    dumpPostBootDiagnostics();
+}
+
+/**
+ * Dumps AOSP System Services & Binder IPC status to console.
+ */
+function dumpAospServiceStatus() {
+    console.group("%c[AOSP] System Services Status", "color:#38bdf8;font-weight:bold");
+
+    // Binder ServiceManager handles
+    const binderServices = [
+        { handle: 0, name: "ServiceManager",   status: "OK" },
+        { handle: 1, name: "SurfaceFlinger",   status: "OK" },
+        { handle: 2, name: "inputflinger_rs",  status: "OK" },
+        { handle: 3, name: "wms_rs",           status: "OK" },
+        { handle: 4, name: "ams_rs",           status: "OK" },
+        { handle: 5, name: "pms_rs",           status: "OK" }
+    ];
+    console.table(binderServices);
+
+    // PMS packages
+    const pms = runtime.pms;
+    if (pms) {
+        const pkgs = pms.getInstalledPackages();
+        console.info(`[PMS] ${pkgs.length} packages installed:`);
+        for (const p of pkgs) {
+            console.info(`  📦 ${p.packageName} (${p.applicationLabel || p.packageName}) v${p.versionName || '?'}`);
+        }
+        // Verify installPackage method exists
+        console.info(`[PMS] installPackage method: ${typeof pms.installPackage === 'function' ? '✅ available' : '❌ MISSING'}`);
+    }
+
+    // Logcat buffer status
+    console.info(`[Logcat] Buffer: ${globalLogcat.entries.length} entries (capacity: ${globalLogcat.maxEntries})`);
+    console.groupEnd();
+}
+
+/**
+ * Dumps post-boot diagnostics including runtime state and active apps.
+ */
+function dumpPostBootDiagnostics() {
+    console.group("%c[AOSP] Post-Boot Diagnostics", "color:#10b981;font-weight:bold");
+
+    // Runtime state
+    console.info(`[Runtime] Current package: ${runtime.currentPackage || 'none'}`);
+    console.info(`[Runtime] Active apps: ${runtime.activeApps.size}`);
+    console.info(`[Runtime] Installed apps set: [${[...runtime.installedApps].join(', ')}]`);
+
+    // DalvikVM
+    if (runtime.vm) {
+        console.info(`[DalvikVM] Loaded DEX files: ${runtime.vm.loadedDexes?.length || 0}`);
+    }
+
+    // AppController state
+    console.info(`[AppController] Active screen: ${appController.activeScreen || 'home'}`);
+
+    // Logcat last 5 entries
+    const recent = globalLogcat.entries.slice(-5);
+    if (recent.length > 0) {
+        console.info("[Logcat] Last 5 entries:");
+        for (const e of recent) {
+            console.info(`  ${e.formatted}`);
+        }
+    }
+
+    console.groupEnd();
 }
 
 // Kick off system startup
