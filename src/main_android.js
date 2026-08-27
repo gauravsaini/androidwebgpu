@@ -8,6 +8,7 @@ import { AppController } from './app_controller.js';
 import { AndroidRuntime } from './android_runtime.js';
 import { globalLogcat, PRIORITY_ORDER } from './logger.js';
 import { renderLogcatList, appendLogcatToDom, updateClock, updateMetrics } from './ui_render.js';
+import { MotionEvent } from './view_rasterizer.js';
 
 // Setup V86Starter compatibility shim on window
 if (typeof window !== 'undefined') {
@@ -98,8 +99,9 @@ function renderLogcat() {
     renderLogcatList(dom.vmLogView, filtered, dom.logcatCounter, globalLogcat.entries.length, isAutoScrollEnabled);
 }
 
-function appendLogcat(tag, msg, priority = 'I') {
-    const entry = globalLogcat.append(tag, msg, priority);
+// Single subscription: automatically reflect any globalLogcat append into the active DOM view
+globalLogcat.subscribe((entry) => {
+    if (!entry) return;
     const minRank = PRIORITY_ORDER[dom.logcatPrio ? dom.logcatPrio.value : 'V'] ?? 0;
     const entryRank = PRIORITY_ORDER[entry.priority] ?? 0;
     const selectedTag = (dom.logcatTag ? dom.logcatTag.value : 'all').toLowerCase();
@@ -112,6 +114,10 @@ function appendLogcat(tag, msg, priority = 'I') {
     if (matches) {
         appendLogcatToDom(dom.vmLogView, entry, dom.logcatCounter, globalLogcat.entries.length, isAutoScrollEnabled);
     }
+});
+
+function appendLogcat(tag, msg, priority = 'I') {
+    globalLogcat.append(tag, msg, priority);
 }
 
 // 3. Initialize Android Runtime
@@ -120,7 +126,7 @@ const runtime = new AndroidRuntime({
         let priority = 'I';
         if (lvl === 'error') priority = 'E';
         else if (lvl === 'warn') priority = 'W';
-        appendLogcat('AndroidRuntime', msg, priority);
+        globalLogcat.append('AndroidRuntime', msg, priority);
     }
 });
 if (typeof window !== 'undefined') {
@@ -137,13 +143,13 @@ const bootstrap = new SystemBootstrap({
     vgaBiosUrl: './bios/vgabios.bin',
     cdromUrl: './guest/build/linux4.iso',
     onMilestone: (milestone) => {
-        appendLogcat('SystemServer', `[BOOT-MILESTONE] ${milestone}`, 'I');
+        // Milestone already recorded into globalLogcat and logger by v86_guest_manager
     },
     onSerial: (line) => {
-        appendLogcat('v86Guest', line, 'I');
+        // Serial line already recorded into globalLogcat by v86_guest_manager
     },
     onStateChange: (state) => {
-        appendLogcat('v86', `VM State Transition: ${state}`, 'I');
+        // State change already recorded into globalLogcat by v86_guest_manager
     },
     onFpsUpdate: (fps, gpuTime) => {
         updateMetrics({
@@ -294,15 +300,46 @@ function bindEventListeners() {
         });
     }
 
-    // Touch input on WebGPU canvas
+    // Touch and pointer input on WebGPU authentic canvas
     if (dom.canvas) {
-        dom.canvas.addEventListener('pointerdown', (e) => {
+        runtime.setCanvas(dom.canvas);
+
+        const getCanvasCoords = (e) => {
             const rect = dom.canvas.getBoundingClientRect();
-            const x = Math.round(((e.clientX - rect.left) / rect.width) * dom.canvas.width);
-            const y = Math.round(((e.clientY - rect.top) / rect.height) * dom.canvas.height);
+            const scaleX = dom.canvas.width / (rect.width || 1);
+            const scaleY = dom.canvas.height / (rect.height || 1);
+            return {
+                x: Math.round((e.clientX - rect.left) * scaleX),
+                y: Math.round((e.clientY - rect.top) * scaleY)
+            };
+        };
+
+        dom.canvas.addEventListener('pointerdown', (e) => {
+            const { x, y } = getCanvasCoords(e);
             appendLogcat('InputDispatcher', `MotionEvent: ACTION_DOWN at (${x}, ${y})`, 'D');
+            runtime.dispatchInputEvent(new MotionEvent(MotionEvent.ACTION_DOWN, x, y));
             appController.sendInputEvent(0, 0);
         });
+
+        dom.canvas.addEventListener('pointermove', (e) => {
+            if (e.buttons === 1) {
+                const { x, y } = getCanvasCoords(e);
+                runtime.dispatchInputEvent(new MotionEvent(MotionEvent.ACTION_MOVE, x, y));
+            }
+        });
+
+        dom.canvas.addEventListener('pointerup', (e) => {
+            const { x, y } = getCanvasCoords(e);
+            appendLogcat('InputDispatcher', `MotionEvent: ACTION_UP at (${x}, ${y})`, 'D');
+            runtime.dispatchInputEvent(new MotionEvent(MotionEvent.ACTION_UP, x, y));
+        });
+
+        dom.canvas.addEventListener('wheel', (e) => {
+            const { x, y } = getCanvasCoords(e);
+            const evt = new MotionEvent(MotionEvent.ACTION_SCROLL, x, y);
+            evt.scrollDeltaY = e.deltaY;
+            runtime.dispatchInputEvent(evt);
+        }, { passive: true });
     }
 }
 

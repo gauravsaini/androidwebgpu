@@ -78,6 +78,12 @@ export class VirtioGpuDevice {
         this.pci_space[20] = 0x00;
         this.pci_space[21] = 0xD0;
 
+        // Subsystem Vendor ID (0x1AF4) & Subsystem ID (0x0010 for VirtIO GPU)
+        this.pci_space[44] = 0xF4;
+        this.pci_space[45] = 0x1A;
+        this.pci_space[46] = 0x10;
+        this.pci_space[47] = 0x00;
+
         // Interrupt line
         this.pci_space[60] = this.irqLine;
         this.pci_space[61] = 0x01; // INTA#
@@ -128,72 +134,180 @@ export class VirtioGpuDevice {
     /**
      * Read from VirtIO Legacy PCI I/O Configuration Space
      */
-    ioRead(offset, size) {
-        switch (offset) {
-            case 0x00: // Host Features (32-bit)
+    ioRead(offset, size = 1) {
+        if (offset >= 0x00 && offset <= 0x03) {
+            // HOST_FEATURES (0x00, 32-bit): VIRTIO_GPU_F_VIRGL | VIRTIO_GPU_F_EDID
+            if (offset === 0x00 && (size === 4 || size === undefined)) {
                 return this.hostFeatures >>> 0;
-            case 0x04: // Guest Features (32-bit)
-                return this.guestFeatures >>> 0;
-            case 0x08: // Queue Address PFN (32-bit)
-                return (this.queues[this.selectedQueue]?.pfn || 0) >>> 0;
-            case 0x0C: // Queue Size (16-bit)
-                return (this.queues[this.selectedQueue]?.size || 0) & 0xFFFF;
-            case 0x0E: // Queue Select (16-bit)
-                return this.selectedQueue & 0xFFFF;
-            case 0x12: // Device Status (8-bit)
-                return this.deviceStatus & 0xFF;
-            case 0x13: { // ISR Status (8-bit)
-                const isr = this.isrStatus;
-                this.isrStatus = 0; // Read clears ISR
-                return isr & 0xFF;
             }
-            case 0x14: // Device-specific: events_read (32-bit)
-                return 0;
-            case 0x18: // Device-specific: events_clear (32-bit)
-                return 0;
-            case 0x1C: // Device-specific: num_scanouts (32-bit)
-                return this.num_scanouts;
-            case 0x20: // Device-specific: num_capsets (32-bit)
-                return this.num_capsets;
-            default:
-                return this.pci_space[offset] || 0;
+            if (offset === 0x00 && size === 2) {
+                return this.hostFeatures & 0xFFFF;
+            }
+            return (this.hostFeatures >>> ((offset - 0x00) * 8)) & 0xFF;
         }
+
+        if (offset >= 0x04 && offset <= 0x07) {
+            // GUEST_FEATURES (0x04, 32-bit)
+            if (offset === 0x04 && (size === 4 || size === undefined)) {
+                return this.guestFeatures >>> 0;
+            }
+            if (offset === 0x04 && size === 2) {
+                return this.guestFeatures & 0xFFFF;
+            }
+            return (this.guestFeatures >>> ((offset - 0x04) * 8)) & 0xFF;
+        }
+
+        if (offset >= 0x08 && offset <= 0x0B) {
+            // QUEUE_PFN (0x08, 32-bit)
+            const pfn = (this.queues[this.selectedQueue]?.pfn || 0) >>> 0;
+            if (offset === 0x08 && (size === 4 || size === undefined)) {
+                return pfn;
+            }
+            if (offset === 0x08 && size === 2) {
+                return pfn & 0xFFFF;
+            }
+            return (pfn >>> ((offset - 0x08) * 8)) & 0xFF;
+        }
+
+        if (offset >= 0x0C && offset <= 0x0D) {
+            // QUEUE_NUM (0x0C, 16-bit): 256 for control (q0), 16 for cursor (q1)
+            const qSize = (this.queues[this.selectedQueue]?.size || 0) & 0xFFFF;
+            if (offset === 0x0C && (size === 2 || size === 4 || size === undefined)) {
+                return qSize;
+            }
+            return (qSize >>> ((offset - 0x0C) * 8)) & 0xFF;
+        }
+
+        if (offset >= 0x0E && offset <= 0x0F) {
+            // QUEUE_SEL (0x0E, 16-bit)
+            const qSel = this.selectedQueue & 0xFFFF;
+            if (offset === 0x0E && (size === 2 || size === 4 || size === undefined)) {
+                return qSel;
+            }
+            return (qSel >>> ((offset - 0x0E) * 8)) & 0xFF;
+        }
+
+        if (offset === 0x10 || offset === 0x11) {
+            // QUEUE_NOTIFY (0x10, 16-bit)
+            return 0;
+        }
+
+        if (offset === 0x12) {
+            // DEVICE_STATUS (0x12, 8-bit): ACKNOWLEDGE -> DRIVER -> DRIVER_OK
+            return this.deviceStatus & 0xFF;
+        }
+
+        if (offset === 0x13) {
+            // ISR_STATUS (0x13, 8-bit): Bit 0 = queue interrupt (read-to-clear)
+            const isr = this.isrStatus;
+            this.isrStatus = 0; // Read clears ISR
+            return isr & 0xFF;
+        }
+
+        if (offset >= 0x14 && offset <= 0x17) {
+            // events_read (32-bit)
+            return 0;
+        }
+
+        if (offset >= 0x18 && offset <= 0x1B) {
+            // events_clear (32-bit)
+            return 0;
+        }
+
+        if (offset >= 0x1C && offset <= 0x1F) {
+            // num_scanouts (32-bit)
+            if (offset === 0x1C && (size === 4 || size === undefined)) {
+                return this.num_scanouts >>> 0;
+            }
+            return (this.num_scanouts >>> ((offset - 0x1C) * 8)) & 0xFF;
+        }
+
+        if (offset >= 0x20 && offset <= 0x23) {
+            // num_capsets (32-bit)
+            if (offset === 0x20 && (size === 4 || size === undefined)) {
+                return this.num_capsets >>> 0;
+            }
+            return (this.num_capsets >>> ((offset - 0x20) * 8)) & 0xFF;
+        }
+
+        return this.pci_space[offset] || 0;
     }
 
     /**
      * Write to VirtIO Legacy PCI I/O Configuration Space
      */
-    ioWrite(offset, val, size) {
-        switch (offset) {
-            case 0x04: // Guest Features
+    ioWrite(offset, val, size = 1) {
+        if (offset >= 0x04 && offset <= 0x07) {
+            // GUEST_FEATURES (0x04, 32-bit)
+            if (offset === 0x04 && (size === 4 || size === undefined)) {
                 this.guestFeatures = val >>> 0;
-                break;
-            case 0x08: // Queue Address PFN
-                if (this.queues[this.selectedQueue]) {
+            } else if (size === 2) {
+                const shift = (offset - 0x04) * 8;
+                this.guestFeatures = ((this.guestFeatures & ~(0xFFFF << shift)) | ((val & 0xFFFF) << shift)) >>> 0;
+            } else {
+                const shift = (offset - 0x04) * 8;
+                this.guestFeatures = ((this.guestFeatures & ~(0xFF << shift)) | ((val & 0xFF) << shift)) >>> 0;
+            }
+            return;
+        }
+
+        if (offset >= 0x08 && offset <= 0x0B) {
+            // QUEUE_PFN (0x08, 32-bit)
+            if (this.queues[this.selectedQueue]) {
+                if (offset === 0x08 && (size === 4 || size === undefined)) {
                     this.queues[this.selectedQueue].pfn = val >>> 0;
+                } else if (size === 2) {
+                    const shift = (offset - 0x08) * 8;
+                    const currentPfn = this.queues[this.selectedQueue].pfn;
+                    this.queues[this.selectedQueue].pfn = ((currentPfn & ~(0xFFFF << shift)) | ((val & 0xFFFF) << shift)) >>> 0;
+                } else {
+                    const shift = (offset - 0x08) * 8;
+                    const currentPfn = this.queues[this.selectedQueue].pfn;
+                    this.queues[this.selectedQueue].pfn = ((currentPfn & ~(0xFF << shift)) | ((val & 0xFF) << shift)) >>> 0;
                 }
-                break;
-            case 0x0E: // Queue Select
-                this.selectedQueue = (val & 0x1) === 1 ? 1 : 0;
-                break;
-            case 0x10: // Queue Notify
-                this.consumeVirtqueue(val & 0xFFFF);
-                break;
-            case 0x12: // Device Status
-                this.deviceStatus = val & 0xFF;
-                if (this.deviceStatus === 0) {
-                    // Reset device
-                    this.queues[0].lastAvailIdx = 0;
-                    this.queues[0].lastUsedIdx = 0;
-                    this.queues[1].lastAvailIdx = 0;
-                    this.queues[1].lastUsedIdx = 0;
-                }
-                break;
-            default:
-                if (offset < this.pci_space.length) {
-                    this.pci_space[offset] = val & 0xFF;
-                }
-                break;
+            }
+            return;
+        }
+
+        if (offset === 0x0E || offset === 0x0F) {
+            // QUEUE_SEL (0x0E, 16-bit)
+            this.selectedQueue = (val & 0x1) === 1 ? 1 : 0;
+            return;
+        }
+
+        if (offset === 0x10 || offset === 0x11) {
+            // QUEUE_NOTIFY (0x10, 16-bit): kick queue processing immediately
+            this.consumeVirtqueue(val & 0xFFFF);
+            return;
+        }
+
+        if (offset === 0x12) {
+            // DEVICE_STATUS (0x12, 8-bit)
+            const prevStatus = this.deviceStatus;
+            this.deviceStatus = val & 0xFF;
+            if (this.deviceStatus === 0) {
+                // Reset device
+                this.queues[0].lastAvailIdx = 0;
+                this.queues[0].lastUsedIdx = 0;
+                this.queues[1].lastAvailIdx = 0;
+                this.queues[1].lastUsedIdx = 0;
+                this.isrStatus = 0;
+                logger.log('bridge', 'I', 'Virtio-GPU device reset (status=0)');
+            } else if (prevStatus !== this.deviceStatus) {
+                logger.log('bridge', 'I', `Virtio-GPU device status changed: 0x${prevStatus.toString(16)} -> 0x${this.deviceStatus.toString(16)}`, {
+                    status: this.deviceStatus,
+                    acknowledge: (this.deviceStatus & 0x01) !== 0,
+                    driver: (this.deviceStatus & 0x02) !== 0,
+                    driverOk: (this.deviceStatus & 0x04) !== 0,
+                    featuresOk: (this.deviceStatus & 0x08) !== 0,
+                    failed: (this.deviceStatus & 0x80) !== 0,
+                });
+            }
+            return;
+        }
+
+        if (offset < this.pci_space.length) {
+            this.pci_space[offset] = val & 0xFF;
         }
     }
 
@@ -283,7 +397,7 @@ export class VirtioGpuDevice {
             const usedSlot = q.lastUsedIdx % qSize;
             const entryOffset = usedRingAddr + 4 + usedSlot * 8;
             view.setUint32(entryOffset, headDescIdx, true);
-            view.setUint32(entryOffset + 4, writtenBytes || 24, true);
+            view.setUint32(entryOffset + 4, writtenBytes !== undefined ? writtenBytes : 24, true);
 
             q.lastUsedIdx = (q.lastUsedIdx + 1) & 0xFFFF;
             view.setUint16(usedRingAddr + 2, q.lastUsedIdx, true);
@@ -296,12 +410,19 @@ export class VirtioGpuDevice {
             // Render scanout to canvas
             this.renderScanoutToCanvas(0);
 
-            // Assert ISR queue interrupt
+            // Assert ISR queue interrupt (bit 0)
             this.isrStatus |= 0x01;
             try {
                 const cpu = this.v86.cpu || (this.v86.v86 && this.v86.v86.cpu);
-                if (cpu && typeof cpu.device_raise_irq === 'function') {
-                    cpu.device_raise_irq(this.irqLine);
+                if (cpu) {
+                    if (typeof cpu.device_raise_irq === 'function') {
+                        cpu.device_raise_irq(this.irqLine);
+                    } else if (typeof cpu.raise_irq === 'function') {
+                        cpu.raise_irq(this.irqLine);
+                    }
+                }
+                if (this.v86 && typeof this.v86.raise_irq === 'function') {
+                    this.v86.raise_irq(this.irqLine);
                 }
             } catch (_) {}
         }
@@ -412,8 +533,8 @@ export class VirtioGpuDevice {
         const fb = this.rustBridge.get_scanout_framebuffer(scanoutId);
         if (!fb || fb.length === 0) return;
 
-        const width = this.canvas.width;
-        const height = this.canvas.height;
+        const width = (this.canvas && this.canvas.width) ? this.canvas.width : 1280;
+        const height = (this.canvas && this.canvas.height) ? this.canvas.height : 720;
 
         if (!this.offscreenTransferred && this.ctx2d) {
             if (!this.cachedImageData || this.cachedImageData.width !== width || this.cachedImageData.height !== height) {

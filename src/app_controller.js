@@ -64,7 +64,7 @@ export class AppController {
         const targetEl = screens[screenName] || this.dom.screenHome;
         if (targetEl) {
             targetEl.classList.add('active');
-            targetEl.style.display = (screenName === 'webgpu' || screenName === 'v86') ? 'flex' : 'block';
+            targetEl.style.display = 'flex';
         }
         this.activeScreen = screenName;
 
@@ -330,92 +330,6 @@ export class AppController {
     }
 
     /**
-     * Queue live scanout framebuffer pixels to SurfaceFlinger BufferQueue via Binder (Handle 10).
-     */
-    async queueAppBufferToSurfaceFlinger(pkg, appName) {
-        const bridge = this.bootstrap ? this.bootstrap.getBridge() : null;
-        const gpuDev = this.bootstrap ? this.bootstrap.getGpuDevice() : null;
-        if (!bridge || typeof bridge.process_binder_packet !== 'function') return;
-
-        try {
-            let rawBytes = null;
-            if (gpuDev && typeof gpuDev.getScanoutFramebuffer === 'function') {
-                const fb = gpuDev.getScanoutFramebuffer(0);
-                if (fb && fb.length >= 1280 * 720 * 4) {
-                    rawBytes = fb.subarray(0, 1280 * 720 * 4);
-                }
-            }
-            if (!rawBytes && typeof bridge.get_scanout_framebuffer === 'function') {
-                const fb = bridge.get_scanout_framebuffer(0);
-                if (fb && fb.length >= 1280 * 720 * 4) {
-                    rawBytes = fb.subarray(0, 1280 * 720 * 4);
-                }
-            }
-            if (!rawBytes) {
-                rawBytes = new Uint8Array(1280 * 720 * 4);
-            }
-
-            const deqParcel = new BinderParcel(32);
-            deqParcel.writeUint32(1280);
-            deqParcel.writeUint32(720);
-            deqParcel.writeUint32(1);
-
-            const deqReq = VirtioBinderFraming.buildRequest({
-                msgId: 4101n,
-                cmd: 1,
-                targetHandle: 10,
-                code: 3, // DEQUEUE_BUFFER
-                flags: 0,
-                cookie: 0n,
-                data: deqParcel.toUint8Array()
-            });
-            const deqRespBytes = bridge.process_binder_packet(deqReq);
-            const deqResp = VirtioBinderFraming.parseResponse(deqRespBytes);
-
-            let slot = 0;
-            if (deqResp.hdr.status === 0 && deqResp.data.length >= 8) {
-                const deqReplyParcel = new BinderParcel();
-                deqReplyParcel.buffer = deqResp.data.buffer.slice(deqResp.data.byteOffset, deqResp.data.byteOffset + deqResp.data.byteLength);
-                deqReplyParcel.view = new DataView(deqReplyParcel.buffer);
-                deqReplyParcel.bytes = new Uint8Array(deqReplyParcel.buffer);
-                deqReplyParcel.writePos = deqResp.data.byteLength;
-                deqReplyParcel.readPos = 4;
-                slot = deqReplyParcel.readInt32();
-            }
-
-            const qParcel = new BinderParcel(1280 * 720 * 4 + 64);
-            qParcel.writeInt32(slot);
-            qParcel.writeUint32(1280);
-            qParcel.writeUint32(720);
-            qParcel.writeByteArray(rawBytes);
-
-            const qReq = VirtioBinderFraming.buildRequest({
-                msgId: 4102n,
-                cmd: 1,
-                targetHandle: 10,
-                code: 6, // QUEUE_BUFFER
-                flags: 0,
-                cookie: 0n,
-                data: qParcel.toUint8Array()
-            });
-            const qRespBytes = bridge.process_binder_packet(qReq);
-            const qResp = VirtioBinderFraming.parseResponse(qRespBytes);
-
-            this.logBinderTransaction({
-                handle: 10,
-                code: 6,
-                desc: `IGraphicBufferProducer::queueBuffer(slot=${slot}, 1280x720)`,
-                status: qResp.hdr.status,
-                durationMs: 0.8,
-                payloadSize: qParcel.dataSize()
-            });
-
-        } catch (e) {
-            console.warn("[AppController] queueAppBufferToSurfaceFlinger error:", e);
-        }
-    }
-
-    /**
      * Launch an Activity with real ActivityManager and WindowManager Binder calls.
      */
     async launchActivity(pkg, activityName = '') {
@@ -480,8 +394,8 @@ export class AppController {
                 wmsParcel.writeBool(false);
                 wmsParcel.writeInt32(0);
                 wmsParcel.writeInt32(0);
-                wmsParcel.writeInt32(1280);
                 wmsParcel.writeInt32(720);
+                wmsParcel.writeInt32(1440);
                 wmsParcel.writeInt32(1); // TYPE_APPLICATION
                 wmsParcel.writeInt32(0);
                 wmsParcel.writeInt32(1);
@@ -489,8 +403,8 @@ export class AppController {
                 wmsParcel.writeFloat32(1.0);
                 wmsParcel.writeFloat32(0.0);
                 wmsParcel.writeBool(false);
-                wmsParcel.writeInt32(1280);
                 wmsParcel.writeInt32(720);
+                wmsParcel.writeInt32(1440);
                 wmsParcel.writeInt32(0); // VISIBLE
                 wmsParcel.writeInt32(0);
 
@@ -514,15 +428,14 @@ export class AppController {
                     durationMs: 0.5,
                     payloadSize: wmsResp.data.length
                 });
+
+                this.onLogcat('WindowManager', `relayoutWindow: ${pkg} -> Bounds=[0, 0, 720, 1440] (VISIBLE)`, 'D');
             } catch (e) {
                 console.warn("[AppController] Binder WMS relayout error:", e);
             }
-
-            // 3. Queue Real Surface Frame into GraphicBufferProducer
-            await this.queueAppBufferToSurfaceFlinger(pkg, meta.name);
         }
 
-        // 4. Trigger WebGPU Compositor Presentation
+        // 3. Trigger WebGPU Compositor Presentation
         if (bridge && typeof bridge.compose_and_present === 'function') {
             try {
                 bridge.compose_and_present();
@@ -531,7 +444,7 @@ export class AppController {
             }
         }
 
-        // 5. Track state in AndroidRuntime and present on real WebGPU canvas
+        // 4. Track state in AndroidRuntime and present on real WebGPU canvas
         if (this.runtime) {
             this.runtime.startActivity(pkg, activityName || `${pkg}.MainActivity`);
         }
@@ -641,7 +554,7 @@ export class AppController {
      * Back button navigation handler.
      */
     async handleBackPress() {
-        this.onLogcat('ViewRootImpl', 'Key down: KEYCODE_BACK', 'D');
+        this.onLogcat('ActivityTaskManager', 'Key down: KEYCODE_BACK -> Popping Activity from Backstack', 'I');
         await this.sendInputEvent(0, 4); // KEY_DOWN, KEYCODE_BACK
         await this.sendAmsLifecycle(6, 'finishActivity');
 
@@ -659,7 +572,7 @@ export class AppController {
      * Home button navigation handler.
      */
     async handleHomePress() {
-        this.onLogcat('ViewRootImpl', 'Key down: KEYCODE_HOME', 'D');
+        this.onLogcat('ActivityTaskManager', 'Key down: KEYCODE_HOME -> Returning to Home Launcher', 'I');
         await this.sendInputEvent(0, 3); // KEY_DOWN, KEYCODE_HOME
         await this.sendAmsLifecycle(4, 'activityPaused');
         this.activateScreen('home');

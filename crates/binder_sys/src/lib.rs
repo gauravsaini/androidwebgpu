@@ -29,7 +29,7 @@ pub use mock_driver::{DriverError, MockBinderDriver, MockClientProcess};
 pub use process_state::ProcessState;
 pub use service_manager::{
     add_service, check_service, default_service_manager, get_service, IServiceManager,
-    MockServiceManager, ServiceManagerClient, ADD_SERVICE_TRANSACTION, CHECK_SERVICE_TRANSACTION,
+    MockServiceManager, ServiceManagerClient, ServiceManagerServer, ADD_SERVICE_TRANSACTION, CHECK_SERVICE_TRANSACTION,
     DUMP_FLAG_PRIORITY_ALL, DUMP_FLAG_PRIORITY_CRITICAL, DUMP_FLAG_PRIORITY_DEFAULT,
     DUMP_FLAG_PRIORITY_HIGH, DUMP_FLAG_PRIORITY_NORMAL, GET_SERVICE_TRANSACTION,
     IS_DECLARED_TRANSACTION, LIST_SERVICES_TRANSACTION, REGISTER_FOR_NOTIFICATIONS_TRANSACTION,

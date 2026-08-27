@@ -11,6 +11,9 @@ bytemuck = { workspace = true }
 thiserror = { workspace = true }
 log = { workspace = true, optional = true }
 
+[target.'cfg(target_os = "linux")'.dependencies]
+libc = { workspace = true }
+
 [dev-dependencies]
 log = { workspace = true }
 

@@ -438,6 +438,31 @@ export class ApkZipReader {
         }
         return null;
     }
+
+    /**
+     * Extracts all DEX file entries.
+     * @returns {Array<{ name: string, data: Uint8Array }>}
+     */
+    getAllDexFiles() {
+        this.readEntries();
+        const dexFiles = [];
+        for (const name of this.entries.keys()) {
+            if (name.endsWith('.dex')) {
+                const data = this.readFile(name);
+                if (data) {
+                    dexFiles.push({ name, data });
+                }
+            }
+        }
+        return dexFiles;
+    }
+
+    /**
+     * Alias for readFile.
+     */
+    getFile(filename) {
+        return this.readFile(filename);
+    }
 }
 
 // -----------------------------------------------------------------------------
@@ -445,6 +470,14 @@ export class ApkZipReader {
 // -----------------------------------------------------------------------------
 
 export class AxmlDecoder {
+    constructor(buffer) {
+        this.buffer = buffer;
+    }
+
+    parse() {
+        return AxmlDecoder.decode(this.buffer);
+    }
+
     /**
      * Decodes a binary Android XML buffer into structured manifest data.
      * @param {ArrayBuffer | Uint8Array} buffer - Binary AXML buffer.
@@ -478,7 +511,8 @@ export class AxmlDecoder {
 
         function parseStringPool(offset, size) {
             if (size < 28) return [];
-            const stringCount = view.getUint32(offset + 8, true);
+            const rawStringCount = view.getUint32(offset + 8, true);
+            const stringCount = Math.min(rawStringCount, Math.floor((size - 28) / 4));
             const flags = view.getUint32(offset + 16, true);
             const stringsStart = view.getUint32(offset + 20, true);
             const isUtf8 = (flags & (1 << 8)) !== 0;

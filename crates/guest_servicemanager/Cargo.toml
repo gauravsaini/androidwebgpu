@@ -1,0 +1,18 @@
+[package]
+name = "guest_servicemanager"
+version = "0.1.0"
+edition = "2021"
+description = "Android Handle 0 Context Manager and ServiceManager Daemon"
+
+[dependencies]
+binder_sys = { path = "../binder_sys" }
+aidl_compat = { path = "../aidl_compat" }
+log = { workspace = true }
+
+[[bin]]
+name = "servicemanager"
+path = "src/main.rs"
+
+[[bin]]
+name = "service_check"
+path = "src/bin/service_check.rs"

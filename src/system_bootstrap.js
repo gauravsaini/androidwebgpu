@@ -164,6 +164,7 @@ export class SystemBootstrap {
     async bootGuest(screenContainer) {
         const guestConfig = {
             ...this.options,
+            autostart: false,
             screenContainer: screenContainer || this.options.screenContainer,
             V86Class: this.V86Class,
             onMilestone: (milestone) => {
@@ -214,8 +215,10 @@ export class SystemBootstrap {
                 try { this.bridge.compose_and_present(); } catch (_) {}
             }
 
-            // Blit swapchain framebuffer to canvas
-            if (this.gpuDev) {
+            // Blit active Android Application View hierarchy or Guest VM scanout
+            if (typeof window !== 'undefined' && window.androidRuntime && window.androidRuntime.currentRootView && window.androidRuntime.viewRoot) {
+                window.androidRuntime.viewRoot.draw();
+            } else if (this.gpuDev) {
                 this.gpuDev.renderScanoutToCanvas(0);
             }
 
@@ -226,6 +229,12 @@ export class SystemBootstrap {
                 this.emit('fpsUpdate', fps, this.metrics.gpuTimeMs);
                 this.metrics.frameCount = 0;
                 this.metrics.lastFpsCheck = now;
+
+                if (!this.metrics.lastLogTime) this.metrics.lastLogTime = now;
+                if (now - this.metrics.lastLogTime >= 5000) {
+                    logger.log('compositor', 'I', `WebGPU Telemetry: ${fps.toFixed(1)} FPS • GPU Time: ${this.metrics.gpuTimeMs.toFixed(2)}ms`);
+                    this.metrics.lastLogTime = now;
+                }
             }
 
             this.animationFrameId = requestAnimationFrame(loop);

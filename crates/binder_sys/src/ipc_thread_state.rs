@@ -128,6 +128,13 @@ impl IPCThreadState {
         Ok(bwr.read_consumed as usize)
     }
 
+    /// Send PING_TRANSACTION to a given handle to check if remote binder is alive.
+    pub fn ping(&mut self, handle: u32) -> Result<()> {
+        let data = Parcel::new();
+        let mut reply = Parcel::new();
+        self.transact(handle, PING_TRANSACTION, 0, &data, &mut reply)
+    }
+
     /// Perform a synchronous or asynchronous Binder transaction across the driver.
     pub fn transact(
         &mut self,

@@ -242,6 +242,9 @@ pub struct MockServiceManager {
     services: RwLock<HashMap<String, SpIBinder>>,
 }
 
+/// ServiceManager Server implementation alias.
+pub type ServiceManagerServer = MockServiceManager;
+
 impl MockServiceManager {
     pub fn new() -> Self {
         Self {

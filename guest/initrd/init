@@ -31,8 +31,15 @@ echo "[init] binderfs mounted successfully at /dev/binderfs" > /dev/ttyS0
 # 3. Start ServiceManager (Context Manager - Root Handle 0)
 if [ -x /system/bin/servicemanager ]; then
     /system/bin/servicemanager &
+    # Wait for handle 0 to accept transactions
+    if [ -x /system/bin/service_check ]; then
+        while ! /system/bin/service_check 0 2>/dev/null; do
+            sleep 0.05
+        done
+    else
+        sleep 0.1
+    fi
     echo "[init] servicemanager started (handle 0 context manager)" > /dev/ttyS0
-    sleep 0.1
 else
     echo "[init] servicemanager binary standby" > /dev/ttyS0
 fi
@@ -40,15 +47,19 @@ fi
 # 4. Start Native Rust System Services (PMS, AMS, WMS, InputFlinger)
 if [ -x /system/bin/pms_rs ]; then
     /system/bin/pms_rs &
+    sleep 0.05
 fi
 if [ -x /system/bin/ams_rs ]; then
     /system/bin/ams_rs &
+    sleep 0.05
 fi
 if [ -x /system/bin/wms_rs ]; then
     /system/bin/wms_rs &
+    sleep 0.05
 fi
 if [ -x /system/bin/inputflinger_rs ]; then
     /system/bin/inputflinger_rs &
+    sleep 0.05
 fi
 
 # 5. Start Virtual AIDL HAL Daemons (Sensors, Audio, Camera)

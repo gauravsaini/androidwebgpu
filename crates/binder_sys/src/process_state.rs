@@ -66,6 +66,34 @@ impl ProcessState {
         Self::new(Arc::new(backend), 15)
     }
 
+    /// Initialize with a custom driver path on Linux (or mock fallback).
+    pub fn init_with_driver(device_path: &str) -> Arc<Self> {
+        #[cfg(target_os = "linux")]
+        {
+            if let Ok(linux_driver) =
+                LinuxBinderDriver::open(device_path, BINDER_DEFAULT_MMAP_SIZE)
+            {
+                return Self::new(Arc::new(linux_driver), 15);
+            }
+        }
+        let _ = device_path;
+        let mock_driver = Arc::new(MockBinderDriver::new());
+        let backend = MockDriverBackend::new(mock_driver, BINDER_DEFAULT_MMAP_SIZE);
+        Self::new(Arc::new(backend), 15)
+    }
+
+    /// Claim handle 0 context manager via BINDER_SET_CONTEXT_MGR ioctl.
+    pub fn become_context_manager(&self) -> Result<(), String> {
+        self.driver
+            .become_context_mgr()
+            .map_err(|e| e.to_string())
+    }
+
+    /// Register a service as handle 0 / context manager binder.
+    pub fn register_as_binder(&self, object: SpIBinder) {
+        self.register_service_object(0, object);
+    }
+
     /// Access driver backend.
     pub fn driver(&self) -> &Arc<dyn BinderDriverBackend> {
         &self.driver

@@ -102,15 +102,21 @@ export function renderAppLauncherItem(containerEl, pkg, name, icon, onLaunch) {
     let existing = containerEl.querySelector(`.app-icon-item[data-pkg="${pkg}"]`);
     if (existing) return;
 
-    const item = document.createElement('div');
+    const item = document.createElement('button');
+    item.type = 'button';
     item.className = 'app-icon-item';
     item.setAttribute('data-pkg', pkg);
+    item.setAttribute('aria-label', `Launch ${name}`);
     item.innerHTML = `
         <div class="app-icon-badge">${icon || '📦'}</div>
         <span class="app-icon-name">${name}</span>
     `;
     if (typeof onLaunch === 'function') {
-        item.addEventListener('click', () => onLaunch(pkg));
+        item.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            onLaunch(pkg);
+        });
     }
     containerEl.appendChild(item);
 }
@@ -122,14 +128,20 @@ export function renderDockItems(containerEl, dockApps, onLaunch) {
     if (!containerEl) return;
     containerEl.innerHTML = '';
     dockApps.forEach(app => {
-        const item = document.createElement('div');
+        const item = document.createElement('button');
+        item.type = 'button';
         item.className = 'app-icon-item';
         item.setAttribute('data-pkg', app.pkg);
+        item.setAttribute('aria-label', `Launch ${app.name || app.pkg}`);
         item.innerHTML = `
             <div class="app-icon-badge app-icon-badge-dock">${app.icon}</div>
         `;
         if (typeof onLaunch === 'function') {
-            item.addEventListener('click', () => onLaunch(app.pkg));
+            item.addEventListener('click', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                onLaunch(app.pkg);
+            });
         }
         containerEl.appendChild(item);
     });

@@ -139,8 +139,8 @@ async function runTests() {
 
         // Fire emulator-started
         mockEmulator.emit('emulator-started');
-        assert.equal(bootstrap.getState(), VM_STATES.RUNNING, 'State transitions to RUNNING on emulator-started');
-        pass('Hypervisor state transitions to RUNNING');
+        assert.equal(bootstrap.getState(), VM_STATES.BOOTING, 'State remains BOOTING on emulator-started (POST active)');
+        pass('Hypervisor state remains BOOTING during BIOS POST');
     }
 
     // =========================================================================
@@ -166,6 +166,13 @@ async function runTests() {
             assert(recordedMilestones.includes(expected), `Milestone ${expected} dispatched to listener`);
             pass(`Dispatched milestone ${expected} from dmesg pattern`);
         }
+
+        assert.equal(bootstrap.getState(), VM_STATES.RUNNING, 'State transitions to RUNNING only after real boot completion');
+        pass('State transitions to RUNNING after SYSTEM_BOOT_COMPLETED');
+
+        assert(recordedSerials.length > 0, 'onSerial received guest serial lines');
+        assert(recordedSerials.some(l => l.includes('Linux version')), 'onSerial received Linux boot banner');
+        pass('onSerial stream dispatched to registered listener');
 
         // Test sending serial shell command
         bootstrap.sendSerialCommand('uname -a');

@@ -169,7 +169,6 @@ impl WasmVirtioGpuBridge {
 
     #[wasm_bindgen]
     pub fn compose_and_present(&self) -> Result<u64, JsValue> {
-        wasm_log("compositor", "D", "WebGPU render pass submitted and presented");
         if let Ok(cell) = self.bridge.try_borrow() {
             if let Some(bridge) = cell.as_ref() {
                 if let Some(sf) = &bridge.surface_composer {

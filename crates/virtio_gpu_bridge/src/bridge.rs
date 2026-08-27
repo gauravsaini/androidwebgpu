@@ -759,6 +759,36 @@ impl VirtioGpuBridge {
                         self.gl_context.gl_viewport(x, y, w, h);
                     }
                 }
+                0x05 => {
+                    // ENABLE / DISABLE (cap: u32, enable: u32)
+                    if cmd_payload.len() >= 8 {
+                        let cap = u32::from_le_bytes(cmd_payload[0..4].try_into().unwrap());
+                        let enable = u32::from_le_bytes(cmd_payload[4..8].try_into().unwrap());
+                        if enable != 0 {
+                            self.gl_context.gl_enable(cap);
+                        } else {
+                            self.gl_context.gl_disable(cap);
+                        }
+                    }
+                }
+                0x06 => {
+                    // BLEND_FUNC (sfactor: u32, dfactor: u32)
+                    if cmd_payload.len() >= 8 {
+                        let sfactor = u32::from_le_bytes(cmd_payload[0..4].try_into().unwrap());
+                        let dfactor = u32::from_le_bytes(cmd_payload[4..8].try_into().unwrap());
+                        self.gl_context.gl_blend_func(sfactor, dfactor);
+                    }
+                }
+                0x07 => {
+                    // SCISSOR (x: i32, y: i32, w: u32, h: u32)
+                    if cmd_payload.len() >= 16 {
+                        let x = i32::from_le_bytes(cmd_payload[0..4].try_into().unwrap());
+                        let y = i32::from_le_bytes(cmd_payload[4..8].try_into().unwrap());
+                        let w = u32::from_le_bytes(cmd_payload[8..12].try_into().unwrap());
+                        let h = u32::from_le_bytes(cmd_payload[12..16].try_into().unwrap());
+                        self.gl_context.gl_scissor(x, y, w, h);
+                    }
+                }
                 VIRTGPU_VK_CMD_QUEUE_SUBMIT => {
                     // num_cbs: u32, [cb_id: u64]...
                     if cmd_payload.len() >= 4 {

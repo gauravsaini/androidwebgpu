@@ -19,6 +19,9 @@ pub trait BinderDriverBackend: Send + Sync {
     /// Execute `BINDER_THREAD_EXIT` ioctl.
     fn thread_exit(&self) -> Result<(), DriverError>;
 
+    /// Execute `BINDER_SET_CONTEXT_MGR` ioctl.
+    fn become_context_mgr(&self) -> Result<(), DriverError>;
+
     /// Return reference to shared memory mapping region.
     fn mmap_region(&self) -> Arc<BinderMmapRegion>;
 
@@ -70,6 +73,11 @@ impl BinderDriverBackend for MockDriverBackend {
         exit_bwr.write_buffer = exit_cmd.as_ptr() as u64;
         exit_bwr.write_size = exit_cmd.len() as u64;
         self.driver.write_read(&self.client, &mut exit_bwr)
+    }
+
+    fn become_context_mgr(&self) -> Result<(), DriverError> {
+        self.driver.set_context_manager(self.client.pid, 0, 0);
+        Ok(())
     }
 
     fn mmap_region(&self) -> Arc<BinderMmapRegion> {
@@ -232,6 +240,31 @@ impl BinderDriverBackend for LinuxBinderDriver {
             if res < 0 {
                 return Err(DriverError::IoError(format!(
                     "BINDER_THREAD_EXIT failed: errno {}",
+                    std::io::Error::last_os_error()
+                )));
+            }
+            Ok(())
+        }
+        #[cfg(not(target_os = "linux"))]
+        {
+            Err(DriverError::IoError("Not supported on non-linux".into()))
+        }
+    }
+
+    fn become_context_mgr(&self) -> Result<(), DriverError> {
+        #[cfg(target_os = "linux")]
+        {
+            let mut dummy: i32 = 0;
+            let res = unsafe {
+                libc::ioctl(
+                    self.fd,
+                    BINDER_SET_CONTEXT_MGR as libc::c_ulong,
+                    &mut dummy as *mut i32,
+                )
+            };
+            if res < 0 {
+                return Err(DriverError::IoError(format!(
+                    "BINDER_SET_CONTEXT_MGR failed: errno {}",
                     std::io::Error::last_os_error()
                 )));
             }

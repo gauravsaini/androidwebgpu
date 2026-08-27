@@ -15,7 +15,7 @@
  * Conforms to ASD-STE100 and /ponytail simplicity principles.
  */
 
-import { logger, logDebug, globalLogcat } from './logger.js';
+import { logDebug, globalLogcat } from './logger.js';
 
 if (typeof window !== 'undefined') {
     if (!window.V86Starter && window.V86) window.V86Starter = window.V86;
@@ -70,7 +70,8 @@ export class V86GuestManager {
             onStateChange: null,
             onLog: null,
             onProgress: null,
-            onMilestone: null
+            onMilestone: null,
+            onSerial: null
         }, config);
 
         this.state = VM_STATES.UNINITIALIZED;
@@ -130,11 +131,11 @@ export class V86GuestManager {
         if (oldState === newState) return;
 
         this.state = newState;
-        logger.log('v86', 'I', `VM State Transition: ${oldState} -> ${newState}`, { oldState, newState });
-        globalLogcat.append('v86', `VM State Transition: ${oldState} -> ${newState}`, 'I');
-        this.log(`VM State Transition: ${oldState} -> ${newState}`, 'info');
+        logDebug('v86', 'I', `VM State Transition: ${oldState} -> ${newState}`, { oldState, newState });
 
-        if (typeof this.config.onStateChange === 'function') {
+        if (typeof this.onStateChange === 'function') {
+            this.onStateChange(newState, oldState);
+        } else if (typeof this.config.onStateChange === 'function') {
             this.config.onStateChange(newState, oldState);
         }
     }
@@ -146,10 +147,10 @@ export class V86GuestManager {
     recordMilestone(milestone) {
         if (!this.milestones.has(milestone)) {
             this.milestones.add(milestone);
-            logger.log('v86', 'I', `[BOOT-MILESTONE] Achieved: ${milestone}`, { milestone });
-            globalLogcat.append('v86', `[BOOT-MILESTONE] Achieved: ${milestone}`, 'I');
-            this.log(`[BOOT-MILESTONE] Achieved: ${milestone}`, 'success');
-            if (typeof this.config.onMilestone === 'function') {
+            logDebug('v86', 'I', `[BOOT-MILESTONE] Achieved: ${milestone}`, { milestone });
+            if (typeof this.onMilestone === 'function') {
+                this.onMilestone(milestone);
+            } else if (typeof this.config.onMilestone === 'function') {
                 this.config.onMilestone(milestone);
             }
         }
@@ -176,6 +177,9 @@ export class V86GuestManager {
      * Start the VM boot sequence
      */
     async start() {
+        if (this.state === VM_STATES.LOADING || this.state === VM_STATES.BOOTING) {
+            return;
+        }
         if (this.state !== VM_STATES.UNINITIALIZED && this.state !== VM_STATES.ERROR) {
             this.log(`Cannot start VM from state ${this.state}`, 'warn');
             return;
@@ -281,10 +285,10 @@ export class V86GuestManager {
 
             const duration = ((typeof performance !== 'undefined' ? performance.now() : Date.now()) - this.bootStartTime).toFixed(1);
             this.stats.bootDurationMs = parseFloat(duration);
-            this.log(`VM Boot completed in ${duration}ms`, 'success');
+            logDebug('v86', 'I', `v86 hypervisor instantiated in ${duration}ms (CPU running BIOS POST)`);
 
         } catch (err) {
-            this.log(`VM Boot Error: ${err.message}`, 'error');
+            logDebug('v86', 'E', `VM Boot Error: ${err.message}`);
             this.setState(VM_STATES.ERROR);
             throw err;
         }
@@ -304,24 +308,30 @@ export class V86GuestManager {
     attachSerialListeners() {
         if (!this.emulator || typeof this.emulator.add_listener !== 'function') return;
 
-        this.emulator.add_listener('serial0-output-char', (char) => {
-            globalLogcat.feedSerialChar(char);
+        const handleChar = (charOrByte) => {
+            const char = typeof charOrByte === 'number' ? String.fromCharCode(charOrByte) : charOrByte;
             if (char === '\r') return;
             if (char === '\n') {
-                this.handleSerialLine(this.serialBuffer);
+                const line = this.serialBuffer;
                 this.serialBuffer = '';
+                this.handleSerialLine(line);
             } else {
                 this.serialBuffer += char;
             }
-        });
+        };
+
+        this.emulator.add_listener('serial0-output-char', handleChar);
+        this.emulator.add_listener('serial0-output-byte', handleChar);
 
         this.emulator.add_listener('emulator-started', () => {
-            this.setState(VM_STATES.RUNNING);
-            logger.log('v86', 'I', 'Real x86 guest VM started (V86Starter)');
+            logDebug('v86', 'I', 'v86 CPU execution active (POST)');
+            if (this.state === VM_STATES.LOADING || this.state === VM_STATES.UNINITIALIZED) {
+                this.setState(VM_STATES.BOOTING);
+            }
         });
 
         this.emulator.add_listener('emulator-ready', () => {
-            logger.log('v86', 'I', 'v86 emulator ready — guest OS accessible');
+            logDebug('v86', 'I', 'v86 emulator initialized — waiting for guest OS serial milestones');
         });
     }
 
@@ -360,9 +370,15 @@ export class V86GuestManager {
         globalLogcat.append('v86Guest', line, isPanic ? 'E' : 'D');
         this.log(`[GUEST-TTY] ${line}`, isPanic ? 'error' : 'guest');
 
+        if (typeof this.onSerial === 'function') {
+            this.onSerial(line);
+        } else if (typeof this.config.onSerial === 'function') {
+            this.config.onSerial(line);
+        }
+
         // Check for fatal errors / kernel panics
         if (isPanic) {
-            this.log(`[GUEST-PANIC] Fatal guest error detected: ${line}`, 'error');
+            logDebug('v86', 'E', `[GUEST-PANIC] Fatal guest error detected: ${line}`);
             this.setState(VM_STATES.ERROR);
             return;
         }
@@ -411,10 +427,13 @@ export class V86GuestManager {
             this.recordMilestone(BOOT_MILESTONES.RUST_SERVICES_READY);
         }
 
-        if (line.includes('Zygote:') || line.includes('zygote socket') || line.includes('ART: Initialized') || line.includes('boot completed')) {
+        if (line.includes('Zygote:') || line.includes('zygote socket') || line.includes('ART: Initialized') || line.includes('boot completed') || line.includes('Android 14 ready') || line.includes('buildroot login:') || line.includes('login:')) {
+            const bootDuration = ((typeof performance !== 'undefined' ? performance.now() : Date.now()) - this.bootStartTime).toFixed(1);
+            this.stats.bootDurationMs = parseFloat(bootDuration);
             this.recordMilestone(BOOT_MILESTONES.ZYGOTE_ART_READY);
             this.recordMilestone(BOOT_MILESTONES.SYSTEM_BOOT_COMPLETED);
             this.setState(VM_STATES.RUNNING);
+            logDebug('v86', 'I', `Guest OS boot completed in ${bootDuration}ms (State: RUNNING)`);
         }
     }
 
@@ -616,12 +635,9 @@ export class V86GuestManager {
      * @param {string} [type='info'] 
      */
     log(msg, type = 'info') {
-        const priority = (type === 'error' || type === 'err') ? 'E' :
-                         (type === 'warn' ? 'W' :
-                         (type === 'debug' ? 'D' :
-                         (type === 'verbose' ? 'V' : 'I')));
-        logger.log('v86', priority, msg);
-        if (typeof this.config.onLog === 'function') {
+        if (typeof this.onLog === 'function') {
+            this.onLog(msg, type);
+        } else if (typeof this.config.onLog === 'function') {
             this.config.onLog(msg, type);
         }
     }
