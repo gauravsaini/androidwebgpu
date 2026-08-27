@@ -80,12 +80,12 @@ export class LayoutParams {
     static MATCH_PARENT = MATCH_PARENT;
     static WRAP_CONTENT = WRAP_CONTENT;
 
-    constructor(width = WRAP_CONTENT, height = WRAP_CONTENT) {
+    constructor(width = WRAP_CONTENT, height = WRAP_CONTENT, weight = 0) {
         this.width = width;
         this.height = height;
         // Margins: [left, top, right, bottom]
         this.margins = [0, 0, 0, 0];
-        this.weight = 0;
+        this.weight = Number(weight) || 0;
         this.gravity = 0;
         // Rules for RelativeLayout (verb -> targetId/true)
         this.alignRules = {};
@@ -1467,9 +1467,17 @@ export class TextView extends View {
         contentW += this.paddingLeft + this.paddingRight;
         contentH += this.paddingTop + this.paddingBottom;
 
-        const w = View.getDefaultSize(Math.max(contentW, this.minWidth), widthMeasureSpec);
-        const h = View.getDefaultSize(Math.max(contentH, this.minHeight), heightMeasureSpec);
-        this.setMeasuredDimension(w, h);
+        let w = contentW;
+        if (wMode === MeasureSpec.EXACTLY) w = wSize;
+        else if (wMode === MeasureSpec.AT_MOST) w = Math.min(contentW, wSize);
+
+        const hMode = MeasureSpec.getMode(heightMeasureSpec);
+        const hSize = MeasureSpec.getSize(heightMeasureSpec);
+        let h = contentH;
+        if (hMode === MeasureSpec.EXACTLY) h = hSize;
+        else if (hMode === MeasureSpec.AT_MOST) h = Math.min(contentH, hSize);
+
+        this.setMeasuredDimension(Math.max(w, this.minWidth), Math.max(h, this.minHeight));
     }
 
     onDraw(ctx) {
@@ -1479,7 +1487,6 @@ export class TextView extends View {
         const fontSize = this.textSize || 14;
         ctx.font = `${this.textStyle !== 'normal' ? this.textStyle + ' ' : ''}${fontSize}px ${this.typeface}`;
         ctx.fillStyle = this.textColor || '#FFFFFF';
-        ctx.textBaseline = 'middle';
 
         const availW = this.getWidth() - this.paddingLeft - this.paddingRight;
         const availH = this.getHeight() - this.paddingTop - this.paddingBottom;
@@ -1497,9 +1504,34 @@ export class TextView extends View {
             ctx.textAlign = 'left';
         }
 
-        // Draw clipped / truncated text
-        if (ctx.fillText) {
-            ctx.fillText(text, drawX, drawY, availW > 0 ? availW : undefined);
+        const singleLineH = Math.round(fontSize * 1.3);
+        const charWidth = fontSize * 0.58;
+        const charsPerLine = Math.max(1, Math.floor(availW / charWidth));
+
+        if (this.maxLines > 1 || this.lines > 1 || (text.length > charsPerLine && availH > singleLineH * 1.5)) {
+            // Multi-line text drawing
+            ctx.textBaseline = 'top';
+            let lineCount = Math.ceil(text.length / charsPerLine);
+            if (this.maxLines > 0) lineCount = Math.min(lineCount, this.maxLines);
+            if (this.lines > 0) lineCount = this.lines;
+
+            for (let i = 0; i < lineCount; i++) {
+                const start = i * charsPerLine;
+                let lineText = text.substring(start, start + charsPerLine);
+                if (i === lineCount - 1 && start + charsPerLine < text.length) {
+                    lineText = lineText.substring(0, Math.max(0, lineText.length - 3)) + '...';
+                }
+                const lineY = this.top + this.paddingTop + (i * singleLineH);
+                if (ctx.fillText) {
+                    ctx.fillText(lineText, drawX, lineY, availW > 0 ? availW : undefined);
+                }
+            }
+        } else {
+            // Single line text drawing
+            ctx.textBaseline = 'middle';
+            if (ctx.fillText) {
+                ctx.fillText(text, drawX, drawY, availW > 0 ? availW : undefined);
+            }
         }
     }
 }
