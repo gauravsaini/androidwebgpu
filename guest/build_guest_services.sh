@@ -39,6 +39,7 @@ else
     TARGET="i686-unknown-linux-gnu"
     rustup target add "$TARGET" 2>/dev/null || true
     echo "Building for target $TARGET"
+    CARGO_TARGET_I686_UNKNOWN_LINUX_GNU_LINKER="i686-linux-gnu-gcc" \
     cargo build --release --target "$TARGET" \
         -p guest_servicemanager \
         -p pms_rs \

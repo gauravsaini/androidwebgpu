@@ -27,8 +27,8 @@ self.onmessage = async function (e) {
     switch (data.type) {
         case "INIT_OFFSCREEN": {
             offscreenCanvas = data.canvas;
-            const width = data.width || 800;
-            const height = data.height || 600;
+            const width = data.width || 720;
+            const height = data.height || 1440;
             offscreenCanvas.width = width;
             offscreenCanvas.height = height;
 

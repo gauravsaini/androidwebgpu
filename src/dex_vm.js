@@ -106,6 +106,13 @@ export const OP_ADD_INT_2ADDR = 0xb0;
 export const OP_SUB_INT_2ADDR = 0xb1;
 export const OP_MUL_INT_2ADDR = 0xb2;
 export const OP_DIV_INT_2ADDR = 0xb3;
+export const OP_REM_INT_2ADDR = 0xb4;
+export const OP_AND_INT_2ADDR = 0xb5;
+export const OP_OR_INT_2ADDR = 0xb6;
+export const OP_XOR_INT_2ADDR = 0xb7;
+export const OP_SHL_INT_2ADDR = 0xb8;
+export const OP_SHR_INT_2ADDR = 0xb9;
+export const OP_USHR_INT_2ADDR = 0xba;
 export const OP_ADD_INT_LIT16 = 0xd0;
 export const OP_ADD_INT_LIT8 = 0xd8;
 
@@ -314,7 +321,8 @@ export class DexParser {
                         const parsedMethod = {
                             ...methodInfo,
                             accessFlags: flags,
-                            code: this.parseCodeItem(codeOff)
+                            code: this.parseCodeItem(codeOff),
+                            dex: this
                         };
                         classDef.directMethods.set(methodInfo.name, parsedMethod);
                     }
@@ -331,7 +339,8 @@ export class DexParser {
                         const parsedMethod = {
                             ...methodInfo,
                             accessFlags: flags,
-                            code: this.parseCodeItem(codeOff)
+                            code: this.parseCodeItem(codeOff),
+                            dex: this
                         };
                         classDef.virtualMethods.set(methodInfo.name, parsedMethod);
                     }
@@ -468,6 +477,7 @@ export class DalvikVM {
             return null;
         }
 
+        const currentDex = method.dex || null;
         const registers = new Array(code.registersSize).fill(0);
         let argIdx = code.registersSize - code.insSize;
 
@@ -565,7 +575,7 @@ export class DalvikVM {
                 case OP_CONST_STRING: {
                     const vA = highByte;
                     const stringIdx = insns[pc + 1];
-                    const str = this.resolveString(stringIdx);
+                    const str = this.resolveString(stringIdx, currentDex);
                     registers[vA] = str;
                     pc += 2;
                     break;
@@ -574,15 +584,36 @@ export class DalvikVM {
                 case OP_CONST_STRING_JUMBO: {
                     const vA = highByte;
                     const stringIdx = insns[pc + 1] | (insns[pc + 2] << 16);
-                    registers[vA] = this.resolveString(stringIdx);
+                    registers[vA] = this.resolveString(stringIdx, currentDex);
                     pc += 3;
+                    break;
+                }
+
+                case OP_CONST_CLASS: {
+                    const vA = highByte;
+                    const typeIdx = insns[pc + 1];
+                    registers[vA] = this.resolveType(typeIdx, currentDex);
+                    pc += 2;
+                    break;
+                }
+
+                case OP_CHECK_CAST: {
+                    pc += 2;
+                    break;
+                }
+
+                case OP_INSTANCE_OF: {
+                    const vA = highByte & 0x0f;
+                    const vB = (highByte >> 4) & 0x0f;
+                    registers[vA] = registers[vB] !== null && registers[vB] !== undefined ? 1 : 0;
+                    pc += 2;
                     break;
                 }
 
                 case OP_NEW_INSTANCE: {
                     const vA = highByte;
                     const typeIdx = insns[pc + 1];
-                    const typeName = this.resolveType(typeIdx);
+                    const typeName = this.resolveType(typeIdx, currentDex);
                     registers[vA] = this.framework.instantiateObject(typeName);
                     pc += 2;
                     break;
@@ -636,7 +667,7 @@ export class DalvikVM {
                     const vA = highByte & 0x0f;
                     const vB = (highByte >> 4) & 0x0f;
                     const fieldIdx = insns[pc + 1];
-                    const fieldInfo = this.resolveField(fieldIdx);
+                    const fieldInfo = this.resolveField(fieldIdx, currentDex);
                     const obj = registers[vB];
                     registers[vA] = (obj && fieldInfo) ? obj[fieldInfo.name] : null;
                     pc += 2;
@@ -648,7 +679,7 @@ export class DalvikVM {
                     const vA = highByte & 0x0f;
                     const vB = (highByte >> 4) & 0x0f;
                     const fieldIdx = insns[pc + 1];
-                    const fieldInfo = this.resolveField(fieldIdx);
+                    const fieldInfo = this.resolveField(fieldIdx, currentDex);
                     const obj = registers[vB];
                     if (obj && fieldInfo) {
                         obj[fieldInfo.name] = registers[vA];
@@ -661,7 +692,7 @@ export class DalvikVM {
                 case OP_SGET_OBJECT: {
                     const vA = highByte;
                     const fieldIdx = insns[pc + 1];
-                    const fieldInfo = this.resolveField(fieldIdx);
+                    const fieldInfo = this.resolveField(fieldIdx, currentDex);
                     if (fieldInfo) {
                         const classState = this.staticState.get(fieldInfo.classType) || {};
                         registers[vA] = classState[fieldInfo.name] !== undefined ? classState[fieldInfo.name] : 0;
@@ -674,7 +705,7 @@ export class DalvikVM {
                 case OP_SPUT_OBJECT: {
                     const vA = highByte;
                     const fieldIdx = insns[pc + 1];
-                    const fieldInfo = this.resolveField(fieldIdx);
+                    const fieldInfo = this.resolveField(fieldIdx, currentDex);
                     if (fieldInfo) {
                         let classState = this.staticState.get(fieldInfo.classType);
                         if (!classState) {
@@ -760,7 +791,7 @@ export class DalvikVM {
                         highByte & 0x0f
                     ].slice(0, count);
 
-                    const methodInfo = this.resolveMethod(methodIdx);
+                    const methodInfo = this.resolveMethod(methodIdx, currentDex);
                     const callArgs = regList.map(r => registers[r]);
                     lastResult = this.framework.dispatchMethodCall(opcode, methodInfo, callArgs);
                     pc += 3;
@@ -778,10 +809,26 @@ export class DalvikVM {
                     const regList = [];
                     for (let r = 0; r < count; r++) regList.push(startReg + r);
 
-                    const methodInfo = this.resolveMethod(methodIdx);
+                    const methodInfo = this.resolveMethod(methodIdx, currentDex);
                     const callArgs = regList.map(r => registers[r]);
                     lastResult = this.framework.dispatchMethodCall(opcode, methodInfo, callArgs);
                     pc += 3;
+                    break;
+                }
+
+                case OP_NEG_INT: {
+                    const vA = highByte & 0x0f;
+                    const vB = (highByte >> 4) & 0x0f;
+                    registers[vA] = (-registers[vB]) | 0;
+                    pc++;
+                    break;
+                }
+
+                case OP_NOT_INT: {
+                    const vA = highByte & 0x0f;
+                    const vB = (highByte >> 4) & 0x0f;
+                    registers[vA] = (~registers[vB]) | 0;
+                    pc++;
                     break;
                 }
 
@@ -819,13 +866,41 @@ export class DalvikVM {
 
                 case OP_ADD_INT_2ADDR:
                 case OP_SUB_INT_2ADDR:
-                case OP_MUL_INT_2ADDR: {
+                case OP_MUL_INT_2ADDR:
+                case OP_DIV_INT_2ADDR:
+                case OP_REM_INT_2ADDR:
+                case OP_AND_INT_2ADDR:
+                case OP_OR_INT_2ADDR:
+                case OP_XOR_INT_2ADDR:
+                case OP_SHL_INT_2ADDR:
+                case OP_SHR_INT_2ADDR:
+                case OP_USHR_INT_2ADDR: {
                     const vA = highByte & 0x0f;
                     const vB = (highByte >> 4) & 0x0f;
-                    if (opcode === OP_ADD_INT_2ADDR) registers[vA] = (registers[vA] + registers[vB]) | 0;
-                    else if (opcode === OP_SUB_INT_2ADDR) registers[vA] = (registers[vA] - registers[vB]) | 0;
-                    else if (opcode === OP_MUL_INT_2ADDR) registers[vA] = Math.imul(registers[vA], registers[vB]);
+                    const a = registers[vA] | 0, b = registers[vB] | 0;
+                    let res = 0;
+                    if (opcode === OP_ADD_INT_2ADDR) res = (a + b) | 0;
+                    else if (opcode === OP_SUB_INT_2ADDR) res = (a - b) | 0;
+                    else if (opcode === OP_MUL_INT_2ADDR) res = Math.imul(a, b);
+                    else if (opcode === OP_DIV_INT_2ADDR) res = b !== 0 ? ((a / b) | 0) : 0;
+                    else if (opcode === OP_REM_INT_2ADDR) res = b !== 0 ? (a % b) : 0;
+                    else if (opcode === OP_AND_INT_2ADDR) res = a & b;
+                    else if (opcode === OP_OR_INT_2ADDR) res = a | b;
+                    else if (opcode === OP_XOR_INT_2ADDR) res = a ^ b;
+                    else if (opcode === OP_SHL_INT_2ADDR) res = a << (b & 0x1f);
+                    else if (opcode === OP_SHR_INT_2ADDR) res = a >> (b & 0x1f);
+                    else if (opcode === OP_USHR_INT_2ADDR) res = a >>> (b & 0x1f);
+                    registers[vA] = res;
                     pc++;
+                    break;
+                }
+
+                case OP_ADD_INT_LIT16: {
+                    const vA = highByte & 0x0f;
+                    const vB = (highByte >> 4) & 0x0f;
+                    const lit = (insns[pc + 1] << 16) >> 16;
+                    registers[vA] = (registers[vB] + lit) | 0;
+                    pc += 2;
                     break;
                 }
 
@@ -847,30 +922,34 @@ export class DalvikVM {
         return lastResult;
     }
 
-    resolveString(idx) {
-        for (const dex of this.dexParsers) {
-            if (dex.strings && dex.strings[idx] !== undefined) return dex.strings[idx];
+    resolveString(idx, dex = null) {
+        if (dex && dex.strings && dex.strings[idx] !== undefined) return dex.strings[idx];
+        for (const d of this.dexParsers) {
+            if (d.strings && d.strings[idx] !== undefined) return d.strings[idx];
         }
         return "";
     }
 
-    resolveType(idx) {
-        for (const dex of this.dexParsers) {
-            if (dex.types && dex.types[idx] !== undefined) return dex.types[idx];
+    resolveType(idx, dex = null) {
+        if (dex && dex.types && dex.types[idx] !== undefined) return dex.types[idx];
+        for (const d of this.dexParsers) {
+            if (d.types && d.types[idx] !== undefined) return d.types[idx];
         }
         return "Ljava/lang/Object;";
     }
 
-    resolveField(idx) {
-        for (const dex of this.dexParsers) {
-            if (dex.fields && dex.fields[idx]) return dex.fields[idx];
+    resolveField(idx, dex = null) {
+        if (dex && dex.fields && dex.fields[idx]) return dex.fields[idx];
+        for (const d of this.dexParsers) {
+            if (d.fields && d.fields[idx]) return d.fields[idx];
         }
         return null;
     }
 
-    resolveMethod(idx) {
-        for (const dex of this.dexParsers) {
-            if (dex.methods && dex.methods[idx]) return dex.methods[idx];
+    resolveMethod(idx, dex = null) {
+        if (dex && dex.methods && dex.methods[idx]) return dex.methods[idx];
+        for (const d of this.dexParsers) {
+            if (d.methods && d.methods[idx]) return d.methods[idx];
         }
         return null;
     }

@@ -27,7 +27,9 @@
  * Logs every gate to /dev/ttyS0 for V86GuestManager serial pipe + stdout.
  */
 
+#ifndef _GNU_SOURCE
 #define _GNU_SOURCE
+#endif
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdint.h>
@@ -357,10 +359,10 @@ int main(int argc, char **argv) {
         memset(desc,0,sizeof(struct VirtqDesc)*2);
     }
 
-    // Command 2: RESOURCE_CREATE_2D (Gate 2.3b dimensions 1280x720)
+    // Command 2: RESOURCE_CREATE_2D (Gate 2.3b dimensions 720x1440)
     {
         struct VirtioGpuResourceCreate2d *c = (struct VirtioGpuResourceCreate2d*)cmd_buf;
-        build_create_2d(c, 1, 1280, 720, 1, 2); // format 1 = B8G8R8A8
+        build_create_2d(c, 1, 720, 1440, 1, 2); // format 1 = B8G8R8A8
         size_t cmd_len = sizeof(struct VirtioGpuResourceCreate2d);
         struct VirtioGpuCtrlHdr *resp_hdr = (struct VirtioGpuCtrlHdr*)resp_buf;
         memset(resp_buf,0,24);
@@ -371,7 +373,7 @@ int main(int argc, char **argv) {
         io_outw(VIRTIO_GPU_IO_BASE + OFF_QUEUE_NOTIFY, 0);
         int spins=0; while(*used_idx != 1 && spins<1000){ usleep(1000); spins++; }
         uint8_t isr = io_inb(VIRTIO_GPU_IO_BASE + OFF_ISR_STATUS);
-        snprintf(buf, sizeof(buf), "[synthetic_probe] RESOURCE_CREATE_2D resp type=0x%x isr=0x%x spins=%d (Gate 2.3b expect 1280x720)", resp_hdr->type, isr, spins);
+        snprintf(buf, sizeof(buf), "[synthetic_probe] RESOURCE_CREATE_2D resp type=0x%x isr=0x%x spins=%d (Gate 2.3b expect 720x1440)", resp_hdr->type, isr, spins);
         log_serial(buf);
         track_op(CMD_RESOURCE_CREATE_2D);
         *used_idx=0; *avail_idx=0; memset(desc,0,sizeof(struct VirtqDesc)*2);
@@ -380,12 +382,12 @@ int main(int argc, char **argv) {
     // Command 3: RESOURCE_ATTACH_BACKING (minimal 1 entry pointing to pixel buffer)
     // We'll allocate a pixel buffer page and create mem entry
     {
-        uint64_t pix_pfn; void *pix_page = alloc_dma_pages(4, &pix_pfn); // 16KB for 1280x720*4 would be ~3.5MB, but for synthetic small 256x256
+        uint64_t pix_pfn; void *pix_page = alloc_dma_pages(4, &pix_pfn); // 16KB for 720x1440*4 would be ~4MB, but for synthetic small 256x256
         // For gate purpose, create zero-filled backing
-        struct { struct VirtioGpuCtrlHdr hdr; uint32_t res_id, nr_entries; } *att = (void*)cmd_buf;
+        struct VirtioGpuAttachBacking { struct VirtioGpuCtrlHdr hdr; uint32_t res_id, nr_entries; } *att = (struct VirtioGpuAttachBacking*)cmd_buf;
         att->hdr.type = 0x0106; att->hdr.flags=0; att->hdr.fence_id=3; att->hdr.ctx_id=0; att->hdr.padding=0;
         att->res_id = 1; att->nr_entries = 1;
-        struct { uint64_t addr; uint32_t len, pad; } *ent = (void*)(cmd_buf + sizeof(*att));
+        struct VirtioGpuMemEntry { uint64_t addr; uint32_t len, pad; } *ent = (struct VirtioGpuMemEntry*)(cmd_buf + sizeof(*att));
         ent->addr = pix_pfn * 4096; ent->len = 4096; ent->pad = 0;
         size_t cmd_len = sizeof(*att) + sizeof(*ent);
         struct VirtioGpuCtrlHdr *resp_hdr = (struct VirtioGpuCtrlHdr*)resp_buf;
@@ -407,7 +409,7 @@ int main(int argc, char **argv) {
     {
         struct VirtioGpuTransferToHost2d *t = (struct VirtioGpuTransferToHost2d*)cmd_buf;
         t->hdr.type = CMD_TRANSFER_TO_HOST_2D; t->hdr.flags=0; t->hdr.fence_id=4; t->hdr.ctx_id=0; t->hdr.padding=0;
-        t->r.x=0; t->r.y=0; t->r.width=1280; t->r.height=720; t->offset=0; t->resource_id=1; t->padding2=0;
+        t->r.x=0; t->r.y=0; t->r.width=720; t->r.height=1440; t->offset=0; t->resource_id=1; t->padding2=0;
         // Append fake pixel payload 256 bytes (gradient)
         for(int i=0;i<256;i++) cmd_buf[sizeof(*t)+i] = (uint8_t)(i);
         size_t cmd_len = sizeof(*t) + 256;
@@ -430,7 +432,7 @@ int main(int argc, char **argv) {
     {
         struct VirtioGpuSetScanout *s = (struct VirtioGpuSetScanout*)cmd_buf;
         s->hdr.type = CMD_SET_SCANOUT; s->hdr.flags=0; s->hdr.fence_id=5; s->hdr.ctx_id=0; s->hdr.padding=0;
-        s->r.x=0; s->r.y=0; s->r.width=1280; s->r.height=720; s->scanout_id=0; s->resource_id=1;
+        s->r.x=0; s->r.y=0; s->r.width=720; s->r.height=1440; s->scanout_id=0; s->resource_id=1;
         size_t cmd_len = sizeof(struct VirtioGpuSetScanout);
         struct VirtioGpuCtrlHdr *resp_hdr = (struct VirtioGpuCtrlHdr*)resp_buf;
         memset(resp_buf,0,24);
@@ -451,7 +453,7 @@ int main(int argc, char **argv) {
     {
         struct VirtioGpuResourceFlush *f = (struct VirtioGpuResourceFlush*)cmd_buf;
         f->hdr.type = CMD_RESOURCE_FLUSH; f->hdr.flags=0; f->hdr.fence_id=6; f->hdr.ctx_id=0; f->hdr.padding=0;
-        f->r.x=0; f->r.y=0; f->r.width=1280; f->r.height=720; f->resource_id=1; f->padding2=0;
+        f->r.x=0; f->r.y=0; f->r.width=720; f->r.height=1440; f->resource_id=1; f->padding2=0;
         size_t cmd_len = sizeof(struct VirtioGpuResourceFlush);
         struct VirtioGpuCtrlHdr *resp_hdr = (struct VirtioGpuCtrlHdr*)resp_buf;
         memset(resp_buf,0,24);
@@ -462,7 +464,7 @@ int main(int argc, char **argv) {
         io_outw(VIRTIO_GPU_IO_BASE + OFF_QUEUE_NOTIFY, 0);
         int spins=0; while(*used_idx != 1 && spins<1000){ usleep(1000); spins++; }
         uint8_t isr = io_inb(VIRTIO_GPU_IO_BASE + OFF_ISR_STATUS);
-        snprintf(buf, sizeof(buf), "[synthetic_probe] RESOURCE_FLUSH resp 0x%x isr 0x%x (Gate 2.5b damage 0,0,1280,720)", resp_hdr->type, isr);
+        snprintf(buf, sizeof(buf), "[synthetic_probe] RESOURCE_FLUSH resp 0x%x isr 0x%x (Gate 2.5b damage 0,0,720,1440)", resp_hdr->type, isr);
         log_serial(buf);
         track_op(CMD_RESOURCE_FLUSH);
         *used_idx=0; *avail_idx=0; memset(desc,0,sizeof(struct VirtqDesc)*2);
@@ -478,7 +480,7 @@ int main(int argc, char **argv) {
     for(int frame=0; frame<5; frame++){
         struct VirtioGpuResourceFlush *f = (struct VirtioGpuResourceFlush*)cmd_buf;
         f->hdr.type = CMD_RESOURCE_FLUSH; f->hdr.flags=0; f->hdr.fence_id=100+frame; f->hdr.ctx_id=0; f->hdr.padding=0;
-        f->r.x=0; f->r.y=0; f->r.width=1280; f->r.height=720; f->resource_id=1; f->padding2=0;
+        f->r.x=0; f->r.y=0; f->r.width=720; f->r.height=1440; f->resource_id=1; f->padding2=0;
         size_t cmd_len = sizeof(struct VirtioGpuResourceFlush);
         struct VirtioGpuCtrlHdr *resp_hdr = (struct VirtioGpuCtrlHdr*)resp_buf;
         memset(resp_buf,0,24);

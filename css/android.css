@@ -155,7 +155,8 @@ main {
 
 .phone-bezel {
     width: 420px;
-    height: 900px;
+    height: 892px;
+    max-width: min(420px, calc((100vh - 105px) * (420 / 892)));
     max-height: calc(100vh - 105px);
     min-height: 600px;
     background: #0f121a;
@@ -260,8 +261,11 @@ main {
     overflow: hidden;
 }
 
-.screen-view.active {
-    display: flex;
+.screen-view.active,
+#screen-home.active,
+#screen-v86.active,
+#screen-webgpu.active {
+    display: flex !important;
 }
 
 /* Real WebGPU Canvas Viewport */
@@ -277,7 +281,6 @@ main {
     background: #000;
     width: 100%;
     height: 100%;
-    display: none;
     align-items: center;
     justify-content: center;
     position: relative;
@@ -312,7 +315,7 @@ main {
 canvas#screen {
     width: 100%;
     height: 100%;
-    object-fit: cover;
+    object-fit: contain;
     background: #0d121f;
     display: block;
     cursor: default;

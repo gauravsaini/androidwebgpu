@@ -1,29 +1,37 @@
-# E2E Test Suite Ready: Authentic Android View System
+# E2E Test Suite Ready
 
-## Test Runner Commands
-```bash
-# Primary 4-Tier Authentic View System E2E Suite (175 Tests, 100% Pass)
-node tests/test_e2e_authentic_view_system.mjs
-
-# Auxiliary APK & DEX Parser Suites
-node tests/test_dex_vm_apk.mjs
-
-# Rust Graphics & System Service Crates
-cargo test --workspace
-```
+## Test Runner
+- Commands:
+  1. `cargo test --workspace` (Rust unit and integration tests across 31 crates)
+  2. `node tests/test_real_guest_rendering.mjs` (In-guest VirtIO GPU rendering and entropy test)
+  3. `node validate_browser.mjs` (Headless browser validation with screenshot capture and Shannon entropy check)
+  4. `node tests/run_e2e_tests.mjs` (Comprehensive E2E suite)
+- Expected: All tests pass with exit code 0.
 
 ## Coverage Summary
-| Tier | Tests | Description | Status |
-|---|:---:|---|:---:|
-| **Tier 1: Feature Coverage** | 85 | ≥5 tests per feature across all 17 features from PROJECT.md | **PASS (85/85)** |
-| **Tier 2: Boundary & Corner Cases** | 55 | 10 boundary areas (XML corruption, depth ≥ 10, 0px/overflow, resource missing, touch spam, scroll clamping, zero-size buffer) | **PASS (55/55)** |
-| **Tier 3: Cross-Feature Combinations** | 25 | Pairwise multi-layer interactions (APK -> ARSC -> XML -> View Tree -> Layout -> MD3 Rasterizer -> VirtIO -> WebGPU) | **PASS (25/25)** |
-| **Tier 4: Real-World Scenarios** | 10 | Production app workloads (F-Droid APK cold boot, app catalog, details navigation, install click, backstack, multitasking) | **PASS (10/10)** |
-| **Total Test Assertions** | **175** | Comprehensive opaque-box verification (Requirement: ≥170) | **PASS (175/175)** |
+| Tier | Count | Description |
+|------|------:|-------------|
+| 1. Feature Coverage | 75 | ≥5 tests per feature for all 15 features |
+| 2. Boundary & Corner | 75 | Boundary and extreme inputs (socket timeouts, memory bounds, DRM formats) |
+| 3. Cross-Feature | 15 | Pairwise feature interaction tests across modules |
+| 4. Real-World Application | 5 | End-to-end user workflows (Boot, Zygote fork, DEX execution, DRM scanout, Canvas presentation) |
+| **Total** | **170** | Full requirement and architectural coverage |
 
-## Verified Invariants
-- 100% pure in-memory `View` / `ViewGroup` inflation from real `F-Droid.apk` binary XML layouts (`res/v9.xml`, `res/Kt.xml`).
-- Genuine resource ID decoding via `resources.arsc` string pool and typed value specs.
-- Zero synthetic HTML DOM mockup `<div>` elements or simulated screen generators in application viewport.
-- Direct hardware rasterization to `OffscreenCanvas` / WebGPU pixel buffers submitted via VirtIO control queue packets.
-- Reverse-Z pointer hit-testing and hardware navigation key backstack management.
+## Feature Checklist
+| Feature | Tier 1 | Tier 2 | Tier 3 | Tier 4 |
+|---------|:------:|:------:|:------:|:------:|
+| F1. BinderFS & Virtual FS Init | 5 | 5 | ✓ | ✓ |
+| F2. ServiceManager Handle 0 | 5 | 5 | ✓ | ✓ |
+| F3. SurfaceFlinger DRM Linkage | 5 | 5 | ✓ | ✓ |
+| F4. Native System Daemons | 5 | 5 | ✓ | ✓ |
+| F5. Zygote Daemon & Boot Assets | 5 | 5 | ✓ | ✓ |
+| F6. F-Droid APK Deployment | 5 | 5 | ✓ | ✓ |
+| F7. Zygote Fork IPC | 5 | 5 | ✓ | ✓ |
+| F8. In-Guest ART / Dalvik VM Execution | 5 | 5 | ✓ | ✓ |
+| F9. ActivityThread Lifecycle | 5 | 5 | ✓ | ✓ |
+| F10. HWUI / Skia Rendering Pipeline | 5 | 5 | ✓ | ✓ |
+| F11. SurfaceFlinger DRM Composition | 5 | 5 | ✓ | ✓ |
+| F12. Host VirtioGpuDevice Virtqueue Bridge | 5 | 5 | ✓ | ✓ |
+| F13. Synthetic Injection Gating | 5 | 5 | ✓ | ✓ |
+| F14. WebGPU Canvas Presentation | 5 | 5 | ✓ | ✓ |
+| F15. Logcat & Verification Harnesses | 5 | 5 | ✓ | ✓ |

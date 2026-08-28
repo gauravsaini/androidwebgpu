@@ -65,8 +65,8 @@ static int hwc_set(hwc_composer_device_1_t* dev, size_t numDisplays,
 
     // Emit RESOURCE_FLUSH to DRM driver on display present
     if (ctx && ctx->drm_fd >= 0) {
-        uint32_t width = 1280;
-        uint32_t height = 720;
+        uint32_t width = 720;
+        uint32_t height = 1440;
         uint32_t res_id = 1;
 
         uint32_t cmds[24] = {
@@ -81,9 +81,9 @@ static int hwc_set(hwc_composer_device_1_t* dev, size_t numDisplays,
             .flags = 0,
             .size = 22 * sizeof(uint32_t),
             .command = (uintptr_t)cmds,
-            .fence_fd = -1,
-            .num_bo_handles = 0,
             .bo_handles = 0,
+            .num_bo_handles = 0,
+            .fence_fd = -1,
         };
 
         ioctl(ctx->drm_fd, DRM_IOCTL_VIRTGPU_EXECBUFFER, &exec);

@@ -268,6 +268,20 @@ export class View {
         return result;
     }
 
+    static resolveSize(size, measureSpec) {
+        const specMode = MeasureSpec.getMode(measureSpec);
+        const specSize = MeasureSpec.getSize(measureSpec);
+        switch (specMode) {
+            case EXACTLY:
+                return specSize;
+            case AT_MOST:
+                return Math.min(size, specSize);
+            case UNSPECIFIED:
+            default:
+                return size;
+        }
+    }
+
     /**
      * Main layout pass entrypoint.
      */
@@ -527,9 +541,13 @@ export class ViewGroup extends View {
 
         switch (specMode) {
             case EXACTLY:
-                if (childDimension >= 0) {
+                if (childDimension > 0) {
                     resultSize = childDimension;
                     resultMode = EXACTLY;
+                } else if (childDimension === 0) {
+                    // MATCH_CONSTRAINT (0dp): flexible under parent constraint
+                    resultSize = size;
+                    resultMode = AT_MOST;
                 } else if (childDimension === MATCH_PARENT) {
                     resultSize = size;
                     resultMode = EXACTLY;
@@ -540,9 +558,13 @@ export class ViewGroup extends View {
                 break;
 
             case AT_MOST:
-                if (childDimension >= 0) {
+                if (childDimension > 0) {
                     resultSize = childDimension;
                     resultMode = EXACTLY;
+                } else if (childDimension === 0) {
+                    // MATCH_CONSTRAINT (0dp): flexible under parent constraint
+                    resultSize = size;
+                    resultMode = AT_MOST;
                 } else if (childDimension === MATCH_PARENT) {
                     resultSize = size;
                     resultMode = AT_MOST;
@@ -553,9 +575,12 @@ export class ViewGroup extends View {
                 break;
 
             case UNSPECIFIED:
-                if (childDimension >= 0) {
+                if (childDimension > 0) {
                     resultSize = childDimension;
                     resultMode = EXACTLY;
+                } else if (childDimension === 0) {
+                    resultSize = 0;
+                    resultMode = UNSPECIFIED;
                 } else if (childDimension === MATCH_PARENT) {
                     resultSize = 0;
                     resultMode = UNSPECIFIED;
@@ -685,8 +710,8 @@ export class FrameLayout extends ViewGroup {
         maxWidth = Math.max(maxWidth, this.minWidth);
         maxHeight = Math.max(maxHeight, this.minHeight);
 
-        const measuredW = View.getDefaultSize(maxWidth, widthMeasureSpec);
-        const measuredH = View.getDefaultSize(maxHeight, heightMeasureSpec);
+        const measuredW = View.resolveSize(maxWidth, widthMeasureSpec);
+        const measuredH = View.resolveSize(maxHeight, heightMeasureSpec);
         this.setMeasuredDimension(measuredW, measuredH);
     }
 
@@ -1123,22 +1148,217 @@ export class RelativeLayout extends ViewGroup {
  */
 export class ConstraintLayout extends ViewGroup {
     onMeasure(widthMeasureSpec, heightMeasureSpec) {
-        this.measureChildren(widthMeasureSpec, heightMeasureSpec);
+        const parentWSize = MeasureSpec.getSize(widthMeasureSpec);
+        const parentHSize = MeasureSpec.getSize(heightMeasureSpec);
+        const parentWMode = MeasureSpec.getMode(widthMeasureSpec);
+        const parentHMode = MeasureSpec.getMode(heightMeasureSpec);
+
+        const parentLeft = this.paddingLeft;
+        const parentRight = (parentWMode !== UNSPECIFIED ? parentWSize : 100000) - this.paddingRight;
+        const parentTop = this.paddingTop;
+        const parentBottom = (parentHMode !== UNSPECIFIED ? parentHSize : 100000) - this.paddingBottom;
+
+        // Pass 1: Measure fixed and wrap_content children, initial measure for 0dp children
+        for (const child of this.children) {
+            if (child.visibility === GONE) continue;
+            this.measureChildWithMargins(child, widthMeasureSpec, 0, heightMeasureSpec, 0);
+        }
+
+        // Internal relaxation pass to estimate spans for MATCH_CONSTRAINT (0dp) children
+        const estBounds = new Map();
+        for (const child of this.children) {
+            if (child.visibility === GONE) continue;
+            const lp = child.layoutParams;
+            const w = child.measuredWidth;
+            const h = child.measuredHeight;
+            let cl = parentLeft + lp.marginLeft;
+            let ct = parentTop + lp.marginTop;
+            let cr = cl + w;
+            let cb = ct + h;
+            estBounds.set(child, { cl, ct, cr, cb, w, h, lp });
+        }
+
+        for (let pass = 0; pass < 3; pass++) {
+            for (const child of this.children) {
+                if (child.visibility === GONE) continue;
+                const b = estBounds.get(child);
+                const lp = child.layoutParams;
+                const c = lp.constraints || {};
+
+                let leftAnchor = null;
+                let rightAnchor = null;
+                let topAnchor = null;
+                let bottomAnchor = null;
+
+                const startToStart = c.layout_constraintStart_toStartOf ?? c.layout_constraintLeft_toLeftOf;
+                if (startToStart === 'parent' || startToStart === 0 || startToStart === -1) {
+                    leftAnchor = parentLeft;
+                } else if (startToStart !== undefined && startToStart !== null) {
+                    const t = this.findViewById(startToStart);
+                    const tb = t ? estBounds.get(t) : null;
+                    if (tb) leftAnchor = tb.cl;
+                }
+
+                const startToEnd = c.layout_constraintStart_toEndOf ?? c.layout_constraintLeft_toRightOf;
+                if (startToEnd !== undefined && startToEnd !== null) {
+                    const t = this.findViewById(startToEnd);
+                    const tb = t ? estBounds.get(t) : null;
+                    if (tb) leftAnchor = tb.cr;
+                }
+
+                const endToEnd = c.layout_constraintEnd_toEndOf ?? c.layout_constraintRight_toRightOf;
+                if (endToEnd === 'parent' || endToEnd === 0 || endToEnd === -1) {
+                    rightAnchor = parentRight;
+                } else if (endToEnd !== undefined && endToEnd !== null) {
+                    const t = this.findViewById(endToEnd);
+                    const tb = t ? estBounds.get(t) : null;
+                    if (tb) rightAnchor = tb.cr;
+                }
+
+                const endToStart = c.layout_constraintEnd_toStartOf ?? c.layout_constraintRight_toLeftOf;
+                if (endToStart !== undefined && endToStart !== null) {
+                    const t = this.findViewById(endToStart);
+                    const tb = t ? estBounds.get(t) : null;
+                    if (tb) rightAnchor = tb.cl;
+                }
+
+                const topToTop = c.layout_constraintTop_toTopOf;
+                if (topToTop === 'parent' || topToTop === 0 || topToTop === -1) {
+                    topAnchor = parentTop;
+                } else if (topToTop !== undefined && topToTop !== null) {
+                    const t = this.findViewById(topToTop);
+                    const tb = t ? estBounds.get(t) : null;
+                    if (tb) topAnchor = tb.ct;
+                }
+
+                const topToBottom = c.layout_constraintTop_toBottomOf;
+                if (topToBottom !== undefined && topToBottom !== null) {
+                    const t = this.findViewById(topToBottom);
+                    const tb = t ? estBounds.get(t) : null;
+                    if (tb) topAnchor = tb.cb;
+                }
+
+                const bottomToBottom = c.layout_constraintBottom_toBottomOf;
+                if (bottomToBottom === 'parent' || bottomToBottom === 0 || bottomToBottom === -1) {
+                    bottomAnchor = parentBottom;
+                } else if (bottomToBottom !== undefined && bottomToBottom !== null) {
+                    const t = this.findViewById(bottomToBottom);
+                    const tb = t ? estBounds.get(t) : null;
+                    if (tb) bottomAnchor = tb.cb;
+                }
+
+                const bottomToTop = c.layout_constraintBottom_toTopOf;
+                if (bottomToTop !== undefined && bottomToTop !== null) {
+                    const t = this.findViewById(bottomToTop);
+                    const tb = t ? estBounds.get(t) : null;
+                    if (tb) bottomAnchor = tb.ct;
+                }
+
+                if (leftAnchor !== null && rightAnchor !== null) {
+                    const availW = Math.max(0, rightAnchor - leftAnchor - lp.marginLeft - lp.marginRight);
+                    if (lp.width === 0) {
+                        b.cl = leftAnchor + lp.marginLeft;
+                        b.cr = Math.max(b.cl, rightAnchor - lp.marginRight);
+                        b.w = b.cr - b.cl;
+                    } else {
+                        const bias = (typeof c.layout_constraintHorizontal_bias === 'number' && !isNaN(c.layout_constraintHorizontal_bias)) ? c.layout_constraintHorizontal_bias : 0.5;
+                        b.cl = leftAnchor + lp.marginLeft + Math.round((availW - b.w) * bias);
+                        b.cr = b.cl + b.w;
+                    }
+                } else if (leftAnchor !== null) {
+                    b.cl = leftAnchor + lp.marginLeft;
+                    b.cr = b.cl + b.w;
+                } else if (rightAnchor !== null) {
+                    b.cr = rightAnchor - lp.marginRight;
+                    b.cl = b.cr - b.w;
+                }
+
+                if (topAnchor !== null && bottomAnchor !== null) {
+                    const availH = Math.max(0, bottomAnchor - topAnchor - lp.marginTop - lp.marginBottom);
+                    if (lp.height === 0) {
+                        b.ct = topAnchor + lp.marginTop;
+                        b.cb = Math.max(b.ct, bottomAnchor - lp.marginBottom);
+                        b.h = b.cb - b.ct;
+                    } else {
+                        const bias = (typeof c.layout_constraintVertical_bias === 'number' && !isNaN(c.layout_constraintVertical_bias)) ? c.layout_constraintVertical_bias : 0.5;
+                        b.ct = topAnchor + lp.marginTop + Math.round((availH - b.h) * bias);
+                        b.cb = b.ct + b.h;
+                    }
+                } else if (topAnchor !== null) {
+                    b.ct = topAnchor + lp.marginTop;
+                    b.cb = b.ct + b.h;
+                } else if (bottomAnchor !== null) {
+                    b.cb = bottomAnchor - lp.marginBottom;
+                    b.ct = b.cb - b.h;
+                }
+
+                if (b.cr < b.cl) b.cr = b.cl;
+                if (b.cb < b.ct) b.cb = b.ct;
+            }
+        }
+
+        // Pass 2: Remeasure MATCH_CONSTRAINT (0dp) children with EXACTLY(resolvedSpan)
+        for (const child of this.children) {
+            if (child.visibility === GONE) continue;
+            const lp = child.layoutParams;
+            let remeasure = false;
+            let childWSpec = null;
+            let childHSpec = null;
+
+            if (lp.width === 0) {
+                const b = estBounds.get(child);
+                const resolvedSpanW = b ? Math.max(0, b.cr - b.cl) : 0;
+                childWSpec = MeasureSpec.makeMeasureSpec(resolvedSpanW, EXACTLY);
+                remeasure = true;
+            } else {
+                childWSpec = ViewGroup.getChildMeasureSpec(
+                    widthMeasureSpec,
+                    this.paddingLeft + this.paddingRight + lp.marginLeft + lp.marginRight,
+                    lp.width
+                );
+            }
+
+            if (lp.height === 0) {
+                const b = estBounds.get(child);
+                const resolvedSpanH = b ? Math.max(0, b.cb - b.ct) : 0;
+                childHSpec = MeasureSpec.makeMeasureSpec(resolvedSpanH, EXACTLY);
+                remeasure = true;
+            } else {
+                childHSpec = ViewGroup.getChildMeasureSpec(
+                    heightMeasureSpec,
+                    this.paddingTop + this.paddingBottom + lp.marginTop + lp.marginBottom,
+                    lp.height
+                );
+            }
+
+            if (remeasure) {
+                child.measure(childWSpec, childHSpec);
+                const b = estBounds.get(child);
+                if (b) {
+                    b.w = child.measuredWidth;
+                    b.h = child.measuredHeight;
+                    b.cb = b.ct + b.h;
+                }
+            }
+        }
 
         let maxRight = 0;
         let maxBottom = 0;
         for (const child of this.children) {
             if (child.visibility === GONE) continue;
             const lp = child.layoutParams;
-            maxRight = Math.max(maxRight, child.measuredWidth + lp.marginLeft + lp.marginRight);
-            maxBottom = Math.max(maxBottom, child.measuredHeight + lp.marginTop + lp.marginBottom);
+            const b = estBounds.get(child);
+            const r = (b && b.cr > 0) ? b.cr + lp.marginRight : (child.measuredWidth + lp.marginLeft + lp.marginRight);
+            const bot = (b && b.cb > 0) ? b.cb + lp.marginBottom : (child.measuredHeight + lp.marginTop + lp.marginBottom);
+            maxRight = Math.max(maxRight, r);
+            maxBottom = Math.max(maxBottom, bot);
         }
 
-        maxRight += this.paddingLeft + this.paddingRight;
-        maxBottom += this.paddingTop + this.paddingBottom;
+        maxRight += this.paddingRight;
+        maxBottom += this.paddingBottom;
 
-        const w = View.getDefaultSize(Math.max(maxRight, this.minWidth), widthMeasureSpec);
-        const h = View.getDefaultSize(Math.max(maxBottom, this.minHeight), heightMeasureSpec);
+        const w = View.resolveSize(Math.max(maxRight, this.minWidth), widthMeasureSpec);
+        const h = View.resolveSize(Math.max(maxBottom, this.minHeight), heightMeasureSpec);
         this.setMeasuredDimension(w, h);
     }
 
@@ -1164,122 +1384,129 @@ export class ConstraintLayout extends ViewGroup {
             childBounds.set(child, { cl, ct, cr, cb, w, h, lp });
         }
 
-        // Resolve constraints
-        for (const child of this.children) {
-            if (child.visibility === GONE) continue;
-            const bounds = childBounds.get(child);
-            const lp = child.layoutParams;
-            const c = lp.constraints || {};
+        // Iterative relaxation (3 passes) over children for forward/backward sibling dependencies
+        for (let pass = 0; pass < 3; pass++) {
+            for (const child of this.children) {
+                if (child.visibility === GONE) continue;
+                const bounds = childBounds.get(child);
+                const lp = child.layoutParams;
+                const c = lp.constraints || {};
 
-            let leftAnchor = null;
-            let rightAnchor = null;
-            let topAnchor = null;
-            let bottomAnchor = null;
+                let leftAnchor = null;
+                let rightAnchor = null;
+                let topAnchor = null;
+                let bottomAnchor = null;
 
-            // Horizontal Start / Left
-            const startToStart = c.layout_constraintStart_toStartOf || c.layout_constraintLeft_toLeftOf;
-            if (startToStart === 'parent' || startToStart === 0 || startToStart === -1) {
-                leftAnchor = parentLeft;
-            } else if (startToStart) {
-                const t = this.findViewById(startToStart);
-                const tb = t ? childBounds.get(t) : null;
-                if (tb) leftAnchor = tb.cl;
-            }
+                // Horizontal Start / Left
+                const startToStart = c.layout_constraintStart_toStartOf ?? c.layout_constraintLeft_toLeftOf;
+                if (startToStart === 'parent' || startToStart === 0 || startToStart === -1) {
+                    leftAnchor = parentLeft;
+                } else if (startToStart !== undefined && startToStart !== null) {
+                    const t = this.findViewById(startToStart);
+                    const tb = t ? childBounds.get(t) : null;
+                    if (tb) leftAnchor = tb.cl;
+                }
 
-            const startToEnd = c.layout_constraintStart_toEndOf || c.layout_constraintLeft_toRightOf;
-            if (startToEnd) {
-                const t = this.findViewById(startToEnd);
-                const tb = t ? childBounds.get(t) : null;
-                if (tb) leftAnchor = tb.cr;
-            }
+                const startToEnd = c.layout_constraintStart_toEndOf ?? c.layout_constraintLeft_toRightOf;
+                if (startToEnd !== undefined && startToEnd !== null) {
+                    const t = this.findViewById(startToEnd);
+                    const tb = t ? childBounds.get(t) : null;
+                    if (tb) leftAnchor = tb.cr;
+                }
 
-            // Horizontal End / Right
-            const endToEnd = c.layout_constraintEnd_toEndOf || c.layout_constraintRight_toRightOf;
-            if (endToEnd === 'parent' || endToEnd === 0 || endToEnd === -1) {
-                rightAnchor = parentRight;
-            } else if (endToEnd) {
-                const t = this.findViewById(endToEnd);
-                const tb = t ? childBounds.get(t) : null;
-                if (tb) rightAnchor = tb.cr;
-            }
+                // Horizontal End / Right
+                const endToEnd = c.layout_constraintEnd_toEndOf ?? c.layout_constraintRight_toRightOf;
+                if (endToEnd === 'parent' || endToEnd === 0 || endToEnd === -1) {
+                    rightAnchor = parentRight;
+                } else if (endToEnd !== undefined && endToEnd !== null) {
+                    const t = this.findViewById(endToEnd);
+                    const tb = t ? childBounds.get(t) : null;
+                    if (tb) rightAnchor = tb.cr;
+                }
 
-            const endToStart = c.layout_constraintEnd_toStartOf || c.layout_constraintRight_toLeftOf;
-            if (endToStart) {
-                const t = this.findViewById(endToStart);
-                const tb = t ? childBounds.get(t) : null;
-                if (tb) rightAnchor = tb.cl;
-            }
+                const endToStart = c.layout_constraintEnd_toStartOf ?? c.layout_constraintRight_toLeftOf;
+                if (endToStart !== undefined && endToStart !== null) {
+                    const t = this.findViewById(endToStart);
+                    const tb = t ? childBounds.get(t) : null;
+                    if (tb) rightAnchor = tb.cl;
+                }
 
-            // Vertical Top
-            const topToTop = c.layout_constraintTop_toTopOf;
-            if (topToTop === 'parent' || topToTop === 0 || topToTop === -1) {
-                topAnchor = parentTop;
-            } else if (topToTop) {
-                const t = this.findViewById(topToTop);
-                const tb = t ? childBounds.get(t) : null;
-                if (tb) topAnchor = tb.ct;
-            }
+                // Vertical Top
+                const topToTop = c.layout_constraintTop_toTopOf;
+                if (topToTop === 'parent' || topToTop === 0 || topToTop === -1) {
+                    topAnchor = parentTop;
+                } else if (topToTop !== undefined && topToTop !== null) {
+                    const t = this.findViewById(topToTop);
+                    const tb = t ? childBounds.get(t) : null;
+                    if (tb) topAnchor = tb.ct;
+                }
 
-            const topToBottom = c.layout_constraintTop_toBottomOf;
-            if (topToBottom) {
-                const t = this.findViewById(topToBottom);
-                const tb = t ? childBounds.get(t) : null;
-                if (tb) topAnchor = tb.cb;
-            }
+                const topToBottom = c.layout_constraintTop_toBottomOf;
+                if (topToBottom !== undefined && topToBottom !== null) {
+                    const t = this.findViewById(topToBottom);
+                    const tb = t ? childBounds.get(t) : null;
+                    if (tb) topAnchor = tb.cb;
+                }
 
-            // Vertical Bottom
-            const bottomToBottom = c.layout_constraintBottom_toBottomOf;
-            if (bottomToBottom === 'parent' || bottomToBottom === 0 || bottomToBottom === -1) {
-                bottomAnchor = parentBottom;
-            } else if (bottomToBottom) {
-                const t = this.findViewById(bottomToBottom);
-                const tb = t ? childBounds.get(t) : null;
-                if (tb) bottomAnchor = tb.cb;
-            }
+                // Vertical Bottom
+                const bottomToBottom = c.layout_constraintBottom_toBottomOf;
+                if (bottomToBottom === 'parent' || bottomToBottom === 0 || bottomToBottom === -1) {
+                    bottomAnchor = parentBottom;
+                } else if (bottomToBottom !== undefined && bottomToBottom !== null) {
+                    const t = this.findViewById(bottomToBottom);
+                    const tb = t ? childBounds.get(t) : null;
+                    if (tb) bottomAnchor = tb.cb;
+                }
 
-            const bottomToTop = c.layout_constraintBottom_toTopOf;
-            if (bottomToTop) {
-                const t = this.findViewById(bottomToTop);
-                const tb = t ? childBounds.get(t) : null;
-                if (tb) bottomAnchor = tb.ct;
-            }
+                const bottomToTop = c.layout_constraintBottom_toTopOf;
+                if (bottomToTop !== undefined && bottomToTop !== null) {
+                    const t = this.findViewById(bottomToTop);
+                    const tb = t ? childBounds.get(t) : null;
+                    if (tb) bottomAnchor = tb.ct;
+                }
 
-            // Apply horizontal positions
-            if (leftAnchor !== null && rightAnchor !== null) {
-                const availW = Math.max(0, rightAnchor - leftAnchor - lp.marginLeft - lp.marginRight);
-                if (lp.width === 0 /* MATCH_CONSTRAINT */) {
+                // Apply horizontal positions
+                if (leftAnchor !== null && rightAnchor !== null) {
+                    const availW = Math.max(0, rightAnchor - leftAnchor - lp.marginLeft - lp.marginRight);
+                    if (lp.width === 0 /* MATCH_CONSTRAINT */) {
+                        bounds.cl = leftAnchor + lp.marginLeft;
+                        bounds.cr = Math.max(bounds.cl, rightAnchor - lp.marginRight);
+                        bounds.w = bounds.cr - bounds.cl;
+                    } else {
+                        const bias = (typeof c.layout_constraintHorizontal_bias === 'number' && !isNaN(c.layout_constraintHorizontal_bias)) ? c.layout_constraintHorizontal_bias : 0.5;
+                        bounds.cl = leftAnchor + lp.marginLeft + Math.round((availW - bounds.w) * bias);
+                        bounds.cr = bounds.cl + bounds.w;
+                    }
+                } else if (leftAnchor !== null) {
                     bounds.cl = leftAnchor + lp.marginLeft;
-                    bounds.cr = rightAnchor - lp.marginRight;
-                } else {
-                    const bias = typeof c.layout_constraintHorizontal_bias === 'number' ? c.layout_constraintHorizontal_bias : 0.5;
-                    bounds.cl = leftAnchor + lp.marginLeft + Math.round((availW - bounds.w) * bias);
                     bounds.cr = bounds.cl + bounds.w;
+                } else if (rightAnchor !== null) {
+                    bounds.cr = rightAnchor - lp.marginRight;
+                    bounds.cl = bounds.cr - bounds.w;
                 }
-            } else if (leftAnchor !== null) {
-                bounds.cl = leftAnchor + lp.marginLeft;
-                bounds.cr = bounds.cl + bounds.w;
-            } else if (rightAnchor !== null) {
-                bounds.cr = rightAnchor - lp.marginRight;
-                bounds.cl = bounds.cr - bounds.w;
-            }
 
-            // Apply vertical positions
-            if (topAnchor !== null && bottomAnchor !== null) {
-                const availH = Math.max(0, bottomAnchor - topAnchor - lp.marginTop - lp.marginBottom);
-                if (lp.height === 0 /* MATCH_CONSTRAINT */) {
+                // Apply vertical positions
+                if (topAnchor !== null && bottomAnchor !== null) {
+                    const availH = Math.max(0, bottomAnchor - topAnchor - lp.marginTop - lp.marginBottom);
+                    if (lp.height === 0 /* MATCH_CONSTRAINT */) {
+                        bounds.ct = topAnchor + lp.marginTop;
+                        bounds.cb = Math.max(bounds.ct, bottomAnchor - lp.marginBottom);
+                        bounds.h = bounds.cb - bounds.ct;
+                    } else {
+                        const bias = (typeof c.layout_constraintVertical_bias === 'number' && !isNaN(c.layout_constraintVertical_bias)) ? c.layout_constraintVertical_bias : 0.5;
+                        bounds.ct = topAnchor + lp.marginTop + Math.round((availH - bounds.h) * bias);
+                        bounds.cb = bounds.ct + bounds.h;
+                    }
+                } else if (topAnchor !== null) {
                     bounds.ct = topAnchor + lp.marginTop;
-                    bounds.cb = bottomAnchor - lp.marginBottom;
-                } else {
-                    const bias = typeof c.layout_constraintVertical_bias === 'number' ? c.layout_constraintVertical_bias : 0.5;
-                    bounds.ct = topAnchor + lp.marginTop + Math.round((availH - bounds.h) * bias);
                     bounds.cb = bounds.ct + bounds.h;
+                } else if (bottomAnchor !== null) {
+                    bounds.cb = bottomAnchor - lp.marginBottom;
+                    bounds.ct = bounds.cb - bounds.h;
                 }
-            } else if (topAnchor !== null) {
-                bounds.ct = topAnchor + lp.marginTop;
-                bounds.cb = bounds.ct + bounds.h;
-            } else if (bottomAnchor !== null) {
-                bounds.cb = bottomAnchor - lp.marginBottom;
-                bounds.ct = bounds.cb - bounds.h;
+
+                if (bounds.cr < bounds.cl) bounds.cr = bounds.cl;
+                if (bounds.cb < bounds.ct) bounds.cb = bounds.ct;
             }
         }
 
@@ -1542,6 +1769,163 @@ export const SCALE_TYPE_CENTER_CROP = 6;
 export const SCALE_TYPE_CENTER_INSIDE = 7;
 
 /**
+ * VectorDrawable: Android AXML Vector (<vector>) path renderer.
+ */
+export class VectorDrawable {
+    constructor(width = 24, height = 24, viewportWidth = 24, viewportHeight = 24, paths = [], tint = null) {
+        this.width = width;
+        this.height = height;
+        this.viewportWidth = viewportWidth || width || 24;
+        this.viewportHeight = viewportHeight || height || 24;
+        this.paths = paths;
+        this.tint = tint;
+    }
+
+    static fromXmlAst(node, resResolver = null) {
+        if (!node || node.tag !== 'vector') return null;
+        const attrs = node.attrs || {};
+        const rawAttrs = node.rawAttrs || [];
+
+        let width = 24;
+        let height = 24;
+        let viewportWidth = 24;
+        let viewportHeight = 24;
+        let tint = null;
+
+        for (const raw of rawAttrs) {
+            const { name, dataType, data } = raw;
+            if (name === 'width' || name === 'layout_width') width = TypedValue.complexToDimension(data) || 24;
+            else if (name === 'height' || name === 'layout_height') height = TypedValue.complexToDimension(data) || 24;
+            else if (name === 'viewportWidth') viewportWidth = TypedValue.decodeValue(dataType, data) || data || 24;
+            else if (name === 'viewportHeight') viewportHeight = TypedValue.decodeValue(dataType, data) || data || 24;
+            else if (name === 'tint') tint = resResolver ? resResolver.resolveColor(data) : TypedValue.decodeColor(data, dataType);
+        }
+
+        if (attrs.viewportWidth) viewportWidth = parseFloat(attrs.viewportWidth) || viewportWidth;
+        if (attrs.viewportHeight) viewportHeight = parseFloat(attrs.viewportHeight) || viewportHeight;
+        if (attrs.width) width = parseFloat(attrs.width) || width;
+        if (attrs.height) height = parseFloat(attrs.height) || height;
+        if (attrs.tint) tint = attrs.tint;
+
+        const paths = [];
+        const extractPaths = (parent) => {
+            if (!parent || !parent.children) return;
+            for (const child of parent.children) {
+                if (child.tag === 'path') {
+                    let pathData = '';
+                    let fillColor = null;
+                    let strokeColor = null;
+                    let strokeWidth = 0;
+                    let fillAlpha = 1.0;
+                    let strokeAlpha = 1.0;
+
+                    const cAttrs = child.attrs || {};
+                    const cRaw = child.rawAttrs || [];
+
+                    for (const r of cRaw) {
+                        const { name, dataType, data, rawVal } = r;
+                        if (name === 'pathData') {
+                            pathData = rawVal || (resResolver && resResolver.globalStrings ? resResolver.globalStrings[data] : '');
+                        } else if (name === 'fillColor') {
+                            fillColor = resResolver ? resResolver.resolveColor(data) : TypedValue.decodeColor(data, dataType);
+                        } else if (name === 'strokeColor') {
+                            strokeColor = resResolver ? resResolver.resolveColor(data) : TypedValue.decodeColor(data, dataType);
+                        } else if (name === 'strokeWidth') {
+                            strokeWidth = TypedValue.decodeValue(dataType, data) || data;
+                        } else if (name === 'fillAlpha') {
+                            fillAlpha = TypedValue.decodeValue(dataType, data) || 1.0;
+                        } else if (name === 'strokeAlpha') {
+                            strokeAlpha = TypedValue.decodeValue(dataType, data) || 1.0;
+                        }
+                    }
+
+                    if (!pathData && cAttrs.pathData) pathData = cAttrs.pathData;
+                    if (!fillColor && cAttrs.fillColor) fillColor = cAttrs.fillColor;
+                    if (!strokeColor && cAttrs.strokeColor) strokeColor = cAttrs.strokeColor;
+
+                    if (pathData) {
+                        paths.push({ pathData, fillColor, strokeColor, strokeWidth, fillAlpha, strokeAlpha });
+                    }
+                } else if (child.children) {
+                    extractPaths(child);
+                }
+            }
+        };
+
+        extractPaths(node);
+        return new VectorDrawable(width, height, viewportWidth, viewportHeight, paths, tint);
+    }
+
+    draw(ctx, x, y, targetWidth, targetHeight) {
+        if (!ctx || this.paths.length === 0) return;
+        ctx.save?.();
+        ctx.translate?.(x, y);
+
+        const sx = targetWidth / (this.viewportWidth || 1);
+        const sy = targetHeight / (this.viewportHeight || 1);
+        ctx.scale?.(sx, sy);
+
+        for (const p of this.paths) {
+            if (!p.pathData) continue;
+            try {
+                let pathObj = null;
+                if (typeof Path2D !== 'undefined') {
+                    try {
+                        pathObj = new Path2D(p.pathData);
+                    } catch (e) {}
+                }
+                if (!pathObj && ctx.beginPath) {
+                    ctx.beginPath();
+                    if (ctx.rect) ctx.rect(0, 0, this.viewportWidth, this.viewportHeight);
+                }
+
+                const fill = this.tint || p.fillColor;
+                if (fill && fill !== 'none') {
+                    ctx.fillStyle = fill;
+                    if (p.fillAlpha !== undefined && p.fillAlpha < 1.0 && ctx.globalAlpha !== undefined) {
+                        const oldAlpha = ctx.globalAlpha;
+                        ctx.globalAlpha = oldAlpha * p.fillAlpha;
+                        if (pathObj && ctx.fill) ctx.fill(pathObj);
+                        else if (ctx.fill) ctx.fill();
+                        ctx.globalAlpha = oldAlpha;
+                    } else {
+                        if (pathObj && ctx.fill) ctx.fill(pathObj);
+                        else if (ctx.fill) ctx.fill();
+                    }
+                }
+                if (p.strokeColor && p.strokeWidth > 0) {
+                    ctx.strokeStyle = p.strokeColor;
+                    ctx.lineWidth = p.strokeWidth;
+                    if (pathObj && ctx.stroke) ctx.stroke(pathObj);
+                    else if (ctx.stroke) ctx.stroke();
+                }
+            } catch (err) {}
+        }
+        ctx.restore?.();
+    }
+}
+
+/**
+ * BitmapDrawable: PNG / WebP / JPEG image bitmap renderer.
+ */
+export class BitmapDrawable {
+    constructor(bitmapOrBuffer, width = 48, height = 48) {
+        this.bitmap = bitmapOrBuffer;
+        this.width = width;
+        this.height = height;
+    }
+
+    draw(ctx, x, y, targetWidth, targetHeight) {
+        if (!ctx || !this.bitmap) return;
+        if (ctx.drawImage) {
+            try {
+                ctx.drawImage(this.bitmap, x, y, targetWidth, targetHeight);
+            } catch (e) {}
+        }
+    }
+}
+
+/**
  * ImageView: Renders drawable assets, vector paths, and bitmap resources.
  */
 export class ImageView extends View {
@@ -1565,12 +1949,28 @@ export class ImageView extends View {
         this.src = src;
     }
 
+    setDrawable(drawable) {
+        this.drawable = drawable;
+        if (drawable) {
+            if (typeof drawable.width === 'number' && drawable.width > 0) {
+                this.intrinsicWidth = drawable.width;
+            }
+            if (typeof drawable.height === 'number' && drawable.height > 0) {
+                this.intrinsicHeight = drawable.height;
+            }
+        }
+    }
+
+    setImageBitmap(bitmap) {
+        this.setDrawable(new BitmapDrawable(bitmap));
+    }
+
     onMeasure(widthMeasureSpec, heightMeasureSpec) {
         let w = this.intrinsicWidth + this.paddingLeft + this.paddingRight;
         let h = this.intrinsicHeight + this.paddingTop + this.paddingBottom;
 
-        const measuredW = View.getDefaultSize(Math.max(w, this.minWidth), widthMeasureSpec);
-        const measuredH = View.getDefaultSize(Math.max(h, this.minHeight), heightMeasureSpec);
+        const measuredW = View.resolveSize(Math.max(w, this.minWidth), widthMeasureSpec);
+        const measuredH = View.resolveSize(Math.max(h, this.minHeight), heightMeasureSpec);
         this.setMeasuredDimension(measuredW, measuredH);
     }
 
@@ -1581,11 +1981,11 @@ export class ImageView extends View {
         const x = this.left + this.paddingLeft;
         const y = this.top + this.paddingTop;
 
-        if (this.tint) {
+        if (this.drawable && typeof this.drawable.draw === 'function') {
+            this.drawable.draw(ctx, x, y, w, h);
+        } else if (this.tint) {
             ctx.fillStyle = this.tint;
             ctx.fillRect(x, y, w, h);
-        } else if (this.drawable && typeof this.drawable.draw === 'function') {
-            this.drawable.draw(ctx, x, y, w, h);
         } else {
             // Placeholder drawable box
             ctx.fillStyle = 'rgba(255, 255, 255, 0.15)';
@@ -1742,7 +2142,17 @@ export const ANDROID_ATTR_IDS = {
     0x010103b3: 'layout_marginStart',
     0x010103b4: 'layout_marginEnd',
     0x010103b7: 'paddingStart',
-    0x010103b8: 'paddingEnd'
+    0x010103b8: 'paddingEnd',
+    0x01010155: 'height',
+    0x01010159: 'width',
+    0x01010402: 'viewportWidth',
+    0x01010403: 'viewportHeight',
+    0x01010404: 'fillColor',
+    0x01010405: 'pathData',
+    0x01010406: 'strokeColor',
+    0x01010407: 'strokeWidth',
+    0x0101040a: 'strokeAlpha',
+    0x0101040b: 'fillAlpha'
 };
 
 /**
@@ -1871,7 +2281,7 @@ export class LayoutInflater {
             return new View();
         }
 
-        const root = LayoutInflater._inflateNode(ast, resourceResolver);
+        const root = LayoutInflater._inflateNode(ast, resourceResolver) || new View();
         if (parent && root && attachToRoot) {
             parent.addView(root);
         }
@@ -2134,6 +2544,32 @@ export class LayoutInflater {
                 view.backgroundColor = view.background;
                 break;
 
+            case 'src':
+                if (view instanceof ImageView) {
+                    if (dataType === TypedValue.TYPE_REFERENCE && resResolver) {
+                        view.setImageResource(data);
+                        if (typeof resResolver.resolveDrawable === 'function') {
+                            const d = resResolver.resolveDrawable(data);
+                            if (d) {
+                                if (d.type === 'color' && d.color) {
+                                    view.tint = d.color;
+                                } else if (d.data && d.type === 'vector') {
+                                    const ast = parseAxmlLayoutBuffer(d.data);
+                                    if (ast) {
+                                        const vd = VectorDrawable.fromXmlAst(ast, resResolver);
+                                        if (vd) view.setDrawable(vd);
+                                    }
+                                }
+                            }
+                        }
+                    } else if (rawVal) {
+                        view.src = rawVal;
+                    } else {
+                        view.src = data;
+                    }
+                }
+                break;
+
             case 'tint':
                 if (view instanceof ImageView) view.tint = resolveColorVal();
                 break;
@@ -2160,7 +2596,15 @@ export class LayoutInflater {
 
             default:
                 // ConstraintLayout and RelativeLayout rules
-                if (name.startsWith('layout_constraint')) {
+                if (name === 'layout_constraintHorizontal_bias' || name === 'layout_constraintVertical_bias') {
+                    if (dataType === TypedValue.TYPE_FLOAT) {
+                        lp.constraints[name] = TypedValue.decodeValue(dataType, data);
+                    } else if (typeof rawVal === 'string' && !isNaN(parseFloat(rawVal))) {
+                        lp.constraints[name] = parseFloat(rawVal);
+                    } else if (typeof data === 'number') {
+                        lp.constraints[name] = TypedValue.complexToFloat(data);
+                    }
+                } else if (name.startsWith('layout_constraint')) {
                     lp.constraints[name] = data >>> 0;
                 } else if (name.startsWith('layout_align') || name.startsWith('layout_to') || name.startsWith('layout_above') || name.startsWith('layout_below') || name.startsWith('layout_center')) {
                     lp.alignRules[name] = data >>> 0;
@@ -2201,6 +2645,8 @@ if (typeof window !== 'undefined') {
     window.TextView = TextView;
     window.EditText = EditText;
     window.ImageView = ImageView;
+    window.VectorDrawable = VectorDrawable;
+    window.BitmapDrawable = BitmapDrawable;
     window.Button = Button;
     window.LayoutInflater = LayoutInflater;
 }

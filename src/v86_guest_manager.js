@@ -63,7 +63,7 @@ export class V86GuestManager {
             bootMode: 'direct',
             memorySizeMb: 512,
             vgaMemorySizeMb: 16,
-            cmdline: 'console=ttyS0 earlyprintk=serial,ttyS0,115200 root=/dev/ram0 rdinit=/init panic=1 loglevel=8 androidboot.hardware=android_x86 androidboot.selinux=permissive binder.debug_mask=0x07',
+            cmdline: 'console=tty0 console=ttyS0 earlyprintk=serial,ttyS0,115200 root=/dev/ram0 rdinit=/init nosmp maxcpus=1 noapic nolapic panic=1 loglevel=8 androidboot.hardware=android_x86 androidboot.selinux=permissive binder.debug_mask=0x07 video=virtio-gpu',
             screenContainer: null,
             canvas: null,
             autostart: false,
@@ -82,7 +82,7 @@ export class V86GuestManager {
         this.milestones = new Set();
         this.serialLogs = [];
         this.allocatedMemory = null;
-        this.gpuDevice = null;
+        this.gpuDevice = this.config.gpuDevice || null;
         this.gpuFeatures = [];
 
         this.stats = {
@@ -108,6 +108,17 @@ export class V86GuestManager {
 
         if (this.config.autostart) {
             this.start();
+        }
+    }
+
+    /**
+     * Bind VirtIO GPU device to guest manager and register if emulator active
+     * @param {Object} gpuDevice
+     */
+    setGpuDevice(gpuDevice) {
+        this.gpuDevice = gpuDevice;
+        if (this.emulator && gpuDevice && typeof gpuDevice.registerWithV86 === 'function') {
+            gpuDevice.registerWithV86(this.emulator);
         }
     }
 
@@ -248,7 +259,7 @@ export class V86GuestManager {
                             }
                             v86Options.bzimage = { buffer: kernelBuf };
                             v86Options.initrd = { buffer: initrdBuf };
-                            v86Options.cmdline = this.config.cmdline || 'console=ttyS0 earlyprintk=serial,ttyS0,115200 root=/dev/ram0 rdinit=/init panic=1 loglevel=8 androidboot.hardware=android_x86 androidboot.selinux=permissive binder.debug_mask=0x07';
+                            v86Options.cmdline = this.config.cmdline || 'console=tty0 console=ttyS0 earlyprintk=serial,ttyS0,115200 root=/dev/ram0 rdinit=/init panic=1 loglevel=8 androidboot.hardware=android_x86 androidboot.selinux=permissive binder.debug_mask=0x07 video=virtio-gpu';
                         } catch (err) {
                             if (isBrowser) throw err;
                         }
@@ -258,6 +269,16 @@ export class V86GuestManager {
 
                     this.emulator = new V86Class(v86Options);
                     this.attachSerialListeners();
+                    if (this.gpuDevice && typeof this.gpuDevice.registerWithV86 === 'function') {
+                        this.gpuDevice.registerWithV86(this.emulator);
+                    }
+                    if (typeof this.emulator.add_listener === 'function') {
+                        this.emulator.add_listener('emulator-ready', () => {
+                            if (this.gpuDevice && typeof this.gpuDevice.registerWithV86 === 'function') {
+                                this.gpuDevice.registerWithV86(this.emulator);
+                            }
+                        });
+                    }
                 } else if (this.config.mockMode === true) {
                     this.setState(VM_STATES.BOOTING);
                     this.recordMilestone(BOOT_MILESTONES.BIOS_POST);

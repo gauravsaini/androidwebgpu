@@ -107,8 +107,8 @@ EGLAPI EGLSurface EGLAPIENTRY eglCreateWindowSurface(EGLDisplay dpy, EGLConfig c
                                                     const EGLint *attrib_list) {
     egl_display_t* d = (egl_display_t*)dpy;
     egl_surface_t* surf = (egl_surface_t*)malloc(sizeof(egl_surface_t));
-    surf->width = 1280;
-    surf->height = 720;
+    surf->width = 720;
+    surf->height = 1440;
     surf->size = surf->width * surf->height * 4;
     surf->bo_handle = 0;
     surf->res_id = 1;
@@ -227,9 +227,9 @@ GL_APICALL void GL_APIENTRY glClear(GLbitfield mask) {
         .flags = 0,
         .size = sizeof(cmd),
         .command = (uintptr_t)cmd,
-        .fence_fd = -1,
-        .num_bo_handles = 0,
         .bo_handles = 0,
+        .num_bo_handles = 0,
+        .fence_fd = -1,
     };
     ioctl(g_current_ctx->drm_fd, DRM_IOCTL_VIRTGPU_EXECBUFFER, &exec);
 }
@@ -249,9 +249,9 @@ GL_APICALL void GL_APIENTRY glDrawArrays(GLenum mode, GLint first, GLsizei count
         .flags = 0,
         .size = sizeof(cmd),
         .command = (uintptr_t)cmd,
-        .fence_fd = -1,
-        .num_bo_handles = 0,
         .bo_handles = 0,
+        .num_bo_handles = 0,
+        .fence_fd = -1,
     };
     ioctl(g_current_ctx->drm_fd, DRM_IOCTL_VIRTGPU_EXECBUFFER, &exec);
 }
@@ -272,9 +272,9 @@ GL_APICALL void GL_APIENTRY glViewport(GLint x, GLint y, GLsizei width, GLsizei 
         .flags = 0,
         .size = sizeof(cmd),
         .command = (uintptr_t)cmd,
-        .fence_fd = -1,
-        .num_bo_handles = 0,
         .bo_handles = 0,
+        .num_bo_handles = 0,
+        .fence_fd = -1,
     };
     ioctl(g_current_ctx->drm_fd, DRM_IOCTL_VIRTGPU_EXECBUFFER, &exec);
 }
@@ -299,9 +299,9 @@ EGLAPI EGLBoolean EGLAPIENTRY eglSwapBuffers(EGLDisplay dpy, EGLSurface surface)
             .flags = VIRTGPU_EXECBUF_FENCE,
             .size = 22 * sizeof(uint32_t),
             .command = (uintptr_t)cmds,
-            .fence_fd = -1,
-            .num_bo_handles = (s->bo_handle > 0) ? 1u : 0u,
             .bo_handles = (uintptr_t)bo_handles,
+            .num_bo_handles = (s->bo_handle > 0) ? 1u : 0u,
+            .fence_fd = -1,
         };
 
         int ret = ioctl(d->drm_fd, DRM_IOCTL_VIRTGPU_EXECBUFFER, &exec);

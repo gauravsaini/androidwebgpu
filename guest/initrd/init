@@ -22,6 +22,26 @@ ln -sf /dev/binderfs/hwbinder /dev/hwbinder 2>/dev/null || true
 ln -sf /dev/binderfs/vndbinder /dev/vndbinder 2>/dev/null || true
 chmod 0666 /dev/binder /dev/binderfs/binder /dev/binderfs/hwbinder /dev/binderfs/vndbinder 2>/dev/null || true
 
+# 2b. Ensure DRM / Framebuffer device nodes exist
+mkdir -p /dev/dri 2>/dev/null || true
+if [ ! -c /dev/dri/card0 ]; then
+    mknod /dev/dri/card0 c 226 0 2>/dev/null || true
+fi
+if [ ! -c /dev/dri/renderD128 ]; then
+    mknod /dev/dri/renderD128 c 226 128 2>/dev/null || true
+fi
+if [ ! -c /dev/fb0 ]; then
+    mknod /dev/fb0 c 29 0 2>/dev/null || true
+fi
+chmod 0666 /dev/dri/card0 /dev/dri/renderD128 /dev/fb0 2>/dev/null || true
+
+# 2c. Stage F-Droid APK into /data/app/org.fdroid.fdroid/base.apk
+mkdir -p /data/app/org.fdroid.fdroid 2>/dev/null || true
+if [ -f /system/app/org.fdroid.fdroid/base.apk ]; then
+    cp /system/app/org.fdroid.fdroid/base.apk /data/app/org.fdroid.fdroid/base.apk 2>/dev/null || true
+    echo "[init] staged F-Droid APK at /data/app/org.fdroid.fdroid/base.apk" > /dev/ttyS0 2>/dev/null || true
+fi
+
 while [ ! -e /dev/binder ]; do
     sleep 0.05 2>/dev/null || sleep 1
     break
@@ -43,6 +63,12 @@ else
     echo "[init] servicemanager binary standby" > /dev/ttyS0 2>/dev/null || true
 fi
 
+# 3b. Start SurfaceFlinger (Linked against egl_webgpu.so, gralloc.virtgpu.so, hwcomposer.virtgpu.so)
+if [ -x /system/bin/surfaceflinger ]; then
+    /system/bin/surfaceflinger &
+    echo "[init] surfaceflinger started (DRM /dev/dri/card0 linkage)" > /dev/ttyS0 2>/dev/null || true
+fi
+
 # 4. Start Native Rust System Services
 if [ -x /system/bin/pms_rs ]; then /system/bin/pms_rs & sleep 0.05 2>/dev/null || true; fi
 if [ -x /system/bin/ams_rs ]; then /system/bin/ams_rs & sleep 0.05 2>/dev/null || true; fi
@@ -53,6 +79,15 @@ if [ -x /system/bin/inputflinger_rs ]; then /system/bin/inputflinger_rs & sleep 
 if [ -x /system/bin/sensors_hal_virtual ]; then /system/bin/sensors_hal_virtual & fi
 if [ -x /system/bin/audio_hal_virtual ]; then /system/bin/audio_hal_virtual & fi
 if [ -x /system/bin/camera_hal_virtual ]; then /system/bin/camera_hal_virtual & fi
+
+# 5b. Start Zygote Daemon (boot.art, framework.jar, /dev/socket/zygote)
+if [ -x /system/bin/app_process ]; then
+    /system/bin/app_process &
+    echo "[init] zygote app_process started" > /dev/ttyS0 2>/dev/null || true
+elif [ -x /system/bin/zygote ]; then
+    /system/bin/zygote &
+    echo "[init] zygote daemon started" > /dev/ttyS0 2>/dev/null || true
+fi
 
 echo "[init] native Rust services and virtual HALs started" > /dev/ttyS0 2>/dev/null || true
 echo "[init] zygote socket listening on /dev/socket/zygote" > /dev/ttyS0 2>/dev/null || true

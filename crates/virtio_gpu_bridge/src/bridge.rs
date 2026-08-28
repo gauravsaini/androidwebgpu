@@ -270,8 +270,8 @@ impl VirtioGpuBridge {
                 resp.pmodes[0].r = VirtioGpuRect {
                     x: 0,
                     y: 0,
-                    width: 1280,
-                    height: 720,
+                    width: 720,
+                    height: 1440,
                 };
                 BinaryWireParser::encode_response(&resp)
             }

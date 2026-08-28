@@ -65,7 +65,7 @@ int main(int argc, char** argv) {
     printf("[test_triangle] Rendering triangle with glClearColor and glDrawArrays via SUBMIT_3D...\n");
 
     // 1. Set Viewport (Opcode 0x04)
-    glViewport(0, 0, 1280, 720);
+    glViewport(0, 0, 720, 1440);
 
     // 2. Clear color to blue (0.2, 0.3, 0.8, 1.0) and Clear (Opcode 0x01)
     glClearColor(0.2f, 0.3f, 0.8f, 1.0f);

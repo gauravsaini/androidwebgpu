@@ -218,6 +218,13 @@ export class LogcatBuffer {
             } catch (_) {}
         }
 
+        if (typeof console !== 'undefined') {
+            const consoleMethod = (safePrio === 'E') ? (console.error || console.log) 
+                : ((safePrio === 'W') ? (console.warn || console.log) 
+                : ((safePrio === 'D' || safePrio === 'V') ? (console.debug || console.log) : (console.info || console.log)));
+            consoleMethod(`[${safeTag}] ${safeMsg}`);
+        }
+
         return entry;
     }
 

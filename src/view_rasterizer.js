@@ -56,8 +56,8 @@ export class ViewRootImpl {
         this.rootView = null;
         this.canvas = canvas;
         this.ctx = canvas ? canvas.getContext('2d') : null;
-        this.width = canvas ? canvas.width : 1280;
-        this.height = canvas ? canvas.height : 720;
+        this.width = canvas ? canvas.width : 720;
+        this.height = canvas ? canvas.height : 1440;
         this.isDirty = true;
     }
 
@@ -157,11 +157,354 @@ export class ActivityBackstack {
 }
 
 // -----------------------------------------------------------------------------
+export function parseCssColor(str) {
+    if (!str || typeof str !== 'string') return [0, 0, 0, 255];
+    str = str.trim();
+    if (str.startsWith('#')) {
+        const hex = str.slice(1);
+        if (hex.length === 3) {
+            return [
+                parseInt(hex[0] + hex[0], 16),
+                parseInt(hex[1] + hex[1], 16),
+                parseInt(hex[2] + hex[2], 16),
+                255
+            ];
+        } else if (hex.length === 4) {
+            return [
+                parseInt(hex[0] + hex[0], 16),
+                parseInt(hex[1] + hex[1], 16),
+                parseInt(hex[2] + hex[2], 16),
+                parseInt(hex[3] + hex[3], 16)
+            ];
+        } else if (hex.length === 6) {
+            return [
+                parseInt(hex.slice(0, 2), 16),
+                parseInt(hex.slice(2, 4), 16),
+                parseInt(hex.slice(4, 6), 16),
+                255
+            ];
+        } else if (hex.length === 8) {
+            return [
+                parseInt(hex.slice(0, 2), 16),
+                parseInt(hex.slice(2, 4), 16),
+                parseInt(hex.slice(4, 6), 16),
+                parseInt(hex.slice(6, 8), 16)
+            ];
+        }
+    } else if (str.startsWith('rgb')) {
+        const m = str.match(/rgba?\s*\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)(?:\s*,\s*([\d.]+))?\s*\)/);
+        if (m) {
+            const r = Math.min(255, parseInt(m[1], 10));
+            const g = Math.min(255, parseInt(m[2], 10));
+            const b = Math.min(255, parseInt(m[3], 10));
+            const a = m[4] !== undefined ? Math.min(255, Math.max(0, Math.round(parseFloat(m[4]) * 255))) : 255;
+            return [r, g, b, a];
+        }
+    } else if (str === 'transparent') {
+        return [0, 0, 0, 0];
+    } else if (str === 'white') {
+        return [255, 255, 255, 255];
+    } else if (str === 'black') {
+        return [0, 0, 0, 255];
+    }
+    return [0, 0, 0, 255];
+}
+
+export const FONT_5X7 = new Uint8Array([
+    0x00,0x00,0x00,0x00,0x00, 0x00,0x00,0x5f,0x00,0x00, 0x00,0x07,0x00,0x07,0x00, 0x14,0x7f,0x14,0x7f,0x14,
+    0x24,0x2a,0x7f,0x2a,0x12, 0x23,0x13,0x08,0x64,0x62, 0x36,0x49,0x55,0x22,0x50, 0x00,0x05,0x03,0x00,0x00,
+    0x00,0x1c,0x22,0x41,0x00, 0x00,0x41,0x22,0x1c,0x00, 0x14,0x08,0x3e,0x08,0x14, 0x08,0x08,0x3e,0x08,0x08,
+    0x00,0x50,0x30,0x00,0x00, 0x08,0x08,0x08,0x08,0x08, 0x00,0x60,0x60,0x00,0x00, 0x20,0x10,0x08,0x04,0x02,
+    0x3e,0x51,0x49,0x45,0x3e, 0x00,0x42,0x7f,0x40,0x00, 0x42,0x61,0x51,0x49,0x46, 0x21,0x41,0x45,0x4b,0x31,
+    0x18,0x14,0x12,0x7f,0x10, 0x27,0x45,0x45,0x45,0x39, 0x3c,0x4a,0x49,0x49,0x30, 0x01,0x71,0x09,0x05,0x03,
+    0x36,0x49,0x49,0x49,0x36, 0x06,0x49,0x49,0x29,0x1e, 0x00,0x36,0x36,0x00,0x00, 0x00,0x56,0x36,0x00,0x00,
+    0x08,0x14,0x22,0x41,0x00, 0x14,0x14,0x14,0x14,0x14, 0x00,0x41,0x22,0x14,0x08, 0x02,0x01,0x51,0x09,0x06,
+    0x32,0x49,0x79,0x41,0x3e, 0x7e,0x11,0x11,0x11,0x7e, 0x7f,0x49,0x49,0x49,0x36, 0x3e,0x41,0x41,0x41,0x22,
+    0x7f,0x41,0x41,0x22,0x1c, 0x7f,0x49,0x49,0x49,0x41, 0x7f,0x09,0x09,0x09,0x01, 0x3e,0x41,0x49,0x49,0x7a,
+    0x7f,0x08,0x08,0x08,0x7f, 0x00,0x41,0x7f,0x41,0x00, 0x20,0x40,0x41,0x3f,0x01, 0x7f,0x08,0x14,0x22,0x41,
+    0x7f,0x40,0x40,0x40,0x40, 0x7f,0x02,0x0c,0x02,0x7f, 0x7f,0x04,0x08,0x10,0x7f, 0x3e,0x41,0x41,0x41,0x3e,
+    0x7f,0x09,0x09,0x09,0x06, 0x3e,0x41,0x51,0x21,0x5e, 0x7f,0x09,0x19,0x29,0x46, 0x46,0x49,0x49,0x49,0x31,
+    0x01,0x01,0x7f,0x01,0x01, 0x3f,0x40,0x40,0x40,0x3f, 0x1f,0x20,0x40,0x20,0x1f, 0x3f,0x40,0x38,0x40,0x3f,
+    0x63,0x14,0x08,0x14,0x63, 0x07,0x08,0x70,0x08,0x07, 0x61,0x51,0x49,0x45,0x43, 0x00,0x7f,0x41,0x41,0x00,
+    0x02,0x04,0x08,0x10,0x20, 0x00,0x41,0x41,0x7f,0x00, 0x04,0x02,0x01,0x02,0x04, 0x40,0x40,0x40,0x40,0x40,
+    0x00,0x01,0x02,0x04,0x00, 0x20,0x54,0x54,0x54,0x78, 0x7f,0x48,0x44,0x44,0x38, 0x38,0x44,0x44,0x44,0x20,
+    0x38,0x44,0x44,0x48,0x7f, 0x38,0x54,0x54,0x54,0x18, 0x08,0x7e,0x09,0x01,0x02, 0x0c,0x52,0x52,0x52,0x3e,
+    0x7f,0x08,0x04,0x04,0x78, 0x00,0x44,0x7d,0x40,0x00, 0x20,0x40,0x44,0x3d,0x00, 0x7f,0x10,0x28,0x44,0x00,
+    0x00,0x41,0x7f,0x40,0x00, 0x7c,0x04,0x18,0x04,0x78, 0x7c,0x08,0x04,0x04,0x78, 0x38,0x44,0x44,0x44,0x38,
+    0x7c,0x14,0x14,0x14,0x08, 0x08,0x14,0x14,0x18,0x7c, 0x7c,0x08,0x04,0x04,0x08, 0x48,0x54,0x54,0x54,0x20,
+    0x04,0x3f,0x44,0x40,0x20, 0x3c,0x40,0x40,0x20,0x7c, 0x1c,0x20,0x40,0x20,0x1c, 0x3c,0x40,0x30,0x40,0x3c,
+    0x44,0x28,0x10,0x28,0x44, 0x0c,0x50,0x50,0x50,0x3c, 0x44,0x64,0x54,0x4c, 0x44, 0x00,0x08,0x36,0x41,0x00,
+    0x00,0x00,0x7f,0x00,0x00, 0x00,0x41,0x36,0x08,0x00, 0x08,0x08,0x2a,0x10,0x10
+]);
+
+export class Software2DContext {
+    constructor(rgbaData, width, height) {
+        this.rgbaData = rgbaData;
+        this.width = width;
+        this.height = height;
+        this.fillStyle = '#000000';
+        this.strokeStyle = '#000000';
+        this.font = '14px sans-serif';
+        this.textAlign = 'start';
+        this.textBaseline = 'middle';
+        this.globalAlpha = 1.0;
+        this.transX = 0;
+        this.transY = 0;
+        this.clipRect = null;
+        this.currentPathRect = null;
+        this.stateStack = [];
+    }
+
+    save() {
+        this.stateStack.push({
+            fillStyle: this.fillStyle,
+            strokeStyle: this.strokeStyle,
+            font: this.font,
+            textAlign: this.textAlign,
+            textBaseline: this.textBaseline,
+            globalAlpha: this.globalAlpha,
+            transX: this.transX,
+            transY: this.transY,
+            clipRect: this.clipRect ? [...this.clipRect] : null
+        });
+    }
+
+    restore() {
+        if (this.stateStack.length === 0) return;
+        const s = this.stateStack.pop();
+        this.fillStyle = s.fillStyle;
+        this.strokeStyle = s.strokeStyle;
+        this.font = s.font;
+        this.textAlign = s.textAlign;
+        this.textBaseline = s.textBaseline;
+        this.globalAlpha = s.globalAlpha;
+        this.transX = s.transX;
+        this.transY = s.transY;
+        this.clipRect = s.clipRect;
+    }
+
+    translate(x, y) {
+        this.transX += x;
+        this.transY += y;
+    }
+
+    beginPath() {
+        this.currentPathRect = null;
+    }
+
+    closePath() {}
+
+    rect(x, y, w, h) {
+        this.currentPathRect = [
+            x + this.transX,
+            y + this.transY,
+            x + this.transX + w,
+            y + this.transY + h
+        ];
+    }
+
+    roundRect(x, y, w, h, r = 0) {
+        this.rect(x, y, w, h);
+    }
+
+    clip() {
+        if (!this.currentPathRect) return;
+        if (!this.clipRect) {
+            this.clipRect = [...this.currentPathRect];
+        } else {
+            this.clipRect = [
+                Math.max(this.clipRect[0], this.currentPathRect[0]),
+                Math.max(this.clipRect[1], this.currentPathRect[1]),
+                Math.min(this.clipRect[2], this.currentPathRect[2]),
+                Math.min(this.clipRect[3], this.currentPathRect[3])
+            ];
+        }
+    }
+
+    fill() {
+        if (this.currentPathRect) {
+            const [x0, y0, x1, y1] = this.currentPathRect;
+            this.fillRect(x0 - this.transX, y0 - this.transY, x1 - x0, y1 - y0);
+        }
+    }
+
+    stroke() {}
+
+    strokeRect(x, y, w, h) {}
+
+    fillRect(x, y, w, h) {
+        const color = parseCssColor(this.fillStyle);
+        const alpha = (color[3] / 255) * this.globalAlpha;
+        if (alpha <= 0 || w <= 0 || h <= 0) return;
+
+        const rx = Math.round(x + this.transX);
+        const ry = Math.round(y + this.transY);
+        const rw = Math.round(w);
+        const rh = Math.round(h);
+
+        const clipX0 = this.clipRect ? this.clipRect[0] : 0;
+        const clipY0 = this.clipRect ? this.clipRect[1] : 0;
+        const clipX1 = this.clipRect ? this.clipRect[2] : this.width;
+        const clipY1 = this.clipRect ? this.clipRect[3] : this.height;
+
+        const sx = Math.max(0, Math.max(clipX0, rx));
+        const sy = Math.max(0, Math.max(clipY0, ry));
+        const ex = Math.min(this.width, Math.min(clipX1, rx + rw));
+        const ey = Math.min(this.height, Math.min(clipY1, ry + rh));
+
+        if (sx >= ex || sy >= ey) return;
+
+        const [sr, sg, sb] = color;
+
+        if (alpha >= 0.999) {
+            for (let r = sy; r < ey; r++) {
+                let idx = (r * this.width + sx) * 4;
+                for (let c = sx; c < ex; c++) {
+                    this.rgbaData[idx] = sr;
+                    this.rgbaData[idx + 1] = sg;
+                    this.rgbaData[idx + 2] = sb;
+                    this.rgbaData[idx + 3] = 255;
+                    idx += 4;
+                }
+            }
+        } else {
+            const invA = 1 - alpha;
+            for (let r = sy; r < ey; r++) {
+                let idx = (r * this.width + sx) * 4;
+                for (let c = sx; c < ex; c++) {
+                    const dr = this.rgbaData[idx];
+                    const dg = this.rgbaData[idx + 1];
+                    const db = this.rgbaData[idx + 2];
+                    const da = this.rgbaData[idx + 3] / 255;
+
+                    const outA = alpha + da * invA;
+                    const norm = outA > 0 ? outA : 1;
+                    this.rgbaData[idx] = Math.round((sr * alpha + dr * da * invA) / norm);
+                    this.rgbaData[idx + 1] = Math.round((sg * alpha + dg * da * invA) / norm);
+                    this.rgbaData[idx + 2] = Math.round((sb * alpha + db * da * invA) / norm);
+                    this.rgbaData[idx + 3] = Math.round(outA * 255);
+                    idx += 4;
+                }
+            }
+        }
+    }
+
+    clearRect(x, y, w, h) {
+        const oldFill = this.fillStyle;
+        this.fillStyle = 'rgba(0,0,0,0)';
+        this.fillRect(x, y, w, h);
+        this.fillStyle = oldFill;
+    }
+
+    measureText(text) {
+        const str = String(text || '');
+        const sizeMatch = (this.font || '').match(/(\d+)px/);
+        const fontSize = sizeMatch ? parseInt(sizeMatch[1], 10) : 14;
+        const scale = Math.max(1, Math.round(fontSize / 7));
+        const charW = scale * 6;
+        return {
+            width: str.length * charW,
+            actualBoundingBoxAscent: scale * 6,
+            actualBoundingBoxDescent: scale * 2
+        };
+    }
+
+    fillText(text, x, y, maxW) {
+        if (!text) return;
+        const str = String(text);
+        const sizeMatch = (this.font || '').match(/(\d+)px/);
+        const fontSize = sizeMatch ? parseInt(sizeMatch[1], 10) : 14;
+        const scale = Math.max(1, Math.round(fontSize / 7));
+        const charW = scale * 6;
+        const charH = scale * 8;
+
+        const fullW = str.length * charW;
+        const textW = (maxW !== undefined && maxW !== null && maxW > 0) ? Math.min(maxW, fullW) : fullW;
+
+        let tx = x + this.transX;
+        if (this.textAlign === 'center') {
+            tx -= textW / 2;
+        } else if (this.textAlign === 'right' || this.textAlign === 'end') {
+            tx -= textW;
+        }
+
+        let ty = y + this.transY;
+        if (this.textBaseline === 'middle') {
+            ty -= charH / 2;
+        } else if (this.textBaseline === 'bottom') {
+            ty -= charH;
+        } else if (this.textBaseline === 'alphabetic') {
+            ty -= scale * 6;
+        }
+
+        const color = parseCssColor(this.fillStyle);
+        const alpha = (color[3] / 255) * this.globalAlpha;
+        if (alpha <= 0) return;
+
+        const [sr, sg, sb] = color;
+        const clipX0 = this.clipRect ? this.clipRect[0] : 0;
+        const clipY0 = this.clipRect ? this.clipRect[1] : 0;
+        const clipX1 = this.clipRect ? this.clipRect[2] : this.width;
+        const clipY1 = this.clipRect ? this.clipRect[3] : this.height;
+
+        let curX = Math.round(tx);
+        const startY = Math.round(ty);
+
+        for (let i = 0; i < str.length; i++) {
+            if (maxW && (curX - Math.round(tx) + charW) > maxW) break;
+            const code = str.charCodeAt(i);
+            const glyphIdx = (code >= 32 && code <= 126) ? (code - 32) * 5 : (63 - 32) * 5;
+
+            for (let col = 0; col < 5; col++) {
+                const colBits = FONT_5X7[glyphIdx + col];
+                for (let row = 0; row < 7; row++) {
+                    if ((colBits & (1 << row)) !== 0) {
+                        for (let sy = 0; sy < scale; sy++) {
+                            const py = startY + row * scale + sy;
+                            if (py < clipY0 || py >= clipY1 || py < 0 || py >= this.height) continue;
+                            for (let sx = 0; sx < scale; sx++) {
+                                const px = curX + col * scale + sx;
+                                if (px < clipX0 || px >= clipX1 || px < 0 || px >= this.width) continue;
+
+                                const idx = (py * this.width + px) * 4;
+                                if (alpha >= 0.999) {
+                                    this.rgbaData[idx] = sr;
+                                    this.rgbaData[idx + 1] = sg;
+                                    this.rgbaData[idx + 2] = sb;
+                                    this.rgbaData[idx + 3] = 255;
+                                } else {
+                                    const invA = 1 - alpha;
+                                    const dr = this.rgbaData[idx];
+                                    const dg = this.rgbaData[idx + 1];
+                                    const db = this.rgbaData[idx + 2];
+                                    const da = this.rgbaData[idx + 3] / 255;
+                                    const outA = alpha + da * invA;
+                                    const norm = outA > 0 ? outA : 1;
+                                    this.rgbaData[idx] = Math.round((sr * alpha + dr * da * invA) / norm);
+                                    this.rgbaData[idx + 1] = Math.round((sg * alpha + dg * da * invA) / norm);
+                                    this.rgbaData[idx + 2] = Math.round((sb * alpha + db * da * invA) / norm);
+                                    this.rgbaData[idx + 3] = Math.round(outA * 255);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            curX += charW;
+        }
+    }
+
+    strokeText(text, x, y, maxW) {}
+
+    drawImage() {}
+}
+
+// -----------------------------------------------------------------------------
 // 4. ViewHierarchyRasterizer
 // -----------------------------------------------------------------------------
 
 export class ViewHierarchyRasterizer {
-    constructor(width = 1280, height = 720) {
+    constructor(width = 720, height = 1440) {
         this.width = width;
         this.height = height;
         this.rgbaData = new Uint8Array(width * height * 4);
@@ -200,63 +543,41 @@ export class ViewHierarchyRasterizer {
         );
         rootView.layout(0, 0, width, height);
 
-        // Software 2D context for pixel buffer filling
-        const mockCtx = {
-            fillStyle: '#000000',
-            strokeStyle: '#000000',
-            font: '14px sans-serif',
-            textAlign: 'start',
-            textBaseline: 'middle',
-            globalAlpha: 1.0,
-            save: () => {},
-            restore: () => {},
-            translate: (x, y) => {},
-            beginPath: () => {},
-            closePath: () => {},
-            clip: () => {},
-            rect: (x, y, w, h) => {},
-            roundRect: (x, y, w, h, r) => {},
-            fill: () => {},
-            stroke: () => {},
-            fillText: (text, x, y, maxW) => {},
-            strokeText: (text, x, y, maxW) => {},
-            measureText: (text) => ({ width: (text || '').length * 8 }),
-            drawImage: () => {},
-            fillRect: (x, y, w, h) => {
-                const sx = Math.max(0, Math.min(x | 0, width));
-                const sy = Math.max(0, Math.min(y | 0, height));
-                const ex = Math.max(0, Math.min((x + w) | 0, width));
-                const ey = Math.max(0, Math.min((y + h) | 0, height));
-                for (let r = sy; r < ey; r++) {
-                    for (let c = sx; c < ex; c++) {
-                        const idx = (r * width + c) * 4;
-                        this.rgbaData[idx] = 30;
-                        this.rgbaData[idx + 1] = 41;
-                        this.rgbaData[idx + 2] = 59;
-                        this.rgbaData[idx + 3] = 255;
-                    }
+        let renderedWithCanvas = false;
+        if (typeof OffscreenCanvas !== 'undefined') {
+            try {
+                const offscreen = new OffscreenCanvas(width, height);
+                const ctx = offscreen.getContext('2d');
+                if (ctx) {
+                    ctx.fillStyle = '#0f172a';
+                    ctx.fillRect(0, 0, width, height);
+                    rootView.draw(ctx);
+                    const imgData = ctx.getImageData(0, 0, width, height);
+                    this.rgbaData.set(imgData.data);
+                    renderedWithCanvas = true;
                 }
-            },
-            drawRect: (x, y, w, h, bg) => {
-                const sx = Math.max(0, Math.min(x | 0, width));
-                const sy = Math.max(0, Math.min(y | 0, height));
-                const ex = Math.max(0, Math.min((x + w) | 0, width));
-                const ey = Math.max(0, Math.min((y + h) | 0, height));
-                for (let r = sy; r < ey; r++) {
-                    for (let c = sx; c < ex; c++) {
-                        const idx = (r * width + c) * 4;
-                        this.rgbaData[idx] = 56;
-                        this.rgbaData[idx + 1] = 189;
-                        this.rgbaData[idx + 2] = 248;
-                        this.rgbaData[idx + 3] = 255;
-                    }
+            } catch (_) {}
+        } else if (typeof document !== 'undefined' && typeof document.createElement === 'function') {
+            try {
+                const domCanvas = document.createElement('canvas');
+                domCanvas.width = width;
+                domCanvas.height = height;
+                const ctx = domCanvas.getContext('2d');
+                if (ctx) {
+                    ctx.fillStyle = '#0f172a';
+                    ctx.fillRect(0, 0, width, height);
+                    rootView.draw(ctx);
+                    const imgData = ctx.getImageData(0, 0, width, height);
+                    this.rgbaData.set(imgData.data);
+                    renderedWithCanvas = true;
                 }
-            },
-            strokeRect: (x, y, w, h) => {},
-            clearRect: (x, y, w, h) => {}
-        };
+            } catch (_) {}
+        }
 
-        rootView.draw(mockCtx);
+        if (!renderedWithCanvas) {
+            const ctx = new Software2DContext(this.rgbaData, width, height);
+            rootView.draw(ctx);
+        }
 
         return {
             width,
@@ -271,6 +592,8 @@ export class ViewHierarchyRasterizer {
      */
     submitToVirtioGpu(device, resId = 100, scanoutId = 0, buffer = this.rgbaData) {
         if (!device) return;
+        if (typeof device.isHostInjectionAllowed === 'function' && !device.isHostInjectionAllowed()) return;
+        if (device.guestActive || device.hostInjectionBlocked) return;
         const transferPkt = VirtioPacketBuilder.transferToHost2d(resId, this.width, this.height, 0, 0, buffer);
         device.processControlQueue(transferPkt);
         const flushPkt = VirtioPacketBuilder.resourceFlush(resId, this.width, this.height, 0, 0);
@@ -285,3 +608,4 @@ if (typeof window !== 'undefined') {
     window.ViewHierarchyRasterizer = ViewHierarchyRasterizer;
     window.ActivityBackstack = ActivityBackstack;
 }
+

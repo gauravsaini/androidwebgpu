@@ -110,8 +110,8 @@ static void draw_char_glyph(PixelBuffer* pb, int x0, int y0, const uint8_t* glyp
 int main(int argc, char** argv) {
     printf("[skia_fb_test] Starting Skia CPU Fallback 2D Rasterizer Test...\n");
 
-    const int width = 1280;
-    const int height = 720;
+    const int width = 720;
+    const int height = 1440;
     PixelBuffer pb;
     pb.width = width;
     pb.height = height;
@@ -127,17 +127,17 @@ int main(int argc, char** argv) {
 
     // 2. Draw card background with drop shadow and rounded corners
     // Shadow
-    draw_rounded_rect(&pb, 195, 145, 890, 430, 24, pack_color(0, 0, 0, 120));
+    draw_rounded_rect(&pb, 55, 145, 610, 800, 24, pack_color(0, 0, 0, 120));
     // Card Base
-    draw_rounded_rect(&pb, 200, 140, 880, 420, 20, pack_color(33, 33, 33, 255));
+    draw_rounded_rect(&pb, 60, 140, 600, 790, 20, pack_color(33, 33, 33, 255));
 
     // 3. Draw gradient header inside card
     Color4f teal = { 0.0f, 0.7f, 0.8f, 1.0f };
     Color4f purple = { 0.5f, 0.2f, 0.8f, 1.0f };
-    draw_linear_gradient(&pb, 220, 160, 840, 80, teal, purple);
+    draw_linear_gradient(&pb, 80, 160, 560, 120, teal, purple);
 
     // 4. Render text glyph
-    draw_char_glyph(&pb, 240, 190, FONT_8X16_H, pack_color(255, 255, 255, 255));
+    draw_char_glyph(&pb, 100, 200, FONT_8X16_H, pack_color(255, 255, 255, 255));
 
     // 5. Verify pixel buffer rasterization invariants
     int non_zero_pixels = 0;

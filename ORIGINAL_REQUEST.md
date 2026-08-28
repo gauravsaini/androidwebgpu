@@ -1,71 +1,59 @@
 # Original User Request
 
-## 2026-08-26T22:19:38Z
+## Initial Request — 2026-08-28T01:21:15Z
 
-Completely eliminate all simulated HTML DOM screens and synthetic application mockups (e.g. renderFdroidActivity, renderSettingsActivity, renderBrowserActivity, and DOM div injections in android_runtime.js and android.html). Implement authentic Android binary XML layout inflation (res/layout/*.xml), resolve resource IDs through resources.arsc, build real in-memory Android View / ViewGroup trees, and rasterize them directly onto WebGPU textures / guest virtio-gpu framebuffers.
-
-Working directory: /Users/ektasaini/Desktop/androidwebgpu
-Integrity mode: development
-
-## Requirements
-
-### R1. Authentic APK Binary XML Layout Inflation & Resource Resolution
-- Implement genuine Android layout inflation that extracts and decodes binary XML files (res/layout/*.xml) directly from APK archives (e.g. F-Droid.apk).
-- Resolve Android resource identifiers (@string/*, @drawable/*, @color/*, @dimen/*, @layout/*, @id/*, @style/*) using the parsed resources.arsc string pool and type spec tables.
-- Construct live in-memory Android View hierarchies supporting fundamental layout types: FrameLayout, LinearLayout (horizontal/vertical, weight distribution), RelativeLayout, ConstraintLayout, ScrollView, RecyclerView / ListView, TextView, ImageView, and Button.
-
-### R2. WebGPU & SurfaceFlinger Hardware View Rasterization
-- Delete all synthetic HTML DOM UI generation functions in android_runtime.js that build simulated web mockups.
-- Render the active ViewHierarchy directly onto an OffscreenCanvas / WebGPU texture buffer with pixel-accurate Material Design 3 styling, text metrics, background tints, vector drawables, and rounded corners.
-- Submit rasterized application buffers through SurfaceFlinger / VirtioGpuBridge so that all app pixels are presented exclusively via the WebGPU hardware swapchain.
-
-### R3. Real Guest VM Framebuffer Integration & Seamless Switching
-- Ensure guest Linux / x86 VM scanouts (via virtio-gpu / fbcon) render smoothly to the WebGPU canvas without HTML DOM overlays.
-- Provide fluid switching between the guest OS display and running APK application activities through the WindowManager (wms_rs) surface stack.
-
-### R4. Touch, Gesture, & Key Dispatch to Real View Trees
-- Capture mouse / touch events from the canvas and route them through InputManager (inputflinger_rs) to the target ViewRootImpl.
-- Implement hit-testing and event bubbling (onTouchEvent, onClick, onScroll) across the inflated View hierarchy.
-- Dispatch hardware navigation buttons (Back, Home, Recents) to AMS and active Activity lifecycles without DOM screen manipulation.
-
-## Acceptance Criteria
-
-### Layout Inflation & Resource Resolution
-- [ ] Binary XML decoder successfully extracts and parses layout structures from F-Droid.apk (e.g. activity_main.xml, app_list_item.xml).
-- [ ] Resource IDs are correctly resolved from resources.arsc without falling back to hardcoded string constants.
-- [ ] Inflated view hierarchy correctly represents child-parent relationships, layout dimensions (match_parent, wrap_content, explicit dp), and padding/margins.
-
-### Hardware Rasterization & Zero-Mock Verification
-- [ ] screen-app / phone viewport contains 0 synthetic HTML mockup divs (fdroid-authentic-root, hardcoded DOM app mockups deleted).
-- [ ] Real app UI is visibly rendered into WebGPU canvas buffers with verified draw calls (text, shapes, drawables).
-- [ ] Test bench validates that application launching routes purely through ViewHierarchy -> SurfaceFlinger -> WebGPU without DOM substitution.
-
-### Interactive Input & Navigation
-- [ ] Clicks and scrolling on the WebGPU canvas trigger hit-tested callbacks in the inflated View hierarchy.
-- [ ] Activity backstack (goBack(), finish()) properly pops inflated activity views and restores the previous view state.
-
-## 2026-08-27T01:34:48Z
-
-Configure and verify direct boot of the real Android x86 Linux kernel (bzImage) with initrd.img in the v86 hypervisor, establishing real serial milestone streaming and BinderFS initialization.
+Build and stabilize the full guest Android-x86 graphics and runtime pipeline for AndroidWebGPU, enabling genuine guest-driven APK rendering onto the WebGPU canvas without host synthetic fallbacks.
 
 Working directory: /Users/ektasaini/Desktop/androidwebgpu
 Integrity mode: development
 
 ## Requirements
 
-### R1. Direct Kernel Boot Configuration
-Configure the v86 hypervisor in SystemBootstrap and V86GuestManager to boot directly from guest/build/bzImage and guest/build/initrd.img using explicit kernel cmdline (console=ttyS0 earlyprintk=serial,ttyS0,115200 root=/dev/ram0 rdinit=/init panic=1 loglevel=8).
+### R1. Stabilize Guest Linux Kernel for v86 (No Stack Overrun Oops)
+Rebuild the 32-bit x86 kernel (`linux-5.10`) targeting v86 compatibility:
+- Disable `CONFIG_VMAP_STACK` and `CONFIG_STACKPROTECTOR` in defconfig to eliminate the `swapper/0 rewind_stack_and_make_dead Thread overran stack` oops.
+- Ensure `CONFIG_ANDROID_BINDERFS=y`, `CONFIG_DRM_VIRTIO_GPU=y`, `CONFIG_FRAMEBUFFER_CONSOLE=y`, `CONFIG_FB_CFB_FILLRECT=y`, `CONFIG_VT=y`, and `CONFIG_FONT_8x16=y` remain active.
+- Output valid, bootable `guest/build/bzImage` verified by `HdrS` / `0xAA55` boot headers.
 
-### R2. Real Serial Milestone Streaming & Lifecycle Progression
-Ensure real serial output from /dev/ttyS0 is streamed into Logcat ([v86Guest]) and drives the VM state machine milestones (BIOS_POST -> KERNEL_BOOT -> KERNEL_UNCOMPRESS -> KERNEL_READY -> BINDERFS_MOUNT -> INIT_USERSPACE -> SERVICEMANAGER_READY -> RUST_SERVICES_READY -> SYSTEM_BOOT_COMPLETED -> RUNNING).
+### R2. Compile Guest EGL and HAL Shims
+Cross-compile 32-bit x86 ELF shared libraries using the host i686 toolchain:
+- Compile `guest/patches/egl_webgpu.cpp` to `guest/initrd/system/lib/egl_webgpu.so`.
+- Compile `guest/patches/gralloc_virtgpu.cpp` to `guest/initrd/system/lib/gralloc.virtgpu.so`.
+- Compile `guest/patches/hwcomposer_virtgpu.cpp` to `guest/initrd/system/lib/hwcomposer.virtgpu.so`.
+- Package libraries into `guest/build/initrd.img` via `guest/tools/build_initrd.sh`.
 
-### R3. BinderFS and Native AOSP Services Standup
-Validate that the guest init system mounts BinderFS at /dev/binderfs, links /dev/binder, starts servicemanager (Handle 0), and initializes native Rust system services (pms_rs, ams_rs, wms_rs, inputflinger_rs).
+### R3. Wire Guest Graphics Pipeline to VirtIO 2D/3D
+Connect guest userspace graphics to the virtio-gpu DRM driver:
+- Verify `/dev/dri/card0` and `/dev/fb0` nodes are created in guest userspace.
+- Run `guest/initrd/system/bin/test_triangle` (EGL `glClearColor` + `glDrawArrays` via `VIRTIO_GPU_CMD_SUBMIT_3D`) and `skia_fb_test` (DRM 2D `TRANSFER_TO_HOST_2D` + `RESOURCE_FLUSH`).
+- Verify the Rust bridge receives commands, presents frames to scanout, and emits damage rects.
+
+### R4. Integrate Guest ART Runtime and Zygote IPC
+Enable guest bytecode execution:
+- Verify `guest/initrd/system/framework/boot.art` (`art\n018`) and `framework.jar` (`dex\n035`) are mounted in rootfs.
+- Ensure `zygote` daemon listens on `/dev/socket/zygote` in the guest.
+- Wire `crates/zygote_client` and `crates/ams_rs` to dispatch package launches to the guest zygote socket.
+
+### R5. End-to-End Headless Browser Validation
+Validate the complete pipeline in a real browser session:
+- Execute `validate_browser.mjs` in Chrome / headless runner.
+- Ensure canvas displays guest-rendered graphics (test triangle / Skia / APK UI) with Shannon entropy $H \ge 1.0$.
+- Capture and inspect `screenshot.png` to confirm bright, recognizable pixels rather than blank/dark fallback frames.
 
 ## Acceptance Criteria
 
-### Boot Verification
-- [ ] v86 hypervisor loads guest/build/bzImage and guest/build/initrd.img with zero reliance on linux4.iso.
-- [ ] Kernel boot messages (dmesg) stream to the serial console listener and appear in Logcat under tag v86Guest.
-- [ ] State transitions advance through real parsed milestones without artificial delays or synthetic transitions.
-- [ ] All automated E2E tests in tests/run_e2e_tests.mjs and tests/test_v86_guest_boot.mjs pass.
+### Kernel & Boot Invariants
+- [ ] `guest/build/bzImage` boots in v86 without `Thread overran stack` oops or fatal kernel panic.
+- [ ] Serial log confirms `VIRTIO_GPU_INIT` milestone (`[drm] fb0: virtio_gpudrmfb` or `modeset initialized`).
+- [ ] `/dev/binderfs` mounts and `servicemanager` root handle 0 starts.
+
+### Graphics & HAL Libraries
+- [ ] `guest/initrd/system/lib/egl_webgpu.so`, `gralloc.virtgpu.so`, and `hwcomposer.virtgpu.so` exist as valid 32-bit x86 ELF shared objects.
+- [ ] `test_triangle` runs in guest and outputs `Blue triangle rendered and presented to WebGPU swapchain successfully`.
+- [ ] Host `VirtioGpuDevice` registers virtqueue kicks and `guestActive` remains true.
+
+### Full-Stack Validation
+- [ ] `node tests/test_v86_guest_boot.mjs` passes all stages (0 failures).
+- [ ] `node --test tests/test_real_guest_rendering.mjs` passes all assertions.
+- [ ] `cargo test --workspace` passes cleanly across all member crates.
+- [ ] `node validate_browser.mjs` succeeds with Shannon entropy $H \ge 1.0$ and visual confirmation in `screenshot.png`.

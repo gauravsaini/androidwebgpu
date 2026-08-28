@@ -32,6 +32,7 @@ export class VirtioGpuDevice {
         this.num_capsets = 1;
         this.damage_rects_count = 0;
         this.onScanoutUpdate = null;
+        this.guestActive = false;
 
         // Virtqueue Ring State
         this.queues = [
@@ -45,10 +46,8 @@ export class VirtioGpuDevice {
         this.guestFeatures = 0;
         this.pciSlot = 0x05;
         this.pci_id = this.pciSlot << 3;
-        this.pci_bars = [{ size: 64 }];
+        this.pci_bars = [{ size: 64 }, { size: 16 * 1024 * 1024 }];
         this.name = "virtio-gpu";
-        this.ioBase = 0xC040;
-        this.bar0Value = 0xC041;
         this.ioBase = 0xC100;
         this.irqLine = 10;
         this.bar0Size = 64;
@@ -57,6 +56,9 @@ export class VirtioGpuDevice {
         this.bar1Size = 16 * 1024 * 1024;
         this.bar1Value = 0xD1000000;
         this.bar1Sizing = false;
+        this.hostInjectionBlocked = false;
+        this.guestHasPresented = false;
+        this.firstGuestFrameAt = 0;
 
         this.initPci();
         if (this.v86) {
@@ -81,9 +83,9 @@ export class VirtioGpuDevice {
         this.pci_space[10] = 0x00;
         this.pci_space[11] = 0x03;
 
-        // BAR0: I/O Space (64 bytes) at 0xC040 (avoid ne2k at 0xC000)
-        this.pci_space[16] = 0x41;
-        this.pci_space[17] = 0xC0;
+        // BAR0: I/O Space (64 bytes) at 0xC100 (virtio legacy)
+        this.pci_space[16] = 0x01;
+        this.pci_space[17] = 0xC1;
         this.pci_space[18] = 0x00;
         this.pci_space[19] = 0x00;
 
@@ -174,15 +176,33 @@ export class VirtioGpuDevice {
             return false;
         };
         if (!tryRegister()) {
-            // Defer until emulator-ready when cpu.devices is populated
+            // Leaf 2.1 fix: PCI must be visible before guest kernel PCI scan (early BIOS + kernel init).
+            // Retry aggressively at 10ms/50ms/100ms and also on emulator-ready, not 500ms+.
             const onReady = () => { try { tryRegister(); } catch (_) {} };
             try {
-                if (typeof v86.add_listener === 'function') v86.add_listener('emulator-ready', onReady);
-                else if (v86.v86 && typeof v86.v86.add_listener === 'function') v86.v86.add_listener('emulator-ready', onReady);
+                if (typeof v86.add_listener === 'function') {
+                    v86.add_listener('emulator-ready', onReady);
+                    v86.add_listener('emulator-started', onReady);
+                } else if (v86.v86 && typeof v86.v86.add_listener === 'function') {
+                    v86.v86.add_listener('emulator-ready', onReady);
+                    v86.v86.add_listener('emulator-started', onReady);
+                }
             } catch (_) {}
-            // Also retry after a short delay as fallback
-            setTimeout(tryRegister, 500);
-            setTimeout(tryRegister, 1500);
+            let attempts = 0;
+            const fastRetry = () => {
+                attempts++;
+                if (tryRegister()) return;
+                if (attempts < 20) setTimeout(fastRetry, attempts < 5 ? 10 : attempts < 10 ? 25 : 50);
+            };
+            setTimeout(fastRetry, 10);
+            setTimeout(fastRetry, 50);
+            if (typeof v86.cpu === 'undefined' && typeof v86.v86 === 'undefined') {
+                // Fallback poll until cpu appears (handles async wasm init)
+                let pollCount = 0;
+                const poll = setInterval(() => {
+                    if (tryRegister() || ++pollCount > 40) clearInterval(poll);
+                }, 25);
+            }
         }
     }
 
@@ -451,6 +471,11 @@ export class VirtioGpuDevice {
         }
 
         if (processedCount > 0) {
+            const wasGuestActive = this.guestActive;
+            this.guestActive = true;
+            this.guestHasPresented = true;
+            this.hostInjectionBlocked = true;
+            if (!wasGuestActive) this.firstGuestFrameAt = (typeof performance !== 'undefined' ? performance.now() : Date.now());
             // Render scanout to canvas
             this.renderScanoutToCanvas(0);
 
@@ -574,19 +599,20 @@ export class VirtioGpuDevice {
             ? this.rustBridge.get_scanout_damage(scanoutId)
             : null;
 
-        const fb = this.rustBridge.get_scanout_framebuffer(scanoutId);
+        const fb = (typeof this.rustBridge.get_scanout_framebuffer_rgba === "function")
+            ? this.rustBridge.get_scanout_framebuffer_rgba(scanoutId)
+            : this.rustBridge.get_scanout_framebuffer(scanoutId);
         if (!fb || fb.length === 0) return;
 
-        const width = (this.canvas && this.canvas.width) ? this.canvas.width : 1280;
-        const height = (this.canvas && this.canvas.height) ? this.canvas.height : 720;
+        const width = (this.canvas && this.canvas.width) ? this.canvas.width : 720;
+        const height = (this.canvas && this.canvas.height) ? this.canvas.height : 1440;
 
         if (!this.offscreenTransferred && this.ctx2d) {
             if (!this.cachedImageData || this.cachedImageData.width !== width || this.cachedImageData.height !== height) {
                 this.cachedImageData = this.ctx2d.createImageData(width, height);
             }
-            if (fb.length >= width * height * 4) {
-                this.cachedImageData.data.set(fb.subarray(0, width * height * 4));
-            }
+            const copyBytes = Math.min(fb.length, this.cachedImageData.data.length);
+            this.cachedImageData.data.set(fb.subarray(0, copyBytes));
         }
 
         if (damage && damage.length === 4) {
@@ -614,7 +640,7 @@ export class VirtioGpuDevice {
                         y: dy,
                         width: subW,
                         height: subH,
-                        pixels: fb.subarray(0, width * height * 4)
+                        pixels: fb.subarray(0, Math.min(fb.length, width * height * 4))
                     });
                 } else if (this.ctx2d) {
                     this.ctx2d.putImageData(this.cachedImageData, 0, 0, dx, dy, subW, subH);
@@ -648,9 +674,9 @@ export class VirtioGpuDevice {
                 y: 0,
                 width,
                 height,
-                pixels: fb.subarray(0, width * height * 4)
+                pixels: fb.subarray(0, Math.min(fb.length, width * height * 4))
             });
-        } else if (this.ctx2d && fb.length >= width * height * 4) {
+        } else if (this.ctx2d && fb.length > 0) {
             this.ctx2d.putImageData(this.cachedImageData, 0, 0);
         }
     }
@@ -687,6 +713,18 @@ export class VirtioGpuDevice {
         if (this.rustBridge && typeof this.rustBridge.clear_scanout_damage === "function") {
             this.rustBridge.clear_scanout_damage(scanoutId);
         }
+    }
+
+    blockHostInjection() {
+        this.hostInjectionBlocked = true;
+    }
+
+    allowHostInjection() {
+        if (!this.guestActive && !this.guestHasPresented) this.hostInjectionBlocked = false;
+    }
+
+    isHostInjectionAllowed() {
+        return !this.hostInjectionBlocked && !this.guestActive && !this.guestHasPresented;
     }
 
     /**

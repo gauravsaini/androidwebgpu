@@ -454,6 +454,11 @@ export class ApkZipReader {
                 }
             }
         }
+        dexFiles.sort((a, b) => {
+            if (a.name === 'classes.dex') return -1;
+            if (b.name === 'classes.dex') return 1;
+            return a.name.localeCompare(b.name, undefined, { numeric: true });
+        });
         return dexFiles;
     }
 

@@ -122,11 +122,11 @@ function appendLogcat(tag, msg, priority = 'I') {
 
 // 3. Initialize Android Runtime
 const runtime = new AndroidRuntime({
-    onLog: (msg, lvl) => {
+    onLog: (msg, lvl, tag = 'AndroidRuntime') => {
         let priority = 'I';
         if (lvl === 'error') priority = 'E';
         else if (lvl === 'warn') priority = 'W';
-        globalLogcat.append('AndroidRuntime', msg, priority);
+        globalLogcat.append(tag, msg, priority);
     }
 });
 if (typeof window !== 'undefined') {
@@ -143,7 +143,7 @@ const bootstrap = new SystemBootstrap({
     vgaBiosUrl: './bios/vgabios.bin',
     kernelUrl: './guest/build/bzImage',
     initrdUrl: './guest/build/initrd.img',
-    cmdline: 'console=ttyS0 earlyprintk=serial,ttyS0,115200 root=/dev/ram0 rdinit=/init panic=1 loglevel=8 androidboot.hardware=android_x86 androidboot.selinux=permissive binder.debug_mask=0x07',
+    cmdline: 'console=ttyS0 earlyprintk=serial,ttyS0,115200 root=/dev/ram0 rdinit=/init nosmp maxcpus=1 noapic nolapic panic=1 loglevel=8 androidboot.hardware=android_x86 androidboot.selinux=permissive binder.debug_mask=0x07',
     bootMode: 'direct',
     onMilestone: (milestone) => {
         // Milestone already recorded into globalLogcat and logger by v86_guest_manager
@@ -305,8 +305,6 @@ function bindEventListeners() {
 
     // Touch and pointer input on WebGPU authentic canvas
     if (dom.canvas) {
-        runtime.setCanvas(dom.canvas);
-
         const getCanvasCoords = (e) => {
             const rect = dom.canvas.getBoundingClientRect();
             const scaleX = dom.canvas.width / (rect.width || 1);
@@ -320,8 +318,14 @@ function bindEventListeners() {
         dom.canvas.addEventListener('pointerdown', (e) => {
             const { x, y } = getCanvasCoords(e);
             appendLogcat('InputDispatcher', `MotionEvent: ACTION_DOWN at (${x}, ${y})`, 'D');
-            runtime.dispatchInputEvent(new MotionEvent(MotionEvent.ACTION_DOWN, x, y));
-            appController.sendInputEvent(0, 0);
+            const gpuDev = bootstrap.getGpuDevice();
+            if (gpuDev && gpuDev.guestActive) {
+                // Guest active: forward to guest InputFlinger (virtio-input / binder), skip host ViewRoot
+                appController.sendInputEvent(x, y);
+            } else {
+                runtime.dispatchInputEvent(new MotionEvent(MotionEvent.ACTION_DOWN, x, y));
+                appController.sendInputEvent(0, 0);
+            }
         });
 
         dom.canvas.addEventListener('pointermove', (e) => {
@@ -368,6 +372,42 @@ async function startSystem() {
         if (typeof window !== 'undefined') {
             window.v86emulator = bootstrap.getGuestManager() ? bootstrap.getGuestManager().emulator : null;
         }
+        if (bootstrap.getGpuDevice()) {
+            runtime.setGpuDevice(bootstrap.getGpuDevice());
+            // Leaf 3.1: gate host injection only after guest shows activity, not immediately.
+            // Keep host fallback for Phase 1-3 until guest proves it (VIRTIO_GPU_INIT / first frame).
+            const gpuDev = bootstrap.getGpuDevice();
+            const gm = bootstrap.getGuestManager();
+            const gateOnGuest = () => {
+                if (gpuDev && (gpuDev.guestActive || gpuDev.guestHasPresented)) {
+                    runtime.enableGuestRendering();
+                }
+            };
+            if (gm) {
+                const origState = gm.onStateChange;
+                const origMile = gm.onMilestone;
+                gm.onStateChange = (newState, oldState) => {
+                    if (typeof origState === 'function') try { origState(newState, oldState); } catch(_) {}
+                    if (newState === 'ERROR') runtime.disableGuestRendering();
+                    if (newState === 'RUNNING') gateOnGuest();
+                };
+                gm.onMilestone = (m) => {
+                    if (typeof origMile === 'function') try { origMile(m); } catch(_) {}
+                    if (m === 'VIRTIO_GPU_INIT' || m === 'SYSTEM_BOOT_COMPLETED' || m === 'INIT_USERSPACE' || m === 'KERNEL_BOOT') {
+                        runtime.enableGuestRendering();
+                        if (gpuDev && typeof gpuDev.blockHostInjection === 'function') {
+                            gpuDev.blockHostInjection();
+                        }
+                    }
+                };
+                // Poll guestActive quickly for first frame (covers synthetic probe path)
+                let poll = 0;
+                const iv = setInterval(() => {
+                    gateOnGuest();
+                    if ((gpuDev && gpuDev.guestActive) || ++poll > 80) clearInterval(iv);
+                }, 50);
+            }
+        }
         await appController.syncPackagesFromTruePms();
     } catch (err) {
         console.warn("[AndroidOS] Bootstrap initialization fallback:", err);
@@ -377,20 +417,32 @@ async function startSystem() {
     // Dump AOSP System Services status to console
     dumpAospServiceStatus();
 
-    // Preload real F-Droid.apk into Dalvik VM & PMS
+    // Preload target APK into Dalvik VM & PMS (F-Droid.apk by default, or firefox.apk if configured)
+    if (dom.canvas) {
+        runtime.setCanvas(dom.canvas);
+    }
     try {
-        const resp = await fetch('F-Droid.apk');
+        const urlParams = (typeof window !== 'undefined' && window.location && window.location.search) ? new URLSearchParams(window.location.search) : null;
+        const targetApk = (urlParams && urlParams.get('apk')) || (typeof window !== 'undefined' && window.TARGET_APK) || 'F-Droid.apk';
+
+        appendLogcat('PackageManager', `Auto-ingesting target APK archive: ${targetApk}`, 'I');
+        const resp = await fetch(targetApk);
         if (resp.ok) {
             const buf = await resp.arrayBuffer();
-            console.info("[AndroidOS] F-Droid.apk fetched:", buf.byteLength, "bytes");
-            await runtime.loadAndRunApk(buf, null);
-            appendLogcat('PackageManager', 'F-Droid.apk loaded into Dalvik VM & registered in PMS.', 'I');
-            console.info("[AndroidOS] F-Droid.apk installed into PMS successfully");
+            console.info(`[AndroidOS] ${targetApk} fetched:`, buf.byteLength, "bytes");
+            appendLogcat('PackageManager', `${targetApk} fetched (${buf.byteLength} bytes). Ingesting archive & DEX bytecode...`, 'I');
+            const appState = await runtime.loadAndRunApk(buf, null);
+            const targetPkg = appState?.packageName || (targetApk.toLowerCase().includes('firefox') ? 'org.mozilla.firefox' : 'org.fdroid.fdroid');
+            appendLogcat('PackageManager', `${targetApk} loaded into Dalvik VM & registered in PMS (${targetPkg}).`, 'I');
+            console.info(`[AndroidOS] ${targetPkg} installed into PMS successfully`);
+            await appController.launchActivity(targetPkg);
         } else {
-            console.warn("[AndroidOS] F-Droid.apk fetch failed:", resp.status, resp.statusText);
+            console.warn(`[AndroidOS] ${targetApk} fetch failed:`, resp.status, resp.statusText);
+            appendLogcat('PackageManager', `Target APK fetch failed: ${targetApk} (HTTP ${resp.status})`, 'W');
         }
     } catch (e) {
-        console.error("[AndroidOS] F-Droid.apk bootstrap error:", e);
+        console.error("[AndroidOS] Target APK bootstrap error:", e);
+        appendLogcat('PackageManager', `Target APK bootstrap error: ${e.message}`, 'E');
     }
 
     // Dump post-boot diagnostics
@@ -444,7 +496,7 @@ function dumpPostBootDiagnostics() {
 
     // DalvikVM
     if (runtime.vm) {
-        console.info(`[DalvikVM] Loaded DEX files: ${runtime.vm.loadedDexes?.length || 0}`);
+        console.info(`[DalvikVM] Loaded DEX files: ${runtime.vm.dexParsers?.length || 0} (${runtime.vm.classes?.size || 0} classes registered)`);
     }
 
     // AppController state

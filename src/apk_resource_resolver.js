@@ -548,7 +548,7 @@ export class ArscResourceTable {
      */
     resolveDrawablePath(resId) {
         if (typeof resId === 'string') {
-            const num = this.resolveIdentifierRef(resId) || this.resolveIdentifier(resId, 'drawable');
+            const num = this.resolveIdentifierRef(resId) || this.resolveIdentifier(resId, 'drawable') || this.resolveIdentifier(resId, 'mipmap');
             if (num) resId = num;
             else return null;
         }
@@ -562,6 +562,41 @@ export class ArscResourceTable {
             return this.resolveDrawablePath(entry.data);
         }
         return typeof entry.val === 'string' ? entry.val : null;
+    }
+
+    /**
+     * Resolves a drawable resource ID into a drawable descriptor.
+     * @param {number|string} resId - 32-bit resource ID or string reference.
+     * @param {object} [apkZip] - Optional ApkZipReader to load binary entry buffers.
+     * @returns {{ type: 'vector'|'bitmap'|'color', path?: string, data?: Uint8Array|ArrayBuffer, color?: string }|null}
+     */
+    resolveDrawable(resId, apkZip = null) {
+        if (typeof resId === 'string') {
+            const num = this.resolveIdentifierRef(resId) || this.resolveIdentifier(resId, 'drawable') || this.resolveIdentifier(resId, 'mipmap');
+            if (num) resId = num;
+        }
+
+        const entry = this.getEntry(resId);
+        if (entry && !entry.isComplex) {
+            if (entry.dataType >= TYPE_FIRST_COLOR_INT && entry.dataType <= TYPE_LAST_COLOR_INT) {
+                return { type: 'color', color: TypedValue.decodeColor(entry.data, entry.dataType) };
+            }
+        }
+
+        const path = this.resolveDrawablePath(resId);
+        if (!path) return null;
+
+        let data = null;
+        if (apkZip && typeof apkZip.getFile === 'function') {
+            data = apkZip.getFile(path);
+        }
+
+        if (path.endsWith('.xml')) {
+            return { type: 'vector', path, data };
+        } else if (path.endsWith('.png') || path.endsWith('.webp') || path.endsWith('.jpg') || path.endsWith('.jpeg')) {
+            return { type: 'bitmap', path, data };
+        }
+        return { type: 'vector', path, data };
     }
 
     /**

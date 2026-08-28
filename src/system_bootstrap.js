@@ -25,7 +25,7 @@ export class SystemBootstrap {
      */
     constructor(options = {}) {
         this.options = {
-            memorySizeMb: 512,
+            memorySizeMb: 128,
             vgaMemorySizeMb: 16,
             autostart: true,
             wasmPath: './v86/v86.wasm',
@@ -35,7 +35,7 @@ export class SystemBootstrap {
             kernelUrl: './guest/build/bzImage',
             initrdUrl: './guest/build/initrd.img',
             bootMode: 'direct',
-            cmdline: 'console=ttyS0 earlyprintk=serial,ttyS0,115200 root=/dev/ram0 rdinit=/init panic=1 loglevel=8 androidboot.hardware=android_x86 androidboot.selinux=permissive binder.debug_mask=0x07',
+            cmdline: 'console=tty0 console=ttyS0 earlyprintk=serial,ttyS0,115200 root=/dev/ram0 rdinit=/init nosmp maxcpus=1 noapic nolapic panic=1 loglevel=8 androidboot.hardware=android_x86 androidboot.selinux=permissive binder.debug_mask=0x07 video=virtio-gpu',
             ...options
         };
 
@@ -144,7 +144,7 @@ export class SystemBootstrap {
     async initGraphics(canvas) {
         await initWasm('./pkg/virtio_gpu_bridge_bg.wasm?v=3');
         this.bridge = new WasmVirtioGpuBridge();
-        await this.bridge.initialize(1280, 720);
+        await this.bridge.initialize(720, 1440);
 
         if (canvas) {
             this.gpuDev = new VirtioGpuDevice(null, this.bridge, canvas);
@@ -159,7 +159,7 @@ export class SystemBootstrap {
             this.bridge.enable_system_ui();
         }
 
-        logger.log('compositor', 'I', 'WebGPU Virtio-GPU Bridge initialized (1280x720, SystemUI active)');
+        logger.log('compositor', 'I', 'WebGPU Virtio-GPU Bridge initialized (720x1440, SystemUI active)');
     }
 
     /**
@@ -169,6 +169,7 @@ export class SystemBootstrap {
         const guestConfig = {
             ...this.options,
             autostart: false,
+            gpuDevice: this.gpuDev,
             screenContainer: screenContainer || this.options.screenContainer,
             V86Class: this.V86Class,
             onMilestone: (milestone) => {
@@ -183,6 +184,9 @@ export class SystemBootstrap {
         };
 
         this.guestManager = new V86GuestManager(guestConfig);
+        if (this.gpuDev && typeof this.guestManager.setGpuDevice === 'function') {
+            this.guestManager.setGpuDevice(this.gpuDev);
+        }
 
         // Forward manager milestones and serial events
         this.guestManager.onMilestone = (m) => this.emit('milestone', m);
@@ -219,11 +223,9 @@ export class SystemBootstrap {
                 try { this.bridge.compose_and_present(); } catch (_) {}
             }
 
-            // Blit active Android Application View hierarchy or Guest VM scanout
-            if (typeof window !== 'undefined' && window.androidRuntime && window.androidRuntime.currentRootView && window.androidRuntime.viewRoot) {
-                window.androidRuntime.viewRoot.draw();
-            } else if (this.gpuDev) {
-                this.gpuDev.renderScanoutToCanvas(0);
+            // Render guest scanout directly to canvas
+            if (this.gpuDev && typeof this.gpuDev.renderScanoutToCanvas === 'function') {
+                try { this.gpuDev.renderScanoutToCanvas(0); } catch (_) {}
             }
 
             const now = performance.now();
