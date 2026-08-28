@@ -57,3 +57,33 @@ Validate the complete pipeline in a real browser session:
 - [ ] `node --test tests/test_real_guest_rendering.mjs` passes all assertions.
 - [ ] `cargo test --workspace` passes cleanly across all member crates.
 - [ ] `node validate_browser.mjs` succeeds with Shannon entropy $H \ge 1.0$ and visual confirmation in `screenshot.png`.
+
+## Follow-up — 2026-08-28T16:00:01Z
+
+Parse and bind authentic F-Droid repository metadata (index-v1.jar / index JSON) directly into the inflated res/v9.xml and res/Kt.xml Android View hierarchy, eliminating static mock package arrays and rendering the live catalog onto the WebGPU canvas.
+
+Working directory: /Users/ektasaini/Desktop/androidwebgpu
+Integrity mode: development
+
+## Requirements
+
+### R1. Authentic F-Droid Index Ingestion
+Parse authentic F-Droid repository index metadata (index-v1.jar or real F-Droid index JSON) to extract real application definitions, package names, version strings, summaries, and icons.
+
+### R2. Dynamic Layout & Adapter Data Binding
+Bind the parsed repository index entries directly to the inflated res/v9.xml and res/Kt.xml RecyclerView items without any hardcoded mock package lists.
+
+### R3. WebGPU Display Verification & Headless Validation
+Ensure the rasterized view hierarchy renders accurately to the WebGPU VirtIO scanout (720x1440 portrait) with no edge clipping and verified Shannon entropy.
+
+## Acceptance Criteria
+
+### Data Integrity
+- [ ] No hardcoded package arrays (fdroidRepoApps or similar) in src/android_runtime.js.
+- [ ] Package items displayed in the RecyclerView originate directly from authentic F-Droid repository index data.
+
+### Visual & Execution Verification
+- [ ] node validate_browser.mjs passes with Shannon entropy H >= 1.0.
+- [ ] pnpm test passes all test suites with 0 failures.
+- [ ] screenshot.png captures the real F-Droid repository catalog filling the 720x1440 viewport edge-to-edge.
+

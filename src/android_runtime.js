@@ -38,6 +38,7 @@ import {
 } from './view_hierarchy.js';
 import { ViewRootImpl, ViewHierarchyRasterizer, MotionEvent, KeyEvent, ActivityBackstack } from './view_rasterizer.js';
 import { VirtioPacketBuilder } from './virtio_packet_builder.js';
+import { FdroidIndexParser, deriveDeterministicColor } from './fdroid_index_parser.js';
 
 export function resolveAppMetadata(pkgName, manifest = {}, arsc = null) {
     let name = manifest.applicationLabel || manifest.appName || manifest.label;
@@ -171,7 +172,11 @@ export class AndroidRuntime {
     /**
      * Loads a real APK binary buffer, parses Manifest, ARSC, and DEX bytecode into Dalvik VM.
      */
-    async loadAndRunApk(arrayBuffer, hostContainer = null) {
+    async loadAndRunApk(arrayBuffer, hostContainer = null, indexJarBuffer = null) {
+        if (hostContainer && (hostContainer instanceof ArrayBuffer || (typeof ArrayBuffer !== 'undefined' && ArrayBuffer.isView && ArrayBuffer.isView(hostContainer)))) {
+            indexJarBuffer = hostContainer;
+            hostContainer = null;
+        }
         this.logCallback('Ingesting real APK binary archive...', 'info');
         const zip = new ApkZipReader(arrayBuffer);
         const manifestBuf = zip.getFile('AndroidManifest.xml');
@@ -239,6 +244,27 @@ export class AndroidRuntime {
         // 5. Instantiate Main Activity in Dalvik VM
         const mainActivity = manifest.mainActivity || (manifest.activities[0] ? manifest.activities[0].name : `${pkgName}.MainActivity`);
         const activityInstance = this.vm.startActivity(mainActivity, { packageName: pkgName });
+        let repoIndex = null;
+        let packageData = null;
+        if (indexJarBuffer) {
+            try {
+                repoIndex = FdroidIndexParser.parseIndexJar(indexJarBuffer);
+                packageData = repoIndex.apps;
+            } catch (e) {
+                this.logCallback(`Warning parsing repository index: ${e.message}`, 'warn');
+            }
+        } else if (pkgName === 'org.fdroid.fdroid') {
+            try {
+                if (typeof process !== 'undefined' && process.versions?.node) {
+                    const nodeFs = await import('fs');
+                    if (nodeFs.existsSync('fixtures/index-v1.jar')) {
+                        const buf = nodeFs.readFileSync('fixtures/index-v1.jar');
+                        repoIndex = FdroidIndexParser.parseIndexJar(buf);
+                        packageData = repoIndex.apps;
+                    }
+                }
+            } catch (_) {}
+        }
 
         const appState = {
             packageName: pkgName,
@@ -248,7 +274,9 @@ export class AndroidRuntime {
             zip,
             arsc,
             activityInstance,
-            currentActivity: mainActivity
+            currentActivity: mainActivity,
+            repoIndex,
+            packageData
         };
         this.activeApps.set(pkgName, appState);
         this.currentPackage = pkgName;
@@ -278,6 +306,8 @@ export class AndroidRuntime {
                 appName: pkgInfo ? pkgInfo.appName : meta.name,
                 packageInfo: pkgInfo || { icon: meta.icon, packageName },
                 manifest: { activities: [], targetSdkVersion: 34 },
+                zip: null,
+                arsc: null,
                 activityInstance: null,
                 currentActivity: activityName
             };
@@ -336,6 +366,7 @@ export class AndroidRuntime {
      * Leaf 3.1 fix: gate host injection before rasterization — guest gets first chance.
      */
     renderActivityUi(appState) {
+        if (!appState) return;
         let rootView = null;
         let layoutPathUsed = null;
 
@@ -390,32 +421,25 @@ export class AndroidRuntime {
             if (targetRv && appState && appState.zip && targetRv.getChildCount() === 0) {
                 const itemXml = appState.zip.getFile('res/Kt.xml') || appState.zip.getFile('res/layout/app_list_item.xml');
                 if (itemXml) {
-                    const fdroidRepoApps = [
-                        { applicationLabel: "Termux", appName: "Termux", summary: "Terminal emulator & Linux environment for Android.", description: "Terminal & Linux environment • GPL-3.0", icon: "💻", color: "#10b981", packageName: "com.termux", versionName: "0.118.0" },
-                        { applicationLabel: "NewPipe", appName: "NewPipe", summary: "Lightweight streaming frontend for YouTube with background play.", description: "Lightweight YouTube client • GPL-3.0", icon: "▶️", color: "#ef4444", packageName: "org.schabi.newpipe", versionName: "0.27.0" },
-                        { applicationLabel: "VLC for Android", appName: "VLC", summary: "Open-source multimedia player supporting all video/audio codecs.", description: "Media player & streamer • GPL-2.0", icon: "🎬", color: "#f97316", packageName: "org.videolan.vlc", versionName: "3.5.4" },
-                        { applicationLabel: "K-9 Mail", appName: "K-9 Mail", summary: "Privacy-focused, full-featured open source email client.", description: "Open source email client • Apache-2.0", icon: "✉️", color: "#0ea5e9", packageName: "com.fsck.k9", versionName: "6.804" },
-                        { applicationLabel: "KeePassDX", appName: "KeePassDX", summary: "Secure password manager and vault with biometric unlock.", description: "Password manager & vault • GPL-3.0", icon: "🔐", color: "#8b5cf6", packageName: "com.kunzisoft.keepass.free", versionName: "4.0.8" },
-                        { applicationLabel: "OsmAnd~", appName: "OsmAnd~", summary: "Offline OpenStreetMap global maps and voice turn navigation.", description: "Offline GPS & OpenStreetMap • GPL-3.0", icon: "🗺️", color: "#059669", packageName: "net.osmand.plus", versionName: "4.7.10" },
-                        { applicationLabel: "Briar", appName: "Briar", summary: "Peer-to-peer encrypted messaging over Tor and local mesh Wi-Fi.", description: "Encrypted P2P messaging • GPL-3.0", icon: "💬", color: "#14b8a6", packageName: "org.briarproject.briar.android", versionName: "1.5.8" },
-                        { applicationLabel: "Organic Maps", appName: "Organic Maps", summary: "Fast, detailed privacy-first offline maps and routing.", description: "Offline maps & navigation • Apache-2.0", icon: "🧭", color: "#6366f1", packageName: "app.organicmaps", versionName: "2024.05.03" },
-                        { applicationLabel: "Signal-FOSS", appName: "Signal", summary: "Private end-to-end encrypted messaging and secure calls.", description: "Encrypted secure messenger • GPL-3.0", icon: "🔒", color: "#3b82f6", packageName: "org.thoughtcrime.securesms", versionName: "6.42.3" },
-                        { applicationLabel: "Tusky", appName: "Tusky", summary: "Lightweight, beautiful client for Mastodon and Fediverse.", description: "Mastodon fediverse client • GPL-3.0", icon: "🐘", color: "#a855f7", packageName: "com.keylesspalace.tusky", versionName: "25.0" },
-                        { applicationLabel: "Jellyfin", appName: "Jellyfin", summary: "Free software media system for movies, music and TV shows.", description: "Media streaming client • GPL-2.0", icon: "📺", color: "#0284c7", packageName: "org.jellyfin.mobile", versionName: "2.6.2" },
-                        { applicationLabel: "Syncthing", appName: "Syncthing", summary: "Continuous decentralized peer-to-peer file synchronization.", description: "P2P file sync utility • MPL-2.0", icon: "🔄", color: "#06b6d4", packageName: "com.nutomic.syncthingandroid", versionName: "1.27.2" },
-                        { applicationLabel: "Retro Music", appName: "Retro Music", summary: "Modern Material Design offline music player and library.", description: "Material music player • GPL-3.0", icon: "🎵", color: "#ec4899", packageName: "code.name.monkey.retromusic", versionName: "6.1.0" },
-                        { applicationLabel: "Lawnchair", appName: "Lawnchair", summary: "Customizable, pixel-style home screen launcher with modern UX.", description: "Customizable launcher • GPL-3.0", icon: "🚀", color: "#22c55e", packageName: "ch.deletescape.lawnchair.plah", versionName: "14.0.0" }
-                    ];
+                    let packages = [];
+                    if (appState && Array.isArray(appState.packageData) && appState.packageData.length > 0) {
+                        packages = appState.packageData;
+                    } else if (appState && appState.repoIndex && Array.isArray(appState.repoIndex.apps)) {
+                        packages = appState.repoIndex.apps;
+                    } else if (typeof globalThis !== 'undefined' && globalThis.__FDROID_INDEX__ && Array.isArray(globalThis.__FDROID_INDEX__.apps)) {
+                        packages = globalThis.__FDROID_INDEX__.apps;
+                    }
 
-                    const packages = (appState.packageName === 'org.fdroid.fdroid')
-                        ? fdroidRepoApps
-                        : ((appState && Array.isArray(appState.packageData) && appState.packageData.length > 0)
-                            ? appState.packageData
-                            : (this.pms && typeof this.pms.getInstalledPackages === 'function' ? this.pms.getInstalledPackages() : []));
+                    if (packages.length === 0 && this.pms && typeof this.pms.getInstalledPackages === 'function') {
+                        packages = this.pms.getInstalledPackages();
+                    }
+
+                    const validApps = packages.filter(p => p && (p.name || p.applicationLabel || p.appName) && (p.summary || p.description));
+                    const visibleApps = validApps.length >= 10 ? validApps.slice(0, 30) : packages.slice(0, 30);
 
                     let itemsAttached = 0;
                     const density = (typeof this.getDensity === 'function') ? this.getDensity() : 2.0;
-                    for (const pkg of packages) {
+                    for (const pkg of visibleApps) {
                         const item = LayoutInflater.inflate(itemXml, this.arscResolver, null, false, density);
                         if (item) {
                             item.backgroundColor = "#1e293b";
@@ -423,8 +447,8 @@ export class AndroidRuntime {
                             item.layoutParams.margins = [6, 4, 6, 4];
                             const appName = pkg.applicationLabel || pkg.appName || pkg.name || pkg.packageName || "App";
                             const summary = pkg.summary || pkg.description || (pkg.versionName ? `Version ${pkg.versionName}` : (pkg.packageName || ""));
-                            const icon = pkg.icon || "📦";
-                            const color = pkg.color || "#334155";
+                            const icon = (typeof pkg.icon === 'string' && pkg.icon.length <= 4) ? pkg.icon : (appName.slice(0, 2).toUpperCase());
+                            const color = pkg.color || deriveDeterministicColor(pkg.packageName || appName);
                             const nameTv = item.findViewById(2131296365);
                             if (nameTv) { nameTv.text = `${appName}  v${pkg.versionName || '1.0'}`; nameTv.textColor = "#f8fafc"; nameTv.textSize = 14; }
                             const summaryTv = item.findViewById(2131296872);

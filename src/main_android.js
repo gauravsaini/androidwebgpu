@@ -425,8 +425,16 @@ async function startSystem() {
         if (resp.ok) {
             const buf = await resp.arrayBuffer();
             console.info(`[AndroidOS] ${targetApk} fetched:`, buf.byteLength, "bytes");
-            appendLogcat('PackageManager', `${targetApk} fetched (${buf.byteLength} bytes). Ingesting archive & DEX bytecode...`, 'I');
-            const appState = await runtime.loadAndRunApk(buf, null);
+            let indexBuf = null;
+            if (targetApk.toLowerCase().includes('fdroid') || targetApk.toLowerCase().includes('f-droid')) {
+                try {
+                    const indexResp = await fetch('fixtures/index-v1.jar');
+                    if (indexResp.ok) {
+                        indexBuf = await indexResp.arrayBuffer();
+                    }
+                } catch (_) {}
+            }
+            const appState = await runtime.loadAndRunApk(buf, indexBuf);
             const targetPkg = appState?.packageName || (targetApk.toLowerCase().includes('firefox') ? 'org.mozilla.firefox' : 'org.fdroid.fdroid');
             appendLogcat('PackageManager', `${targetApk} loaded into Dalvik VM & registered in PMS (${targetPkg}).`, 'I');
             console.info(`[AndroidOS] ${targetPkg} installed into PMS successfully`);

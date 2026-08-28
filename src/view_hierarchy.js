@@ -613,6 +613,7 @@ export class ViewGroup extends View {
 
         ctx.save?.();
         if (this.alpha < 1.0) ctx.globalAlpha *= this.alpha;
+        if (ctx.translate) ctx.translate(this.left, this.top);
 
         // Draw container background
         this.drawBackground(ctx, w, h);
@@ -626,13 +627,23 @@ export class ViewGroup extends View {
         ctx.restore?.();
     }
 
+    drawBackground(ctx, w, h) {
+        const bg = this.backgroundColor || this.background;
+        if (bg && typeof bg === 'string') {
+            ctx.fillStyle = bg;
+            ctx.fillRect(0, 0, w, h);
+        } else if (typeof bg === 'function') {
+            bg(ctx, 0, 0, w, h);
+        }
+    }
+
     dispatchDraw(ctx) {
         if (!ctx) return;
         ctx.save?.();
         // Clip to container bounds
         if (ctx.beginPath && ctx.rect && ctx.clip) {
             ctx.beginPath();
-            ctx.rect(this.left, this.top, this.getWidth(), this.getHeight());
+            ctx.rect(0, 0, this.getWidth(), this.getHeight());
             ctx.clip();
         }
 
@@ -1618,9 +1629,9 @@ export class RecyclerView extends ViewGroup {
     }
 
     onLayout(changed, l, t, r, b) {
-        let curY = this.top + this.paddingTop;
-        const parentLeft = this.left + this.paddingLeft;
-        const parentRight = this.right - this.paddingRight;
+        let curY = this.paddingTop;
+        const parentLeft = this.paddingLeft;
+        const parentRight = this.getWidth() - this.paddingRight;
 
         for (const child of this.children) {
             if (child.visibility === GONE) continue;
@@ -1969,11 +1980,21 @@ export class ImageView extends View {
         if (this.drawable && typeof this.drawable.draw === 'function') {
             this.drawable.draw(ctx, x, y, w, h);
         } else if (this.text) {
-            // Emoji or text icon glyph rendering
-            ctx.font = `${Math.round(h * 0.6)}px sans-serif`;
+            ctx.fillStyle = this.backgroundColor || '#3b82f6';
+            if (ctx.beginPath && ctx.roundRect) {
+                ctx.beginPath();
+                ctx.roundRect(x, y, w, h, 8);
+                ctx.fill();
+            } else {
+                ctx.fillRect(x, y, w, h);
+            }
+            ctx.font = `bold ${Math.round(h * 0.45)}px sans-serif`;
+            ctx.fillStyle = '#FFFFFF';
             ctx.textAlign = 'center';
             ctx.textBaseline = 'middle';
-            ctx.fillText(this.text, x + Math.round(w / 2), y + Math.round(h / 2));
+            if (ctx.fillText) {
+                ctx.fillText(this.text, x + Math.round(w / 2), y + Math.round(h / 2));
+            }
         } else if (this.tint) {
             ctx.fillStyle = this.tint;
             ctx.fillRect(x, y, w, h);
