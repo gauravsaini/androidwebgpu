@@ -336,10 +336,6 @@ export class AndroidRuntime {
      * Leaf 3.1 fix: gate host injection before rasterization — guest gets first chance.
      */
     renderActivityUi(appState) {
-        if (!this.isHostInjectionAllowed()) {
-            this.log('Guest rendering active — host injection gated before rasterize (Leaf 3.1)', 'info', 'bridge');
-            return;
-        }
         let rootView = null;
         let layoutPathUsed = null;
 
@@ -402,7 +398,13 @@ export class AndroidRuntime {
                         { applicationLabel: "KeePassDX", appName: "KeePassDX", summary: "Secure password manager and vault with biometric unlock.", description: "Password manager & vault • GPL-3.0", icon: "🔐", color: "#8b5cf6", packageName: "com.kunzisoft.keepass.free", versionName: "4.0.8" },
                         { applicationLabel: "OsmAnd~", appName: "OsmAnd~", summary: "Offline OpenStreetMap global maps and voice turn navigation.", description: "Offline GPS & OpenStreetMap • GPL-3.0", icon: "🗺️", color: "#059669", packageName: "net.osmand.plus", versionName: "4.7.10" },
                         { applicationLabel: "Briar", appName: "Briar", summary: "Peer-to-peer encrypted messaging over Tor and local mesh Wi-Fi.", description: "Encrypted P2P messaging • GPL-3.0", icon: "💬", color: "#14b8a6", packageName: "org.briarproject.briar.android", versionName: "1.5.8" },
-                        { applicationLabel: "Organic Maps", appName: "Organic Maps", summary: "Fast, detailed privacy-first offline maps and routing.", description: "Offline maps & navigation • Apache-2.0", icon: "🧭", color: "#6366f1", packageName: "app.organicmaps", versionName: "2024.05.03" }
+                        { applicationLabel: "Organic Maps", appName: "Organic Maps", summary: "Fast, detailed privacy-first offline maps and routing.", description: "Offline maps & navigation • Apache-2.0", icon: "🧭", color: "#6366f1", packageName: "app.organicmaps", versionName: "2024.05.03" },
+                        { applicationLabel: "Signal-FOSS", appName: "Signal", summary: "Private end-to-end encrypted messaging and secure calls.", description: "Encrypted secure messenger • GPL-3.0", icon: "🔒", color: "#3b82f6", packageName: "org.thoughtcrime.securesms", versionName: "6.42.3" },
+                        { applicationLabel: "Tusky", appName: "Tusky", summary: "Lightweight, beautiful client for Mastodon and Fediverse.", description: "Mastodon fediverse client • GPL-3.0", icon: "🐘", color: "#a855f7", packageName: "com.keylesspalace.tusky", versionName: "25.0" },
+                        { applicationLabel: "Jellyfin", appName: "Jellyfin", summary: "Free software media system for movies, music and TV shows.", description: "Media streaming client • GPL-2.0", icon: "📺", color: "#0284c7", packageName: "org.jellyfin.mobile", versionName: "2.6.2" },
+                        { applicationLabel: "Syncthing", appName: "Syncthing", summary: "Continuous decentralized peer-to-peer file synchronization.", description: "P2P file sync utility • MPL-2.0", icon: "🔄", color: "#06b6d4", packageName: "com.nutomic.syncthingandroid", versionName: "1.27.2" },
+                        { applicationLabel: "Retro Music", appName: "Retro Music", summary: "Modern Material Design offline music player and library.", description: "Material music player • GPL-3.0", icon: "🎵", color: "#ec4899", packageName: "code.name.monkey.retromusic", versionName: "6.1.0" },
+                        { applicationLabel: "Lawnchair", appName: "Lawnchair", summary: "Customizable, pixel-style home screen launcher with modern UX.", description: "Customizable launcher • GPL-3.0", icon: "🚀", color: "#22c55e", packageName: "ch.deletescape.lawnchair.plah", versionName: "14.0.0" }
                     ];
 
                     const packages = (appState.packageName === 'org.fdroid.fdroid')
@@ -412,20 +414,21 @@ export class AndroidRuntime {
                             : (this.pms && typeof this.pms.getInstalledPackages === 'function' ? this.pms.getInstalledPackages() : []));
 
                     let itemsAttached = 0;
+                    const density = (typeof this.getDensity === 'function') ? this.getDensity() : 2.0;
                     for (const pkg of packages) {
-                        const item = LayoutInflater.inflate(itemXml, this.arscResolver);
+                        const item = LayoutInflater.inflate(itemXml, this.arscResolver, null, false, density);
                         if (item) {
                             item.backgroundColor = "#1e293b";
-                            item.layoutParams.height = 110;
-                            item.layoutParams.margins = [8, 8, 8, 8];
+                            item.layoutParams.height = 96;
+                            item.layoutParams.margins = [6, 4, 6, 4];
                             const appName = pkg.applicationLabel || pkg.appName || pkg.name || pkg.packageName || "App";
                             const summary = pkg.summary || pkg.description || (pkg.versionName ? `Version ${pkg.versionName}` : (pkg.packageName || ""));
                             const icon = pkg.icon || "📦";
                             const color = pkg.color || "#334155";
                             const nameTv = item.findViewById(2131296365);
-                            if (nameTv) { nameTv.text = `${appName}  v${pkg.versionName || '1.0'}`; nameTv.textColor = "#f8fafc"; nameTv.textSize = 15; }
+                            if (nameTv) { nameTv.text = `${appName}  v${pkg.versionName || '1.0'}`; nameTv.textColor = "#f8fafc"; nameTv.textSize = 14; }
                             const summaryTv = item.findViewById(2131296872);
-                            if (summaryTv) { summaryTv.text = summary; summaryTv.textColor = "#94a3b8"; summaryTv.textSize = 12; }
+                            if (summaryTv) { summaryTv.text = summary; summaryTv.textColor = "#94a3b8"; summaryTv.textSize = 11; }
                             const iconIv = item.findViewById(2131296574);
                             if (iconIv) { iconIv.text = icon; iconIv.backgroundColor = color; }
                             targetRv.addView(item);
@@ -484,6 +487,17 @@ export class AndroidRuntime {
         const frame = this.rasterizer.rasterize(rootView, width, height);
         const elapsed = (((typeof performance !== 'undefined') ? performance.now() : Date.now()) - t0).toFixed(2);
         this.log(`Rasterized ${width}x${height} view tree in ${elapsed}ms (damage: [${frame.damageRect.join(', ')}])`, 'info', 'ViewRasterizer');
+
+        if (this.canvas && typeof this.canvas.getContext === 'function') {
+            try {
+                const ctx = this.canvas.getContext('2d');
+                if (ctx && typeof ctx.createImageData === 'function' && typeof ctx.putImageData === 'function') {
+                    const imgData = ctx.createImageData(width, height);
+                    imgData.data.set(frame.rgbaData);
+                    ctx.putImageData(imgData, 0, 0);
+                }
+            } catch (_) {}
+        }
 
         if (this.gpuDevice) {
             if (!this.isHostInjectionAllowed()) {

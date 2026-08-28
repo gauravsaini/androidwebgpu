@@ -309,7 +309,7 @@ export class View {
         const h = this.getHeight();
         if (w <= 0 || h <= 0) return;
 
-        ctx.save();
+        ctx.save?.();
         if (this.alpha < 1.0) ctx.globalAlpha *= this.alpha;
 
         // Draw background
@@ -318,7 +318,7 @@ export class View {
         // Draw view contents
         this.onDraw(ctx);
 
-        ctx.restore();
+        ctx.restore?.();
     }
 
     drawBackground(ctx, w, h) {
@@ -611,16 +611,19 @@ export class ViewGroup extends View {
         const h = this.getHeight();
         if (w <= 0 || h <= 0) return;
 
-        ctx.save();
+        ctx.save?.();
         if (this.alpha < 1.0) ctx.globalAlpha *= this.alpha;
 
         // Draw container background
         this.drawBackground(ctx, w, h);
 
+        // Draw container custom contents
+        this.onDraw(ctx);
+
         // Draw children with container clipping & scroll offset translation
         this.dispatchDraw(ctx);
 
-        ctx.restore();
+        ctx.restore?.();
     }
 
     dispatchDraw(ctx) {
@@ -633,9 +636,9 @@ export class ViewGroup extends View {
             ctx.clip();
         }
 
-        // Apply container offset and scroll translation
-        if (ctx.translate) {
-            ctx.translate(this.left - (this.scrollX || 0), this.top - (this.scrollY || 0));
+        // Apply container scroll translation if any
+        if ((this.scrollX || this.scrollY) && ctx.translate) {
+            ctx.translate(-(this.scrollX || 0), -(this.scrollY || 0));
         }
 
         // Draw children
@@ -1615,9 +1618,9 @@ export class RecyclerView extends ViewGroup {
     }
 
     onLayout(changed, l, t, r, b) {
-        let curY = this.paddingTop;
-        const parentLeft = this.paddingLeft;
-        const parentRight = this.getWidth() - this.paddingRight;
+        let curY = this.top + this.paddingTop;
+        const parentLeft = this.left + this.paddingLeft;
+        const parentRight = this.right - this.paddingRight;
 
         for (const child of this.children) {
             if (child.visibility === GONE) continue;
@@ -1819,33 +1822,23 @@ export class VectorDrawable {
                     let fillAlpha = 1.0;
                     let strokeAlpha = 1.0;
 
-                    const cAttrs = child.attrs || {};
-                    const cRaw = child.rawAttrs || [];
-
-                    for (const r of cRaw) {
-                        const { name, dataType, data, rawVal } = r;
-                        if (name === 'pathData') {
-                            pathData = rawVal || (resResolver && resResolver.globalStrings ? resResolver.globalStrings[data] : '');
-                        } else if (name === 'fillColor') {
-                            fillColor = resResolver ? resResolver.resolveColor(data) : TypedValue.decodeColor(data, dataType);
-                        } else if (name === 'strokeColor') {
-                            strokeColor = resResolver ? resResolver.resolveColor(data) : TypedValue.decodeColor(data, dataType);
-                        } else if (name === 'strokeWidth') {
-                            strokeWidth = TypedValue.decodeValue(dataType, data) || data;
-                        } else if (name === 'fillAlpha') {
-                            fillAlpha = TypedValue.decodeValue(dataType, data) || 1.0;
-                        } else if (name === 'strokeAlpha') {
-                            strokeAlpha = TypedValue.decodeValue(dataType, data) || 1.0;
-                        }
+                    for (const r of (child.rawAttrs || [])) {
+                        if (r.name === 'pathData') pathData = r.rawVal || '';
+                        else if (r.name === 'fillColor') fillColor = resResolver ? resResolver.resolveColor(r.data) : TypedValue.decodeColor(r.data, r.dataType);
+                        else if (r.name === 'strokeColor') strokeColor = resResolver ? resResolver.resolveColor(r.data) : TypedValue.decodeColor(r.data, r.dataType);
+                        else if (r.name === 'strokeWidth') strokeWidth = (r.dataType === 0x10 || r.dataType === 0x11 || r.dataType === 0x04) ? r.data : (TypedValue.complexToDimension(r.data) || r.data || 0);
+                        else if (r.name === 'fillAlpha') fillAlpha = TypedValue.decodeValue(r.dataType, r.data) || 1.0;
+                        else if (r.name === 'strokeAlpha') strokeAlpha = TypedValue.decodeValue(r.dataType, r.data) || 1.0;
                     }
 
-                    if (!pathData && cAttrs.pathData) pathData = cAttrs.pathData;
-                    if (!fillColor && cAttrs.fillColor) fillColor = cAttrs.fillColor;
-                    if (!strokeColor && cAttrs.strokeColor) strokeColor = cAttrs.strokeColor;
-
-                    if (pathData) {
-                        paths.push({ pathData, fillColor, strokeColor, strokeWidth, fillAlpha, strokeAlpha });
+                    if (child.attrs) {
+                        if (child.attrs.pathData) pathData = child.attrs.pathData;
+                        if (child.attrs.fillColor) fillColor = child.attrs.fillColor;
+                        if (child.attrs.strokeColor) strokeColor = child.attrs.strokeColor;
+                        if (child.attrs.strokeWidth) strokeWidth = parseFloat(child.attrs.strokeWidth) || strokeWidth;
                     }
+
+                    paths.push({ pathData, fillColor, strokeColor, strokeWidth, fillAlpha, strokeAlpha });
                 } else if (child.children) {
                     extractPaths(child);
                 }
@@ -1857,34 +1850,26 @@ export class VectorDrawable {
     }
 
     draw(ctx, x, y, targetWidth, targetHeight) {
-        if (!ctx || this.paths.length === 0) return;
+        if (!ctx) return;
         ctx.save?.();
-        ctx.translate?.(x, y);
-
-        const sx = targetWidth / (this.viewportWidth || 1);
-        const sy = targetHeight / (this.viewportHeight || 1);
-        ctx.scale?.(sx, sy);
+        ctx.translate(x, y);
+        const scaleX = targetWidth / (this.viewportWidth || 24);
+        const scaleY = targetHeight / (this.viewportHeight || 24);
+        ctx.scale(scaleX, scaleY);
 
         for (const p of this.paths) {
             if (!p.pathData) continue;
             try {
                 let pathObj = null;
                 if (typeof Path2D !== 'undefined') {
-                    try {
-                        pathObj = new Path2D(p.pathData);
-                    } catch (e) {}
+                    pathObj = new Path2D(p.pathData);
                 }
-                if (!pathObj && ctx.beginPath) {
-                    ctx.beginPath();
-                    if (ctx.rect) ctx.rect(0, 0, this.viewportWidth, this.viewportHeight);
-                }
-
                 const fill = this.tint || p.fillColor;
-                if (fill && fill !== 'none') {
+                if (fill && fill !== 'none' && fill !== 'transparent') {
                     ctx.fillStyle = fill;
-                    if (p.fillAlpha !== undefined && p.fillAlpha < 1.0 && ctx.globalAlpha !== undefined) {
+                    if (p.fillAlpha < 1.0) {
                         const oldAlpha = ctx.globalAlpha;
-                        ctx.globalAlpha = oldAlpha * p.fillAlpha;
+                        ctx.globalAlpha *= p.fillAlpha;
                         if (pathObj && ctx.fill) ctx.fill(pathObj);
                         else if (ctx.fill) ctx.fill();
                         ctx.globalAlpha = oldAlpha;
@@ -1983,6 +1968,12 @@ export class ImageView extends View {
 
         if (this.drawable && typeof this.drawable.draw === 'function') {
             this.drawable.draw(ctx, x, y, w, h);
+        } else if (this.text) {
+            // Emoji or text icon glyph rendering
+            ctx.font = `${Math.round(h * 0.6)}px sans-serif`;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(this.text, x + Math.round(w / 2), y + Math.round(h / 2));
         } else if (this.tint) {
             ctx.fillStyle = this.tint;
             ctx.fillRect(x, y, w, h);
@@ -2271,7 +2262,7 @@ export class LayoutInflater {
      * @param {boolean} [attachToRoot=true] - Whether to attach to root parent.
      * @returns {View} Root inflated View.
      */
-    static inflate(xmlBufferOrTree, resourceResolver = null, parent = null, attachToRoot = true) {
+    static inflate(xmlBufferOrTree, resourceResolver = null, parent = null, attachToRoot = true, density = 1.0) {
         let ast = xmlBufferOrTree;
         if (xmlBufferOrTree instanceof ArrayBuffer || (xmlBufferOrTree && xmlBufferOrTree.buffer)) {
             ast = parseAxmlLayoutBuffer(xmlBufferOrTree);
@@ -2281,7 +2272,7 @@ export class LayoutInflater {
             return new View();
         }
 
-        const root = LayoutInflater._inflateNode(ast, resourceResolver) || new View();
+        const root = LayoutInflater._inflateNode(ast, resourceResolver, density) || new View();
         if (parent && root && attachToRoot) {
             parent.addView(root);
         }
@@ -2358,12 +2349,11 @@ export class LayoutInflater {
         }
     }
 
-    static _inflateNode(node, resResolver) {
+    static _inflateNode(node, resResolver, density = 1.0) {
         if (!node || !node.tag) return null;
 
         const view = LayoutInflater._createViewForTag(node.tag);
         const lp = new LayoutParams();
-        const density = 1.0;
 
         const attrs = node.attrs || {};
         const rawAttrs = node.rawAttrs || [];
@@ -2386,7 +2376,7 @@ export class LayoutInflater {
         // Inflate children recursively
         if (view instanceof ViewGroup && Array.isArray(node.children)) {
             for (const childNode of node.children) {
-                const childView = LayoutInflater._inflateNode(childNode, resResolver);
+                const childView = LayoutInflater._inflateNode(childNode, resResolver, density);
                 if (childView) {
                     view.addView(childView);
                 }

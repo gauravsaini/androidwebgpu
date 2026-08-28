@@ -393,12 +393,7 @@ async function startSystem() {
                 };
                 gm.onMilestone = (m) => {
                     if (typeof origMile === 'function') try { origMile(m); } catch(_) {}
-                    if (m === 'VIRTIO_GPU_INIT' || m === 'SYSTEM_BOOT_COMPLETED' || m === 'INIT_USERSPACE' || m === 'KERNEL_BOOT') {
-                        runtime.enableGuestRendering();
-                        if (gpuDev && typeof gpuDev.blockHostInjection === 'function') {
-                            gpuDev.blockHostInjection();
-                        }
-                    }
+                    if (m === 'VIRTIO_GPU_INIT' || m === 'SYSTEM_BOOT_COMPLETED') gateOnGuest();
                 };
                 // Poll guestActive quickly for first frame (covers synthetic probe path)
                 let poll = 0;
