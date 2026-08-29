@@ -593,6 +593,24 @@ export class ViewGroup extends View {
         return MeasureSpec.makeMeasureSpec(resultSize, resultMode);
     }
 
+    onMeasure(widthMeasureSpec, heightMeasureSpec) {
+        this.measureChildren(widthMeasureSpec, heightMeasureSpec);
+        let maxWidth = 0;
+        let maxHeight = 0;
+        for (const child of this.children) {
+            if (child.visibility !== GONE) {
+                const lp = child.layoutParams;
+                maxWidth = Math.max(maxWidth, child.measuredWidth + lp.marginLeft + lp.marginRight);
+                maxHeight = Math.max(maxHeight, child.measuredHeight + lp.marginTop + lp.marginBottom);
+            }
+        }
+        maxWidth += this.paddingLeft + this.paddingRight;
+        maxHeight += this.paddingTop + this.paddingBottom;
+        const measuredW = View.resolveSize(Math.max(maxWidth, this.minWidth), widthMeasureSpec);
+        const measuredH = View.resolveSize(Math.max(maxHeight, this.minHeight), heightMeasureSpec);
+        this.setMeasuredDimension(measuredW, measuredH);
+    }
+
     onLayout(changed, l, t, r, b) {
         // Base ViewGroup default layout
         const w = r - l;
@@ -819,7 +837,7 @@ export class LinearLayout extends ViewGroup {
         maxWidth += this.paddingLeft + this.paddingRight;
         maxWidth = Math.max(maxWidth, this.minWidth);
 
-        const targetHeight = View.getDefaultSize(usedHeight, heightMeasureSpec);
+        const targetHeight = View.resolveSize(usedHeight, heightMeasureSpec);
         const remainingSpace = targetHeight - usedHeight;
 
         // Weight distribution pass
@@ -843,7 +861,7 @@ export class LinearLayout extends ViewGroup {
             }
         }
 
-        const measuredW = View.getDefaultSize(maxWidth, widthMeasureSpec);
+        const measuredW = View.resolveSize(maxWidth, widthMeasureSpec);
         this.setMeasuredDimension(measuredW, targetHeight);
     }
 
@@ -871,7 +889,7 @@ export class LinearLayout extends ViewGroup {
         maxHeight += this.paddingTop + this.paddingBottom;
         maxHeight = Math.max(maxHeight, this.minHeight);
 
-        const targetWidth = View.getDefaultSize(usedWidth, widthMeasureSpec);
+        const targetWidth = View.resolveSize(usedWidth, widthMeasureSpec);
         const remainingSpace = targetWidth - usedWidth;
 
         // Weight distribution pass
@@ -895,7 +913,7 @@ export class LinearLayout extends ViewGroup {
             }
         }
 
-        const measuredH = View.getDefaultSize(maxHeight, heightMeasureSpec);
+        const measuredH = View.resolveSize(maxHeight, heightMeasureSpec);
         this.setMeasuredDimension(targetWidth, measuredH);
     }
 

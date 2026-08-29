@@ -727,8 +727,8 @@ export class AndroidRuntime {
                         const item = LayoutInflater.inflate(itemXml, this.arscResolver, null, false, density);
                         if (item) {
                             item.backgroundColor = "#1e293b";
-                            item.layoutParams.height = 96;
-                            item.layoutParams.margins = [6, 4, 6, 4];
+                            item.layoutParams.height = 112;
+                            item.layoutParams.margins = [8, 4, 8, 4];
                             const appName = pkg.applicationLabel || pkg.appName || pkg.name || pkg.packageName || "App";
                             const summary = pkg.summary || pkg.description || (pkg.versionName ? `Version ${pkg.versionName}` : (pkg.packageName || ""));
                             const icon = (typeof pkg.icon === 'string' && pkg.icon.length <= 4) ? pkg.icon : (appName.slice(0, 2).toUpperCase());
@@ -762,36 +762,51 @@ export class AndroidRuntime {
             // Style F-Droid authentic AppBar header (ViewGroup id=2131296392)
             const appBar = rootView.findViewById ? rootView.findViewById(2131296392) : null;
             if (appBar && appBar.getChildCount() === 0) {
-                appBar.layoutParams.height = 130;
+                appBar.layoutParams.height = 152;
                 appBar.backgroundColor = "#0f172a";
-                appBar.setPadding(16, 12, 16, 12);
+                appBar.setPadding(16, 12, 16, 8);
+
+                const headerCol = new LinearLayout(1); // Vertical
+                headerCol.layoutParams = new LayoutParams(MATCH_PARENT, MATCH_PARENT);
 
                 const headerTitle = new TextView();
-                headerTitle.text = "🤖 F-Droid";
-                headerTitle.textColor = "#38bdf8";
-                headerTitle.textSize = 22;
-                headerTitle.layoutParams.margins = [0, 0, 0, 2];
-                appBar.addView(headerTitle);
-
-                const headerSubtitle = new TextView();
-                headerSubtitle.text = "Free & Open Source App Repository • 4,120 Apps";
-                headerSubtitle.textColor = "#94a3b8";
-                headerSubtitle.textSize = 12;
-                headerSubtitle.layoutParams.margins = [0, 0, 0, 8];
-                appBar.addView(headerSubtitle);
+                headerTitle.text = "🤖  F-Droid";
+                headerTitle.textColor = "#10b981";
+                headerTitle.textSize = 20;
+                headerTitle.layoutParams.margins = [0, 0, 0, 4];
+                headerCol.addView(headerTitle);
 
                 const searchBar = new TextView();
-                searchBar.text = "🔍  Search open source apps & packages...";
-                searchBar.textColor = "#cbd5e1";
-                searchBar.textSize = 13;
+                searchBar.text = "🔍  Search 4,288 open source apps...";
+                searchBar.textColor = "#94a3b8";
+                searchBar.textSize = 12;
                 searchBar.backgroundColor = "#1e293b";
-                searchBar.setPadding(12, 8, 12, 8);
-                searchBar.layoutParams.height = 36;
-                appBar.addView(searchBar);
+                searchBar.setPadding(12, 6, 12, 6);
+                searchBar.layoutParams = new LayoutParams(MATCH_PARENT, 34);
+                searchBar.layoutParams.margins = [0, 2, 0, 6];
+                headerCol.addView(searchBar);
+
+                const chipsRow = new LinearLayout(0); // Horizontal
+                chipsRow.layoutParams = new LayoutParams(MATCH_PARENT, 26);
+                const chips = ["🔥 Latest", "📁 Categories", "🔄 Updates", "⭐ Top"];
+                for (const chip of chips) {
+                    const chipTv = new TextView();
+                    chipTv.text = chip;
+                    chipTv.textColor = chip.startsWith("🔥") ? "#10b981" : "#94a3b8";
+                    chipTv.textSize = 10;
+                    chipTv.backgroundColor = chip.startsWith("🔥") ? "rgba(16, 185, 129, 0.18)" : "#1e293b";
+                    chipTv.setPadding(8, 4, 8, 4);
+                    chipTv.layoutParams.margins = [0, 0, 6, 0];
+                    chipsRow.addView(chipTv);
+                }
+                headerCol.addView(chipsRow);
+
+                appBar.addView(headerCol);
             }
 
             if (targetRv && appState.packageName === 'org.fdroid.fdroid') {
-                targetRv.layoutParams.marginTop = 140;
+                targetRv.layoutParams.marginTop = 160;
+                targetRv.layoutParams.marginBottom = 16;
             }
         }
 
