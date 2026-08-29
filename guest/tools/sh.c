@@ -203,18 +203,36 @@ static int run_line(char *line) {
                 // Extract module parameters (e.g. force_legacy=1)
                 char mod_args[256] = {0};
                 char *arg_pos = ms + mi;
-                while (*arg_pos == ' ') arg_pos++;
-                int ai = 0;
-                while (arg_pos[ai] && arg_pos[ai] != ';' && arg_pos[ai] != '&' && arg_pos[ai] != '|' && arg_pos[ai] != '>' && ai < 255) {
-                    mod_args[ai] = arg_pos[ai];
-                    ai++;
+                while (*arg_pos && *arg_pos != ';' && *arg_pos != '&' && *arg_pos != '|' && *arg_pos != '>' && *arg_pos != '<') {
+                    while (*arg_pos == ' ') arg_pos++;
+                    if (!*arg_pos || *arg_pos == ';' || *arg_pos == '&' || *arg_pos == '|' || *arg_pos == '>' || *arg_pos == '<') break;
+                    char token[128] = {0};
+                    int ti = 0;
+                    while (arg_pos[ti] && arg_pos[ti] != ' ' && arg_pos[ti] != ';' && arg_pos[ti] != '&' && arg_pos[ti] != '|' && arg_pos[ti] != '>' && arg_pos[ti] != '<' && ti < 127) {
+                        token[ti] = arg_pos[ti];
+                        ti++;
+                    }
+                    token[ti] = '\0';
+                    arg_pos += ti;
+                    if (strcmp(token, "2") == 0 && (*arg_pos == '>' || *arg_pos == '<')) break;
+                    if (strchr(token, '>') || strchr(token, '<')) break;
+                    if (ti > 0 && strcmp(token, "2") != 0 && strcmp(token, "1") != 0) {
+                        if (strlen(mod_args) > 0 && strlen(mod_args) + ti + 2 < sizeof(mod_args)) {
+                            strcat(mod_args, " ");
+                            strcat(mod_args, token);
+                        } else if (ti < sizeof(mod_args)) {
+                            strcpy(mod_args, token);
+                        }
+                    }
                 }
-                mod_args[ai] = '\0';
-                while (ai > 0 && (mod_args[ai-1] == ' ' || mod_args[ai-1] == '\r' || mod_args[ai-1] == '\n')) mod_args[--ai] = '\0';
 
-                // Automatically provide force_legacy=1 for virtio_pci.ko if not specified
-                if (strstr(mod_path, "virtio_pci.ko") && strlen(mod_args) == 0) {
-                    strcpy(mod_args, "force_legacy=1");
+                // Automatically provide force_legacy=1 for virtio_pci.ko
+                if (strstr(mod_path, "virtio_pci.ko")) {
+                    if (strlen(mod_args) == 0) {
+                        strcpy(mod_args, "force_legacy=1");
+                    } else if (!strstr(mod_args, "force_legacy")) {
+                        strcat(mod_args, " force_legacy=1");
+                    }
                 }
 
                 mod_idx++;
