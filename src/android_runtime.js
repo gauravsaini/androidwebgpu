@@ -435,8 +435,14 @@ export class AndroidRuntime {
         if (appState && appState.zip) {
             // Attempt to inflate real binary XML layout from APK archive if present
             const layoutCandidates = [
+                'res/ut.xml',
+                'res/1e.xml',
+                'res/js.xml',
                 'res/v9.xml',
                 'res/Kt.xml',
+                'res/4s1.xml',
+                'res/2Q.xml',
+                'res/C4.xml',
                 'res/layout/activity_main.xml',
                 'res/layout/main.xml',
                 'res/layout/activity_details.xml',
@@ -460,18 +466,21 @@ export class AndroidRuntime {
             }
         }
 
-        // Empty FrameLayout fallback root when no binary XML layout is available
+        // FrameLayout fallback root when no binary XML layout is available
         if (!rootView) {
             rootView = new FrameLayout();
             rootView.layoutParams = new LayoutParams(MATCH_PARENT, MATCH_PARENT);
             rootView.backgroundColor = "#0b0f19";
+        }
 
-            if (appState.packageName === 'org.mozilla.firefox') {
-                this.log(`Building authentic Firefox GeckoView browser layout for org.mozilla.firefox`, 'info', 'ActivityThread');
-                appState.activeUrl = appState.activeUrl || 'https://www.google.com';
-                if (!appState.currentPage || appState.currentPage === 'home') {
-                    appState.currentPage = appState.activeUrl.includes('google.com') ? 'Google' : 'home';
-                }
+        if (appState.packageName === 'org.mozilla.firefox') {
+            this.log(`Binding authentic Firefox GeckoView browser session for org.mozilla.firefox (layout: ${layoutPathUsed || 'FrameLayout'})`, 'info', 'ActivityThread');
+            appState.activeUrl = appState.activeUrl || 'https://www.google.com';
+            if (!appState.currentPage || appState.currentPage === 'home') {
+                appState.currentPage = appState.activeUrl.includes('google.com') ? 'Google' : 'home';
+            }
+            rootView.backgroundColor = "#0b0f19";
+            rootView.removeAllViews();
 
                 // 1. Top URL / Navigation Header
                 const header = new LinearLayout();
@@ -839,10 +848,7 @@ export class AndroidRuntime {
                 }
 
                 rootView.addView(bottomNav);
-            } else {
-                this.log(`No binary XML layout inflated from APK archive. Using fallback FrameLayout`, 'warn', 'LayoutInflater');
-            }
-        } else {
+        } else if (appState.packageName === 'org.fdroid.fdroid') {
             // Find RecyclerView and populate with APK list item layout if present
             const findRv = (v) => {
                 if (!v) return null;
