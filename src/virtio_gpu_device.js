@@ -95,6 +95,87 @@ export class VirtioGpuDevice {
         this.pci_space[22] = 0x10;
         this.pci_space[23] = 0xD1;
 
+        // Capabilities Pointer & Status (Bit 4 of Status = Capabilities List)
+        this.pci_space[6] = 0x10;
+        this.pci_space[7] = 0x00;
+        this.pci_space[0x34] = 0x40;
+
+        // Capability 1: VIRTIO_PCI_CAP_COMMON_CFG (Type 1) at offset 0x40 (len 16)
+        this.pci_space[0x40] = 0x09; // cap_vndr: PCI_CAP_ID_VNDR
+        this.pci_space[0x41] = 0x50; // cap_next: points to 0x50
+        this.pci_space[0x42] = 0x10; // cap_len: 16 bytes
+        this.pci_space[0x43] = 0x01; // cfg_type: 1 (VIRTIO_PCI_CAP_COMMON_CFG)
+        this.pci_space[0x44] = 0x01; // bar: 1 (BAR1 MMIO)
+        this.pci_space[0x45] = 0x00; // id: 0
+        this.pci_space[0x46] = 0x00; // padding
+        this.pci_space[0x47] = 0x00;
+        this.pci_space[0x48] = 0x00; // offset = 0x0000
+        this.pci_space[0x49] = 0x00;
+        this.pci_space[0x4A] = 0x00;
+        this.pci_space[0x4B] = 0x00;
+        this.pci_space[0x4C] = 0x38; // length = 0x38 (56 bytes for virtio_pci_common_cfg)
+        this.pci_space[0x4D] = 0x00;
+        this.pci_space[0x4E] = 0x00;
+        this.pci_space[0x4F] = 0x00;
+
+        // Capability 2: VIRTIO_PCI_CAP_NOTIFY_CFG (Type 2) at offset 0x50 (len 20)
+        this.pci_space[0x50] = 0x09; // cap_vndr
+        this.pci_space[0x51] = 0x64; // cap_next: points to 0x64
+        this.pci_space[0x52] = 0x14; // cap_len: 20 bytes
+        this.pci_space[0x53] = 0x02; // cfg_type: 2 (VIRTIO_PCI_CAP_NOTIFY_CFG)
+        this.pci_space[0x54] = 0x01; // bar: 1 (BAR1 MMIO)
+        this.pci_space[0x55] = 0x00; // id: 0
+        this.pci_space[0x56] = 0x00; // padding
+        this.pci_space[0x57] = 0x00;
+        this.pci_space[0x58] = 0x00; // offset = 0x1000
+        this.pci_space[0x59] = 0x10;
+        this.pci_space[0x5A] = 0x00;
+        this.pci_space[0x5B] = 0x00;
+        this.pci_space[0x5C] = 0x00; // length = 0x1000
+        this.pci_space[0x5D] = 0x10;
+        this.pci_space[0x5E] = 0x00;
+        this.pci_space[0x5F] = 0x00;
+        this.pci_space[0x60] = 0x04; // notify_off_multiplier = 4
+        this.pci_space[0x61] = 0x00;
+        this.pci_space[0x62] = 0x00;
+        this.pci_space[0x63] = 0x00;
+
+        // Capability 3: VIRTIO_PCI_CAP_ISR_CFG (Type 3) at offset 0x64 (len 16)
+        this.pci_space[0x64] = 0x09; // cap_vndr
+        this.pci_space[0x65] = 0x74; // cap_next: points to 0x74
+        this.pci_space[0x66] = 0x10; // cap_len: 16 bytes
+        this.pci_space[0x67] = 0x03; // cfg_type: 3 (VIRTIO_PCI_CAP_ISR_CFG)
+        this.pci_space[0x68] = 0x01; // bar: 1 (BAR1 MMIO)
+        this.pci_space[0x69] = 0x00; // id: 0
+        this.pci_space[0x6A] = 0x00; // padding
+        this.pci_space[0x6B] = 0x00;
+        this.pci_space[0x6C] = 0x00; // offset = 0x2000
+        this.pci_space[0x6D] = 0x20;
+        this.pci_space[0x6E] = 0x00;
+        this.pci_space[0x6F] = 0x00;
+        this.pci_space[0x70] = 0x04; // length = 0x04
+        this.pci_space[0x71] = 0x00;
+        this.pci_space[0x72] = 0x00;
+        this.pci_space[0x73] = 0x00;
+
+        // Capability 4: VIRTIO_PCI_CAP_DEVICE_CFG (Type 4) at offset 0x74 (len 16)
+        this.pci_space[0x74] = 0x09; // cap_vndr
+        this.pci_space[0x75] = 0x00; // cap_next: 0 (end of capabilities list)
+        this.pci_space[0x76] = 0x10; // cap_len: 16 bytes
+        this.pci_space[0x77] = 0x04; // cfg_type: 4 (VIRTIO_PCI_CAP_DEVICE_CFG)
+        this.pci_space[0x78] = 0x01; // bar: 1 (BAR1 MMIO)
+        this.pci_space[0x79] = 0x00; // id: 0
+        this.pci_space[0x7A] = 0x00; // padding
+        this.pci_space[0x7B] = 0x00;
+        this.pci_space[0x7C] = 0x00; // offset = 0x3000
+        this.pci_space[0x7D] = 0x30;
+        this.pci_space[0x7E] = 0x00;
+        this.pci_space[0x7F] = 0x00;
+        this.pci_space[0x80] = 0x18; // length = 0x18 (24 bytes for virtio_gpu_config)
+        this.pci_space[0x81] = 0x00;
+        this.pci_space[0x82] = 0x00;
+        this.pci_space[0x83] = 0x00;
+
         // Subsystem Vendor ID (0x1AF4) & Subsystem ID (0x0010 for VirtIO GPU)
         this.pci_space[44] = 0xF4;
         this.pci_space[45] = 0x1A;
@@ -105,7 +186,7 @@ export class VirtioGpuDevice {
         this.pci_space[60] = this.irqLine;
         this.pci_space[61] = 0x01; // INTA#
 
-        logger.log('bridge', 'I', 'Virtio-GPU PCI device (0x1AF4:0x1050) initialized with 1 scanout', {
+        logger.log('bridge', 'I', 'Virtio-GPU PCI device (0x1AF4:0x1050) initialized with 1 scanout and VirtIO 1.0 capabilities', {
             vendorId: 0x1AF4,
             deviceId: 0x1050,
             scanouts: this.num_scanouts
@@ -326,9 +407,13 @@ export class VirtioGpuDevice {
      * Read from VirtIO Legacy PCI I/O Configuration Space
      */
     ioRead(offset, size = 1) {
-        // VERBOSE: log all I/O reads for BAR mismatch debugging (limit to first 100 to avoid spam)
+        // VERBOSE: log all I/O reads for BAR mismatch debugging (limit to first 500 to avoid spam)
         if (!this._ioReadCount) this._ioReadCount=0;
-        if (this._ioReadCount < 100) { this._ioReadCount++; logger.log('bridge','D',`[virtio-gpu] ioRead offset=0x${offset.toString(16)} size=${size} ioBase=0x${this.ioBase.toString(16)}`); }
+        if (this._ioReadCount < 500 || offset === 0x12) { 
+            this._ioReadCount++; 
+            logger.log('bridge','D',`[virtio-gpu] ioRead offset=0x${offset.toString(16)} size=${size} ioBase=0x${this.ioBase.toString(16)} (DEVICE_STATUS=${this.deviceStatus})`); 
+            if (this._ioReadCount === 500) logger.log('bridge', 'I', `[virtio-gpu] ioRead verbose limit reached (500)`);
+        }
         if (offset >= 0x00 && offset <= 0x03) {
             // HOST_FEATURES (0x00, 32-bit): VIRTIO_GPU_F_VIRGL | VIRTIO_GPU_F_EDID
             if (offset === 0x00 && (size === 4 || size === undefined)) {
@@ -432,7 +517,11 @@ export class VirtioGpuDevice {
      */
     ioWrite(offset, val, size = 1) {
         if (!this._ioWriteCount) this._ioWriteCount=0;
-        if (this._ioWriteCount < 200) { this._ioWriteCount++; logger.log('bridge','D',`[virtio-gpu] ioWrite offset=0x${offset.toString(16)} val=0x${val.toString(16)} size=${size} ioBase=0x${this.ioBase.toString(16)}`); if(this._ioWriteCount===200) logger.log('bridge','I','[virtio-gpu] ioWrite verbose limit reached, silencing'); }
+        if (this._ioWriteCount < 500 || offset === 0x12 || (offset >= 0x08 && offset <= 0x0B)) { 
+            this._ioWriteCount++; 
+            logger.log('bridge','D',`[virtio-gpu] ioWrite offset=0x${offset.toString(16)} val=0x${val.toString(16)} size=${size} ioBase=0x${this.ioBase.toString(16)}`); 
+            if (this._ioWriteCount === 500) logger.log('bridge','I','[virtio-gpu] ioWrite verbose limit reached (500), silencing general writes'); 
+        }
         if (offset >= 0x04 && offset <= 0x07) {
             // GUEST_FEATURES (0x04, 32-bit)
             if (offset === 0x04 && (size === 4 || size === undefined)) {
@@ -520,11 +609,11 @@ export class VirtioGpuDevice {
 
    pciRead(addr, size) {
         if (!this._pciReadCount) this._pciReadCount = 0;
-        if (this._pciReadCount < 20) {
+        if (this._pciReadCount < 50) {
             this._pciReadCount++;
             logger.log('bridge', 'D', `[virtio-gpu][VERBOSE] pciRead addr=0x${addr.toString(16)} size=${size} ioBase=0x${this.ioBase.toString(16)}`);
             console.debug(`[VirtIO-GPU][VERBOSE] pciRead addr=0x${addr.toString(16)} size=${size}`);
-            if (this._pciReadCount === 20) logger.log('bridge', 'I', `[virtio-gpu][VERBOSE] pciRead limit reached`);
+            if (this._pciReadCount === 50) logger.log('bridge', 'I', `[virtio-gpu][VERBOSE] pciRead limit reached`);
         }
         if (addr === 0x10 && this.bar0Sizing) {
             logger.log('bridge', 'I', `[virtio-gpu][VERBOSE] pciRead BAR0 sizing probe -> mask 0xFFFFFFC1`);
@@ -548,28 +637,54 @@ export class VirtioGpuDevice {
     }
     pciWrite(addr, val, size) {
         if (!this._pciWriteCount) this._pciWriteCount = 0;
-        if (this._pciWriteCount < 30) {
+        if (this._pciWriteCount < 50) {
             this._pciWriteCount++;
             logger.log('bridge','D',`[virtio-gpu][VERBOSE] pciWrite addr=0x${addr.toString(16)} val=0x${val.toString(16)} size=${size} before ioBase=0x${this.ioBase.toString(16)}`);
             console.debug(`[VirtIO-GPU][VERBOSE] pciWrite addr=0x${addr.toString(16)} val=0x${val.toString(16)} size=${size}`);
-            if (this._pciWriteCount === 30) logger.log('bridge', 'I', `[virtio-gpu][VERBOSE] pciWrite limit reached`);
+            if (this._pciWriteCount === 50) logger.log('bridge', 'I', `[virtio-gpu][VERBOSE] pciWrite limit reached`);
         }
-        // BAR0 (0x10) I/O relocation handling - handle any size write to BAR region
-        if (addr >= 0x10 && addr <= 0x13) {
-            if (val === 0xFFFFFFFF) {
-                this.bar0Sizing = true;
-                this.pci_space[16] = 0xC1; this.pci_space[17] = 0xFF; this.pci_space[18] = 0xFF; this.pci_space[19] = 0xFF;
-                logger.log('bridge', 'I', `[virtio-gpu] BAR0 sizing probe 0xFFFFFFFF -> mask 0xFFFFFFC1`);
-                return;
+
+        // BAR0 (0x10-0x13) sizing probe handling
+        if (addr >= 0x10 && addr <= 0x13 && val === 0xFFFFFFFF) {
+            this.bar0Sizing = true;
+            this.pci_space[16] = 0xC1; this.pci_space[17] = 0xFF; this.pci_space[18] = 0xFF; this.pci_space[19] = 0xFF;
+            logger.log('bridge', 'I', `[virtio-gpu] BAR0 sizing probe 0xFFFFFFFF -> mask 0xFFFFFFC1`);
+            return;
+        }
+
+        // BAR1 (0x14-0x17) sizing probe handling
+        if (addr >= 0x14 && addr <= 0x17 && val === 0xFFFFFFFF) {
+            this.bar1Sizing = true;
+            this.pci_space[20] = 0x00; this.pci_space[21] = 0x00; this.pci_space[22] = 0x00; this.pci_space[23] = 0xFF;
+            logger.log('bridge', 'I', `[virtio-gpu] BAR1 sizing probe 0xFFFFFFFF -> mask 0xFF000000`);
+            return;
+        }
+
+        if (this.bar0Sizing && addr >= 0x10 && addr <= 0x13) this.bar0Sizing = false;
+        if (this.bar1Sizing && addr >= 0x14 && addr <= 0x17) this.bar1Sizing = false;
+
+        // Store bytes into pci_space
+        for (let i = 0; i < size; i++) {
+            if (addr + i < this.pci_space.length) {
+                this.pci_space[addr + i] = (val >>> (i * 8)) & 0xFF;
             }
-            if (this.bar0Sizing) { this.bar0Sizing = false; }
-            // Reconstruct full 32-bit BAR value from pci_space after partial write will be done below - for now use val as if size 4
-            const isIO = (val & 0x01) !== 0;
-            let newBase = isIO ? (val & 0xFFFFFFC0) : (val & 0xFFFFFFF0);
+        }
+
+        // Check if COMMAND register (0x04-0x05) was modified
+        if (addr <= 0x04 && (addr + size) > 0x04) {
+            const cmd = (this.pci_space[4] | (this.pci_space[5] << 8)) >>> 0;
+            logger.log('bridge', 'I', `[virtio-gpu] PCI COMMAND register updated: 0x${cmd.toString(16)} (IO=${(cmd & 1) !== 0}, MEM=${(cmd & 2) !== 0}, BUS_MASTER=${(cmd & 4) !== 0})`);
+        }
+
+        // Reconstruct full 32-bit BAR0 from pci_space after write
+        if (addr >= 0x10 && addr <= 0x13) {
+            const fullBar0 = (this.pci_space[16] | (this.pci_space[17] << 8) | (this.pci_space[18] << 16) | (this.pci_space[19] << 24)) >>> 0;
+            const isIO = (fullBar0 & 0x01) !== 0;
+            const newBase = isIO ? (fullBar0 & 0xFFFFFFC0) : (fullBar0 & 0xFFFFFFF0);
             if (newBase !== 0 && newBase !== this.ioBase) {
                 const oldBase = this.ioBase;
                 this.ioBase = newBase;
-                logger.log('bridge', 'I', `[virtio-gpu] BAR0 relocated ioBase 0x${oldBase.toString(16)} -> 0x${newBase.toString(16)} val=0x${val.toString(16)}`);
+                logger.log('bridge', 'I', `[virtio-gpu] BAR0 relocated ioBase 0x${oldBase.toString(16)} -> 0x${newBase.toString(16)} fullBar0=0x${fullBar0.toString(16)}`);
                 console.info(`[VirtIO-GPU] BAR0 relocated ioBase 0x${oldBase.toString(16)} -> 0x${newBase.toString(16)}`);
                 // Re-register I/O handlers at new base if v86 io available
                 try {
@@ -577,30 +692,28 @@ export class VirtioGpuDevice {
                     const cpu = v86?.cpu || v86?.v86?.cpu;
                     const io = v86?.io || v86?.v86?.io || this._io;
                     if (io && typeof io.register_read === 'function') {
-                        // Store for future
                         this._io = io;
                         for (let port = this.ioBase; port < this.ioBase + 64; port++) {
                             const offset = port - this.ioBase;
-                            io.register_read(port, this, () => this.ioRead(offset,1), () => this.ioRead(offset,2), () => this.ioRead(offset,4));
-                            io.register_write(port, this, (v)=> this.ioWrite(offset,v,1), (v)=> this.ioWrite(offset,v,2), (v)=> this.ioWrite(offset,v,4));
+                            io.register_read(port, this, () => this.ioRead(offset, 1), () => this.ioRead(offset, 2), () => this.ioRead(offset, 4));
+                            io.register_write(port, this, (v) => this.ioWrite(offset, v, 1), (v) => this.ioWrite(offset, v, 2), (v) => this.ioWrite(offset, v, 4));
                         }
                         logger.log('bridge', 'I', `Virtio-GPU I/O handlers re-registered at 0x${this.ioBase.toString(16)}`);
                     }
-                } catch(e){ logger.log('bridge','W', `BAR0 reregister failed: ${e.message}`); }
+                } catch(e) { logger.log('bridge', 'W', `BAR0 reregister failed: ${e.message}`); }
             }
-            for (let i=0;i<size;i++) this.pci_space[addr+i] = (val >>> (i*8)) & 0xFF;
-            return;
         }
-        if (addr === 0x14 && size === 4) {
-            if (val === 0xFFFFFFFF) {
-                this.bar1Sizing = true;
-                this.pci_space[20]=0x00; this.pci_space[21]=0x00; this.pci_space[22]=0x00; this.pci_space[23]=0xFF;
-                logger.log('bridge','I',`[virtio-gpu] BAR1 sizing probe -> mask 0xFF000000`);
-                return;
+
+        // Reconstruct full 32-bit BAR1 from pci_space after write
+        if (addr >= 0x14 && addr <= 0x17) {
+            const fullBar1 = (this.pci_space[20] | (this.pci_space[21] << 8) | (this.pci_space[22] << 16) | (this.pci_space[23] << 24)) >>> 0;
+            const newBar1 = (fullBar1 & 0xFF000000) >>> 0;
+            if (newBar1 !== 0 && newBar1 !== this.bar1Value) {
+                const oldBar1 = this.bar1Value;
+                this.bar1Value = newBar1;
+                logger.log('bridge', 'I', `[virtio-gpu] BAR1 relocated bar1Value 0x${oldBar1.toString(16)} -> 0x${newBar1.toString(16)} fullBar1=0x${fullBar1.toString(16)}`);
             }
-            if (this.bar1Sizing) this.bar1Sizing=false;
         }
-        for (let i = 0; i < size; i++) this.pci_space[addr + i] = (val >>> (i * 8)) & 0xFF;
     }
 
     /**

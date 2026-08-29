@@ -77,9 +77,14 @@ echo "[init][VERBOSE] dmesg filtered virtio drm" > /dev/ttyS0 2>/dev/null || tru
 dmesg 2>/dev/ttyS0 | grep -i -E "virtio|drm" 2>&1 | tail -n 30 > /dev/ttyS0 2>&1 || true
 sleep 0.3 2>/dev/null || true
 echo "[init][VERBOSE] DRM probe after module load" > /dev/ttyS0 2>/dev/null || true
+echo "[init][VERBOSE] Enable dynamic debug for virtio drivers ..." > /dev/ttyS0 2>/dev/null || true
+echo 'file drivers/virtio/* +p' > /sys/kernel/debug/dynamic_debug/control 2>/dev/null || true
 echo "[init][VERBOSE] Trigger PCI rescan for hot-plug virtio-gpu (host registers at 108ms, kernel scanned earlier) ..." > /dev/ttyS0 2>/dev/null || true
 echo 1 > /sys/bus/pci/rescan 2>/dev/ttyS0 || echo 1 > /sys/bus/pci/rescan 2>&1 > /dev/ttyS0 || true
 sleep 0.2 2>/dev/null || true
+echo "[init][VERBOSE] Fallback manual new_id and bind for virtio-pci ..." > /dev/ttyS0 2>/dev/null || true
+echo "1af4 1050" > /sys/bus/pci/drivers/virtio-pci/new_id 2>/dev/null || true
+echo "0000:00:06.0" > /sys/bus/pci/drivers/virtio-pci/bind 2>/dev/null || true
 dmesg 2>/dev/ttyS0 | tail -n 20 > /dev/ttyS0 2>&1 || true
 echo "[init][VERBOSE] Post-rescan PCI and DRM check ..." > /dev/ttyS0 2>/dev/null || true
 cat /proc/bus/pci/devices 2>/dev/ttyS0 2>&1 | head -n 20 || true
@@ -88,6 +93,8 @@ echo "[init][VERBOSE] DIAG after rescan: /proc/ioports (should show 0xc000 vs 0x
 cat /proc/ioports 2>/dev/ttyS0 2>&1 | head -n 30 || true
 echo "[init][VERBOSE] DIAG resource for 00:06.0 (BAR0 should be c001 or c141)" > /dev/ttyS0 2>/dev/null || true
 cat /sys/bus/pci/devices/0000:00:06.0/resource 2>/dev/ttyS0 2>&1 || true
+cat /sys/bus/pci/devices/0000:00:06.0/modalias 2>/dev/ttyS0 2>&1 || true
+cat /proc/interrupts 2>/dev/ttyS0 2>&1 | grep 10 || true
 ls -la /sys/bus/pci/devices/0000:00:06.0/ 2>/dev/ttyS0 2>&1 | head -n 30 || true
 ls -la /sys/class/drm/ 2>/dev/ttyS0 2>&1 || true
 ls -la /dev/dri/ 2>/dev/ttyS0 2>&1 || true

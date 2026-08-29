@@ -271,6 +271,8 @@ static int run_line(char *line) {
         DIR *d=opendir("/sys/bus/pci/devices/0000:00:06.0"); if(d){ char lb2[4096]; snprintf(lb2,sizeof(lb2),"[sh][DIAG] 00:06.0 entries:"); struct dirent *e; int c=0; while((e=readdir(d)) && c<30){ if(e->d_name[0]=='.') continue; strncat(lb2," ",sizeof(lb2)-strlen(lb2)-1); strncat(lb2,e->d_name,sizeof(lb2)-strlen(lb2)-1); c++; } closedir(d); log_line(lb2); } else { log_line("[sh][DIAG] opendir 00:06.0 fail"); }
         int fd2=open("/sys/bus/pci/devices/0000:00:06.0/enable", O_RDONLY); if(fd2>=0){ char b2[32]; ssize_t r2=read(fd2,b2,sizeof(b2)-1); if(r2>0){b2[r2]='\0'; char lb2[256]; snprintf(lb2,sizeof(lb2),"[sh][DIAG] 00:06.0 enable=%s",b2); log_line(lb2);} close(fd2);} 
         int fd3=open("/sys/bus/pci/devices/0000:00:06.0/resource", O_RDONLY); if(fd3>=0){ char b3[512]; ssize_t r3=read(fd3,b3,sizeof(b3)-1); if(r3>0){b3[r3]='\0'; char lb2[1024]; snprintf(lb2,sizeof(lb2),"[sh][DIAG] 00:06.0 resource inline: %.400s", b3); log_line(lb2);} close(fd3);} 
+        int fd_mod=open("/sys/bus/pci/devices/0000:00:06.0/modalias", O_RDONLY); if(fd_mod>=0){ char b_mod[128]; ssize_t r_mod=read(fd_mod,b_mod,sizeof(b_mod)-1); if(r_mod>0){ b_mod[r_mod]='\0'; char lb_mod[256]; snprintf(lb_mod,sizeof(lb_mod),"[sh][DIAG] 00:06.0 modalias=%s",b_mod); log_line(lb_mod); } close(fd_mod); }
+        int fd_irq=open("/proc/interrupts", O_RDONLY); if(fd_irq>=0){ char b_irq[2048]; ssize_t r_irq=read(fd_irq,b_irq,sizeof(b_irq)-1); if(r_irq>0){ b_irq[r_irq]='\0'; char lb_irq[2048]; snprintf(lb_irq,sizeof(lb_irq),"[sh][DIAG] /proc/interrupts: %.1000s",b_irq); log_line(lb_irq); } close(fd_irq); }
     }
     if (strstr(line, "lspci") ) {
         // Emulate lspci via /proc/bus/pci/devices hex dump
