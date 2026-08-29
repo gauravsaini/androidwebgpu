@@ -232,7 +232,20 @@ static int run_line(char *line) {
                             if (r==st.st_size) {
                                 long ret=syscall(128, buf, r, mod_args);
                                 if (ret==0) { snprintf(lb,sizeof(lb),"[sh][VERBOSE][%d] %s %s -> OK (%ld bytes) [OK]",mod_idx, keyword, mod_path,r); log_line(lb); }
-                                else { snprintf(lb,sizeof(lb),"[sh][VERBOSE][%d] init_module %s -> ret=%ld errno=%d (%s) [FAIL]",mod_idx, mod_path,ret,errno,strerror(errno)); log_line(lb); }
+                                else { 
+                                    snprintf(lb,sizeof(lb),"[sh][VERBOSE][%d] init_module %s -> ret=%ld errno=%d (%s) [FAIL]",mod_idx, mod_path,ret,errno,strerror(errno)); 
+                                    log_line(lb); 
+                                    char kbuf[2048];
+                                    long sz = syscall(103, 3, kbuf, sizeof(kbuf) - 1);
+                                    if (sz > 0) {
+                                        kbuf[sz] = '\0';
+                                        char *tail = sz > 300 ? kbuf + (sz - 300) : kbuf;
+                                        for (int i = 0; tail[i]; i++) if (tail[i] == '\n') tail[i] = ' ';
+                                        char lb_k[512];
+                                        snprintf(lb_k, sizeof(lb_k), "[sh][VERBOSE] dmesg tail: %s", tail);
+                                        log_line(lb_k);
+                                    }
+                                }
                             } else { snprintf(lb,sizeof(lb),"[sh][VERBOSE][%d] read %s failed %ld",mod_idx, mod_path,r); log_line(lb); close(fd); }
                             free(buf);
                         } else { close(fd); snprintf(lb,sizeof(lb),"[sh][VERBOSE][%d] malloc fail for %s",mod_idx, mod_path); log_line(lb); }

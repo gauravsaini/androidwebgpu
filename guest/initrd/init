@@ -46,28 +46,51 @@ ls -la /sys/bus/pci/devices/ 2>/dev/ttyS0 2>&1 || true
 echo "[init][VERBOSE] Loading Virtio-GPU stack via explicit insmod 12 steps topo sorted ..." > /dev/ttyS0 2>/dev/null || true
 echo "[init][VERBOSE][1/12] insmod i2c-core.ko ..." > /dev/ttyS0 2>/dev/null || true
 insmod /lib/modules/6.6.142-0-lts/kernel/drivers/i2c/i2c-core.ko 2>/dev/ttyS0 && echo "[init][VERBOSE][1/12] i2c-core.ko : OK" > /dev/ttyS0 2>/dev/null || echo "[init][VERBOSE][1/12] i2c-core.ko : FAIL required for drm.ko" > /dev/ttyS0 2>/dev/null || true
+echo "[init][VERBOSE][1/12] done i2c-core.ko" > /dev/ttyS0 2>/dev/null || true
+
 echo "[init][VERBOSE][2/12] insmod drm_panel_orientation_quirks.ko ..." > /dev/ttyS0 2>/dev/null || true
 insmod /lib/modules/6.6.142-0-lts/kernel/drivers/gpu/drm/drm_panel_orientation_quirks.ko 2>/dev/ttyS0 && echo "[init][VERBOSE][2/12] drm_panel_orientation_quirks.ko : OK" > /dev/ttyS0 2>/dev/null || echo "[init][VERBOSE][2/12] drm_panel_orientation_quirks.ko : FAIL" > /dev/ttyS0 2>/dev/null || true
+echo "[init][VERBOSE][2/12] done drm_panel_orientation_quirks.ko" > /dev/ttyS0 2>/dev/null || true
+
 echo "[init][VERBOSE][3/12] insmod virtio.ko ..." > /dev/ttyS0 2>/dev/null || true
 insmod /lib/modules/6.6.142-0-lts/kernel/drivers/virtio/virtio.ko 2>/dev/ttyS0 && echo "[init][VERBOSE][3/12] virtio.ko : OK" > /dev/ttyS0 2>/dev/null || echo "[init][VERBOSE][3/12] virtio.ko : FAIL" > /dev/ttyS0 2>/dev/null || true
+echo "[init][VERBOSE][3/12] done virtio.ko" > /dev/ttyS0 2>/dev/null || true
+
 echo "[init][VERBOSE][4/12] insmod virtio_ring.ko ..." > /dev/ttyS0 2>/dev/null || true
 insmod /lib/modules/6.6.142-0-lts/kernel/drivers/virtio/virtio_ring.ko 2>/dev/ttyS0 && echo "[init][VERBOSE][4/12] virtio_ring.ko : OK" > /dev/ttyS0 2>/dev/null || echo "[init][VERBOSE][4/12] virtio_ring.ko : FAIL" > /dev/ttyS0 2>/dev/null || true
+echo "[init][VERBOSE][4/12] done virtio_ring.ko" > /dev/ttyS0 2>/dev/null || true
+
 echo "[init][VERBOSE][5/12] insmod virtio_pci_modern_dev.ko must be before virtio_pci ..." > /dev/ttyS0 2>/dev/null || true
 insmod /lib/modules/6.6.142-0-lts/kernel/drivers/virtio/virtio_pci_modern_dev.ko 2>/dev/ttyS0 && echo "[init][VERBOSE][5/12] virtio_pci_modern_dev.ko : OK" > /dev/ttyS0 2>/dev/null || echo "[init][VERBOSE][5/12] virtio_pci_modern_dev.ko : FAIL" > /dev/ttyS0 2>/dev/null || true
+echo "[init][VERBOSE][5/12] done virtio_pci_modern_dev.ko" > /dev/ttyS0 2>/dev/null || true
+
 echo "[init][VERBOSE][6/12] insmod virtio_pci_legacy_dev.ko ..." > /dev/ttyS0 2>/dev/null || true
 insmod /lib/modules/6.6.142-0-lts/kernel/drivers/virtio/virtio_pci_legacy_dev.ko 2>/dev/ttyS0 && echo "[init][VERBOSE][6/12] virtio_pci_legacy_dev.ko : OK optional" > /dev/ttyS0 2>/dev/null || echo "[init][VERBOSE][6/12] virtio_pci_legacy_dev.ko : optional miss" > /dev/ttyS0 2>/dev/null || true
+echo "[init][VERBOSE][6/12] done virtio_pci_legacy_dev.ko" > /dev/ttyS0 2>/dev/null || true
+
 echo "[init][VERBOSE][7/12] insmod virtio_pci.ko depends on 3 4 5 6 ..." > /dev/ttyS0 2>/dev/null || true
 insmod /lib/modules/6.6.142-0-lts/kernel/drivers/virtio/virtio_pci.ko force_legacy=1 2>/dev/ttyS0 && echo "[init][VERBOSE][7/12] virtio_pci.ko : OK" > /dev/ttyS0 2>/dev/null || echo "[init][VERBOSE][7/12] virtio_pci.ko : FAIL check dmesg unknown symbol" > /dev/ttyS0 2>/dev/null || true
+echo "[init][VERBOSE][7/12] done virtio_pci.ko" > /dev/ttyS0 2>/dev/null || true
+
 echo "[init][VERBOSE][8/12] insmod virtio_dma_buf.ko ..." > /dev/ttyS0 2>/dev/null || true
 insmod /lib/modules/6.6.142-0-lts/kernel/drivers/virtio/virtio_dma_buf.ko 2>/dev/ttyS0 && echo "[init][VERBOSE][8/12] virtio_dma_buf.ko : OK" > /dev/ttyS0 2>/dev/null || echo "[init][VERBOSE][8/12] virtio_dma_buf.ko : optional" > /dev/ttyS0 2>/dev/null || true
+echo "[init][VERBOSE][8/12] done virtio_dma_buf.ko" > /dev/ttyS0 2>/dev/null || true
+
 echo "[init][VERBOSE][9/12] insmod drm.ko depends on 1 2 ..." > /dev/ttyS0 2>/dev/null || true
 insmod /lib/modules/6.6.142-0-lts/kernel/drivers/gpu/drm/drm.ko 2>/dev/ttyS0 && echo "[init][VERBOSE][9/12] drm.ko : OK" > /dev/ttyS0 2>/dev/null || echo "[init][VERBOSE][9/12] drm.ko : FAIL missing i2c panel_quirks" > /dev/ttyS0 2>/dev/null || true
+echo "[init][VERBOSE][9/12] done drm.ko" > /dev/ttyS0 2>/dev/null || true
+
 echo "[init][VERBOSE][10/12] insmod drm_shmem_helper.ko depends on 9 ..." > /dev/ttyS0 2>/dev/null || true
 insmod /lib/modules/6.6.142-0-lts/kernel/drivers/gpu/drm/drm_shmem_helper.ko 2>/dev/ttyS0 && echo "[init][VERBOSE][10/12] drm_shmem_helper.ko : OK" > /dev/ttyS0 2>/dev/null || echo "[init][VERBOSE][10/12] drm_shmem_helper.ko : FAIL" > /dev/ttyS0 2>/dev/null || true
+echo "[init][VERBOSE][10/12] done drm_shmem_helper.ko" > /dev/ttyS0 2>/dev/null || true
+
 echo "[init][VERBOSE][11/12] insmod drm_kms_helper.ko depends on 9 ..." > /dev/ttyS0 2>/dev/null || true
 insmod /lib/modules/6.6.142-0-lts/kernel/drivers/gpu/drm/drm_kms_helper.ko 2>/dev/ttyS0 && echo "[init][VERBOSE][11/12] drm_kms_helper.ko : OK" > /dev/ttyS0 2>/dev/null || echo "[init][VERBOSE][11/12] drm_kms_helper.ko : FAIL" > /dev/ttyS0 2>/dev/null || true
+echo "[init][VERBOSE][11/12] done drm_kms_helper.ko" > /dev/ttyS0 2>/dev/null || true
+
 echo "[init][VERBOSE][12/12] insmod virtio-gpu.ko depends on 3 4 8 9 10 11 ..." > /dev/ttyS0 2>/dev/null || true
 insmod /lib/modules/6.6.142-0-lts/kernel/drivers/gpu/drm/virtio/virtio-gpu.ko 2>/dev/ttyS0 && echo "[init][VERBOSE][12/12] virtio-gpu.ko : OK GUEST DRM READY" > /dev/ttyS0 2>/dev/null || echo "[init][VERBOSE][12/12] virtio-gpu.ko : FAIL" > /dev/ttyS0 2>/dev/null || true
+echo "[init][VERBOSE][12/12] done virtio-gpu.ko" > /dev/ttyS0 2>/dev/null || true
 echo "[init][VERBOSE] Virtio stack insmod sequence done checking lsmod and dmesg" > /dev/ttyS0 2>/dev/null || true
 lsmod 2>/dev/ttyS0 | head -n 40 > /dev/ttyS0 2>&1 || true
 echo "[init][VERBOSE] lsmod filtered virtio drm i2c" > /dev/ttyS0 2>/dev/null || true
