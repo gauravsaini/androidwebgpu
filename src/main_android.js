@@ -455,7 +455,9 @@ async function startSystem() {
     }
     try {
         const urlParams = (typeof window !== 'undefined' && window.location && window.location.search) ? new URLSearchParams(window.location.search) : null;
-        const targetApk = (urlParams && urlParams.get('apk')) || (typeof window !== 'undefined' && window.TARGET_APK) || 'F-Droid.apk';
+        let targetApk = (urlParams && urlParams.get('apk')) || (typeof window !== 'undefined' && window.TARGET_APK) || 'firefox.apk';
+        if (targetApk === 'firefox') targetApk = 'firefox.apk';
+        if (targetApk === 'fdroid' || targetApk === 'f-droid') targetApk = 'F-Droid.apk';
 
         appendLogcat('PackageManager', `Auto-ingesting target APK archive: ${targetApk}`, 'I');
         const resp = await fetch(targetApk);

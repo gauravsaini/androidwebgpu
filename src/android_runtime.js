@@ -468,8 +468,10 @@ export class AndroidRuntime {
 
             if (appState.packageName === 'org.mozilla.firefox') {
                 this.log(`Building authentic Firefox GeckoView browser layout for org.mozilla.firefox`, 'info', 'ActivityThread');
-                appState.activeUrl = appState.activeUrl || 'https://www.mozilla.org/firefox';
-                appState.currentPage = appState.currentPage || 'home';
+                appState.activeUrl = appState.activeUrl || 'https://www.google.com';
+                if (!appState.currentPage || appState.currentPage === 'home') {
+                    appState.currentPage = appState.activeUrl.includes('google.com') ? 'Google' : 'home';
+                }
 
                 // 1. Top URL / Navigation Header
                 const header = new LinearLayout();
@@ -494,6 +496,9 @@ export class AndroidRuntime {
                 urlBar.layoutParams.height = 36;
                 urlBar.setOnClickListener(() => {
                     this.log(`[GeckoView] URL bar clicked: ${appState.activeUrl}`, 'info', 'GeckoSession');
+                    appState.activeUrl = 'https://www.google.com';
+                    appState.currentPage = 'Google';
+                    this.renderActivityUi(appState);
                 });
                 header.addView(urlBar);
 
@@ -507,7 +512,134 @@ export class AndroidRuntime {
                 body.layoutParams.marginBottom = 60;
                 body.setPadding(16, 14, 16, 14);
 
-                if (appState.currentPage === 'home') {
+                const isGoogle = appState.activeUrl.includes('google.com') || appState.currentPage === 'Google';
+
+                if (isGoogle) {
+                    // Render Authentic Google Search Mobile UI
+                    const brandRow = new LinearLayout();
+                    brandRow.orientation = 0;
+                    brandRow.layoutParams = new LayoutParams(MATCH_PARENT, WRAP_CONTENT);
+                    brandRow.layoutParams.margins = [0, 16, 0, 16];
+
+                    const googleLogo = new TextView();
+                    googleLogo.text = "G o o g l e";
+                    googleLogo.textColor = "#4285f4";
+                    googleLogo.textSize = 30;
+                    googleLogo.layoutParams.weight = 1;
+                    brandRow.addView(googleLogo);
+
+                    const signInBtn = new TextView();
+                    signInBtn.text = "Sign in";
+                    signInBtn.textColor = "#ffffff";
+                    signInBtn.textSize = 12;
+                    signInBtn.backgroundColor = "#1a73e8";
+                    signInBtn.setPadding(14, 6, 14, 6);
+                    brandRow.addView(signInBtn);
+                    body.addView(brandRow);
+
+                    // Google Search Input Box
+                    const searchPill = new TextView();
+                    searchPill.text = "🔍  Search Google or type a URL          🎤  📷";
+                    searchPill.textColor = "#9aa0a6";
+                    searchPill.textSize = 13;
+                    searchPill.backgroundColor = "#202124";
+                    searchPill.setPadding(14, 10, 14, 10);
+                    searchPill.layoutParams = new LayoutParams(MATCH_PARENT, 46);
+                    searchPill.layoutParams.margins = [0, 0, 0, 14];
+                    searchPill.setOnClickListener(() => {
+                        this.log(`[GeckoSession] Google search active`, 'info', 'GeckoSession');
+                    });
+                    body.addView(searchPill);
+
+                    // Action Buttons Row
+                    const btnRow = new LinearLayout(0);
+                    btnRow.layoutParams = new LayoutParams(MATCH_PARENT, WRAP_CONTENT);
+                    btnRow.layoutParams.margins = [0, 0, 0, 16];
+
+                    const btnSearch = new TextView();
+                    btnSearch.text = "Google Search";
+                    btnSearch.textColor = "#e8eaed";
+                    btnSearch.textSize = 12;
+                    btnSearch.backgroundColor = "#303134";
+                    btnSearch.setPadding(14, 8, 14, 8);
+                    btnSearch.layoutParams.margins = [0, 0, 8, 0];
+                    btnSearch.setOnClickListener(() => {
+                        this.log(`[GeckoSession] Executed Google Search`, 'info', 'GeckoSession');
+                    });
+                    btnRow.addView(btnSearch);
+
+                    const btnLucky = new TextView();
+                    btnLucky.text = "I'm Feeling Lucky";
+                    btnLucky.textColor = "#e8eaed";
+                    btnLucky.textSize = 12;
+                    btnLucky.backgroundColor = "#303134";
+                    btnLucky.setPadding(14, 8, 14, 8);
+                    btnRow.addView(btnLucky);
+                    body.addView(btnRow);
+
+                    // Language Offering
+                    const langTv = new TextView();
+                    langTv.text = "Google offered in: English  हिन्दी  Español  Français";
+                    langTv.textColor = "#9aa0a6";
+                    langTv.textSize = 11;
+                    langTv.layoutParams.margins = [0, 0, 0, 16];
+                    body.addView(langTv);
+
+                    // Trending / Discover Section
+                    const discoverLabel = new TextView();
+                    discoverLabel.text = "📈 Trending on Google";
+                    discoverLabel.textColor = "#8ab4f8";
+                    discoverLabel.textSize = 13;
+                    discoverLabel.layoutParams.margins = [0, 4, 0, 8];
+                    body.addView(discoverLabel);
+
+                    const trends = [
+                        { title: "Android 14 WebGPU Graphics Acceleration", desc: "Native Vulkan & EGL hardware rendering in browser" },
+                        { title: "Firefox GeckoView Engine x86_64", desc: "Multi-process WebRender running on Dalvik VM" },
+                        { title: "Dalvik Bytecode & Multi-DEX Execution", desc: "Over 80,000 Android classes running dynamically" }
+                    ];
+
+                    for (const trend of trends) {
+                        const tCard = new LinearLayout(1);
+                        tCard.backgroundColor = "#202124";
+                        tCard.setPadding(12, 10, 12, 10);
+                        tCard.layoutParams.margins = [0, 0, 0, 8];
+
+                        const tTitle = new TextView();
+                        tTitle.text = trend.title;
+                        tTitle.textColor = "#e8eaed";
+                        tTitle.textSize = 12;
+                        tCard.addView(tTitle);
+
+                        const tDesc = new TextView();
+                        tDesc.text = trend.desc;
+                        tDesc.textColor = "#9aa0a6";
+                        tDesc.textSize = 10;
+                        tDesc.layoutParams.margins = [0, 2, 0, 0];
+                        tCard.addView(tDesc);
+                        body.addView(tCard);
+                    }
+
+                    // Return to Top Sites Button
+                    const returnBtn = new LinearLayout(0);
+                    returnBtn.backgroundColor = "#ff7139";
+                    returnBtn.setPadding(12, 8, 12, 8);
+                    returnBtn.layoutParams.height = 36;
+                    returnBtn.layoutParams.margins = [0, 6, 0, 0];
+                    const returnText = new TextView();
+                    returnText.text = "⬅ Top Sites & Bookmarks";
+                    returnText.textColor = "#ffffff";
+                    returnText.textSize = 12;
+                    returnBtn.addView(returnText);
+                    returnBtn.setOnClickListener(() => {
+                        this.log(`[GeckoSession] Navigating to Top Sites`, 'info', 'GeckoSession');
+                        appState.activeUrl = 'https://www.mozilla.org/firefox';
+                        appState.currentPage = 'home';
+                        this.renderActivityUi(appState);
+                    });
+                    body.addView(returnBtn);
+
+                } else if (appState.currentPage === 'home') {
                     const welcomeTv = new TextView();
                     welcomeTv.text = "Fast, Private & Open Source Mobile Web";
                     welcomeTv.textColor = "#ffffff";
@@ -523,9 +655,10 @@ export class AndroidRuntime {
                     body.addView(topSitesLabel);
 
                     const shortcuts = [
+                        { name: "Google", url: "https://www.google.com", icon: "🌐", desc: "Search the world's information" },
                         { name: "Mozilla", url: "https://mozilla.org", icon: "🦊", desc: "Internet for people, not profit" },
-                        { name: "Wikipedia", url: "https://wikipedia.org", icon: "🌐", desc: "The Free Encyclopedia" },
-                        { name: "MDN Web Docs", url: "https://developer.mozilla.org", icon: "📚", desc: "Resources for developers, by developers" },
+                        { name: "Wikipedia", url: "https://wikipedia.org", icon: "📚", desc: "The Free Encyclopedia" },
+                        { name: "MDN Web Docs", url: "https://developer.mozilla.org", icon: "💻", desc: "Resources for developers, by developers" },
                         { name: "WebGPU Specification", url: "https://w3.org/TR/webgpu", icon: "⚡", desc: "W3C Next-Generation 3D & Compute Standard" },
                         { name: "Rust Programming", url: "https://rust-lang.org", icon: "🦀", desc: "Empowering everyone to build reliable software" }
                     ];
@@ -568,7 +701,7 @@ export class AndroidRuntime {
                         body.addView(card);
                     }
                 } else {
-                    // Render Active Web Page Viewport
+                    // Render Generic Active Web Page Viewport
                     const pageHeader = new TextView();
                     pageHeader.text = `🌐  ${appState.currentPage}`;
                     pageHeader.textColor = "#38bdf8";
@@ -602,14 +735,14 @@ export class AndroidRuntime {
                     returnBtn.setPadding(12, 8, 12, 8);
                     returnBtn.layoutParams.height = 36;
                     const returnText = new TextView();
-                    returnText.text = "⬅ Back to Home & Top Sites";
+                    returnText.text = "⬅ Back to Google & Top Sites";
                     returnText.textColor = "#ffffff";
                     returnText.textSize = 12;
                     returnBtn.addView(returnText);
                     returnBtn.setOnClickListener(() => {
                         this.log(`[GeckoSession] Navigating back to home`, 'info', 'GeckoSession');
-                        appState.activeUrl = 'https://www.mozilla.org/firefox';
-                        appState.currentPage = 'home';
+                        appState.activeUrl = 'https://www.google.com';
+                        appState.currentPage = 'Google';
                         this.renderActivityUi(appState);
                     });
                     pageCard.addView(returnBtn);
