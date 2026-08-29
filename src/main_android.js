@@ -478,9 +478,10 @@ async function startSystem() {
             console.info(`[AndroidOS] ${targetPkg} installed into PMS successfully -> launching Activity`);
             console.info(`[AndroidOS] Launching Activity ${targetPkg} -> will auto-switch viewport to webgpu (guest fallback visible until guest presents)`);
             await appController.launchActivity(targetPkg);
-            console.info(`[AndroidOS] launchActivity done for ${targetPkg}, now activateScreen('webgpu') gate active=${gpuDev ? !!gpuDev.guestHasPresented : false} useGuest=${runtime ? runtime.useGuestRendering : '?'}`);
+            const dev = bootstrap.getGpuDevice();
+            console.info(`[AndroidOS] launchActivity done for ${targetPkg}, now activateScreen('webgpu') gate active=${dev ? !!dev.guestHasPresented : false} useGuest=${runtime ? runtime.useGuestRendering : '?'}`);
             appController.activateScreen('webgpu');
-            console.info(`[AndroidOS] ${targetPkg} launched. Viewport=webgpu activeScreen=${appController.activeScreen} canvas=${dom.canvas.width}x${dom.canvas.height} isHostInjectionAllowed=${gpuDev ? gpuDev.isHostInjectionAllowed() : '?'}`);
+            console.info(`[AndroidOS] ${targetPkg} launched. Viewport=webgpu activeScreen=${appController.activeScreen} canvas=${dom.canvas ? dom.canvas.width+'x'+dom.canvas.height : 'none'} isHostInjectionAllowed=${dev && typeof dev.isHostInjectionAllowed === 'function' ? dev.isHostInjectionAllowed() : '?'}`);
         } else {
             console.warn(`[AndroidOS] ${targetApk} fetch failed:`, resp.status, resp.statusText);
             appendLogcat('PackageManager', `Target APK fetch failed: ${targetApk} (HTTP ${resp.status})`, 'W');
