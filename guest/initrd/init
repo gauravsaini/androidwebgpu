@@ -57,7 +57,7 @@ insmod /lib/modules/6.6.142-0-lts/kernel/drivers/virtio/virtio_pci_modern_dev.ko
 echo "[init][VERBOSE][6/12] insmod virtio_pci_legacy_dev.ko ..." > /dev/ttyS0 2>/dev/null || true
 insmod /lib/modules/6.6.142-0-lts/kernel/drivers/virtio/virtio_pci_legacy_dev.ko 2>/dev/ttyS0 && echo "[init][VERBOSE][6/12] virtio_pci_legacy_dev.ko : OK optional" > /dev/ttyS0 2>/dev/null || echo "[init][VERBOSE][6/12] virtio_pci_legacy_dev.ko : optional miss" > /dev/ttyS0 2>/dev/null || true
 echo "[init][VERBOSE][7/12] insmod virtio_pci.ko depends on 3 4 5 6 ..." > /dev/ttyS0 2>/dev/null || true
-insmod /lib/modules/6.6.142-0-lts/kernel/drivers/virtio/virtio_pci.ko 2>/dev/ttyS0 && echo "[init][VERBOSE][7/12] virtio_pci.ko : OK" > /dev/ttyS0 2>/dev/null || echo "[init][VERBOSE][7/12] virtio_pci.ko : FAIL check dmesg unknown symbol" > /dev/ttyS0 2>/dev/null || true
+insmod /lib/modules/6.6.142-0-lts/kernel/drivers/virtio/virtio_pci.ko force_legacy=1 2>/dev/ttyS0 && echo "[init][VERBOSE][7/12] virtio_pci.ko : OK" > /dev/ttyS0 2>/dev/null || echo "[init][VERBOSE][7/12] virtio_pci.ko : FAIL check dmesg unknown symbol" > /dev/ttyS0 2>/dev/null || true
 echo "[init][VERBOSE][8/12] insmod virtio_dma_buf.ko ..." > /dev/ttyS0 2>/dev/null || true
 insmod /lib/modules/6.6.142-0-lts/kernel/drivers/virtio/virtio_dma_buf.ko 2>/dev/ttyS0 && echo "[init][VERBOSE][8/12] virtio_dma_buf.ko : OK" > /dev/ttyS0 2>/dev/null || echo "[init][VERBOSE][8/12] virtio_dma_buf.ko : optional" > /dev/ttyS0 2>/dev/null || true
 echo "[init][VERBOSE][9/12] insmod drm.ko depends on 1 2 ..." > /dev/ttyS0 2>/dev/null || true

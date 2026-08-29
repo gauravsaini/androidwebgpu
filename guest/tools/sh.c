@@ -200,9 +200,26 @@ static int run_line(char *line) {
                     log_line(lb_var);
                     continue;
                 }
+                // Extract module parameters (e.g. force_legacy=1)
+                char mod_args[256] = {0};
+                char *arg_pos = ms + mi;
+                while (*arg_pos == ' ') arg_pos++;
+                int ai = 0;
+                while (arg_pos[ai] && arg_pos[ai] != ';' && arg_pos[ai] != '&' && arg_pos[ai] != '|' && arg_pos[ai] != '>' && ai < 255) {
+                    mod_args[ai] = arg_pos[ai];
+                    ai++;
+                }
+                mod_args[ai] = '\0';
+                while (ai > 0 && (mod_args[ai-1] == ' ' || mod_args[ai-1] == '\r' || mod_args[ai-1] == '\n')) mod_args[--ai] = '\0';
+
+                // Automatically provide force_legacy=1 for virtio_pci.ko if not specified
+                if (strstr(mod_path, "virtio_pci.ko") && strlen(mod_args) == 0) {
+                    strcpy(mod_args, "force_legacy=1");
+                }
+
                 mod_idx++;
                 char lb[512];
-                snprintf(lb,sizeof(lb),"[sh][VERBOSE][%d] %s attempting: %s", mod_idx, keyword, mod_path);
+                snprintf(lb,sizeof(lb),"[sh][VERBOSE][%d] %s attempting: %s (args: '%s')", mod_idx, keyword, mod_path, mod_args);
                 log_line(lb);
                 int fd=open(mod_path,O_RDONLY);
                 if (fd>=0) {
@@ -213,7 +230,7 @@ static int run_line(char *line) {
                             ssize_t r=read(fd,buf,st.st_size);
                             close(fd);
                             if (r==st.st_size) {
-                                long ret=syscall(128, buf, r, "");
+                                long ret=syscall(128, buf, r, mod_args);
                                 if (ret==0) { snprintf(lb,sizeof(lb),"[sh][VERBOSE][%d] %s %s -> OK (%ld bytes) [OK]",mod_idx, keyword, mod_path,r); log_line(lb); }
                                 else { snprintf(lb,sizeof(lb),"[sh][VERBOSE][%d] init_module %s -> ret=%ld errno=%d (%s) [FAIL]",mod_idx, mod_path,ret,errno,strerror(errno)); log_line(lb); }
                             } else { snprintf(lb,sizeof(lb),"[sh][VERBOSE][%d] read %s failed %ld",mod_idx, mod_path,r); log_line(lb); close(fd); }
