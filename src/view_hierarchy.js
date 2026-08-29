@@ -391,6 +391,31 @@ export class View {
         return null;
     }
 
+    performClick() {
+        if (this.onClickListener && typeof this.onClickListener === 'function') {
+            this.onClickListener(this);
+            return true;
+        }
+        if (this.parent && typeof this.parent.performClick === 'function') {
+            return this.parent.performClick();
+        }
+        return false;
+    }
+
+    findViewByText(text) {
+        if (this.text === text || (typeof this.text === 'string' && typeof text === 'string' && this.text.includes(text))) {
+            return this;
+        }
+        return null;
+    }
+
+    findView(predicate) {
+        if (typeof predicate === 'function' && predicate(this)) {
+            return this;
+        }
+        return null;
+    }
+
     findViewById(id) {
         if (this.id === id && id !== 0) return this;
         return null;
@@ -482,6 +507,28 @@ export class ViewGroup extends View {
         if (this.id === id && id !== 0) return this;
         for (const child of this.children) {
             const found = child.findViewById(id);
+            if (found) return found;
+        }
+        return null;
+    }
+
+    findViewByText(text) {
+        if (this.text === text || (typeof this.text === 'string' && typeof text === 'string' && this.text.includes(text))) {
+            return this;
+        }
+        for (const child of this.children) {
+            const found = child.findViewByText ? child.findViewByText(text) : null;
+            if (found) return found;
+        }
+        return null;
+    }
+
+    findView(predicate) {
+        if (typeof predicate === 'function' && predicate(this)) {
+            return this;
+        }
+        for (const child of this.children) {
+            const found = child.findView ? child.findView(predicate) : null;
             if (found) return found;
         }
         return null;

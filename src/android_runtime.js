@@ -769,8 +769,16 @@ export class AndroidRuntime {
                         label: "◀",
                         action: () => {
                             this.log(`[GeckoSession] Toolbar Back clicked`, 'info', 'GeckoSession');
-                            appState.activeUrl = 'https://www.mozilla.org/firefox';
-                            appState.currentPage = 'home';
+                            if (appState.currentPage === 'Google' || (appState.activeUrl && appState.activeUrl.includes('google.com'))) {
+                                appState.activeUrl = 'https://www.mozilla.org/firefox';
+                                appState.currentPage = 'home';
+                            } else if (appState.currentPage === 'home') {
+                                appState.activeUrl = 'https://www.google.com';
+                                appState.currentPage = 'Google';
+                            } else {
+                                appState.activeUrl = 'https://www.google.com';
+                                appState.currentPage = 'Google';
+                            }
                             this.renderActivityUi(appState);
                         }
                     },
@@ -778,12 +786,20 @@ export class AndroidRuntime {
                         label: "▶",
                         action: () => {
                             this.log(`[GeckoSession] Toolbar Forward clicked`, 'info', 'GeckoSession');
+                            if (appState.currentPage === 'home') {
+                                appState.activeUrl = 'https://www.google.com';
+                                appState.currentPage = 'Google';
+                                this.renderActivityUi(appState);
+                            } else {
+                                this.renderActivityUi(appState);
+                            }
                         }
                     },
                     {
                         label: "🔄",
                         action: () => {
                             this.log(`[GeckoSession] Reloading: ${appState.activeUrl}`, 'info', 'GeckoSession');
+                            appState.activeUrl = appState.activeUrl || 'https://www.google.com';
                             this.renderActivityUi(appState);
                         }
                     },
@@ -816,6 +832,7 @@ export class AndroidRuntime {
                     tv.textColor = "#e4e4e7";
                     tv.textSize = 24;
                     tv.gravity = 17;
+                    tv.setOnClickListener(act.action);
                     btn.addView(tv);
                     btn.setOnClickListener(act.action);
                     bottomNav.addView(btn);
