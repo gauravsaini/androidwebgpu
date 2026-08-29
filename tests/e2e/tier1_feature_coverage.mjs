@@ -409,10 +409,10 @@ export async function runTier1Tests(reporter = console.log) {
         const dev = new VirtioGpuDevice(null, null, null);
         const vendorId = dev.pciRead(0, 2);
         const deviceId = dev.pciRead(2, 2);
-        const pciValid = vendorId === 0x1AF4 && deviceId === 0x1050;
-        record('F5.1: Virtio-GPU PCI configuration space (0x1AF4:0x1050) verified', pciValid);
+        const pciValid = vendorId === 0x1AF4 && deviceId === 0x1010;
+        record('F5.1: Virtio-GPU PCI configuration space (0x1AF4:0x1010) verified', pciValid);
     } catch (err) {
-        record('F5.1: Virtio-GPU PCI configuration space (0x1AF4:0x1050) verified', false, err.message);
+        record('F5.1: Virtio-GPU PCI configuration space (0x1AF4:0x1010) verified', false, err.message);
     }
 
     try {

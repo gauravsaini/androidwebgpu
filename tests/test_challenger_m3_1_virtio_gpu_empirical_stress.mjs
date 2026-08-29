@@ -21,7 +21,7 @@ describe('Challenger M3.1: VirtIO GPU Bridge & Virtqueue Adversarial Stress Test
             
             // 8-bit, 16-bit, and 32-bit reads on PCI header
             assert.equal(dev.pciRead(0, 2), 0x1AF4, 'Vendor ID must be 0x1AF4 (Red Hat / QEMU VirtIO)');
-            assert.equal(dev.pciRead(2, 2), 0x1050, 'Device ID must be 0x1050 (VirtIO GPU)');
+            assert.equal(dev.pciRead(2, 2), 0x1010, 'Device ID must be 0x1010 (VirtIO GPU Legacy/Transitional)');
             assert.equal(dev.pciRead(10, 2), 0x0300, 'Class code must be Display Controller (0x0300)');
             assert.equal(dev.pciRead(60, 1), 10, 'IRQ Line must be 10');
             

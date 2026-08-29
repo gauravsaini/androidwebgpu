@@ -71,16 +71,23 @@ export class VirtioGpuDevice {
         this.pci_space[0] = 0xF4;
         this.pci_space[1] = 0x1A;
 
-        // Device ID: Virtio GPU (0x1050)
-        this.pci_space[2] = 0x50;
+        // Device ID: Virtio GPU Legacy/Transitional (0x1010 = 0x1000 + subsys 0x10)
+        // 0x1050 is modern-only and requires MMIO caps v86 cannot trap.
+        // 0x1010 falls in legacy range 0x1000-0x103F, auto-matched by virtio_pci_legacy.
+        this.pci_space[2] = 0x10;
         this.pci_space[3] = 0x10;
 
         // Command & Status
         this.pci_space[4] = 0x07; // I/O, Memory, Bus Master enabled
         this.pci_space[5] = 0x00;
 
-        // Subsystem IDs & Class: Display Controller (0x030000)
+        // Revision ID (0x08) = 0x00 (legacy VirtIO device)
+        this.pci_space[8] = 0x00;
+        // Programming Interface (0x09) = 0x00
+        this.pci_space[9] = 0x00;
+        // Subclass (0x0A): Display Controller - Other (0x80) or VGA (0x00)
         this.pci_space[10] = 0x00;
+        // Class Code (0x0B): Display Controller (0x03)
         this.pci_space[11] = 0x03;
 
         // BAR0: I/O Space (64 bytes) at 0xC140 (virtio legacy) — slot 0x06 avoids NE2000 collision at 0x05/C000
@@ -186,9 +193,9 @@ export class VirtioGpuDevice {
         this.pci_space[60] = this.irqLine;
         this.pci_space[61] = 0x01; // INTA#
 
-        logger.log('bridge', 'I', 'Virtio-GPU PCI device (0x1AF4:0x1050) initialized with 1 scanout and VirtIO 1.0 capabilities', {
+        logger.log('bridge', 'I', 'Virtio-GPU PCI device (0x1AF4:0x1010) initialized with 1 scanout and VirtIO legacy I/O capabilities', {
             vendorId: 0x1AF4,
-            deviceId: 0x1050,
+            deviceId: 0x1010,
             scanouts: this.num_scanouts
         });
     }

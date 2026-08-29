@@ -83,7 +83,7 @@ echo "[init][VERBOSE] Trigger PCI rescan for hot-plug virtio-gpu (host registers
 echo 1 > /sys/bus/pci/rescan 2>/dev/ttyS0 || echo 1 > /sys/bus/pci/rescan 2>&1 > /dev/ttyS0 || true
 sleep 0.2 2>/dev/null || true
 echo "[init][VERBOSE] Fallback manual new_id and bind for virtio-pci ..." > /dev/ttyS0 2>/dev/null || true
-echo "1af4 1050" > /sys/bus/pci/drivers/virtio-pci/new_id 2>/dev/null || true
+echo "1af4 1010" > /sys/bus/pci/drivers/virtio-pci/new_id 2>/dev/null || true
 echo "0000:00:06.0" > /sys/bus/pci/drivers/virtio-pci/bind 2>/dev/null || true
 dmesg 2>/dev/ttyS0 | tail -n 20 > /dev/ttyS0 2>&1 || true
 echo "[init][VERBOSE] Post-rescan PCI and DRM check ..." > /dev/ttyS0 2>/dev/null || true

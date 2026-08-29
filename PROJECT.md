@@ -1,73 +1,65 @@
-# Project: Firefox APK Ingestion & GeckoView Web Content Execution
+# Project: AndroidWebGPU Pure Guest Rendering
 
 ## Architecture
-The system ingests and executes authentic `firefox.apk` within the Dalvik VM and WebGPU runtime environment:
-1. **Target APK Resolution & Multi-DEX Ingestion (`src/main_android.js`, `src/apk_client_parser.js`, `src/dex_vm.js`)**:
-   - URL query parameter parsing (`?apk=firefox.apk`) defaulting to `firefox.apk`.
-   - Zero-dependency ZIP extraction (`ApkZipReader`) and binary XML parsing (`AxmlDecoder`) decoding package name `org.mozilla.firefox`, SDK 37, activities, and native `.so` libraries.
-   - Multi-DEX bytecode parser (`DexParser`) loading `classes.dex`, `classes2.dex`, `classes3.dex` (80,012 classes) into `DalvikVM`.
-   - `PackageManagerRegistry` registration of `org.mozilla.firefox`.
-2. **GeckoView Activity Launch & Web Content Rendering (`src/app_controller.js`, `src/android_runtime.js`, `src/view_rasterizer.js`)**:
-   - `AppController.launchActivity('org.mozilla.firefox')` executes Binder transactions to `ams_rs` (Handle 4) and `wms_rs` (Handle 3), invokes Dalvik VM lifecycle, and activates the `#screen-webgpu` canvas viewport.
-   - `AndroidRuntime.renderActivityUi()` initializes `appState.activeUrl = 'https://www.google.com'`, `appState.currentPage = 'Google'`, and constructs the GeckoView view hierarchy.
-   - `ViewHierarchyRasterizer` renders the Google Search mobile layout (Google logo, search pill, action buttons, trending cards, navigation) onto the 720x1440 WebGPU canvas buffer.
-3. **Interactive Navigation & Toolbar Control (`src/android_runtime.js`, `src/view_hierarchy.js`, `src/main_android.js`)**:
-   - URL search bar and action buttons (Reload, Back, Home, Tabs) with touch hit-testing and event dispatch updating `appState.activeUrl` and re-rasterizing the view hierarchy.
-   - Physical pointer event dispatch from canvas coordinates to view click listeners.
-4. **Automated Quality Gates & Test Suites (`tests/`, `package.json`)**:
-   - Unit and integration test suites executed via `pnpm test` (21 test files, 100% pass, 0 failures).
-   - End-to-end 4-Tier verification runner (`node tests/run_e2e_tests.mjs`).
-   - Guest boot and hardware presentation verification (`tests/test_v86_guest_boot.mjs`).
+AndroidWebGPU executes guest Linux and Android userspace inside a WebAssembly v86 x86 VM with hardware-accelerated VirtIO-GPU graphics bridged to WebGPU:
+- **VM Layer (`src/virtio_gpu_device.js`, `v86`)**: Emulates OASIS VirtIO-GPU 1.0/1.2 PCI device at BDF 0000:00:06.0 with BAR0 (I/O, 64B) and BAR1 (MMIO, 16MB). Intercepts notify kicks, parses virtqueue descriptor chains, handles BAR sizing/relocation, and raises CPU interrupts.
+- **Guest Layer (`guest/initrd/init`, `guest/surfaceflinger.c`, `guest/app_process.c`, `guest/patches/`)**: Guest Linux kernel binds `virtio-pci` and `virtio-gpu`, creating `/dev/dri/card0` and `/dev/dri/renderD128`. Guest userspace (`init -> servicemanager -> zygote -> app_process -> SurfaceFlinger`) allocates DRM GEM buffers via gralloc and submits `TRANSFER_TO_HOST_2D` and `RESOURCE_FLUSH` via `DRM_IOCTL_VIRTGPU_EXECBUFFER`.
+- **Bridge & Compositor Layer (`crates/virtio_gpu_bridge`, `crates/webgpu_compositor`)**: Rust/WASM bridge decodes virtqueue packets, resolves scatter-gather DMA memory backing, swizzles BGRX to RGBA, tracks damage bounding boxes, and blits to `<canvas id="screen" width="720" height="1440">`.
+- **Gating & Runtime Layer (`src/android_runtime.js`, `src/system_bootstrap.js`)**: Transitions `guestActive=true` and `guestHasPresented=true` upon first guest frame, permanently locking out host rasterizer fallback.
 
 ## Feature Inventory
 | # | Feature | Description | Milestone | Source |
 |---|---------|-------------|-----------|--------|
-| 1 | Target APK Resolution & Default Config | Parse `?apk=firefox.apk` URL param, default to `firefox.apk`, and fetch arrayBuffer | M1 | R1 |
-| 2 | APK ZIP & Manifest Decoding | Decode `AndroidManifest.xml` via `AxmlDecoder`, extracting `org.mozilla.firefox` & metadata | M1 | R1 |
-| 3 | Multi-DEX Bytecode Ingestion | Ingest `classes.dex`, `classes2.dex`, `classes3.dex` (80,012 classes) into `DalvikVM` | M1 | R1 |
-| 4 | PMS Package Registration | Register `org.mozilla.firefox` with label "Firefox" and icon in `PackageManagerRegistry` | M1 | R1 |
-| 5 | GeckoView Activity Launch | Launch `org.mozilla.firefox` via `AppController.launchActivity` and switch to WebGPU canvas | M2 | R2 |
-| 6 | Active URL Initialization | Default `appState.activeUrl` to `https://www.google.com` and `appState.currentPage` to `'Google'` | M2 | R2 |
-| 7 | Google Search Canvas Rasterization | Rasterize Google Search mobile UI (logo, search pill, buttons) onto 720x1440 canvas buffer | M2 | R2 |
-| 8 | Interactive Navigation & URL Bar | Support address bar search/click and action buttons (Reload, Back, Home) updating web view | M3 | R3 |
-| 9 | Comprehensive Test Suite Verification | Verify 100% test pass across unit, integration, and E2E suites via `pnpm test` | M3 | R3 |
+| 1 | VirtIO PCI Config & Caps | Emulate BDF 0x06 PCI device with Vendor 0x1AF4, Device 0x1010, BAR0/BAR1, and VirtIO legacy I/O capabilities | M1 | survey_explorer_1 |
+| 2 | BAR0/BAR1 Relocation & Sizing | Support BAR sizing probes (0xFFFFFFFF) and partial byte/word writes without corrupting ioBase | M1 | survey_explorer_1 |
+| 3 | Driver Binding & Sysfs | Topological module load (12 modules) and sysfs driver binding (`/sys/bus/pci/drivers/virtio-pci/new_id`) | M1 | survey_explorer_1 |
+| 4 | DRM Nodes Creation | Create and expose `/dev/dri/card0` and `/dev/dri/renderD128` without ENODEV | M1 | survey_explorer_1 |
+| 5 | Guest Userspace Boot Pipeline | Boot sequence: `init -> servicemanager -> zygote -> app_process -> SurfaceFlinger` | M2 | survey_explorer_2 |
+| 6 | DRM Gralloc GEM Allocations | Allocate GEM backing buffers via `DRM_IOCTL_VIRTGPU_RESOURCE_CREATE` + `DRM_IOCTL_VIRTGPU_MAP` | M2 | survey_explorer_2 |
+| 7 | SurfaceFlinger Command Dispatch | Submit `RESOURCE_CREATE_2D`, `TRANSFER_TO_HOST_2D`, `RESOURCE_FLUSH` via `DRM_IOCTL_VIRTGPU_EXECBUFFER` | M2 | survey_explorer_2 |
+| 8 | Virtqueue 0 Ring Processing | Hypervisor consumes Queue 0 descriptors, updates Used ring, raises IRQ 10 | M2 | survey_explorer_2 |
+| 9 | Guest Gating & Fallback Lockout | Transition `guestActive=true`, `guestHasPresented=true`, and suppress host rasterizer | M2 | survey_explorer_2 |
+| 10 | WebGPU VirtIO Scanout Blit | Deliver 720x1440 RGBA scanout framebuffer to `#screen` canvas via WebGPU / 2D context | M3 | survey_spec_miner_1 |
+| 11 | BGRX to RGBA Swizzling | Swizzle Linux DRM BGRX to WebGPU RGBA with alpha=255 | M3 | survey_spec_miner_1 |
+| 12 | Damage Rect Tracking | Track dirty bounding boxes on `RESOURCE_FLUSH` for partial canvas updating | M3 | survey_spec_miner_1 |
+| 13 | Multi-Layer Compositing Engine | WGSL multi-layer compositor with matrix transforms and blend states | M3 | survey_spec_miner_1 |
+| 14 | Shannon Entropy Telemetry | Validate non-black rendered display frames ($H \ge 1.0$) | M3 | survey_spec_miner_1 |
+| 15 | E2E 4-Tier Test Suite | Comprehensive unit, integration, boundary, combinatorial, and scenario test matrix | M4 | survey_spec_miner_1 |
+| 16 | Adversarial Hardening (Tier 5) | Adversarial stress testing, race condition checking, and memory integrity audits | M4 | survey_spec_miner_1 |
 
 ## Milestones
 | # | Name | Scope | Dependencies | Status |
 |---|------|-------|-------------|--------|
-| M1 | Target APK Resolution & Firefox Ingestion | URL parameter parsing, `ApkZipReader`, `AxmlDecoder`, Multi-DEX loading into `DalvikVM`, PMS `org.mozilla.firefox` registration | none | DONE |
-| M2 | GeckoView Activity Launch & Google Rendering | `AppController.launchActivity('org.mozilla.firefox')`, viewport switch, `activeUrl = https://www.google.com`, 720x1440 rasterization | M1 | DONE |
-| M3 | Interactive Navigation & Test Suite Validation | Address bar click, Reload/Back/Home actions, unit test assertions, `pnpm test` pass | M2 | DONE |
+| 1 | M1: VirtIO-GPU PCI Device Emulation & Driver Binding | VirtIO PCI config space, OASIS 1.0 caps, BAR0/BAR1 sizing & relocation, module loading & driver binding to `/dev/dri/card0` | None | **DONE** |
+| 2 | M2: End-to-End Guest Graphics Stack Execution | Userspace boot (`init -> servicemanager -> zygote -> app_process -> SurfaceFlinger`), DRM GEM buffer allocation, VirtIO-GPU command dispatch, virtqueue 0 ring processing, and host fallback lockout (`guestActive=true`, `guestHasPresented=true`) | M1 | IN_PROGRESS |
+| 3 | M3: WebGPU VirtIO Scanout Presentation | 720x1440 WebGPU canvas blit, BGRX swizzling, damage rect tracking, and Shannon entropy validation ($H \ge 1.0$) | M2 | PLANNED |
+| 4 | M4: E2E Full-Stack Verification & Adversarial Hardening | 100% pass of 4-tier E2E tests (`pnpm test`, `run_e2e_tests.mjs`) + Tier 5 adversarial coverage hardening | M1, M2, M3 | PLANNED |
 
 ## Interface Contracts
-### Target APK Resolution Contract
-```javascript
-// URL query parameter ?apk=firefox.apk -> targetApk = 'firefox.apk'
-// ArrayBuffer -> ApkZipReader -> AxmlDecoder -> DalvikVM & PackageManagerRegistry
-```
+### Guest Kernel / Userspace ↔ VirtIO-GPU PCI Device
+- PCI BDF: `0000:00:06.0` (`0x1AF4:0x1010`, Subsystem `0x1AF4:0x0010`)
+- BAR0: I/O Space (64 Bytes, `0xC140..0xC17F`), BAR1: MMIO Space (16 MB, `0xD1000000..0xD1FFFFFF`)
+- Virtqueue 0: Size 256, Control Queue for 2D/3D command descriptors
+- Virtqueue 1: Size 16, Cursor Queue
+- IRQ: Line 10 (INTA#)
 
-### GeckoView Activity & Navigation State
-```javascript
-interface FirefoxAppState {
-  packageName: 'org.mozilla.firefox';
-  activityName: 'org.mozilla.firefox.App';
-  activeUrl: 'https://www.google.com' | string;
-  currentPage: 'Google' | 'home' | string;
-}
-```
+### VirtIO-GPU Device (`src/virtio_gpu_device.js`) ↔ WASM Bridge (`crates/virtio_gpu_bridge`)
+- `process_virtqueue_descriptor(guestMem, descTableAddr, headDescIdx)` -> returns processed bytes / result status
+- `get_scanout_framebuffer_rgba(scanoutId)` -> returns Uint8Array of $720 \times 1440 \times 4$ bytes
+- `get_scanout_damage(scanoutId)` -> returns `[x, y, w, h]` or `null`
 
-### Canvas Viewport & Scanout Dimensions
-- Resolution: 720 x 1440
-- RGBA Buffer Size: 4,147,200 bytes ($720 \times 1440 \times 4$)
-- DOM Viewport: `#screen-webgpu` canvas element `#screen`
+### Host Runtime Gating (`src/android_runtime.js`, `src/view_rasterizer.js`)
+- `gpuDev.guestActive === true` and `gpuDev.guestHasPresented === true` -> `isHostInjectionAllowed() === false` -> disables `submitToVirtioGpu()` and host activity rasterizer.
 
 ## Code Layout
-- `firefox.apk`: Authentic Firefox Android application package (138.4 MB).
-- `src/main_android.js`: Entry point, URL param parser (`?apk=...`), target APK loader, and navigation handlers.
-- `src/apk_client_parser.js`: `ApkZipReader`, `AxmlDecoder`, `PackageManagerRegistry`.
-- `src/dex_vm.js`: `DexParser`, `DalvikVM` multi-DEX class loading and execution.
-- `src/app_controller.js`: Activity launching, screen switching (`activateScreen('webgpu')`), Binder dispatch.
-- `src/android_runtime.js`: Runtime coordinator, GeckoView layout construction, URL navigation, toolbar actions.
-- `src/view_rasterizer.js`: `ViewHierarchyRasterizer` (720x1440 canvas rendering).
-- `src/view_hierarchy.js`: Android View hierarchy components, touch dispatch, reverse-Z hit testing.
-- `tests/`: Automated unit, integration, and E2E test suites (`test_firefox_geckoview.mjs`, `test_geckoview_adversarial_stress.mjs`, etc.).
+- `src/virtio_gpu_device.js` — VirtIO-GPU PCI and virtqueue hypervisor emulation
+- `src/android_runtime.js` — Android runtime management and host fallback gating
+- `src/system_bootstrap.js` — System bootstrap and WebGPU presentation loop
+- `src/view_rasterizer.js` — Host rasterizer (gated out when guest presents)
+- `crates/virtio_gpu_bridge/` — Rust/WASM VirtIO-GPU wire protocol, resource manager, and scanout renderer
+- `crates/webgpu_compositor/` — WebGPU multi-layer composition pipeline and WGSL shaders
+- `guest/initrd/init` — Guest Linux PID 1 initialization and module binding
+- `guest/surfaceflinger.c` — Guest SurfaceFlinger display manager
+- `guest/app_process.c` — Guest Zygote and Android application runner
+- `guest/patches/` — Gralloc and HWC VirtIO-GPU drivers
+- `tests/` — Test suites (unit, integration, adversarial, E2E)

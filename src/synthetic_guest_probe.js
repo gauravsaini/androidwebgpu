@@ -106,7 +106,7 @@ export class SyntheticGuestProbe {
         const devId = this.device.pciRead(2, 2);
         const cls = this.device.pciRead(10, 2);
         const bar0 = this.device.pciRead(16, 4);
-        const ok = vendor === 0x1AF4 && devId === 0x1050 && cls === 0x0300 && (bar0 & 0x01) === 1;
+        const ok = vendor === 0x1AF4 && devId === 0x1010 && cls === 0x0300 && (bar0 & 0x01) === 1;
         this.log('2.1', `PCI probe vendor=0x${vendor.toString(16)} dev=0x${devId.toString(16)} class=0x${cls.toString(16)} BAR0=0x${bar0.toString(16)} ${ok ? 'PASS' : 'FAIL'}`);
         return ok;
     }

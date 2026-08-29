@@ -8,8 +8,8 @@ describe('VirtioGpuDevice & Virtqueue Phase 2 Integration Tests', () => {
         
         // Vendor ID: 0x1AF4
         assert.strictEqual(dev.pciRead(0, 2), 0x1AF4);
-        // Device ID: 0x1050 (Virtio GPU)
-        assert.strictEqual(dev.pciRead(2, 2), 0x1050);
+        // Device ID: 0x1010 (Virtio GPU Legacy/Transitional)
+        assert.strictEqual(dev.pciRead(2, 2), 0x1010);
         // Class: Display Controller (0x030000)
         assert.strictEqual(dev.pciRead(10, 2), 0x0300);
         // BAR0: I/O Space (indicator bit 0 set)

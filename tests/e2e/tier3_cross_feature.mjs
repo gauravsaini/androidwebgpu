@@ -143,7 +143,7 @@ export async function runTier3Tests(reporter = console.log) {
             return entry;
         }
 
-        logBridge('I', 'PCI Device 0x1AF4:0x1050 initialized with 1 scanout');
+        logBridge('I', 'PCI Device 0x1AF4:0x1010 initialized with 1 scanout');
         logBridge('D', 'Processing control queue: RESOURCE_CREATE_2D (res=1, 800x600)');
         logBridge('D', 'SET_SCANOUT 0 -> Resource 1');
         logBridge('I', 'Scanout 0 damaged rect [0, 0, 800, 600] presented');

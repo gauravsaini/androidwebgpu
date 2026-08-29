@@ -450,7 +450,7 @@ describe('Challenger 2 M4: Zygote IPC, APK Ingestion & Display Metrics Stress Su
             const gpuDev = new VirtioGpuDevice(null, null, new MockCanvas(720, 1440));
             assert.strictEqual(gpuDev.num_scanouts, 1, 'Device must have 1 scanout');
             assert.strictEqual(gpuDev.pci_space[0], 0xF4, 'Vendor ID 0x1AF4');
-            assert.strictEqual(gpuDev.pci_space[2], 0x50, 'Device ID 0x1050');
+            assert.strictEqual(gpuDev.pci_space[2], 0x10, 'Device ID 0x1010');
 
             // Build GET_DISPLAY_INFO packet
             const getDisplayInfoPkt = VirtioPacketBuilder.encodeHeader(VIRTIO_GPU_CMD.GET_DISPLAY_INFO, 0, 1, 0);
