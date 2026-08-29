@@ -66,7 +66,9 @@ export class AppController {
             targetEl.classList.add('active');
             targetEl.style.display = 'flex';
         }
+        const oldScreen = this.activeScreen || 'initial';
         this.activeScreen = screenName;
+        console.info(`[AppController] Viewport switch: '${oldScreen}' -> '${screenName}' (active element: ${targetEl ? targetEl.id : 'none'})`);
 
         if (this.dom.btnSwitchCanvas) {
             if (screenName === 'webgpu') {

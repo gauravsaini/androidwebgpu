@@ -594,6 +594,7 @@ export class ViewHierarchyRasterizer {
         if (!device) return;
         // ponytail: only block if guest genuinely presented via virtqueue
         if (device.guestHasPresented && device.guestActive) return;
+        console.debug(`[ViewRasterizer] Submitting rasterized buffer (${buffer.length} bytes) to VirtIO-GPU scanout ${scanoutId}`);
         const transferPkt = VirtioPacketBuilder.transferToHost2d(resId, this.width, this.height, 0, 0, buffer);
         device.processControlQueue(transferPkt);
         const flushPkt = VirtioPacketBuilder.resourceFlush(resId, this.width, this.height, 0, 0);

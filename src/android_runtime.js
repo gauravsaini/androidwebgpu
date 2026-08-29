@@ -341,6 +341,7 @@ export class AndroidRuntime {
         this.activityStack.push({ packageName, activityName, extras });
         this.activityBackstack.push({ packageName, activityName, extras });
 
+        console.info(`[AndroidRuntime] startActivity("${packageName}", "${activityName}") -> dispatching lifecycle & inflating View tree`);
         // Invoke onCreate / onResume in Dalvik VM
         this.vm.startActivity(activityName, { packageName, ...extras });
 
@@ -802,6 +803,7 @@ export class AndroidRuntime {
         const frame = this.rasterizer.rasterize(rootView, width, height);
         const elapsed = (((typeof performance !== 'undefined') ? performance.now() : Date.now()) - t0).toFixed(2);
         this.log(`Rasterized ${width}x${height} view tree in ${elapsed}ms (damage: [${frame.damageRect.join(', ')}])`, 'info', 'ViewRasterizer');
+        console.info(`[ViewRasterizer] Rasterized ${width}x${height} view tree in ${elapsed}ms -> blitting to canvas & VirtIO scanout`);
 
         if (this.canvas && typeof this.canvas.getContext === 'function') {
             try {
@@ -810,8 +812,11 @@ export class AndroidRuntime {
                     const imgData = ctx.createImageData(width, height);
                     imgData.data.set(frame.rgbaData);
                     ctx.putImageData(imgData, 0, 0);
+                    console.debug(`[Canvas2D] Successfully blitted ${width}x${height} image data to 2D context`);
                 }
-            } catch (_) {}
+            } catch (err) {
+                console.warn(`[Canvas2D] Canvas putImageData error:`, err);
+            }
         }
 
         if (this.gpuDevice) {

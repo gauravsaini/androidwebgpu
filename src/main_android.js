@@ -452,11 +452,13 @@ async function startSystem() {
                     }
                 } catch (_) {}
             }
+            console.info(`[AndroidOS] Ingesting APK into DalvikVM runtime...`);
             const appState = await runtime.loadAndRunApk(buf, indexBuf);
             const targetPkg = appState?.packageName || (targetApk.toLowerCase().includes('firefox') ? 'org.mozilla.firefox' : 'org.fdroid.fdroid');
             appendLogcat('PackageManager', `${targetApk} loaded into Dalvik VM & registered in PMS (${targetPkg}).`, 'I');
-            console.info(`[AndroidOS] ${targetPkg} installed into PMS successfully`);
+            console.info(`[AndroidOS] ${targetPkg} installed into PMS successfully -> launching Activity`);
             await appController.launchActivity(targetPkg);
+            console.info(`[AndroidOS] ${targetPkg} launched. WebGPU viewport active.`);
         } else {
             console.warn(`[AndroidOS] ${targetApk} fetch failed:`, resp.status, resp.statusText);
             appendLogcat('PackageManager', `Target APK fetch failed: ${targetApk} (HTTP ${resp.status})`, 'W');
