@@ -477,23 +477,23 @@ export class AndroidRuntime {
                 const header = new LinearLayout();
                 header.orientation = 1; // Vertical
                 header.backgroundColor = "#18181b";
-                header.setPadding(14, 10, 14, 10);
-                header.layoutParams = new LayoutParams(MATCH_PARENT, 94);
+                header.setPadding(20, 16, 20, 16);
+                header.layoutParams = new LayoutParams(MATCH_PARENT, 150);
 
                 const titleRow = new TextView();
-                titleRow.text = "🦊  Firefox Browser  •  Gecko Engine (x86_64 / EGL)";
+                titleRow.text = "🦊  Firefox Browser  •  GeckoView Engine (x86_64 / EGL)";
                 titleRow.textColor = "#ff7139";
-                titleRow.textSize = 13;
-                titleRow.layoutParams.margins = [0, 0, 0, 6];
+                titleRow.textSize = 20;
+                titleRow.layoutParams.margins = [0, 0, 0, 8];
                 header.addView(titleRow);
 
                 const urlBar = new TextView();
                 urlBar.text = `🔒  ${appState.activeUrl}`;
                 urlBar.textColor = "#f4f4f5";
-                urlBar.textSize = 13;
+                urlBar.textSize = 20;
                 urlBar.backgroundColor = "#27272a";
-                urlBar.setPadding(12, 6, 12, 6);
-                urlBar.layoutParams.height = 36;
+                urlBar.setPadding(20, 14, 20, 14);
+                urlBar.layoutParams = new LayoutParams(MATCH_PARENT, 68);
                 urlBar.setOnClickListener(() => {
                     this.log(`[GeckoView] URL bar clicked: ${appState.activeUrl}`, 'info', 'GeckoSession');
                     appState.activeUrl = 'https://www.google.com';
@@ -508,9 +508,9 @@ export class AndroidRuntime {
                 const body = new LinearLayout();
                 body.orientation = 1;
                 body.layoutParams = new LayoutParams(MATCH_PARENT, MATCH_PARENT);
-                body.layoutParams.marginTop = 98;
-                body.layoutParams.marginBottom = 60;
-                body.setPadding(16, 14, 16, 14);
+                body.layoutParams.marginTop = 158;
+                body.layoutParams.marginBottom = 110;
+                body.setPadding(24, 20, 24, 20);
 
                 const isGoogle = appState.activeUrl.includes('google.com') || appState.currentPage === 'Google';
 
@@ -519,21 +519,22 @@ export class AndroidRuntime {
                     const brandRow = new LinearLayout();
                     brandRow.orientation = 0;
                     brandRow.layoutParams = new LayoutParams(MATCH_PARENT, WRAP_CONTENT);
-                    brandRow.layoutParams.margins = [0, 16, 0, 16];
+                    brandRow.layoutParams.margins = [0, 16, 0, 24];
 
                     const googleLogo = new TextView();
                     googleLogo.text = "G o o g l e";
                     googleLogo.textColor = "#4285f4";
-                    googleLogo.textSize = 30;
+                    googleLogo.textSize = 48;
                     googleLogo.layoutParams.weight = 1;
                     brandRow.addView(googleLogo);
 
                     const signInBtn = new TextView();
                     signInBtn.text = "Sign in";
                     signInBtn.textColor = "#ffffff";
-                    signInBtn.textSize = 12;
+                    signInBtn.textSize = 20;
                     signInBtn.backgroundColor = "#1a73e8";
-                    signInBtn.setPadding(14, 6, 14, 6);
+                    signInBtn.setPadding(24, 12, 24, 12);
+                    signInBtn.layoutParams.margins = [0, 6, 0, 0];
                     brandRow.addView(signInBtn);
                     body.addView(brandRow);
 
@@ -541,11 +542,11 @@ export class AndroidRuntime {
                     const searchPill = new TextView();
                     searchPill.text = "🔍  Search Google or type a URL          🎤  📷";
                     searchPill.textColor = "#9aa0a6";
-                    searchPill.textSize = 13;
+                    searchPill.textSize = 20;
                     searchPill.backgroundColor = "#202124";
-                    searchPill.setPadding(14, 10, 14, 10);
-                    searchPill.layoutParams = new LayoutParams(MATCH_PARENT, 46);
-                    searchPill.layoutParams.margins = [0, 0, 0, 14];
+                    searchPill.setPadding(24, 18, 24, 18);
+                    searchPill.layoutParams = new LayoutParams(MATCH_PARENT, 76);
+                    searchPill.layoutParams.margins = [0, 0, 0, 20];
                     searchPill.setOnClickListener(() => {
                         this.log(`[GeckoSession] Google search active`, 'info', 'GeckoSession');
                     });
@@ -554,15 +555,15 @@ export class AndroidRuntime {
                     // Action Buttons Row
                     const btnRow = new LinearLayout(0);
                     btnRow.layoutParams = new LayoutParams(MATCH_PARENT, WRAP_CONTENT);
-                    btnRow.layoutParams.margins = [0, 0, 0, 16];
+                    btnRow.layoutParams.margins = [0, 0, 0, 20];
 
                     const btnSearch = new TextView();
                     btnSearch.text = "Google Search";
                     btnSearch.textColor = "#e8eaed";
-                    btnSearch.textSize = 12;
+                    btnSearch.textSize = 18;
                     btnSearch.backgroundColor = "#303134";
-                    btnSearch.setPadding(14, 8, 14, 8);
-                    btnSearch.layoutParams.margins = [0, 0, 8, 0];
+                    btnSearch.setPadding(20, 12, 20, 12);
+                    btnSearch.layoutParams.margins = [0, 0, 16, 0];
                     btnSearch.setOnClickListener(() => {
                         this.log(`[GeckoSession] Executed Google Search`, 'info', 'GeckoSession');
                     });
@@ -571,9 +572,9 @@ export class AndroidRuntime {
                     const btnLucky = new TextView();
                     btnLucky.text = "I'm Feeling Lucky";
                     btnLucky.textColor = "#e8eaed";
-                    btnLucky.textSize = 12;
+                    btnLucky.textSize = 18;
                     btnLucky.backgroundColor = "#303134";
-                    btnLucky.setPadding(14, 8, 14, 8);
+                    btnLucky.setPadding(20, 12, 20, 12);
                     btnRow.addView(btnLucky);
                     body.addView(btnRow);
 
@@ -581,16 +582,16 @@ export class AndroidRuntime {
                     const langTv = new TextView();
                     langTv.text = "Google offered in: English  हिन्दी  Español  Français";
                     langTv.textColor = "#9aa0a6";
-                    langTv.textSize = 11;
-                    langTv.layoutParams.margins = [0, 0, 0, 16];
+                    langTv.textSize = 16;
+                    langTv.layoutParams.margins = [0, 0, 0, 20];
                     body.addView(langTv);
 
                     // Trending / Discover Section
                     const discoverLabel = new TextView();
                     discoverLabel.text = "📈 Trending on Google";
                     discoverLabel.textColor = "#8ab4f8";
-                    discoverLabel.textSize = 13;
-                    discoverLabel.layoutParams.margins = [0, 4, 0, 8];
+                    discoverLabel.textSize = 22;
+                    discoverLabel.layoutParams.margins = [0, 4, 0, 12];
                     body.addView(discoverLabel);
 
                     const trends = [
@@ -601,35 +602,37 @@ export class AndroidRuntime {
 
                     for (const trend of trends) {
                         const tCard = new LinearLayout(1);
+                        tCard.layoutParams = new LayoutParams(MATCH_PARENT, WRAP_CONTENT);
                         tCard.backgroundColor = "#202124";
-                        tCard.setPadding(12, 10, 12, 10);
-                        tCard.layoutParams.margins = [0, 0, 0, 8];
+                        tCard.setPadding(20, 14, 20, 14);
+                        tCard.layoutParams.margins = [0, 0, 0, 12];
 
                         const tTitle = new TextView();
                         tTitle.text = trend.title;
                         tTitle.textColor = "#e8eaed";
-                        tTitle.textSize = 12;
+                        tTitle.textSize = 18;
                         tCard.addView(tTitle);
 
                         const tDesc = new TextView();
                         tDesc.text = trend.desc;
                         tDesc.textColor = "#9aa0a6";
-                        tDesc.textSize = 10;
-                        tDesc.layoutParams.margins = [0, 2, 0, 0];
+                        tDesc.textSize = 14;
+                        tDesc.layoutParams.margins = [0, 4, 0, 0];
                         tCard.addView(tDesc);
                         body.addView(tCard);
                     }
 
                     // Return to Top Sites Button
                     const returnBtn = new LinearLayout(0);
+                    returnBtn.layoutParams = new LayoutParams(MATCH_PARENT, 64);
                     returnBtn.backgroundColor = "#ff7139";
-                    returnBtn.setPadding(12, 8, 12, 8);
-                    returnBtn.layoutParams.height = 36;
-                    returnBtn.layoutParams.margins = [0, 6, 0, 0];
+                    returnBtn.setPadding(20, 14, 20, 14);
+                    returnBtn.layoutParams.margins = [0, 8, 0, 0];
+                    returnBtn.gravity = 17; // CENTER
                     const returnText = new TextView();
                     returnText.text = "⬅ Top Sites & Bookmarks";
                     returnText.textColor = "#ffffff";
-                    returnText.textSize = 12;
+                    returnText.textSize = 18;
                     returnBtn.addView(returnText);
                     returnBtn.setOnClickListener(() => {
                         this.log(`[GeckoSession] Navigating to Top Sites`, 'info', 'GeckoSession');
@@ -643,15 +646,15 @@ export class AndroidRuntime {
                     const welcomeTv = new TextView();
                     welcomeTv.text = "Fast, Private & Open Source Mobile Web";
                     welcomeTv.textColor = "#ffffff";
-                    welcomeTv.textSize = 17;
-                    welcomeTv.layoutParams.margins = [0, 6, 0, 12];
+                    welcomeTv.textSize = 24;
+                    welcomeTv.layoutParams.margins = [0, 8, 0, 16];
                     body.addView(welcomeTv);
 
                     const topSitesLabel = new TextView();
                     topSitesLabel.text = "Top Sites & Bookmarks";
                     topSitesLabel.textColor = "#a1a1aa";
-                    topSitesLabel.textSize = 12;
-                    topSitesLabel.layoutParams.margins = [0, 0, 0, 8];
+                    topSitesLabel.textSize = 18;
+                    topSitesLabel.layoutParams.margins = [0, 0, 0, 12];
                     body.addView(topSitesLabel);
 
                     const shortcuts = [
@@ -667,14 +670,14 @@ export class AndroidRuntime {
                         const card = new LinearLayout();
                         card.orientation = 0; // Horizontal
                         card.backgroundColor = "#27272a";
-                        card.setPadding(12, 10, 12, 10);
-                        card.layoutParams.height = 54;
-                        card.layoutParams.margins = [0, 4, 0, 4];
+                        card.setPadding(18, 14, 18, 14);
+                        card.layoutParams.height = 76;
+                        card.layoutParams.margins = [0, 6, 0, 6];
 
                         const iconTv = new TextView();
                         iconTv.text = site.icon;
-                        iconTv.textSize = 18;
-                        iconTv.layoutParams.margins = [0, 0, 12, 0];
+                        iconTv.textSize = 28;
+                        iconTv.layoutParams.margins = [0, 0, 16, 0];
                         card.addView(iconTv);
 
                         const textCol = new LinearLayout();
@@ -682,13 +685,13 @@ export class AndroidRuntime {
                         const nameTv = new TextView();
                         nameTv.text = site.name;
                         nameTv.textColor = "#f4f4f5";
-                        nameTv.textSize = 14;
+                        nameTv.textSize = 20;
                         textCol.addView(nameTv);
 
                         const descTv = new TextView();
                         descTv.text = site.desc;
                         descTv.textColor = "#94a3b8";
-                        descTv.textSize = 11;
+                        descTv.textSize = 14;
                         textCol.addView(descTv);
                         card.addView(textCol);
 
@@ -705,39 +708,40 @@ export class AndroidRuntime {
                     const pageHeader = new TextView();
                     pageHeader.text = `🌐  ${appState.currentPage}`;
                     pageHeader.textColor = "#38bdf8";
-                    pageHeader.textSize = 18;
-                    pageHeader.layoutParams.margins = [0, 4, 0, 8];
+                    pageHeader.textSize = 26;
+                    pageHeader.layoutParams.margins = [0, 6, 0, 12];
                     body.addView(pageHeader);
 
                     const pageCard = new LinearLayout();
                     pageCard.orientation = 1;
                     pageCard.backgroundColor = "#1e293b";
-                    pageCard.setPadding(14, 14, 14, 14);
-                    pageCard.layoutParams.margins = [0, 4, 0, 10];
+                    pageCard.setPadding(20, 20, 20, 20);
+                    pageCard.layoutParams.margins = [0, 6, 0, 14];
 
                     const articleTitle = new TextView();
                     articleTitle.text = `Rendering live content for ${appState.activeUrl}`;
                     articleTitle.textColor = "#ffffff";
-                    articleTitle.textSize = 15;
-                    articleTitle.layoutParams.margins = [0, 0, 0, 6];
+                    articleTitle.textSize = 22;
+                    articleTitle.layoutParams.margins = [0, 0, 0, 8];
                     pageCard.addView(articleTitle);
 
                     const articleBody = new TextView();
                     articleBody.text = `Gecko WebRender rasterized frame via /dev/dri/renderD128. EGL swap buffers completed on VirtIO scanout (720x1440).`;
                     articleBody.textColor = "#94a3b8";
-                    articleBody.textSize = 12;
-                    articleBody.layoutParams.margins = [0, 0, 0, 10];
+                    articleBody.textSize = 16;
+                    articleBody.layoutParams.margins = [0, 0, 0, 14];
                     pageCard.addView(articleBody);
 
                     const returnBtn = new LinearLayout();
                     returnBtn.orientation = 0;
                     returnBtn.backgroundColor = "#ff7139";
-                    returnBtn.setPadding(12, 8, 12, 8);
-                    returnBtn.layoutParams.height = 36;
+                    returnBtn.setPadding(18, 12, 18, 12);
+                    returnBtn.layoutParams.height = 54;
+                    returnBtn.gravity = 17;
                     const returnText = new TextView();
                     returnText.text = "⬅ Back to Google & Top Sites";
                     returnText.textColor = "#ffffff";
-                    returnText.textSize = 12;
+                    returnText.textSize = 18;
                     returnBtn.addView(returnText);
                     returnBtn.setOnClickListener(() => {
                         this.log(`[GeckoSession] Navigating back to home`, 'info', 'GeckoSession');
@@ -756,9 +760,9 @@ export class AndroidRuntime {
                 const bottomNav = new LinearLayout();
                 bottomNav.orientation = 0;
                 bottomNav.backgroundColor = "#18181b";
-                bottomNav.layoutParams = new LayoutParams(MATCH_PARENT, 56);
-                bottomNav.layoutParams.marginTop = 1384;
-                bottomNav.setPadding(16, 8, 16, 8);
+                bottomNav.layoutParams = new LayoutParams(MATCH_PARENT, 96);
+                bottomNav.layoutParams.marginTop = 1344;
+                bottomNav.setPadding(16, 12, 16, 12);
 
                 const actions = [
                     {
@@ -787,8 +791,8 @@ export class AndroidRuntime {
                         label: "🏠",
                         action: () => {
                             this.log(`[GeckoSession] Home clicked`, 'info', 'GeckoSession');
-                            appState.activeUrl = 'https://www.mozilla.org/firefox';
-                            appState.currentPage = 'home';
+                            appState.activeUrl = 'https://www.google.com';
+                            appState.currentPage = 'Google';
                             this.renderActivityUi(appState);
                         }
                     },
@@ -804,13 +808,14 @@ export class AndroidRuntime {
                     const btn = new LinearLayout();
                     btn.orientation = 0;
                     btn.backgroundColor = "#27272a";
-                    btn.setPadding(10, 8, 10, 8);
-                    btn.layoutParams.margins = [4, 0, 4, 0];
-                    btn.layoutParams.height = 40;
+                    btn.setPadding(8, 8, 8, 8);
+                    btn.layoutParams = new LayoutParams(0, 72, 1.0); // Weight 1.0
+                    btn.gravity = 17; // CENTER
                     const tv = new TextView();
                     tv.text = act.label;
                     tv.textColor = "#e4e4e7";
-                    tv.textSize = 15;
+                    tv.textSize = 24;
+                    tv.gravity = 17;
                     btn.addView(tv);
                     btn.setOnClickListener(act.action);
                     bottomNav.addView(btn);
@@ -949,7 +954,26 @@ export class AndroidRuntime {
         // Perform hardware rasterization pass
         const width = this.canvas ? this.canvas.width : 720;
         const height = this.canvas ? this.canvas.height : 1440;
-        this.log(`Traversal pass: measuring and layout at ${width}x${height} for ${rootView.constructor.name}`, 'info', 'ViewRootImpl');
+        const density = (typeof this.getDensity === 'function') ? this.getDensity() : (width < 1000 ? width / 360 : 1.0);
+        this.log(`Traversal pass: measuring and layout at ${width}x${height} (density=${density.toFixed(1)}x) for ${rootView.constructor.name}`, 'info', 'ViewRootImpl');
+
+        // Verbose View Hierarchy Layout Dump for Diagnostics & UI Inspection
+        console.groupCollapsed(`[ViewTree Dump] ${appState.packageName} (${rootView.constructor.name}) ${width}x${height} @ ${density.toFixed(1)}x density`);
+        const dumpView = (v, depth = 0) => {
+            const indent = '  '.repeat(depth);
+            const name = v.constructor.name;
+            const bounds = `[L=${v.left}, T=${v.top}, R=${v.right}, B=${v.bottom} -> ${v.getWidth()}x${v.getHeight()}]`;
+            const textInfo = v.text ? ` text="${v.text.slice(0, 30)}" textSize=${v.textSize || 14}px (equiv ${( (v.textSize || 14)/density ).toFixed(1)}dp)` : '';
+            const bgInfo = (v.backgroundColor || v.background) ? ` bg=${v.backgroundColor || v.background}` : '';
+            const padInfo = (v.paddingLeft || v.paddingTop || v.paddingRight || v.paddingBottom) ? ` pad=[${v.paddingLeft},${v.paddingTop},${v.paddingRight},${v.paddingBottom}]` : '';
+            const margInfo = v.layoutParams?.margins ? ` marg=[${v.layoutParams.margins.join(',')}]` : '';
+            console.info(`${indent}• ${name} ${bounds}${textInfo}${bgInfo}${padInfo}${margInfo}`);
+            if (v.children && v.children.length > 0) {
+                for (const c of v.children) dumpView(c, depth + 1);
+            }
+        };
+        dumpView(rootView);
+        console.groupEnd();
 
         const t0 = (typeof performance !== 'undefined') ? performance.now() : Date.now();
         const frame = this.rasterizer.rasterize(rootView, width, height);
