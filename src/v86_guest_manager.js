@@ -259,7 +259,7 @@ export class V86GuestManager {
                             }
                             v86Options.bzimage = { buffer: kernelBuf };
                             v86Options.initrd = { buffer: initrdBuf };
-                            v86Options.cmdline = this.config.cmdline || 'console=tty0 console=ttyS0 earlyprintk=serial,ttyS0,115200 root=/dev/ram0 rdinit=/init panic=1 loglevel=8 androidboot.hardware=android_x86 androidboot.selinux=permissive binder.debug_mask=0x07 video=virtio-gpu';
+                            v86Options.cmdline = this.config.cmdline || 'console=tty0 console=ttyS0 earlyprintk=serial,ttyS0,115200 root=/dev/ram0 rdinit=/init nosmp maxcpus=1 noapic nolapic panic=1 loglevel=8 androidboot.hardware=android_x86 androidboot.selinux=permissive binder.debug_mask=0x07 video=virtio-gpu';
                         } catch (err) {
                             if (isBrowser) throw err;
                         }
@@ -390,6 +390,7 @@ export class V86GuestManager {
 
         globalLogcat.append('v86Guest', line, isPanic ? 'E' : 'D');
         this.log(`[GUEST-TTY] ${line}`, isPanic ? 'error' : 'guest');
+        console.log('[v86-serial]', line);
 
         if (typeof this.onSerial === 'function') {
             this.onSerial(line);
@@ -417,7 +418,16 @@ export class V86GuestManager {
             }
         }
 
-        if (line.includes('virtio_gpu') || line.includes('virtio-gpu') || line.includes('drm: virtio-gpu') || line.includes('virtio_gpudrmfb')) {
+        if (line.includes('[drm] Initialized virtio_gpu') || 
+            line.includes('virtio_gpudrmfb') || 
+            line.includes('DRM/KMS active') ||
+            line.includes('[drm: virtio-gpu]') ||
+            (line.includes('virtio-gpu') && line.includes('0000:')) ||
+            (line.includes('virtio_gpu') && line.includes('0000:')) ||
+            (line.includes('virtio-pci') && line.includes('virtio-gpu')) ||
+            line.includes('DRM open card0 fd=') || 
+            line.includes('DRM_IOCTL_VIRTGPU_RESOURCE_CREATE ok') ||
+            line.includes('virtio_gpu initialized (device /dev/dri/card0')) {
             this.recordMilestone(BOOT_MILESTONES.VIRTIO_GPU_INIT);
         }
 
@@ -449,12 +459,14 @@ export class V86GuestManager {
         }
 
         if (line.includes('Zygote:') || line.includes('zygote socket') || line.includes('ART: Initialized') || line.includes('boot completed') || line.includes('Android 14 ready') || line.includes('buildroot login:') || line.includes('login:')) {
-            const bootDuration = ((typeof performance !== 'undefined' ? performance.now() : Date.now()) - this.bootStartTime).toFixed(1);
-            this.stats.bootDurationMs = parseFloat(bootDuration);
-            this.recordMilestone(BOOT_MILESTONES.ZYGOTE_ART_READY);
-            this.recordMilestone(BOOT_MILESTONES.SYSTEM_BOOT_COMPLETED);
-            this.setState(VM_STATES.RUNNING);
-            logDebug('v86', 'I', `Guest OS boot completed in ${bootDuration}ms (State: RUNNING)`);
+            if (this.state !== VM_STATES.RUNNING) {
+                const bootDuration = ((typeof performance !== 'undefined' ? performance.now() : Date.now()) - this.bootStartTime).toFixed(1);
+                this.stats.bootDurationMs = parseFloat(bootDuration);
+                this.recordMilestone(BOOT_MILESTONES.ZYGOTE_ART_READY);
+                this.recordMilestone(BOOT_MILESTONES.SYSTEM_BOOT_COMPLETED);
+                this.setState(VM_STATES.RUNNING);
+                logDebug('v86', 'I', `Guest OS boot completed in ${bootDuration}ms (State: RUNNING)`);
+            }
         }
     }
 

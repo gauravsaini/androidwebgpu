@@ -468,6 +468,30 @@ export class ApkZipReader {
     getFile(filename) {
         return this.readFile(filename);
     }
+
+    /**
+     * Inspects archive for native shared libraries under lib/<abi>/*.so
+     * @returns {Array<{path: string, abi: string, libName: string, size: number}>}
+     */
+    getNativeLibraries() {
+        this.readEntries();
+        const libs = [];
+        for (const name of this.entries.keys()) {
+            if (name.startsWith('lib/') && name.endsWith('.so')) {
+                const parts = name.split('/');
+                const abi = parts[1] || 'unknown';
+                const libName = parts[parts.length - 1];
+                const entry = this.entries.get(name);
+                libs.push({
+                    path: name,
+                    abi,
+                    libName,
+                    size: entry ? entry.uncompressedSize : 0
+                });
+            }
+        }
+        return libs;
+    }
 }
 
 // -----------------------------------------------------------------------------

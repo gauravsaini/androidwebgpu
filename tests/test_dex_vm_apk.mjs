@@ -105,7 +105,7 @@ const mockContainer = {
 
 let errorLogged = false;
 try {
-    runtime.loadAndRunApk(buf, mockContainer);
+    await runtime.loadAndRunApk(buf, mockContainer);
 } catch (e) {
     errorLogged = true;
 }

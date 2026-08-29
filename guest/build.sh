@@ -19,8 +19,8 @@ else
   node "$SCRIPT_DIR/tools/generate_bzimage.mjs"
 fi
 
-echo "[guest/build.sh] 2. Generating ART boot.art & framework.jar assets..."
-node "$SCRIPT_DIR/tools/generate_art_assets.mjs"
+echo "[guest/build.sh] 2. Staging authentic ART boot.art & framework bytecode assets..."
+node "$SCRIPT_DIR/tools/stage_authentic_framework.mjs"
 
 echo "[guest/build.sh] 3. Building initrd.img archive..."
 "$SCRIPT_DIR/tools/build_initrd.sh"

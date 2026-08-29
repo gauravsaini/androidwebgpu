@@ -628,7 +628,7 @@ console.log("\n▶ [Suite 3] Dalvik VM Control Flow, Branching, Loops & Instruct
                     0x0113, 1,                                  // pc 2: const/16 v1, 1 (i)
                     0x0213, 50,                                 // pc 4: const/16 v2, 50 (limit)
                     // loop starts at pc 6
-                    (OP_IF_GT) | (0x01 << 8) | (0x02 << 12), 5, // pc 6: if-gt v1, v2, jump to pc 11 (offset +5)
+                    (OP_IF_GT) | (0x01 << 8) | (0x02 << 12), 6, // pc 6: if-gt v1, v2, jump to pc 12 (offset +6)
                     (OP_ADD_INT_2ADDR) | (0x00 << 8) | (0x01 << 12), // pc 8: add-int/2addr v0, v1 (sum += i)
                     (OP_ADD_INT_LIT8) | (0x01 << 8), 0x01 | (0x01 << 8), // pc 9: add-int/lit8 v1, v1, #1 (i++)
                     (OP_GOTO) | ((-5 & 0xff) << 8),             // pc 11: goto pc 6 (offset -5)

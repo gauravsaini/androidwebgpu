@@ -592,8 +592,8 @@ export class ViewHierarchyRasterizer {
      */
     submitToVirtioGpu(device, resId = 100, scanoutId = 0, buffer = this.rgbaData) {
         if (!device) return;
-        if (typeof device.isHostInjectionAllowed === 'function' && !device.isHostInjectionAllowed()) return;
-        if (device.guestActive || device.hostInjectionBlocked) return;
+        // ponytail: only block if guest genuinely presented via virtqueue
+        if (device.guestHasPresented && device.guestActive) return;
         const transferPkt = VirtioPacketBuilder.transferToHost2d(resId, this.width, this.height, 0, 0, buffer);
         device.processControlQueue(transferPkt);
         const flushPkt = VirtioPacketBuilder.resourceFlush(resId, this.width, this.height, 0, 0);

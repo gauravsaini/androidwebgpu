@@ -3,7 +3,11 @@
 #include <cutils/native_handle.h>
 #include <stdint.h>
 #include <stddef.h>
-#include <sys/cdefs.h>
+#if defined(__has_include)
+# if __has_include(<sys/cdefs.h>)
+#  include <sys/cdefs.h>
+# endif
+#endif
 
 #ifdef __cplusplus
 extern "C" {

@@ -59,9 +59,9 @@ if [ -f "$GUEST_DIR/etc/vintf/device_manifest.xml" ]; then
     cp "$GUEST_DIR/etc/vintf/device_manifest.xml" "$INITRD_SRC/vendor/etc/vintf/"
 fi
 
-# Generate ART and Framework assets (boot.art and framework.jar)
-echo "[build_initrd] Generating ART boot image and framework.jar assets..."
-node "$SCRIPT_DIR/generate_art_assets.mjs"
+# Stage authentic ART and Framework assets (boot.art, core-libart.jar, ext.jar, framework.jar, services.jar)
+echo "[build_initrd] Staging authentic Android ART runtime and framework bytecode assets..."
+node "$SCRIPT_DIR/stage_authentic_framework.mjs"
 
 # Stage F-Droid APK into /system/app/org.fdroid.fdroid/base.apk
 mkdir -p "$INITRD_SRC/system/app/org.fdroid.fdroid"

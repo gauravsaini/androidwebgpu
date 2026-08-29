@@ -135,15 +135,15 @@ if (typeof window !== 'undefined') {
 
 // 4. Initialize System Bootstrap
 const bootstrap = new SystemBootstrap({
-    memorySizeMb: 128,
-    vgaMemorySizeMb: 8,
+    memorySizeMb: 512,
+    vgaMemorySizeMb: 16,
     autostart: true,
     wasmPath: './v86/v86.wasm',
     biosUrl: './bios/seabios.bin',
     vgaBiosUrl: './bios/vgabios.bin',
     kernelUrl: './guest/build/bzImage',
     initrdUrl: './guest/build/initrd.img',
-    cmdline: 'console=ttyS0 earlyprintk=serial,ttyS0,115200 root=/dev/ram0 rdinit=/init nosmp maxcpus=1 noapic nolapic panic=1 loglevel=8 androidboot.hardware=android_x86 androidboot.selinux=permissive binder.debug_mask=0x07',
+    cmdline: 'console=ttyS0 earlyprintk=serial,ttyS0,115200 root=/dev/ram0 rdinit=/init nosmp maxcpus=1 noapic nolapic panic=1 loglevel=8 androidboot.hardware=android_x86 androidboot.selinux=permissive binder.debug_mask=0x07 video=virtio-gpu',
     bootMode: 'direct',
     onMilestone: (milestone) => {
         // Milestone already recorded into globalLogcat and logger by v86_guest_manager
@@ -318,12 +318,11 @@ function bindEventListeners() {
         dom.canvas.addEventListener('pointerdown', (e) => {
             const { x, y } = getCanvasCoords(e);
             appendLogcat('InputDispatcher', `MotionEvent: ACTION_DOWN at (${x}, ${y})`, 'D');
+            runtime.dispatchInputEvent(new MotionEvent(MotionEvent.ACTION_DOWN, x, y));
             const gpuDev = bootstrap.getGpuDevice();
             if (gpuDev && gpuDev.guestActive) {
-                // Guest active: forward to guest InputFlinger (virtio-input / binder), skip host ViewRoot
                 appController.sendInputEvent(x, y);
             } else {
-                runtime.dispatchInputEvent(new MotionEvent(MotionEvent.ACTION_DOWN, x, y));
                 appController.sendInputEvent(0, 0);
             }
         });
@@ -339,6 +338,10 @@ function bindEventListeners() {
             const { x, y } = getCanvasCoords(e);
             appendLogcat('InputDispatcher', `MotionEvent: ACTION_UP at (${x}, ${y})`, 'D');
             runtime.dispatchInputEvent(new MotionEvent(MotionEvent.ACTION_UP, x, y));
+            const gpuDev = bootstrap.getGpuDevice();
+            if (gpuDev && gpuDev.guestActive) {
+                appController.sendInputEvent(x, y);
+            }
         });
 
         dom.canvas.addEventListener('wheel', (e) => {
@@ -378,29 +381,44 @@ async function startSystem() {
             // Keep host fallback for Phase 1-3 until guest proves it (VIRTIO_GPU_INIT / first frame).
             const gpuDev = bootstrap.getGpuDevice();
             const gm = bootstrap.getGuestManager();
+            let lastGateState = null;
             const gateOnGuest = () => {
-                if (gpuDev && (gpuDev.guestActive || gpuDev.guestHasPresented)) {
+                const active = gpuDev ? (gpuDev.guestHasPresented || (gpuDev.guestActive && gpuDev.guestHasPresented)) : false;
+                const stateStr = `${gpuDev ? gpuDev.guestActive : false}_${gpuDev ? gpuDev.guestHasPresented : false}_${runtime ? runtime.useGuestRendering : false}`;
+                if (stateStr !== lastGateState) {
+                    lastGateState = stateStr;
+                    console.log(`[gate] guestActive: ${gpuDev ? gpuDev.guestActive : false}, guestHasPresented: ${gpuDev ? gpuDev.guestHasPresented : false}, useGuestRendering: ${runtime ? runtime.useGuestRendering : false}`);
+                }
+                if (active) {
                     runtime.enableGuestRendering();
                 }
             };
+            if (gpuDev) {
+                gpuDev.onGuestActiveChange = (active) => {
+                    console.log(`[gate] onGuestActiveChange event received (active=${active}) -> evaluating gateOnGuest`);
+                    gateOnGuest();
+                };
+            }
             if (gm) {
                 const origState = gm.onStateChange;
                 const origMile = gm.onMilestone;
                 gm.onStateChange = (newState, oldState) => {
                     if (typeof origState === 'function') try { origState(newState, oldState); } catch(_) {}
+                    console.log(`[v86-state] State Transition: ${oldState} -> ${newState}`);
                     if (newState === 'ERROR') runtime.disableGuestRendering();
-                    if (newState === 'RUNNING') gateOnGuest();
+                    gateOnGuest();
                 };
                 gm.onMilestone = (m) => {
                     if (typeof origMile === 'function') try { origMile(m); } catch(_) {}
-                    if (m === 'VIRTIO_GPU_INIT' || m === 'SYSTEM_BOOT_COMPLETED') gateOnGuest();
+                    console.log(`[v86-milestone] Milestone Achieved: ${m}`);
+                    gateOnGuest();
                 };
-                // Poll guestActive quickly for first frame (covers synthetic probe path)
+                // Poll guestActive for guest activation (handles VirtIO driver init or synthetic probes)
                 let poll = 0;
                 const iv = setInterval(() => {
                     gateOnGuest();
-                    if ((gpuDev && gpuDev.guestActive) || ++poll > 80) clearInterval(iv);
-                }, 50);
+                    if ((gpuDev && gpuDev.guestHasPresented) || ++poll > 400) clearInterval(iv);
+                }, 100);
             }
         }
         await appController.syncPackagesFromTruePms();

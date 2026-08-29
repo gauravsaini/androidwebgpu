@@ -366,11 +366,18 @@ export class DexParser {
 
         if (codeOff + 16 + insnsSize * 2 > this.bytes.length) return null;
 
-        const insns = new Uint16Array(
-            this.bytes.buffer,
-            this.bytes.byteOffset + codeOff + 16,
-            insnsSize
-        );
+        let insns;
+        const totalOffset = this.bytes.byteOffset + codeOff + 16;
+        if (totalOffset % 2 === 0) {
+            insns = new Uint16Array(
+                this.bytes.buffer,
+                totalOffset,
+                insnsSize
+            );
+        } else {
+            const sub = this.bytes.subarray(codeOff + 16, codeOff + 16 + insnsSize * 2);
+            insns = new Uint16Array(sub.slice().buffer);
+        }
 
         return {
             registersSize,

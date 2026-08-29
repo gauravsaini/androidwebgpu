@@ -156,8 +156,20 @@ export class VirtioGpuDevice {
                         if (io && typeof io.register_read === 'function' && typeof io.register_write === 'function') {
                             for (let port = this.ioBase; port < this.ioBase + 64; port++) {
                                 const offset = port - this.ioBase;
-                                io.register_read(port, this, () => this.ioRead(offset, 1));
-                                io.register_write(port, this, (val) => this.ioWrite(offset, val, 1));
+                                io.register_read(
+                                    port,
+                                    this,
+                                    () => this.ioRead(offset, 1),
+                                    () => this.ioRead(offset, 2),
+                                    () => this.ioRead(offset, 4)
+                                );
+                                io.register_write(
+                                    port,
+                                    this,
+                                    (val) => this.ioWrite(offset, val, 1),
+                                    (val) => this.ioWrite(offset, val, 2),
+                                    (val) => this.ioWrite(offset, val, 4)
+                                );
                             }
                         }
                         logger.log('bridge', 'I', `Virtio-GPU device attached to v86 (slot 0x${this.pciSlot.toString(16)}, I/O 0x${this.ioBase.toString(16)})`, {
@@ -340,6 +352,7 @@ export class VirtioGpuDevice {
                     const currentPfn = this.queues[this.selectedQueue].pfn;
                     this.queues[this.selectedQueue].pfn = ((currentPfn & ~(0xFF << shift)) | ((val & 0xFF) << shift)) >>> 0;
                 }
+                logger.log('bridge', 'I', `[virtio-gpu-device] QUEUE_PFN set: queue=${this.selectedQueue}, pfn=0x${this.queues[this.selectedQueue].pfn.toString(16)}, size=${this.queues[this.selectedQueue].size}`);
             }
             return;
         }
@@ -347,12 +360,15 @@ export class VirtioGpuDevice {
         if (offset === 0x0E || offset === 0x0F) {
             // QUEUE_SEL (0x0E, 16-bit)
             this.selectedQueue = (val & 0x1) === 1 ? 1 : 0;
+            logger.log('bridge', 'D', `[virtio-gpu-device] QUEUE_SEL: ${this.selectedQueue}`);
             return;
         }
 
         if (offset === 0x10 || offset === 0x11) {
             // QUEUE_NOTIFY (0x10, 16-bit): kick queue processing immediately
-            this.consumeVirtqueue(val & 0xFFFF);
+            const qIdx = val & 0xFFFF;
+            logger.log('bridge', 'D', `[virtio-gpu-device] QUEUE_NOTIFY kicked for queue ${qIdx}`);
+            this.consumeVirtqueue(qIdx);
             return;
         }
 
@@ -360,6 +376,7 @@ export class VirtioGpuDevice {
             // DEVICE_STATUS (0x12, 8-bit)
             const prevStatus = this.deviceStatus;
             this.deviceStatus = val & 0xFF;
+            logger.log('bridge', 'I', `[virtio-gpu-device] DEVICE_STATUS: 0x${prevStatus.toString(16)} -> 0x${this.deviceStatus.toString(16)} (ACK=${!!(val & 1)}, DRV=${!!(val & 2)}, OK=${!!(val & 4)}, FEAT=${!!(val & 8)})`);
             if (this.deviceStatus === 0) {
                 // Reset device
                 this.queues[0].lastAvailIdx = 0;
@@ -367,7 +384,12 @@ export class VirtioGpuDevice {
                 this.queues[1].lastAvailIdx = 0;
                 this.queues[1].lastUsedIdx = 0;
                 this.isrStatus = 0;
+                this.guestActive = false;
+                this.hostInjectionBlocked = false;
                 logger.log('bridge', 'I', 'Virtio-GPU device reset (status=0)');
+                if (typeof this.onGuestActiveChange === 'function') {
+                    try { this.onGuestActiveChange(false); } catch (_) {}
+                }
             } else if (prevStatus !== this.deviceStatus) {
                 logger.log('bridge', 'I', `Virtio-GPU device status changed: 0x${prevStatus.toString(16)} -> 0x${this.deviceStatus.toString(16)}`, {
                     status: this.deviceStatus,
@@ -435,6 +457,7 @@ export class VirtioGpuDevice {
 
         const view = new DataView(guestMem.buffer, guestMem.byteOffset, guestMem.byteLength);
         const availIdx = view.getUint16(availRingAddr + 2, true);
+        logger.log('bridge', 'D', `queue ${queueIdx} pfn=${q.pfn} avail=${availIdx}`);
 
         let processedCount = 0;
         while (q.lastAvailIdx !== availIdx) {
@@ -475,7 +498,14 @@ export class VirtioGpuDevice {
             this.guestActive = true;
             this.guestHasPresented = true;
             this.hostInjectionBlocked = true;
-            if (!wasGuestActive) this.firstGuestFrameAt = (typeof performance !== 'undefined' ? performance.now() : Date.now());
+            logger.log('bridge', 'I', `[virtio-gpu-device] Processed ${processedCount} descriptors on queue ${queueIdx} (lastAvail=${q.lastAvailIdx}, lastUsed=${q.lastUsedIdx})`);
+            if (!wasGuestActive) {
+                this.firstGuestFrameAt = (typeof performance !== 'undefined' ? performance.now() : Date.now());
+                logger.log('bridge', 'I', 'GUEST FIRST FRAME - host injection blocked');
+                if (typeof this.onGuestActiveChange === 'function') {
+                    try { this.onGuestActiveChange(true); } catch (_) {}
+                }
+            }
             // Render scanout to canvas
             this.renderScanoutToCanvas(0);
 
@@ -564,7 +594,11 @@ export class VirtioGpuDevice {
      */
     processControlQueue(commandBuffer) {
         const cmdLen = commandBuffer ? commandBuffer.length : 0;
-        logger.log('bridge', 'D', `Processing control queue packet (${cmdLen} bytes)`, {
+        const cmdType = commandBuffer && commandBuffer.length >= 4
+            ? (commandBuffer[0] | (commandBuffer[1] << 8) | (commandBuffer[2] << 16) | (commandBuffer[3] << 24)) >>> 0
+            : 0;
+        logger.log('bridge', 'D', `Processing control queue packet (0x${cmdType.toString(16).padStart(4, '0')}, ${cmdLen} bytes)`, {
+            opcode: `0x${cmdType.toString(16)}`,
             bytes: cmdLen
         });
 

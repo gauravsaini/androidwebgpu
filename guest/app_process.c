@@ -103,18 +103,124 @@ static void fill_rounded_rect(uint32_t *fb, int rx, int ry, int rw, int rh, int 
     }
 }
 
-// 8x16 bitmap font for proof-of-life UI label rasterization
-static const uint8_t FONT_8X16_F[] = { 0x7E, 0x60, 0x60, 0x7C, 0x60, 0x60, 0x60, 0x60, 0x00 };
-static const uint8_t FONT_8X16_D[] = { 0x7C, 0x66, 0x66, 0x66, 0x66, 0x66, 0x7C, 0x00, 0x00 };
+// 5x8 basic ASCII font map for scalable text rendering
+static const uint8_t FONT_5X8[96][5] = {
+    {0x00,0x00,0x00,0x00,0x00}, // 32 ' '
+    {0x00,0x00,0x5F,0x00,0x00}, // 33 '!'
+    {0x00,0x07,0x00,0x07,0x00}, // 34 '"'
+    {0x14,0x7F,0x14,0x7F,0x14}, // 35 '#'
+    {0x24,0x2A,0x7F,0x2A,0x12}, // 36 '$'
+    {0x23,0x13,0x08,0x64,0x62}, // 37 '%'
+    {0x36,0x49,0x55,0x22,0x50}, // 38 '&'
+    {0x00,0x05,0x03,0x00,0x00}, // 39 '''
+    {0x00,0x1C,0x22,0x41,0x00}, // 40 '('
+    {0x00,0x41,0x22,0x1C,0x00}, // 41 ')'
+    {0x14,0x08,0x3E,0x08,0x14}, // 42 '*'
+    {0x08,0x08,0x3E,0x08,0x08}, // 43 '+'
+    {0x00,0x50,0x30,0x00,0x00}, // 44 ','
+    {0x08,0x08,0x08,0x08,0x08}, // 45 '-'
+    {0x00,0x60,0x60,0x00,0x00}, // 46 '.'
+    {0x20,0x10,0x08,0x04,0x02}, // 47 '/'
+    {0x3E,0x51,0x49,0x45,0x3E}, // 48 '0'
+    {0x00,0x42,0x7F,0x40,0x00}, // 49 '1'
+    {0x42,0x61,0x51,0x49,0x46}, // 50 '2'
+    {0x21,0x41,0x45,0x4B,0x31}, // 51 '3'
+    {0x18,0x14,0x12,0x7F,0x10}, // 52 '4'
+    {0x27,0x45,0x45,0x45,0x39}, // 53 '5'
+    {0x3C,0x4A,0x49,0x49,0x30}, // 54 '6'
+    {0x01,0x71,0x09,0x05,0x03}, // 55 '7'
+    {0x36,0x49,0x49,0x49,0x36}, // 56 '8'
+    {0x06,0x49,0x49,0x29,0x1E}, // 57 '9'
+    {0x00,0x36,0x36,0x00,0x00}, // 58 ':'
+    {0x00,0x56,0x36,0x00,0x00}, // 59 ';'
+    {0x08,0x14,0x22,0x41,0x00}, // 60 '<'
+    {0x14,0x14,0x14,0x14,0x14}, // 61 '='
+    {0x00,0x41,0x22,0x14,0x08}, // 62 '>'
+    {0x02,0x01,0x51,0x09,0x06}, // 63 '?'
+    {0x32,0x49,0x79,0x41,0x3E}, // 64 '@'
+    {0x7E,0x11,0x11,0x11,0x7E}, // 65 'A'
+    {0x7F,0x49,0x49,0x49,0x36}, // 66 'B'
+    {0x3E,0x41,0x41,0x41,0x22}, // 67 'C'
+    {0x7F,0x41,0x41,0x22,0x1C}, // 68 'D'
+    {0x7F,0x49,0x49,0x49,0x41}, // 69 'E'
+    {0x7F,0x09,0x09,0x09,0x01}, // 70 'F'
+    {0x3E,0x41,0x49,0x49,0x7A}, // 71 'G'
+    {0x7F,0x08,0x08,0x08,0x7F}, // 72 'H'
+    {0x00,0x41,0x7F,0x41,0x00}, // 73 'I'
+    {0x20,0x40,0x41,0x3F,0x01}, // 74 'J'
+    {0x7F,0x08,0x14,0x22,0x41}, // 75 'K'
+    {0x7F,0x40,0x40,0x40,0x40}, // 76 'L'
+    {0x7F,0x02,0x0C,0x02,0x7F}, // 77 'M'
+    {0x7F,0x04,0x08,0x10,0x7F}, // 78 'N'
+    {0x3E,0x41,0x41,0x41,0x3E}, // 79 'O'
+    {0x7F,0x09,0x09,0x09,0x06}, // 80 'P'
+    {0x3E,0x41,0x51,0x21,0x5E}, // 81 'Q'
+    {0x7F,0x09,0x19,0x29,0x46}, // 82 'R'
+    {0x46,0x49,0x49,0x49,0x31}, // 83 'S'
+    {0x01,0x01,0x7F,0x01,0x01}, // 84 'T'
+    {0x3F,0x40,0x40,0x40,0x3F}, // 85 'U'
+    {0x1F,0x20,0x40,0x20,0x1F}, // 86 'V'
+    {0x3F,0x40,0x38,0x40,0x3F}, // 87 'W'
+    {0x63,0x14,0x08,0x14,0x63}, // 88 'X'
+    {0x07,0x08,0x70,0x08,0x07}, // 89 'Y'
+    {0x61,0x51,0x49,0x45,0x43}, // 90 'Z'
+    {0x00,0x7F,0x41,0x41,0x00}, // 91 '['
+    {0x02,0x04,0x08,0x10,0x20}, // 92 '\'
+    {0x00,0x41,0x41,0x7F,0x00}, // 93 ']'
+    {0x04,0x02,0x01,0x02,0x04}, // 94 '^'
+    {0x40,0x40,0x40,0x40,0x40}, // 95 '_'
+    {0x00,0x01,0x02,0x04,0x00}, // 96 '`'
+    {0x20,0x54,0x54,0x54,0x78}, // 97 'a'
+    {0x7F,0x48,0x44,0x44,0x38}, // 98 'b'
+    {0x38,0x44,0x44,0x44,0x20}, // 99 'c'
+    {0x38,0x44,0x44,0x48,0x7F}, // 100 'd'
+    {0x38,0x54,0x54,0x54,0x18}, // 101 'e'
+    {0x08,0x7E,0x09,0x01,0x02}, // 102 'f'
+    {0x0C,0x52,0x52,0x52,0x3E}, // 103 'g'
+    {0x7F,0x08,0x04,0x04,0x78}, // 104 'h'
+    {0x00,0x44,0x7D,0x40,0x00}, // 105 'i'
+    {0x20,0x40,0x44,0x3D,0x00}, // 106 'j'
+    {0x7F,0x10,0x28,0x44,0x00}, // 107 'k'
+    {0x00,0x41,0x7F,0x40,0x00}, // 108 'l'
+    {0x7C,0x04,0x18,0x04,0x78}, // 109 'm'
+    {0x7C,0x08,0x04,0x04,0x78}, // 110 'n'
+    {0x38,0x44,0x44,0x44,0x38}, // 111 'o'
+    {0x7C,0x14,0x14,0x14,0x08}, // 112 'p'
+    {0x08,0x14,0x14,0x18,0x7C}, // 113 'q'
+    {0x7C,0x08,0x04,0x04,0x08}, // 114 'r'
+    {0x48,0x54,0x54,0x54,0x20}, // 115 's'
+    {0x04,0x3F,0x44,0x40,0x20}, // 116 't'
+    {0x3C,0x40,0x40,0x20,0x7C}, // 117 'u'
+    {0x1C,0x20,0x40,0x20,0x1C}, // 118 'v'
+    {0x3C,0x40,0x30,0x40,0x3C}, // 119 'w'
+    {0x44,0x28,0x10,0x28,0x44}, // 120 'x'
+    {0x0C,0x50,0x50,0x50,0x3C}, // 121 'y'
+    {0x44,0x64,0x54,0x4C,0x44}, // 122 'z'
+    {0x00,0x08,0x36,0x41,0x00}, // 123 '{'
+    {0x00,0x00,0x7F,0x00,0x00}, // 124 '|'
+    {0x00,0x41,0x36,0x08,0x00}, // 125 '}'
+    {0x08,0x08,0x2A,0x1C,0x08}  // 126 '~'
+};
 
-static void draw_glyph(uint32_t *fb, int x0, int y0, const uint8_t *glyph, int height, uint32_t color) {
-    for (int y = 0; y < height && (y0 + y) < DISPLAY_HEIGHT; ++y) {
-        uint8_t row = glyph[y];
-        for (int x = 0; x < 8 && (x0 + x) < DISPLAY_WIDTH; ++x) {
-            if (row & (0x80 >> x)) {
-                fb[(y0 + y) * DISPLAY_WIDTH + (x0 + x)] = color;
+static void draw_char(uint32_t *fb, int x0, int y0, char c, int scale, uint32_t color) {
+    if (c < 32 || c > 126) c = ' ';
+    const uint8_t *glyph = FONT_5X8[c - 32];
+    for (int col = 0; col < 5; ++col) {
+        uint8_t line = glyph[col];
+        for (int row = 0; row < 8; ++row) {
+            if (line & (1 << row)) {
+                fill_rect(fb, x0 + col * scale, y0 + row * scale, scale, scale, color);
             }
         }
+    }
+}
+
+static void draw_string(uint32_t *fb, int x0, int y0, const char *str, int scale, uint32_t color) {
+    int cur_x = x0;
+    while (*str) {
+        draw_char(fb, cur_x, y0, *str, scale, color);
+        cur_x += 6 * scale;
+        str++;
     }
 }
 
@@ -124,28 +230,38 @@ static void render_in_guest_view_hierarchy(uint32_t *fb, const char *pkg_name) {
 
     // 2. Status bar (0..48, #000000)
     fill_rect(fb, 0, 0, DISPLAY_WIDTH, 48, pack_argb(255, 0, 0, 0));
+    draw_string(fb, 24, 16, "12:00", 2, pack_argb(255, 255, 255, 255));
     // Status icons (battery pill, wifi bars)
     fill_rounded_rect(fb, 650, 16, 44, 20, 4, pack_argb(255, 255, 255, 255));
     fill_rect(fb, 694, 22, 4, 8, pack_argb(255, 255, 255, 255));
 
-    // 3. Toolbar / Action Bar (48..160, Teal Accent #00897B / Primary #1976D2)
+    // 3. Toolbar / Action Bar (48..160, Primary Blue #1976D2)
     fill_rect(fb, 0, 48, DISPLAY_WIDTH, 112, pack_argb(255, 25, 118, 210));
     // App icon badge & Title
     fill_rounded_rect(fb, 24, 72, 64, 64, 16, pack_argb(255, 255, 255, 255));
-    draw_glyph(fb, 48, 88, FONT_8X16_F, 8, pack_argb(255, 25, 118, 210));
-    draw_glyph(fb, 58, 88, FONT_8X16_D, 8, pack_argb(255, 25, 118, 210));
+    draw_string(fb, 36, 88, "FD", 3, pack_argb(255, 25, 118, 210));
 
-    // Search action icon
+    draw_string(fb, 108, 88, "F-Droid", 3, pack_argb(255, 255, 255, 255));
+
+    // Search & Menu action icons
     fill_rounded_rect(fb, 640, 84, 40, 40, 20, pack_argb(255, 255, 255, 255));
+    draw_string(fb, 652, 94, "Q", 2, pack_argb(255, 25, 118, 210));
 
     // 4. Category Tabs (160..230, #1565C0)
     fill_rect(fb, 0, 160, DISPLAY_WIDTH, 70, pack_argb(255, 21, 101, 192));
-    // Active tab indicator
-    fill_rect(fb, 32, 224, 180, 6, pack_argb(255, 255, 215, 0));
+    draw_string(fb, 32, 184, "WHAT'S NEW", 2, pack_argb(255, 255, 255, 255));
+    draw_string(fb, 240, 184, "LATEST", 2, pack_argb(200, 200, 220, 255));
+    draw_string(fb, 420, 184, "CATEGORIES", 2, pack_argb(200, 200, 220, 255));
+    draw_string(fb, 600, 184, "NEARBY", 2, pack_argb(200, 200, 220, 255));
+    // Active tab indicator bar (gold accent)
+    fill_rect(fb, 28, 224, 160, 6, pack_argb(255, 255, 215, 0));
 
     // 5. RecyclerView Content Cards (240..1300)
     const char *apps[] = { "VLC", "Signal", "Termux", "K-9 Mail", "NewPipe", "Firefox Klar" };
+    const char *descs[] = { "Media Player", "Private Messenger", "Terminal Emulator", "Email Client", "Streaming Frontend", "Privacy Browser" };
+    const char *pkgs[] = { "org.videolan.vlc", "org.thoughtcrime.securesms", "com.termux", "com.fsck.k9", "org.schabi.newpipe", "org.mozilla.klar" };
     int app_count = 6;
+
     for (int i = 0; i < app_count; ++i) {
         int card_y = 250 + i * 160;
         if (card_y + 140 > 1300) break;
@@ -159,44 +275,42 @@ static void render_in_guest_view_hierarchy(uint32_t *fb, const char *pkg_name) {
             pack_argb(255, 255, 136, 0),
             pack_argb(255, 43, 114, 230),
             pack_argb(255, 0, 0, 0),
-            pack_argb(255, 66, 133, 244),
-            pack_argb(255, 204, 0, 0),
-            pack_argb(255, 255, 113, 36)
+            pack_argb(255, 76, 175, 80),
+            pack_argb(255, 230, 33, 23),
+            pack_argb(255, 255, 87, 34)
         };
-        fill_rounded_rect(fb, 44, card_y + 20, 100, 100, 20, icon_colors[i % 6]);
+        fill_rounded_rect(fb, 40, card_y + 20, 100, 100, 20, icon_colors[i % 6]);
+        draw_string(fb, 75, card_y + 55, "A", 3, pack_argb(255, 255, 255, 255));
 
-        // Title bar placeholder
-        fill_rounded_rect(fb, 168, card_y + 30, 260, 28, 6, pack_argb(255, 240, 240, 240));
-        // Subtitle / category placeholder
-        fill_rounded_rect(fb, 168, card_y + 70, 180, 20, 4, pack_argb(255, 160, 160, 160));
+        // App Title
+        draw_string(fb, 160, card_y + 25, apps[i], 3, pack_argb(255, 255, 255, 255));
 
-        // Install / Open button
-        fill_rounded_rect(fb, 540, card_y + 44, 130, 52, 26, pack_argb(255, 0, 137, 123));
+        // App Description
+        draw_string(fb, 160, card_y + 60, descs[i], 2, pack_argb(255, 180, 180, 180));
+
+        // App Package Name
+        draw_string(fb, 160, card_y + 88, pkgs[i], 2, pack_argb(255, 120, 120, 120));
+
+        // Install / Open Action Button (#1976D2)
+        fill_rounded_rect(fb, 560, card_y + 45, 120, 50, 8, pack_argb(255, 25, 118, 210));
+        draw_string(fb, 580, card_y + 60, "OPEN", 2, pack_argb(255, 255, 255, 255));
     }
 
-    // 6. Bottom Navigation Bar (1320..1440, #1E1E1E)
-    fill_rect(fb, 0, 1320, DISPLAY_WIDTH, 120, pack_argb(255, 30, 30, 30));
-    // Nav items (4 pills)
-    for (int j = 0; j < 4; ++j) {
-        int nav_x = 45 + j * 170;
-        uint32_t nav_col = (j == 0) ? pack_argb(255, 30, 136, 229) : pack_argb(255, 120, 120, 120);
-        fill_rounded_rect(fb, nav_x + 30, 1345, 50, 40, 20, nav_col);
-    }
+    // 6. Navigation Bar (1360..1440, #000000)
+    fill_rect(fb, 0, 1360, DISPLAY_WIDTH, 80, pack_argb(255, 0, 0, 0));
+    // Back (triangle), Home (circle), Recents (square)
+    draw_string(fb, 160, 1385, "<", 3, pack_argb(255, 200, 200, 200));
+    fill_rounded_rect(fb, 345, 1385, 30, 30, 15, pack_argb(255, 200, 200, 200));
+    fill_rounded_rect(fb, 540, 1385, 30, 30, 6, pack_argb(255, 200, 200, 200));
 }
 
-// Child execution routine for spawned Android app
 static void run_spawned_application(const char *package_name, const char *entry_point, uint32_t uid, uint32_t gid) {
     char log_buf[256];
-    pid_t my_pid = getpid();
-
-    snprintf(log_buf, sizeof(log_buf), "[app_process] Child %d spawned for package %s (entry point: %s)",
-             my_pid, package_name, entry_point);
+    snprintf(log_buf, sizeof(log_buf), "[app_process] Spawned child process (PID %d, UID %u, GID %u) for %s",
+             getpid(), uid, gid, package_name);
     log_zygote(log_buf);
 
-    snprintf(log_buf, sizeof(log_buf), "[app_process] Staged APK verified at /data/app/%s/base.apk", package_name);
-    log_zygote(log_buf);
-
-    snprintf(log_buf, sizeof(log_buf), "[app_process] ActivityThread: Loaded classes.dex and resources.arsc for %s", package_name);
+    snprintf(log_buf, sizeof(log_buf), "[app_process] DalvikVM / ART: Loaded %s (%s)", entry_point, package_name);
     log_zygote(log_buf);
 
     snprintf(log_buf, sizeof(log_buf), "[app_process] ActivityThread: attachApplication completed for %s", package_name);
@@ -248,11 +362,17 @@ static void run_spawned_application(const char *package_name, const char *entry_
             struct drm_virtgpu_execbuffer exec;
             memset(&exec, 0, sizeof(exec));
             exec.flags = 0;
-            exec.size = 22 * sizeof(uint32_t);
+            exec.size = 24 * sizeof(uint32_t);
             exec.command = (uintptr_t)cmds;
             exec.fence_fd = -1;
-            ioctl(drm_fd, DRM_IOCTL_VIRTGPU_EXECBUFFER, &exec);
+            int exec_ret = ioctl(drm_fd, DRM_IOCTL_VIRTGPU_EXECBUFFER, &exec);
+
+            char drm_log[256];
+            snprintf(drm_log, sizeof(drm_log), "[zygote] HWUI EGL init drm_fd=%d resId=%u exec_ret=%d", drm_fd, res_create.res_handle, exec_ret);
+            log_zygote(drm_log);
             close(drm_fd);
+        } else {
+            log_zygote("[zygote] HWUI EGL init drm_fd=-1 resId=0 (fallback)");
         }
 
         log_zygote("[app_process] HWUI: Initialized EGL / Skia rendering pipeline on /dev/dri/card0 (720x1440)");
@@ -273,6 +393,9 @@ static void run_spawned_application(const char *package_name, const char *entry_
 // -----------------------------------------------------------------------------
 
 int main(int argc, char **argv) {
+    (void)argc;
+    (void)argv;
+
     tty_fd = open("/dev/ttyS0", O_WRONLY | O_NONBLOCK);
     if (tty_fd < 0) tty_fd = open("/dev/console", O_WRONLY | O_NONBLOCK);
 
@@ -395,6 +518,9 @@ int main(int argc, char **argv) {
             close(client_fd);
 
             char log_msg[256];
+            snprintf(log_msg, sizeof(log_msg), "[zygote] fork pkg=%s nice=%s",
+                     package_name, nice_name);
+            log_zygote(log_msg);
             snprintf(log_msg, sizeof(log_msg), "[zygote] Forked child process %d for package %s (nice-name: %s)",
                      child_pid, package_name, nice_name);
             log_zygote(log_msg);

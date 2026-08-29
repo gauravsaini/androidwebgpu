@@ -6,6 +6,7 @@
 #include <EGL/egl.h>
 #include <EGL/eglext.h>
 #include <GLES2/gl2.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
@@ -15,6 +16,8 @@
 #include <sys/mman.h>
 #include <drm/drm.h>
 #include <drm/virtgpu_drm.h>
+#include <errno.h>
+#include <string.h>
 
 #ifndef VIRTGPU_EXECBUF_FENCE
 #define VIRTGPU_EXECBUF_FENCE 1
@@ -46,12 +49,26 @@ struct egl_context_t {
 
 static egl_context_t* g_current_ctx = NULL;
 
+struct ANativeWindow_Internal {
+    int32_t width;
+    int32_t height;
+    int32_t format;
+    uint32_t flags;
+    void* internal_surface;
+};
+
 EGLAPI EGLDisplay EGLAPIENTRY eglGetDisplay(EGLNativeDisplayType display_id) {
     egl_display_t* dpy = (egl_display_t*)malloc(sizeof(egl_display_t));
     dpy->magic = 0x12345678;
+    // Prefer card0 for primary KMS master or render node /dev/dri/renderD128
     dpy->drm_fd = open("/dev/dri/card0", O_RDWR | O_CLOEXEC);
     if (dpy->drm_fd < 0) {
         dpy->drm_fd = open("/dev/dri/renderD128", O_RDWR | O_CLOEXEC);
+    }
+    if (dpy->drm_fd >= 0) {
+        fprintf(stderr, "[EGL-VirtGPU] eglGetDisplay: opened DRM device node (fd=%d)\n", dpy->drm_fd);
+    } else {
+        fprintf(stderr, "[EGL-VirtGPU] eglGetDisplay: DRM open failed (errno=%d: %s)\n", errno, strerror(errno));
     }
     return (EGLDisplay)dpy;
 }
@@ -109,6 +126,14 @@ EGLAPI EGLSurface EGLAPIENTRY eglCreateWindowSurface(EGLDisplay dpy, EGLConfig c
     egl_surface_t* surf = (egl_surface_t*)malloc(sizeof(egl_surface_t));
     surf->width = 720;
     surf->height = 1440;
+
+    // Handle ANativeWindow pointer passed from Gecko libxul.so / NDK
+    if (win) {
+        struct ANativeWindow_Internal* nw = (struct ANativeWindow_Internal*)win;
+        if (nw->width > 0 && nw->width <= 4096) surf->width = nw->width;
+        if (nw->height > 0 && nw->height <= 4096) surf->height = nw->height;
+    }
+
     surf->size = surf->width * surf->height * 4;
     surf->bo_handle = 0;
     surf->res_id = 1;
@@ -148,6 +173,9 @@ EGLAPI EGLSurface EGLAPIENTRY eglCreateWindowSurface(EGLDisplay dpy, EGLConfig c
         }
     }
 
+    fprintf(stderr, "[EGL-VirtGPU] eglCreateWindowSurface: ANativeWindow surface created (%dx%d), bo_handle=%u, res_id=%u\n",
+            surf->width, surf->height, surf->bo_handle, surf->res_id);
+
     return (EGLSurface)surf;
 }
 
@@ -179,6 +207,7 @@ EGLAPI EGLContext EGLAPIENTRY eglCreateContext(EGLDisplay dpy, EGLConfig config,
     ctx->clear_color[1] = 0.0f;
     ctx->clear_color[2] = 0.0f;
     ctx->clear_color[3] = 1.0f;
+    fprintf(stderr, "[EGL-VirtGPU] eglCreateContext: ctx_id=%d, drm_fd=%d\n", ctx->ctx_id, ctx->drm_fd);
     return (EGLContext)ctx;
 }
 
@@ -195,6 +224,7 @@ EGLAPI EGLBoolean EGLAPIENTRY eglDestroyContext(EGLDisplay dpy, EGLContext ctx) 
 EGLAPI EGLBoolean EGLAPIENTRY eglMakeCurrent(EGLDisplay dpy, EGLSurface draw,
                                             EGLSurface read, EGLContext ctx) {
     g_current_ctx = (egl_context_t*)ctx;
+    fprintf(stderr, "[EGL-VirtGPU] eglMakeCurrent: bound ctx_id=%d\n", ctx ? ((egl_context_t*)ctx)->ctx_id : 0);
     return EGL_TRUE;
 }
 
@@ -284,6 +314,8 @@ EGLAPI EGLBoolean EGLAPIENTRY eglSwapBuffers(EGLDisplay dpy, EGLSurface surface)
     egl_surface_t* s = (egl_surface_t*)surface;
 
     if (d && d->drm_fd >= 0 && s) {
+        fprintf(stderr, "[EGL-VirtGPU] eglSwapBuffers: flushing res_id=%u (%dx%d) via EXECBUFFER to DRM node\n",
+                s->res_id, s->width, s->height);
         // Submit VIRTIO_GPU_CMD_TRANSFER_TO_HOST_2D followed by RESOURCE_FLUSH (total 22 words)
         uint32_t cmds[24] = {
             // Transfer to host 2D (0x0105, 12 words)

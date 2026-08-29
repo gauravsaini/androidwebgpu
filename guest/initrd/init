@@ -4,7 +4,10 @@
 # + synthetic virtio-gpu probe (Option A) — runs if binary present
 
 export PATH=/system/bin:/system/xbin:/sbin:/bin:/usr/bin
-export LD_LIBRARY_PATH=/system/lib
+export LD_LIBRARY_PATH=/system/lib:/system/lib64:/vendor/lib
+export ANDROID_ROOT=/system
+export ANDROID_DATA=/data
+export BOOTCLASSPATH=/system/framework/core-libart.jar:/system/framework/ext.jar:/system/framework/framework.jar:/system/framework/services.jar
 
 # 1. Mount virtual file systems
 mount -t proc proc /proc 2>/dev/null || true
@@ -22,18 +25,33 @@ ln -sf /dev/binderfs/hwbinder /dev/hwbinder 2>/dev/null || true
 ln -sf /dev/binderfs/vndbinder /dev/vndbinder 2>/dev/null || true
 chmod 0666 /dev/binder /dev/binderfs/binder /dev/binderfs/hwbinder /dev/binderfs/vndbinder 2>/dev/null || true
 
-# 2b. Ensure DRM / Framebuffer device nodes exist
-mkdir -p /dev/dri 2>/dev/null || true
-if [ ! -c /dev/dri/card0 ]; then
-    mknod /dev/dri/card0 c 226 0 2>/dev/null || true
+# 2b. Load VirtIO and DRM Kernel Modules
+KVER=$(uname -r 2>/dev/null || echo "6.6.142-0-lts")
+MODDIR="/lib/modules/$KVER"
+if [ ! -d "$MODDIR" ]; then
+    MODDIR="/lib/modules/6.6.142-0-lts"
 fi
-if [ ! -c /dev/dri/renderD128 ]; then
-    mknod /dev/dri/renderD128 c 226 128 2>/dev/null || true
-fi
-if [ ! -c /dev/fb0 ]; then
-    mknod /dev/fb0 c 29 0 2>/dev/null || true
-fi
-chmod 0666 /dev/dri/card0 /dev/dri/renderD128 /dev/fb0 2>/dev/null || true
+
+echo "[init] Loading DRM and VirtIO kernel modules from $MODDIR..." > /dev/ttyS0 2>/dev/null || true
+
+for mpath in \
+    "$MODDIR/kernel/drivers/virtio/virtio.ko" \
+    "$MODDIR/kernel/drivers/virtio/virtio_ring.ko" \
+    "$MODDIR/kernel/drivers/virtio/virtio_pci_modern_dev.ko" \
+    "$MODDIR/kernel/drivers/virtio/virtio_pci.ko" \
+    "$MODDIR/kernel/drivers/i2c/i2c-core.ko" \
+    "$MODDIR/kernel/drivers/gpu/drm/drm_panel_orientation_quirks.ko" \
+    "$MODDIR/kernel/drivers/gpu/drm/drm.ko" \
+    "$MODDIR/kernel/drivers/gpu/drm/drm_kms_helper.ko" \
+    "$MODDIR/kernel/drivers/gpu/drm/drm_shmem_helper.ko" \
+    "$MODDIR/kernel/drivers/virtio/virtio_dma_buf.ko" \
+    "$MODDIR/kernel/drivers/gpu/drm/virtio/virtio-gpu.ko"; do
+    if [ -f "$mpath" ]; then
+        insmod "$mpath" 2>/dev/null && echo "[init] Loaded $(basename "$mpath")" > /dev/ttyS0 2>/dev/null || true
+    fi
+done
+depmod -a 2>/dev/null || true
+modprobe virtio-gpu 2>/dev/null || modprobe virtio_gpu 2>/dev/null || true
 
 # 2c. Stage F-Droid APK into /data/app/org.fdroid.fdroid/base.apk
 mkdir -p /data/app/org.fdroid.fdroid 2>/dev/null || true
@@ -59,46 +77,51 @@ if [ -x /system/bin/servicemanager ]; then
         sleep 0.1
     fi
     echo "[init] servicemanager started (handle 0 context manager)" > /dev/ttyS0 2>/dev/null || true
+    echo "[init] servicemanager pid $! handle 0" > /dev/ttyS0 2>/dev/null || true
 else
     echo "[init] servicemanager binary standby" > /dev/ttyS0 2>/dev/null || true
 fi
 
+# 3a. Check DRM device presence from kernel driver
+mkdir -p /dev/dri 2>/dev/null || true
+chmod 0666 /dev/dri/* /dev/fb* /dev/graphics/* 2>/dev/null || true
+if [ -d /sys/class/drm ]; then
+    echo "[init] /sys/class/drm contents:" > /dev/ttyS0 2>/dev/null || true
+    ls -la /sys/class/drm/ > /dev/ttyS0 2>&1 || true
+fi
+if [ -d /dev/dri ]; then
+    echo "[init] /dev/dri contents:" > /dev/ttyS0 2>/dev/null || true
+    ls -la /dev/dri/ > /dev/ttyS0 2>&1 || true
+fi
+sleep 0.1 2>/dev/null || true
+
 # 3b. Start SurfaceFlinger (Linked against egl_webgpu.so, gralloc.virtgpu.so, hwcomposer.virtgpu.so)
 if [ -x /system/bin/surfaceflinger ]; then
-    /system/bin/surfaceflinger &
-    echo "[init] surfaceflinger started (DRM /dev/dri/card0 linkage)" > /dev/ttyS0 2>/dev/null || true
+    /system/bin/surfaceflinger > /dev/ttyS0 2>&1 &
+    echo "[init] surfaceflinger started (DRM /dev/dri linkage)" > /dev/ttyS0 2>/dev/null || true
 fi
 
 # 4. Start Native Rust System Services
-if [ -x /system/bin/pms_rs ]; then /system/bin/pms_rs & sleep 0.05 2>/dev/null || true; fi
-if [ -x /system/bin/ams_rs ]; then /system/bin/ams_rs & sleep 0.05 2>/dev/null || true; fi
-if [ -x /system/bin/wms_rs ]; then /system/bin/wms_rs & sleep 0.05 2>/dev/null || true; fi
-if [ -x /system/bin/inputflinger_rs ]; then /system/bin/inputflinger_rs & sleep 0.05 2>/dev/null || true; fi
+if [ -x /system/bin/pms_rs ]; then /system/bin/pms_rs > /dev/ttyS0 2>&1 & sleep 0.05 2>/dev/null || true; fi
+if [ -x /system/bin/ams_rs ]; then /system/bin/ams_rs > /dev/ttyS0 2>&1 & sleep 0.05 2>/dev/null || true; fi
+if [ -x /system/bin/wms_rs ]; then /system/bin/wms_rs > /dev/ttyS0 2>&1 & sleep 0.05 2>/dev/null || true; fi
+if [ -x /system/bin/inputflinger_rs ]; then /system/bin/inputflinger_rs > /dev/ttyS0 2>&1 & sleep 0.05 2>/dev/null || true; fi
 
 # 5. Start Virtual AIDL HAL Daemons
-if [ -x /system/bin/sensors_hal_virtual ]; then /system/bin/sensors_hal_virtual & fi
-if [ -x /system/bin/audio_hal_virtual ]; then /system/bin/audio_hal_virtual & fi
-if [ -x /system/bin/camera_hal_virtual ]; then /system/bin/camera_hal_virtual & fi
+if [ -x /system/bin/sensors_hal_virtual ]; then /system/bin/sensors_hal_virtual > /dev/ttyS0 2>&1 & fi
+if [ -x /system/bin/audio_hal_virtual ]; then /system/bin/audio_hal_virtual > /dev/ttyS0 2>&1 & fi
+if [ -x /system/bin/camera_hal_virtual ]; then /system/bin/camera_hal_virtual > /dev/ttyS0 2>&1 & fi
 
 # 5b. Start Zygote Daemon (boot.art, framework.jar, /dev/socket/zygote)
 if [ -x /system/bin/app_process ]; then
-    /system/bin/app_process &
+    /system/bin/app_process > /dev/ttyS0 2>&1 &
     echo "[init] zygote app_process started" > /dev/ttyS0 2>/dev/null || true
 elif [ -x /system/bin/zygote ]; then
-    /system/bin/zygote &
+    /system/bin/zygote > /dev/ttyS0 2>&1 &
     echo "[init] zygote daemon started" > /dev/ttyS0 2>/dev/null || true
 fi
 
 echo "[init] native Rust services and virtual HALs started" > /dev/ttyS0 2>/dev/null || true
-echo "[init] zygote socket listening on /dev/socket/zygote" > /dev/ttyS0 2>/dev/null || true
-
-# 5b. Option A synthetic virtio-gpu probe (if present) — proves 2.2→2.5 without real kernel build
-if [ -x /system/bin/synthetic_virtio_probe ]; then
-    echo "[init] launching synthetic_virtio_probe (Option A /dev/mem + outl proof)..." > /dev/ttyS0 2>/dev/null || true
-    /system/bin/synthetic_virtio_probe /dev/ttyS0 > /dev/ttyS0 2>&1 &
-else
-    echo "[init] synthetic_virtio_probe not present (run guest/tools/build_synthetic_probe.sh)" > /dev/ttyS0 2>/dev/null || true
-fi
 
 # 5c. Phase 4 Graphics and 2D Skia Rasterization tests
 if [ -x /system/bin/skia_fb_test ]; then

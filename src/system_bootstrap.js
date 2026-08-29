@@ -21,11 +21,11 @@ export class SystemBootstrap {
      * @param {Function} [options.onFpsUpdate] - FPS update callback
      * @param {Function} [options.onLog] - Log callback
      * @param {boolean} [options.autostart=true] - Whether to automatically start hypervisor
-     * @param {number} [options.memorySizeMb=128] - Guest RAM size in MB
+     * @param {number} [options.memorySizeMb=512] - Guest RAM size in MB
      */
     constructor(options = {}) {
         this.options = {
-            memorySizeMb: 128,
+            memorySizeMb: 512,
             vgaMemorySizeMb: 16,
             autostart: true,
             wasmPath: './v86/v86.wasm',
@@ -142,7 +142,7 @@ export class SystemBootstrap {
      * Initialize WebGPU Virtio-GPU Bridge.
      */
     async initGraphics(canvas) {
-        await initWasm('./pkg/virtio_gpu_bridge_bg.wasm?v=3');
+        await initWasm({ module_or_path: './pkg/virtio_gpu_bridge_bg.wasm?v=3' });
         this.bridge = new WasmVirtioGpuBridge();
         await this.bridge.initialize(720, 1440);
 
