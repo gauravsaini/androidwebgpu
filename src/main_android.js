@@ -376,26 +376,39 @@ async function startSystem() {
             window.v86emulator = bootstrap.getGuestManager() ? bootstrap.getGuestManager().emulator : null;
         }
         if (bootstrap.getGpuDevice()) {
-            runtime.setGpuDevice(bootstrap.getGpuDevice());
+            const __gpuDevTmp = bootstrap.getGpuDevice();
+            console.info(`[main] Binding VirtIO-GPU device to runtime: pciSlot=0x${__gpuDevTmp.pciSlot.toString(16)} io=0x${__gpuDevTmp.ioBase.toString(16)} irq=${__gpuDevTmp.irqLine} scanouts=${__gpuDevTmp.num_scanouts} guestActive=${__gpuDevTmp.guestActive} guestHasPresented=${__gpuDevTmp.guestHasPresented}`);
+            runtime.setGpuDevice(__gpuDevTmp);
+            console.info(`[main] isHostInjectionAllowed=${typeof __gpuDevTmp.isHostInjectionAllowed === 'function' ? __gpuDevTmp.isHostInjectionAllowed() : 'n/a'} useGuestRendering=${runtime.useGuestRendering}`);
             // Leaf 3.1: gate host injection only after guest shows activity, not immediately.
             // Keep host fallback for Phase 1-3 until guest proves it (VIRTIO_GPU_INIT / first frame).
-            const gpuDev = bootstrap.getGpuDevice();
+            const gpuDev = __gpuDevTmp;
             const gm = bootstrap.getGuestManager();
             let lastGateState = null;
             const gateOnGuest = () => {
-                const active = gpuDev ? (gpuDev.guestHasPresented || (gpuDev.guestActive && gpuDev.guestHasPresented)) : false;
-                const stateStr = `${gpuDev ? gpuDev.guestActive : false}_${gpuDev ? gpuDev.guestHasPresented : false}_${runtime ? runtime.useGuestRendering : false}`;
+                const active = gpuDev ? !!gpuDev.guestHasPresented : false;
+                const allowed = gpuDev ? (typeof gpuDev.isHostInjectionAllowed === 'function' ? gpuDev.isHostInjectionAllowed() : !gpuDev.guestHasPresented) : true;
+                const stateStr = `${gpuDev ? gpuDev.guestActive : false}_${gpuDev ? gpuDev.guestHasPresented : false}_${runtime ? runtime.useGuestRendering : false}_${allowed}`;
                 if (stateStr !== lastGateState) {
                     lastGateState = stateStr;
-                    console.log(`[gate] guestActive: ${gpuDev ? gpuDev.guestActive : false}, guestHasPresented: ${gpuDev ? gpuDev.guestHasPresented : false}, useGuestRendering: ${runtime ? runtime.useGuestRendering : false}`);
+                    console.log(`[gate] guestActive=${gpuDev ? gpuDev.guestActive : false} guestHasPresented=${gpuDev ? gpuDev.guestHasPresented : false} useGuestRendering=${runtime ? runtime.useGuestRendering : false} isHostInjectionAllowed=${allowed} -> active (guestHasPresented)=${active} | pciSlot=0x${gpuDev ? gpuDev.pciSlot.toString(16) : '?' } io=0x${gpuDev ? gpuDev.ioBase.toString(16) : '?'}`);
+                    console.log(`[gate] decision -> ${active ? 'ENABLE guest rendering (BLOCK host injection) & host rasterizer gated' : 'DISABLE guest rendering (ALLOW host fallback rasterizer)'} | canvas=${dom.canvas ? dom.canvas.width+'x'+dom.canvas.height : 'none'} screen=${appController.activeScreen}`);
                 }
                 if (active) {
+                    console.info(`[gate] >>> SWITCH TO GUEST rendering (SurfaceFlinger scanout should be visible on canvas)`);
                     runtime.enableGuestRendering();
+                } else {
+                    // verbose only on state change already logged above; keep host fallback visible
+                    runtime.disableGuestRendering();
+                }
+                // also trace for app_controller viewport
+                if (runtime.useGuestRendering !== active) {
+                    console.debug(`[gate] useGuestRendering mismatch corrected: runtime.useGuestRendering=${runtime.useGuestRendering} expected=${active}`);
                 }
             };
             if (gpuDev) {
                 gpuDev.onGuestActiveChange = (active) => {
-                    console.log(`[gate] onGuestActiveChange event received (active=${active}) -> evaluating gateOnGuest`);
+                    console.info(`[gate] onGuestActiveChange event received active=${active} guestHasPresented=${gpuDev.guestHasPresented} guestActive=${gpuDev.guestActive} -> re-evaluating gate`);
                     gateOnGuest();
                 };
             }
@@ -404,20 +417,26 @@ async function startSystem() {
                 const origMile = gm.onMilestone;
                 gm.onStateChange = (newState, oldState) => {
                     if (typeof origState === 'function') try { origState(newState, oldState); } catch(_) {}
-                    console.log(`[v86-state] State Transition: ${oldState} -> ${newState}`);
+                    console.info(`[v86-state] ${oldState} -> ${newState} (guestHasPresented=${gpuDev ? gpuDev.guestHasPresented : '?' } guestActive=${gpuDev ? gpuDev.guestActive : '?' })`);
                     if (newState === 'ERROR') runtime.disableGuestRendering();
                     gateOnGuest();
                 };
                 gm.onMilestone = (m) => {
                     if (typeof origMile === 'function') try { origMile(m); } catch(_) {}
-                    console.log(`[v86-milestone] Milestone Achieved: ${m}`);
+                    console.info(`[v86-milestone] ${m} (gate active=${gpuDev ? !!gpuDev.guestHasPresented : false} will ${gpuDev && gpuDev.guestHasPresented ? 'ENABLE guest' : 'keep host fallback'})`);
                     gateOnGuest();
                 };
                 // Poll guestActive for guest activation (handles VirtIO driver init or synthetic probes)
                 let poll = 0;
                 const iv = setInterval(() => {
+                    const before = gpuDev ? gpuDev.guestHasPresented : false;
                     gateOnGuest();
-                    if ((gpuDev && gpuDev.guestHasPresented) || ++poll > 400) clearInterval(iv);
+                    if ((gpuDev && gpuDev.guestHasPresented) || ++poll > 400) {
+                        if (gpuDev && gpuDev.guestHasPresented && !before) console.info(`[gate] poll detected guestHasPresented transition at poll=${poll} -> guest rendering now ACTIVE`);
+                        if (poll > 400) console.warn(`[gate] poll timeout 400*100ms=40s guest never presented (DRM ENODEV? check v86-serial /sys/class/drm empty + surfaceflinger fd=-1)`);
+                        clearInterval(iv);
+                    }
+                    if (poll % 50 === 0 && poll !== 0) console.debug(`[gate] poll tick ${poll} guestHasPresented=${gpuDev ? gpuDev.guestHasPresented : false} guestActive=${gpuDev ? gpuDev.guestActive : false}`);
                 }, 100);
             }
         }
@@ -457,8 +476,11 @@ async function startSystem() {
             const targetPkg = appState?.packageName || (targetApk.toLowerCase().includes('firefox') ? 'org.mozilla.firefox' : 'org.fdroid.fdroid');
             appendLogcat('PackageManager', `${targetApk} loaded into Dalvik VM & registered in PMS (${targetPkg}).`, 'I');
             console.info(`[AndroidOS] ${targetPkg} installed into PMS successfully -> launching Activity`);
+            console.info(`[AndroidOS] Launching Activity ${targetPkg} -> will auto-switch viewport to webgpu (guest fallback visible until guest presents)`);
             await appController.launchActivity(targetPkg);
-            console.info(`[AndroidOS] ${targetPkg} launched. WebGPU viewport active.`);
+            console.info(`[AndroidOS] launchActivity done for ${targetPkg}, now activateScreen('webgpu') gate active=${gpuDev ? !!gpuDev.guestHasPresented : false} useGuest=${runtime ? runtime.useGuestRendering : '?'}`);
+            appController.activateScreen('webgpu');
+            console.info(`[AndroidOS] ${targetPkg} launched. Viewport=webgpu activeScreen=${appController.activeScreen} canvas=${dom.canvas.width}x${dom.canvas.height} isHostInjectionAllowed=${gpuDev ? gpuDev.isHostInjectionAllowed() : '?'}`);
         } else {
             console.warn(`[AndroidOS] ${targetApk} fetch failed:`, resp.status, resp.statusText);
             appendLogcat('PackageManager', `Target APK fetch failed: ${targetApk} (HTTP ${resp.status})`, 'W');

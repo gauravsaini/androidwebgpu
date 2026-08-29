@@ -153,17 +153,25 @@ export class AndroidRuntime {
     }
 
     isHostInjectionAllowed() {
-        if (this.useGuestRendering) {
-            return false;
-        }
+        let allowed;
+        let reason = 'default allow';
         if (this.gpuDevice) {
             if (typeof this.gpuDevice.isHostInjectionAllowed === 'function') {
-                return this.gpuDevice.isHostInjectionAllowed();
+                allowed = this.gpuDevice.isHostInjectionAllowed();
+                reason = `gpuDevice.isHostInjectionAllowed()=${allowed} (guestHasPresented=${this.gpuDevice.guestHasPresented} blocked=${this.gpuDevice.hostInjectionBlocked})`;
+                // console.debug(`[gate] AndroidRuntime.isHostInjectionAllowed -> ${reason}`);
+                return allowed;
             }
-            if (this.gpuDevice.guestActive || this.gpuDevice.hostInjectionBlocked) {
+            if (this.gpuDevice.guestHasPresented || this.gpuDevice.hostInjectionBlocked) {
+                // console.debug(`[gate] AndroidRuntime.isHostInjectionAllowed blocked by guestHasPresented=${this.gpuDevice.guestHasPresented} hostBlocked=${this.gpuDevice.hostInjectionBlocked}`);
                 return false;
             }
         }
+        if (this.useGuestRendering && this.gpuDevice && this.gpuDevice.guestHasPresented) {
+            // console.debug(`[gate] blocked by useGuestRendering=${this.useGuestRendering} + guestHasPresented`);
+            return false;
+        }
+        // console.debug(`[gate] AndroidRuntime.isHostInjectionAllowed => true (${reason})`);
         return true;
     }
 
@@ -417,14 +425,10 @@ export class AndroidRuntime {
      * Leaf 3.1 fix: gate host injection before rasterization — guest gets first chance.
      */
     renderActivityUi(appState) {
-        if (!appState) return;
-        // ponytail: only block host rendering if guest has genuinely presented
-        // frames via virtqueue descriptors. guestActive alone is not sufficient
-        // because the guest virtio-gpu driver never probes (ENODEV).
-        if (this.gpuDevice && this.gpuDevice.guestHasPresented && this.gpuDevice.guestActive) {
-            this.log('GUEST GATED - skip host inflate (guest virtqueue active)', 'info', 'bridge');
-            return;
-        }
+        if (!appState) { console.warn(`[ViewRasterizer] renderActivityUi called with null appState -> abort`); return; }
+        const __gateBlocked = this.gpuDevice ? this.gpuDevice.guestHasPresented : false;
+        const __allow = this.isHostInjectionAllowed();
+        console.info(`[ViewRasterizer] renderActivityUi entry pkg=${appState.packageName || appState.packageName} guestHasPresented=${__gateBlocked} isHostInjectionAllowed=${__allow} useGuestRendering=${this.useGuestRendering} canvas=${this.canvas ? this.canvas.width+'x'+this.canvas.height : 'none'}`);
         let rootView = null;
         let layoutPathUsed = null;
 
@@ -802,35 +806,50 @@ export class AndroidRuntime {
         const t0 = (typeof performance !== 'undefined') ? performance.now() : Date.now();
         const frame = this.rasterizer.rasterize(rootView, width, height);
         const elapsed = (((typeof performance !== 'undefined') ? performance.now() : Date.now()) - t0).toFixed(2);
-        this.log(`Rasterized ${width}x${height} view tree in ${elapsed}ms (damage: [${frame.damageRect.join(', ')}])`, 'info', 'ViewRasterizer');
-        console.info(`[ViewRasterizer] Rasterized ${width}x${height} view tree in ${elapsed}ms -> blitting to canvas & VirtIO scanout`);
+        const __rgbaLen = frame.rgbaData ? frame.rgbaData.length : 0;
+        const __damage = frame.damageRect ? frame.damageRect.join(', ') : '0,0,0,0';
+        this.log(`Rasterized ${width}x${height} view tree in ${elapsed}ms (damage: [${__damage}])`, 'info', 'ViewRasterizer');
+        console.info(`[ViewRasterizer] Rasterized ${width}x${height} view tree in ${elapsed}ms rgba=${__rgbaLen} damage=[${__damage}] layout=${rootView.constructor.name} inflatePath=${layoutPathUsed || 'synthetic fallback'} -> blitting to canvas (${width}x${height}) & VirtIO scanout gated=${this.gpuDevice ? this.gpuDevice.guestHasPresented : false}`);
 
         if (this.canvas && typeof this.canvas.getContext === 'function') {
             try {
                 const ctx = this.canvas.getContext('2d');
-                if (ctx && typeof ctx.createImageData === 'function' && typeof ctx.putImageData === 'function') {
+                if (!ctx) {
+                    console.warn(`[Canvas2D] getContext('2d') returned null for canvas ${width}x${height}`);
+                } else if (typeof ctx.createImageData !== 'function' || typeof ctx.putImageData !== 'function') {
+                    console.warn(`[Canvas2D] context missing createImageData/putImageData`);
+                } else {
                     const imgData = ctx.createImageData(width, height);
                     imgData.data.set(frame.rgbaData);
                     ctx.putImageData(imgData, 0, 0);
-                    console.debug(`[Canvas2D] Successfully blitted ${width}x${height} image data to 2D context`);
+                    console.info(`[Canvas2D] Blitted ${width}x${height} (${imgData.data.length} bytes) to 2D context canvasId=${this.canvas.id || 'screen'} (host fallback visible=${!this.gpuDevice || !this.gpuDevice.guestHasPresented})`);
+                    if (this.canvas && this.gpuDevice && this.gpuDevice.guestHasPresented) {
+                        console.info(`[Canvas2D] Note: guestHasPresented true -> this host blit will be OVERDRAWN by guest scanout via VirtIO if guest presents`);
+                    }
                 }
             } catch (err) {
                 console.warn(`[Canvas2D] Canvas putImageData error:`, err);
             }
+        } else {
+            console.warn(`[Canvas2D] No canvas or getContext missing -> cannot blit ${width}x${height} (canvas=${!!this.canvas})`);
         }
 
         if (this.gpuDevice) {
-            // ponytail: only skip VirtIO injection if guest genuinely presented
-            if (this.gpuDevice.guestHasPresented && this.gpuDevice.guestActive) {
+            if (this.gpuDevice.guestHasPresented) {
                 this.log('Guest rendering active — skipping host synthetic injection (gated)', 'info', 'bridge');
+                console.info(`[VirtIO] SKIP host TRANSFER_TO_HOST_2D / RESOURCE_FLUSH because guestHasPresented=true (pure guest scanout active, host fallback gated) resId=100 ${width}x${height}`);
                 return;
             }
             const resId = 100;
+            console.info(`[VirtIO] Host injection ALLOWED (guestHasPresented=false) -> dispatching RESOURCE_CREATE_2D resId=${resId} ${width}x${height} & SET_SCANOUT(0) & TRANSFER_TO_HOST_2D ${frame.rgbaData.length} bytes`);
             this.log(`Dispatched VirtIO RESOURCE_CREATE_2D (resId=${resId}, ${width}x${height}) & SET_SCANOUT(0)`, 'info', 'bridge');
             this.gpuDevice.processControlQueue(VirtioPacketBuilder.createResource2d(resId, width, height));
             this.gpuDevice.processControlQueue(VirtioPacketBuilder.setScanout(0, resId, width, height));
             this.log(`Dispatched VirtIO TRANSFER_TO_HOST_2D & RESOURCE_FLUSH (${frame.rgbaData.length} bytes)`, 'info', 'bridge');
             this.rasterizer.submitToVirtioGpu(this.gpuDevice, resId, 0, frame.rgbaData);
+            console.info(`[VirtIO] Host raster buffer submitted to VirtIO-GPU scanout 0 (will be visible until guest first frame arrives via QUEUE_NOTIFY)`);
+        } else {
+            console.warn(`[VirtIO] No gpuDevice attached -> host buffer only on Canvas2D (no VirtIO scanout)`);
         }
     }
 }

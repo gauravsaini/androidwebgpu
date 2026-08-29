@@ -44,14 +44,14 @@ export class VirtioGpuDevice {
         this.isrStatus = 0;
         this.hostFeatures = (1 << 0) | (1 << 1); // VIRGL + EDID
         this.guestFeatures = 0;
-        this.pciSlot = 0x05;
+        this.pciSlot = 0x06;
         this.pci_id = this.pciSlot << 3;
         this.pci_bars = [{ size: 64 }, { size: 16 * 1024 * 1024 }];
         this.name = "virtio-gpu";
-        this.ioBase = 0xC100;
+        this.ioBase = 0xC140;
         this.irqLine = 10;
         this.bar0Size = 64;
-        this.bar0Value = 0xC101;
+        this.bar0Value = 0xC141;
         this.bar0Sizing = false;
         this.bar1Size = 16 * 1024 * 1024;
         this.bar1Value = 0xD1000000;
@@ -83,8 +83,8 @@ export class VirtioGpuDevice {
         this.pci_space[10] = 0x00;
         this.pci_space[11] = 0x03;
 
-        // BAR0: I/O Space (64 bytes) at 0xC100 (virtio legacy)
-        this.pci_space[16] = 0x01;
+        // BAR0: I/O Space (64 bytes) at 0xC140 (virtio legacy) — slot 0x06 avoids NE2000 collision at 0x05/C000
+        this.pci_space[16] = 0x41;
         this.pci_space[17] = 0xC1;
         this.pci_space[18] = 0x00;
         this.pci_space[19] = 0x00;
@@ -122,8 +122,12 @@ export class VirtioGpuDevice {
         this.v86 = v86;
         const tryRegister = () => {
             try {
-                const cpu = v86.cpu || (v86.v86 && v86.v86.cpu);
-                const io = v86.io || (v86.v86 && v86.v86.io);
+                const cpu = v86.cpu || (v86.v86 && v86.v86.cpu) || (v86.emulator && v86.emulator.cpu);
+                let io = (cpu && cpu.io) || (v86.io) || (v86.v86 && v86.v86.io) || (v86.emulator && v86.emulator.io);
+                if (!io && cpu && cpu.devices && cpu.devices.pci) {
+                    try { io = cpu.devices.pci.cpu?.io || cpu.devices.pci.io || null; } catch (_) {}
+                }
+                logger.log('bridge','D', `[virtio-gpu][VERBOSE] register attempt cpu=${!!cpu} io=${!!io} pciExists=${!!(cpu && cpu.devices && cpu.devices.pci)} bdf=0x${this.pci_id.toString(16)}`);
                 if (cpu && cpu.devices && cpu.devices.pci) {
                     // Avoid double-registration
                     if (cpu.devices.pci.devices && cpu.devices.pci.devices[this.pci_id]) {
@@ -147,13 +151,71 @@ export class VirtioGpuDevice {
                     }
                     const check = cpu.devices.pci.devices ? cpu.devices.pci.devices[this.pci_id] : null;
                     const mockSuccess = !cpu.devices.pci.devices; // test mock has no devices dict but register_device was called
-                    logger.log('bridge', 'I', `PCI register bdf=0x${this.pci_id.toString(16)} (${this.name}) -> ${check || mockSuccess ? 'OK' : 'FAIL'}`, {
+                    const slotHex = `0x${this.pciSlot.toString(16)}`;
+                    const bdfHex = `0x${this.pci_id.toString(16)}`;
+                    logger.log('bridge', 'I', `PCI register bdf=${bdfHex} (${this.name}) slot=${slotHex} io=0x${this.ioBase.toString(16)} -> ${check || mockSuccess ? 'OK' : 'FAIL'}`, {
                         pci_id: this.pci_id,
                         found: !!(check || mockSuccess)
                     });
-                    if (check || mockSuccess) {
-                        // Register I/O port handlers for BAR0
-                        if (io && typeof io.register_read === 'function' && typeof io.register_write === 'function') {
+                   if (check || mockSuccess) {
+                       if (!io) {
+                            logger.log('bridge','W', `[virtio-gpu][VERBOSE] PCI registered but io STILL missing (cpu.io=${!!(cpu&&cpu.io)} v86.io=${!!v86.io} v86.v86.io=${!!(v86.v86&&v86.v86.io)}) - will retry handler registration via poll`);
+                            console.warn(`[VirtIO-GPU][VERBOSE] io missing after PCI register, scheduling retry`);
+                            let retryCount=0;
+                            const retryIo = () => {
+                                retryCount++;
+                                const cpuR = v86.cpu || (v86.v86 && v86.v86.cpu) || (v86.emulator && v86.emulator.cpu);
+                                let ioR = (cpuR && cpuR.io) || v86.io || (v86.v86 && v86.v86.io) || (cpuR && cpuR.devices && cpuR.devices.pci && cpuR.devices.pci.cpu?.io);
+                                if (ioR && typeof ioR.register_read === 'function') {
+                                    this._io = ioR;
+                                    logger.log('bridge','I', `[virtio-gpu][VERBOSE] Retry ${retryCount}: I/O now available, registering handlers at 0x${this.ioBase.toString(16)}`);
+                                    console.info(`[VirtIO-GPU][VERBOSE] Retry I/O handlers register at 0x${this.ioBase.toString(16)}`);
+                                    for (let port=this.ioBase; port<this.ioBase+64; port++) {
+                                        const offset=port-this.ioBase;
+                                        ioR.register_read(port,this, ()=>this.ioRead(offset,1), ()=>this.ioRead(offset,2), ()=>this.ioRead(offset,4));
+                                        ioR.register_write(port,this, (v)=>this.ioWrite(offset,v,1), (v)=>this.ioWrite(offset,v,2), (v)=>this.ioWrite(offset,v,4));
+                                    }
+                                    try {
+                                        const pciDevR = (cpuR.devices.pci.devices[this.pci_id] || cpu.devices.pci.devices[this.pci_id]);
+                                        if (pciDevR && pciDevR.pci_bars && pciDevR.pci_bars[0]) {
+                                            const bar0=pciDevR.pci_bars[0];
+                                            bar0.entries=[];
+                                            for(let i=0;i<bar0.size;i++) bar0.entries[i]=ioR.ports[this.ioBase+i];
+                                            logger.log('bridge','I', `[virtio-gpu][VERBOSE] Retry bar0 patched count=${bar0.entries.length}`);
+                                        }
+                                    } catch(e){ logger.log('bridge','W', `[virtio-gpu][VERBOSE] Retry bar0 patch fail ${e.message}`); }
+                                    return;
+                                }
+                                if (retryCount<20) setTimeout(retryIo, 50);
+                                else logger.log('bridge','W', `[virtio-gpu][VERBOSE] Retry exhausted io still missing`);
+                            };
+                            setTimeout(retryIo, 50);
+                       } else {
+                           this._io = io;
+                       }
+                        logger.log('bridge', 'I', `[virtio-gpu][VERBOSE] PCI register success bdf=${bdfHex} ioBase=0x${this.ioBase.toString(16)} wrapping set_io_bars for BAR relocation visibility ioAvailable=${!!io}`);
+                        console.info(`[VirtIO-GPU][VERBOSE] PCI registered bdf=${bdfHex} ioBase=0x${this.ioBase.toString(16)} wrapping set_io_bars`);
+                        if (cpu.devices.pci.set_io_bars && !cpu.devices.pci._gpuBarWrap) {
+                            const origSetIo = cpu.devices.pci.set_io_bars.bind(cpu.devices.pci);
+                            const self = this;
+                            cpu.devices.pci.set_io_bars = function(bar, oldPort, newPort) {
+                                logger.log('bridge', 'I', `[virtio-gpu][VERBOSE] v86 set_io_bars barSize=${bar.size} old=0x${oldPort.toString(16)} -> new=0x${newPort.toString(16)}`);
+                                console.info(`[VirtIO-GPU][VERBOSE] set_io_bars old=0x${oldPort.toString(16)} -> new=0x${newPort.toString(16)} barSize=${bar.size}`);
+                                const ret = origSetIo(bar, oldPort, newPort);
+                                if (bar.size === 64) {
+                                    const oldBase = self.ioBase;
+                                    self.ioBase = newPort;
+                                    logger.log('bridge', 'I', `[virtio-gpu][VERBOSE] BAR0 relocated via v86 core old=0x${oldBase.toString(16)} -> new=0x${newPort.toString(16)}`);
+                                    console.info(`[VirtIO-GPU] BAR0 relocated via v86 core 0x${oldBase.toString(16)} -> 0x${newPort.toString(16)}`);
+                                }
+                                return ret;
+                            };
+                            cpu.devices.pci._gpuBarWrap = true;
+                            logger.log('bridge', 'I', `[virtio-gpu][VERBOSE] set_io_bars wrapped OK`);
+                        }
+                       if (io && typeof io.register_read === 'function' && typeof io.register_write === 'function') {
+                            logger.log('bridge', 'I', `[virtio-gpu][VERBOSE] Registering I/O handlers at base 0x${this.ioBase.toString(16)} count=64`);
+                            console.info(`[VirtIO-GPU][VERBOSE] Registering I/O handlers at 0x${this.ioBase.toString(16)}`);
                             for (let port = this.ioBase; port < this.ioBase + 64; port++) {
                                 const offset = port - this.ioBase;
                                 io.register_read(
@@ -171,12 +233,54 @@ export class VirtioGpuDevice {
                                     (val) => this.ioWrite(offset, val, 4)
                                 );
                             }
+                            logger.log('bridge', 'I', `[virtio-gpu][VERBOSE] I/O handlers registered OK at 0x${this.ioBase.toString(16)}`);
+                       } else {
+                            logger.log('bridge', 'W', `[virtio-gpu][VERBOSE] I/O handlers NOT registered - io missing`);
                         }
+                        if (io) {
+                            try {
+                                const pciDev = cpu.devices.pci.devices[this.pci_id];
+                                if (pciDev && pciDev.pci_bars && pciDev.pci_bars[0]) {
+                                    const bar0 = pciDev.pci_bars[0];
+                                    logger.log('bridge', 'D', `[virtio-gpu][VERBOSE] pre-patch bar0.entries len=${bar0.entries ? bar0.entries.length : 0} firstEmpty=${!bar0.entries || !bar0.entries[0]} ioBase=0x${this.ioBase.toString(16)}`);
+                                    bar0.entries = [];
+                                    for (let i = 0; i < bar0.size; i++) {
+                                        bar0.entries[i] = io.ports[this.ioBase + i];
+                                    }
+                                    logger.log('bridge', 'I', `[virtio-gpu][VERBOSE] bar0.entries patched count=${bar0.entries.length} ioBase=0x${this.ioBase.toString(16)} sampleExists=${!!bar0.entries[0]}`);
+                                    console.info(`[VirtIO-GPU][VERBOSE] bar0.entries patched for ioBase 0x${this.ioBase.toString(16)} count=${bar0.entries.length}`);
+                                } else {
+                                    logger.log('bridge', 'W', `[virtio-gpu][VERBOSE] pci_bars[0] missing after register - cannot patch`);
+                                }
+                            } catch (e) {
+                                logger.log('bridge', 'W', `[virtio-gpu][VERBOSE] bar0 patch failed: ${e.message}`);
+                            }
+                        } else {
+                            logger.log('bridge','I', `[virtio-gpu][VERBOSE] bar0 patch deferred until retry (io missing)`);
+                        }
+                        setTimeout(() => {
+                            try {
+                                const cpuChk = this.v86?.cpu || this.v86?.v86?.cpu;
+                                const ioChk = this.v86?.io || this.v86?.v86?.io || this._io;
+                                const hasHandler = ioChk && ioChk.ports && ioChk.ports[this.ioBase];
+                                logger.log('bridge', 'I', `[virtio-gpu][VERBOSE] POST-CHECK 2s after attach ioBase=0x${this.ioBase.toString(16)} handlerAtBase=${!!hasHandler} portsLen=${ioChk?.ports?.length}`);
+                                console.info(`[VirtIO-GPU][VERBOSE] POST-CHECK ioBase=0x${this.ioBase.toString(16)} handler=${!!hasHandler}`);
+                                if (cpuChk && cpuChk.devices && cpuChk.devices.pci && cpuChk.devices.pci.devices[this.pci_id]) {
+                                    const pd = cpuChk.devices.pci.devices[this.pci_id];
+                                    const ds = cpuChk.devices.pci.device_spaces[this.pci_id];
+                                    if (ds) {
+                                        const barVal = (ds[4] | (ds[5]<<8) | (ds[6]<<16) | (ds[7]<<24)) >>>0;
+                                        logger.log('bridge', 'I', `[virtio-gpu][VERBOSE] POST-CHECK device_spaces BAR0 val=0x${barVal.toString(16)} expected 0x${(this.ioBase|1).toString(16)}`);
+                                    }
+                                }
+                            } catch (e2) { logger.log('bridge','W', `[virtio-gpu][VERBOSE] POST-CHECK failed ${e2.message}`); }
+                        }, 2000);
                         logger.log('bridge', 'I', `Virtio-GPU device attached to v86 (slot 0x${this.pciSlot.toString(16)}, I/O 0x${this.ioBase.toString(16)})`, {
                             pciSlot: this.pciSlot,
                             ioBase: this.ioBase,
                             irqLine: this.irqLine
                         });
+                        console.info(`[VirtIO-GPU][VERBOSE] device attached slot 0x${this.pciSlot.toString(16)} ioBase 0x${this.ioBase.toString(16)} irq ${this.irqLine}`);
                         return true;
                     }
                 } else {
@@ -222,6 +326,9 @@ export class VirtioGpuDevice {
      * Read from VirtIO Legacy PCI I/O Configuration Space
      */
     ioRead(offset, size = 1) {
+        // VERBOSE: log all I/O reads for BAR mismatch debugging (limit to first 100 to avoid spam)
+        if (!this._ioReadCount) this._ioReadCount=0;
+        if (this._ioReadCount < 100) { this._ioReadCount++; logger.log('bridge','D',`[virtio-gpu] ioRead offset=0x${offset.toString(16)} size=${size} ioBase=0x${this.ioBase.toString(16)}`); }
         if (offset >= 0x00 && offset <= 0x03) {
             // HOST_FEATURES (0x00, 32-bit): VIRTIO_GPU_F_VIRGL | VIRTIO_GPU_F_EDID
             if (offset === 0x00 && (size === 4 || size === undefined)) {
@@ -324,6 +431,8 @@ export class VirtioGpuDevice {
      * Write to VirtIO Legacy PCI I/O Configuration Space
      */
     ioWrite(offset, val, size = 1) {
+        if (!this._ioWriteCount) this._ioWriteCount=0;
+        if (this._ioWriteCount < 200) { this._ioWriteCount++; logger.log('bridge','D',`[virtio-gpu] ioWrite offset=0x${offset.toString(16)} val=0x${val.toString(16)} size=${size} ioBase=0x${this.ioBase.toString(16)}`); if(this._ioWriteCount===200) logger.log('bridge','I','[virtio-gpu] ioWrite verbose limit reached, silencing'); }
         if (offset >= 0x04 && offset <= 0x07) {
             // GUEST_FEATURES (0x04, 32-bit)
             if (offset === 0x04 && (size === 4 || size === undefined)) {
@@ -376,6 +485,7 @@ export class VirtioGpuDevice {
             // DEVICE_STATUS (0x12, 8-bit)
             const prevStatus = this.deviceStatus;
             this.deviceStatus = val & 0xFF;
+            console.info(`[VirtIO-GPU] DEVICE_STATUS: 0x${prevStatus.toString(16)} -> 0x${this.deviceStatus.toString(16)} ACK=${!!(val & 1)} DRV=${!!(val & 2)} OK=${!!(val & 4)} FEAT=${!!(val & 8)} guestActive=${this.guestActive} guestHasPresented=${this.guestHasPresented}`);
             logger.log('bridge', 'I', `[virtio-gpu-device] DEVICE_STATUS: 0x${prevStatus.toString(16)} -> 0x${this.deviceStatus.toString(16)} (ACK=${!!(val & 1)}, DRV=${!!(val & 2)}, OK=${!!(val & 4)}, FEAT=${!!(val & 8)})`);
             if (this.deviceStatus === 0) {
                 // Reset device
@@ -408,12 +518,88 @@ export class VirtioGpuDevice {
         }
     }
 
-    pciRead(addr, size) {
+   pciRead(addr, size) {
+        if (!this._pciReadCount) this._pciReadCount = 0;
+        if (this._pciReadCount < 20) {
+            this._pciReadCount++;
+            logger.log('bridge', 'D', `[virtio-gpu][VERBOSE] pciRead addr=0x${addr.toString(16)} size=${size} ioBase=0x${this.ioBase.toString(16)}`);
+            console.debug(`[VirtIO-GPU][VERBOSE] pciRead addr=0x${addr.toString(16)} size=${size}`);
+            if (this._pciReadCount === 20) logger.log('bridge', 'I', `[virtio-gpu][VERBOSE] pciRead limit reached`);
+        }
+        if (addr === 0x10 && this.bar0Sizing) {
+            logger.log('bridge', 'I', `[virtio-gpu][VERBOSE] pciRead BAR0 sizing probe -> mask 0xFFFFFFC1`);
+            return 0xFFFFFFC1 >>> 0;
+        }
+        if (addr === 0x14 && this.bar1Sizing) {
+            logger.log('bridge', 'I', `[virtio-gpu][VERBOSE] pciRead BAR1 sizing probe -> mask 0xFF000000`);
+            return 0xFF000000 >>> 0;
+        }
         let val = 0;
         for (let i = 0; i < size; i++) val |= (this.pci_space[addr + i] || 0) << (i * 8);
         return val >>> 0;
     }
+    pci_read(addr, size) {
+        logger.log('bridge', 'D', `[virtio-gpu][VERBOSE] pci_read alias addr=0x${addr.toString(16)} size=${size}`);
+        return this.pciRead(addr, size);
+    }
+    pci_write(addr, val, size) {
+        logger.log('bridge', 'D', `[virtio-gpu][VERBOSE] pci_write alias addr=0x${addr.toString(16)} val=0x${val.toString(16)} size=${size}`);
+        return this.pciWrite(addr, val, size);
+    }
     pciWrite(addr, val, size) {
+        if (!this._pciWriteCount) this._pciWriteCount = 0;
+        if (this._pciWriteCount < 30) {
+            this._pciWriteCount++;
+            logger.log('bridge','D',`[virtio-gpu][VERBOSE] pciWrite addr=0x${addr.toString(16)} val=0x${val.toString(16)} size=${size} before ioBase=0x${this.ioBase.toString(16)}`);
+            console.debug(`[VirtIO-GPU][VERBOSE] pciWrite addr=0x${addr.toString(16)} val=0x${val.toString(16)} size=${size}`);
+            if (this._pciWriteCount === 30) logger.log('bridge', 'I', `[virtio-gpu][VERBOSE] pciWrite limit reached`);
+        }
+        // BAR0 (0x10) I/O relocation handling - handle any size write to BAR region
+        if (addr >= 0x10 && addr <= 0x13) {
+            if (val === 0xFFFFFFFF) {
+                this.bar0Sizing = true;
+                this.pci_space[16] = 0xC1; this.pci_space[17] = 0xFF; this.pci_space[18] = 0xFF; this.pci_space[19] = 0xFF;
+                logger.log('bridge', 'I', `[virtio-gpu] BAR0 sizing probe 0xFFFFFFFF -> mask 0xFFFFFFC1`);
+                return;
+            }
+            if (this.bar0Sizing) { this.bar0Sizing = false; }
+            // Reconstruct full 32-bit BAR value from pci_space after partial write will be done below - for now use val as if size 4
+            const isIO = (val & 0x01) !== 0;
+            let newBase = isIO ? (val & 0xFFFFFFC0) : (val & 0xFFFFFFF0);
+            if (newBase !== 0 && newBase !== this.ioBase) {
+                const oldBase = this.ioBase;
+                this.ioBase = newBase;
+                logger.log('bridge', 'I', `[virtio-gpu] BAR0 relocated ioBase 0x${oldBase.toString(16)} -> 0x${newBase.toString(16)} val=0x${val.toString(16)}`);
+                console.info(`[VirtIO-GPU] BAR0 relocated ioBase 0x${oldBase.toString(16)} -> 0x${newBase.toString(16)}`);
+                // Re-register I/O handlers at new base if v86 io available
+                try {
+                    const v86 = this.v86;
+                    const cpu = v86?.cpu || v86?.v86?.cpu;
+                    const io = v86?.io || v86?.v86?.io || this._io;
+                    if (io && typeof io.register_read === 'function') {
+                        // Store for future
+                        this._io = io;
+                        for (let port = this.ioBase; port < this.ioBase + 64; port++) {
+                            const offset = port - this.ioBase;
+                            io.register_read(port, this, () => this.ioRead(offset,1), () => this.ioRead(offset,2), () => this.ioRead(offset,4));
+                            io.register_write(port, this, (v)=> this.ioWrite(offset,v,1), (v)=> this.ioWrite(offset,v,2), (v)=> this.ioWrite(offset,v,4));
+                        }
+                        logger.log('bridge', 'I', `Virtio-GPU I/O handlers re-registered at 0x${this.ioBase.toString(16)}`);
+                    }
+                } catch(e){ logger.log('bridge','W', `BAR0 reregister failed: ${e.message}`); }
+            }
+            for (let i=0;i<size;i++) this.pci_space[addr+i] = (val >>> (i*8)) & 0xFF;
+            return;
+        }
+        if (addr === 0x14 && size === 4) {
+            if (val === 0xFFFFFFFF) {
+                this.bar1Sizing = true;
+                this.pci_space[20]=0x00; this.pci_space[21]=0x00; this.pci_space[22]=0x00; this.pci_space[23]=0xFF;
+                logger.log('bridge','I',`[virtio-gpu] BAR1 sizing probe -> mask 0xFF000000`);
+                return;
+            }
+            if (this.bar1Sizing) this.bar1Sizing=false;
+        }
         for (let i = 0; i < size; i++) this.pci_space[addr + i] = (val >>> (i * 8)) & 0xFF;
     }
 
@@ -498,6 +684,7 @@ export class VirtioGpuDevice {
             this.guestActive = true;
             this.guestHasPresented = true;
             this.hostInjectionBlocked = true;
+            console.info(`[VirtIO-GPU] GUEST FIRST FRAME: processed ${processedCount} descriptors queue=${queueIdx} lastAvail=${q.lastAvailIdx} lastUsed=${q.lastUsedIdx} wasGuestActive=${wasGuestActive} -> GUEST_ACTIVE TRUE (host injection now BLOCKED)`);
             logger.log('bridge', 'I', `[virtio-gpu-device] Processed ${processedCount} descriptors on queue ${queueIdx} (lastAvail=${q.lastAvailIdx}, lastUsed=${q.lastUsedIdx})`);
             if (!wasGuestActive) {
                 this.firstGuestFrameAt = (typeof performance !== 'undefined' ? performance.now() : Date.now());
@@ -754,11 +941,14 @@ export class VirtioGpuDevice {
     }
 
     allowHostInjection() {
-        if (!this.guestActive && !this.guestHasPresented) this.hostInjectionBlocked = false;
+        if (!this.guestHasPresented) this.hostInjectionBlocked = false;
     }
 
     isHostInjectionAllowed() {
-        return !this.hostInjectionBlocked && !this.guestActive && !this.guestHasPresented;
+        const allowed = !this.hostInjectionBlocked && !this.guestHasPresented;
+        // verbose trace for gate debugging (throttled elsewhere, here per-call for visibility)
+        // console.debug(`[gate] isHostInjectionAllowed -> blocked=${this.hostInjectionBlocked} presented=${this.guestHasPresented} => allowed=${allowed}`);
+        return allowed;
     }
 
     /**
@@ -768,4 +958,3 @@ export class VirtioGpuDevice {
         // Handle guest cursor position and shape updates
     }
 }
-

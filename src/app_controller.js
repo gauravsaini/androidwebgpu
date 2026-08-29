@@ -335,6 +335,7 @@ export class AppController {
      * Launch an Activity with real ActivityManager and WindowManager Binder calls.
      */
     async launchActivity(pkg, activityName = '') {
+        console.info(`[AppController] launchActivity pkg=${pkg} activity=${activityName || pkg+'.MainActivity'} -> will auto-activate webgpu viewport (gate check in main_android.js)`);
         this.onLogcat('ActivityTaskManager', `START u0 {act=android.intent.action.MAIN cat=[android.intent.category.LAUNCHER] pkg=${pkg}}`, 'I');
         const meta = resolveAppMetadata(pkg);
         const bridge = this.bootstrap ? this.bootstrap.getBridge() : null;
@@ -448,9 +449,15 @@ export class AppController {
 
         // 4. Track state in AndroidRuntime and present on real WebGPU canvas
         if (this.runtime) {
+            console.info(`[AppController] Invoking runtime.startActivity for ${pkg} -> will rasterize & blit to canvas (verbose in android_runtime.js)`);
             this.runtime.startActivity(pkg, activityName || `${pkg}.MainActivity`);
+            console.info(`[AppController] runtime.startActivity done, now auto-activate webgpu viewport`);
+        } else {
+            console.warn(`[AppController] No runtime attached -> cannot startActivity for ${pkg}`);
         }
+        console.info(`[AppController] launchActivity final viewport switch -> webgpu (host fallback until guest presents)`);
         this.activateScreen('webgpu');
+        console.info(`[AppController] launchActivity complete pkg=${pkg} activeScreen=${this.activeScreen}`);
     }
 
     /**

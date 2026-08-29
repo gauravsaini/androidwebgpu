@@ -34,24 +34,71 @@ fi
 
 echo "[init] Loading DRM and VirtIO kernel modules from $MODDIR..." > /dev/ttyS0 2>/dev/null || true
 
-for mpath in \
-    "$MODDIR/kernel/drivers/virtio/virtio.ko" \
-    "$MODDIR/kernel/drivers/virtio/virtio_ring.ko" \
-    "$MODDIR/kernel/drivers/virtio/virtio_pci_modern_dev.ko" \
-    "$MODDIR/kernel/drivers/virtio/virtio_pci.ko" \
-    "$MODDIR/kernel/drivers/i2c/i2c-core.ko" \
-    "$MODDIR/kernel/drivers/gpu/drm/drm_panel_orientation_quirks.ko" \
-    "$MODDIR/kernel/drivers/gpu/drm/drm.ko" \
-    "$MODDIR/kernel/drivers/gpu/drm/drm_kms_helper.ko" \
-    "$MODDIR/kernel/drivers/gpu/drm/drm_shmem_helper.ko" \
-    "$MODDIR/kernel/drivers/virtio/virtio_dma_buf.ko" \
-    "$MODDIR/kernel/drivers/gpu/drm/virtio/virtio-gpu.ko"; do
-    if [ -f "$mpath" ]; then
-        insmod "$mpath" 2>/dev/null && echo "[init] Loaded $(basename "$mpath")" > /dev/ttyS0 2>/dev/null || true
-    fi
-done
-depmod -a 2>/dev/null || true
-modprobe virtio-gpu 2>/dev/null || modprobe virtio_gpu 2>/dev/null || true
+echo "[init] Probing VirtIO-GPU PCI device before module load..." > /dev/ttyS0 2>/dev/null || true
+# Show PCI devices (should include 1AF4:1050 virtio-gpu at slot 0x06 if host registered correctly)
+cat /proc/bus/pci/devices 2>/dev/null | head -n 20 > /dev/ttyS0 2>&1 || true
+lspci 2>/dev/null | head -n 20 > /dev/ttyS0 2>&1 || true
+# Also check via /sys/bus/pci/devices if available
+ls -la /sys/bus/pci/devices/ 2>/dev/ttyS0 2>&1 || true
+
+# Direct insmod with explicit paths - VERBOSE FIX 2026-08-29 v2 (explicit absolute, no $MODBASE variable - sh.c has no expansion) - topo order
+# modules.dep: drm.ko -> panel_quirks + i2c-core; virtio_pci -> modern+legacy+ring+virtio; virtio-gpu -> dma_buf+shmem+kms+drm
+echo "[init][VERBOSE] Loading Virtio-GPU stack via explicit insmod 12 steps topo sorted ..." > /dev/ttyS0 2>/dev/null || true
+echo "[init][VERBOSE][1/12] insmod i2c-core.ko ..." > /dev/ttyS0 2>/dev/null || true
+insmod /lib/modules/6.6.142-0-lts/kernel/drivers/i2c/i2c-core.ko 2>/dev/ttyS0 && echo "[init][VERBOSE][1/12] i2c-core.ko : OK" > /dev/ttyS0 2>/dev/null || echo "[init][VERBOSE][1/12] i2c-core.ko : FAIL required for drm.ko" > /dev/ttyS0 2>/dev/null || true
+echo "[init][VERBOSE][2/12] insmod drm_panel_orientation_quirks.ko ..." > /dev/ttyS0 2>/dev/null || true
+insmod /lib/modules/6.6.142-0-lts/kernel/drivers/gpu/drm/drm_panel_orientation_quirks.ko 2>/dev/ttyS0 && echo "[init][VERBOSE][2/12] drm_panel_orientation_quirks.ko : OK" > /dev/ttyS0 2>/dev/null || echo "[init][VERBOSE][2/12] drm_panel_orientation_quirks.ko : FAIL" > /dev/ttyS0 2>/dev/null || true
+echo "[init][VERBOSE][3/12] insmod virtio.ko ..." > /dev/ttyS0 2>/dev/null || true
+insmod /lib/modules/6.6.142-0-lts/kernel/drivers/virtio/virtio.ko 2>/dev/ttyS0 && echo "[init][VERBOSE][3/12] virtio.ko : OK" > /dev/ttyS0 2>/dev/null || echo "[init][VERBOSE][3/12] virtio.ko : FAIL" > /dev/ttyS0 2>/dev/null || true
+echo "[init][VERBOSE][4/12] insmod virtio_ring.ko ..." > /dev/ttyS0 2>/dev/null || true
+insmod /lib/modules/6.6.142-0-lts/kernel/drivers/virtio/virtio_ring.ko 2>/dev/ttyS0 && echo "[init][VERBOSE][4/12] virtio_ring.ko : OK" > /dev/ttyS0 2>/dev/null || echo "[init][VERBOSE][4/12] virtio_ring.ko : FAIL" > /dev/ttyS0 2>/dev/null || true
+echo "[init][VERBOSE][5/12] insmod virtio_pci_modern_dev.ko must be before virtio_pci ..." > /dev/ttyS0 2>/dev/null || true
+insmod /lib/modules/6.6.142-0-lts/kernel/drivers/virtio/virtio_pci_modern_dev.ko 2>/dev/ttyS0 && echo "[init][VERBOSE][5/12] virtio_pci_modern_dev.ko : OK" > /dev/ttyS0 2>/dev/null || echo "[init][VERBOSE][5/12] virtio_pci_modern_dev.ko : FAIL" > /dev/ttyS0 2>/dev/null || true
+echo "[init][VERBOSE][6/12] insmod virtio_pci_legacy_dev.ko ..." > /dev/ttyS0 2>/dev/null || true
+insmod /lib/modules/6.6.142-0-lts/kernel/drivers/virtio/virtio_pci_legacy_dev.ko 2>/dev/ttyS0 && echo "[init][VERBOSE][6/12] virtio_pci_legacy_dev.ko : OK optional" > /dev/ttyS0 2>/dev/null || echo "[init][VERBOSE][6/12] virtio_pci_legacy_dev.ko : optional miss" > /dev/ttyS0 2>/dev/null || true
+echo "[init][VERBOSE][7/12] insmod virtio_pci.ko depends on 3 4 5 6 ..." > /dev/ttyS0 2>/dev/null || true
+insmod /lib/modules/6.6.142-0-lts/kernel/drivers/virtio/virtio_pci.ko 2>/dev/ttyS0 && echo "[init][VERBOSE][7/12] virtio_pci.ko : OK" > /dev/ttyS0 2>/dev/null || echo "[init][VERBOSE][7/12] virtio_pci.ko : FAIL check dmesg unknown symbol" > /dev/ttyS0 2>/dev/null || true
+echo "[init][VERBOSE][8/12] insmod virtio_dma_buf.ko ..." > /dev/ttyS0 2>/dev/null || true
+insmod /lib/modules/6.6.142-0-lts/kernel/drivers/virtio/virtio_dma_buf.ko 2>/dev/ttyS0 && echo "[init][VERBOSE][8/12] virtio_dma_buf.ko : OK" > /dev/ttyS0 2>/dev/null || echo "[init][VERBOSE][8/12] virtio_dma_buf.ko : optional" > /dev/ttyS0 2>/dev/null || true
+echo "[init][VERBOSE][9/12] insmod drm.ko depends on 1 2 ..." > /dev/ttyS0 2>/dev/null || true
+insmod /lib/modules/6.6.142-0-lts/kernel/drivers/gpu/drm/drm.ko 2>/dev/ttyS0 && echo "[init][VERBOSE][9/12] drm.ko : OK" > /dev/ttyS0 2>/dev/null || echo "[init][VERBOSE][9/12] drm.ko : FAIL missing i2c panel_quirks" > /dev/ttyS0 2>/dev/null || true
+echo "[init][VERBOSE][10/12] insmod drm_shmem_helper.ko depends on 9 ..." > /dev/ttyS0 2>/dev/null || true
+insmod /lib/modules/6.6.142-0-lts/kernel/drivers/gpu/drm/drm_shmem_helper.ko 2>/dev/ttyS0 && echo "[init][VERBOSE][10/12] drm_shmem_helper.ko : OK" > /dev/ttyS0 2>/dev/null || echo "[init][VERBOSE][10/12] drm_shmem_helper.ko : FAIL" > /dev/ttyS0 2>/dev/null || true
+echo "[init][VERBOSE][11/12] insmod drm_kms_helper.ko depends on 9 ..." > /dev/ttyS0 2>/dev/null || true
+insmod /lib/modules/6.6.142-0-lts/kernel/drivers/gpu/drm/drm_kms_helper.ko 2>/dev/ttyS0 && echo "[init][VERBOSE][11/12] drm_kms_helper.ko : OK" > /dev/ttyS0 2>/dev/null || echo "[init][VERBOSE][11/12] drm_kms_helper.ko : FAIL" > /dev/ttyS0 2>/dev/null || true
+echo "[init][VERBOSE][12/12] insmod virtio-gpu.ko depends on 3 4 8 9 10 11 ..." > /dev/ttyS0 2>/dev/null || true
+insmod /lib/modules/6.6.142-0-lts/kernel/drivers/gpu/drm/virtio/virtio-gpu.ko 2>/dev/ttyS0 && echo "[init][VERBOSE][12/12] virtio-gpu.ko : OK GUEST DRM READY" > /dev/ttyS0 2>/dev/null || echo "[init][VERBOSE][12/12] virtio-gpu.ko : FAIL" > /dev/ttyS0 2>/dev/null || true
+echo "[init][VERBOSE] Virtio stack insmod sequence done checking lsmod and dmesg" > /dev/ttyS0 2>/dev/null || true
+lsmod 2>/dev/ttyS0 | head -n 40 > /dev/ttyS0 2>&1 || true
+echo "[init][VERBOSE] lsmod filtered virtio drm i2c" > /dev/ttyS0 2>/dev/null || true
+lsmod 2>/dev/ttyS0 | grep -E "virtio|drm|i2c" > /dev/ttyS0 2>&1 || true
+dmesg 2>/dev/ttyS0 | tail -n 50 > /dev/ttyS0 2>&1 || true
+echo "[init][VERBOSE] dmesg filtered virtio drm" > /dev/ttyS0 2>/dev/null || true
+dmesg 2>/dev/ttyS0 | grep -i -E "virtio|drm" 2>&1 | tail -n 30 > /dev/ttyS0 2>&1 || true
+sleep 0.3 2>/dev/null || true
+echo "[init][VERBOSE] DRM probe after module load" > /dev/ttyS0 2>/dev/null || true
+echo "[init][VERBOSE] Trigger PCI rescan for hot-plug virtio-gpu (host registers at 108ms, kernel scanned earlier) ..." > /dev/ttyS0 2>/dev/null || true
+echo 1 > /sys/bus/pci/rescan 2>/dev/ttyS0 || echo 1 > /sys/bus/pci/rescan 2>&1 > /dev/ttyS0 || true
+sleep 0.2 2>/dev/null || true
+dmesg 2>/dev/ttyS0 | tail -n 20 > /dev/ttyS0 2>&1 || true
+echo "[init][VERBOSE] Post-rescan PCI and DRM check ..." > /dev/ttyS0 2>/dev/null || true
+cat /proc/bus/pci/devices 2>/dev/ttyS0 2>&1 | head -n 20 || true
+ls -la /sys/bus/pci/devices/ 2>/dev/ttyS0 2>&1 || true
+echo "[init][VERBOSE] DIAG after rescan: /proc/ioports (should show 0xc000 vs 0xc140)" > /dev/ttyS0 2>/dev/null || true
+cat /proc/ioports 2>/dev/ttyS0 2>&1 | head -n 30 || true
+echo "[init][VERBOSE] DIAG resource for 00:06.0 (BAR0 should be c001 or c141)" > /dev/ttyS0 2>/dev/null || true
+cat /sys/bus/pci/devices/0000:00:06.0/resource 2>/dev/ttyS0 2>&1 || true
+ls -la /sys/bus/pci/devices/0000:00:06.0/ 2>/dev/ttyS0 2>&1 | head -n 30 || true
+ls -la /sys/class/drm/ 2>/dev/ttyS0 2>&1 || true
+ls -la /dev/dri/ 2>/dev/ttyS0 2>&1 || true
+echo "[init][VERBOSE] Post-rescan dmesg tail virtio drm" > /dev/ttyS0 2>/dev/null || true
+dmesg 2>/dev/ttyS0 | grep -i -E "virtio|drm" | tail -n 20 2>&1 > /dev/ttyS0 2>&1 || true
+echo "[init][VERBOSE] Check virtio bus devices" > /dev/ttyS0 2>/dev/null || true
+ls -la /sys/bus/virtio/devices/ 2>/dev/ttyS0 2>&1 || true
+ls -la /sys/bus/virtio/drivers/ 2>/dev/ttyS0 2>&1 || true
+ls -la /sys/bus/pci/drivers/virtio-pci/ 2>/dev/ttyS0 2>&1 || true
+echo "[init][VERBOSE] ls /sys/bus/pci/devices/0000:00:06.0/driver" > /dev/ttyS0 2>/dev/null || true
+ls -la /sys/bus/pci/devices/0000:00:06.0/driver 2>/dev/ttyS0 2>&1 || readlink /sys/bus/pci/devices/0000:00:06.0/driver 2>/dev/ttyS0 2>&1 || true
 
 # 2c. Stage F-Droid APK into /data/app/org.fdroid.fdroid/base.apk
 mkdir -p /data/app/org.fdroid.fdroid 2>/dev/null || true
@@ -82,18 +129,33 @@ else
     echo "[init] servicemanager binary standby" > /dev/ttyS0 2>/dev/null || true
 fi
 
-# 3a. Check DRM device presence from kernel driver
+# 3a. Check DRM device presence from kernel driver (verbose for guestActive debugging)
 mkdir -p /dev/dri 2>/dev/null || true
 chmod 0666 /dev/dri/* /dev/fb* /dev/graphics/* 2>/dev/null || true
+echo "[init] DRM device probe: /sys/class/drm exists=$([ -d /sys/class/drm ] && echo yes || echo no) /dev/dri exists=$([ -d /dev/dri ] && echo yes || echo no)" > /dev/ttyS0 2>/dev/null || true
 if [ -d /sys/class/drm ]; then
     echo "[init] /sys/class/drm contents:" > /dev/ttyS0 2>/dev/null || true
     ls -la /sys/class/drm/ > /dev/ttyS0 2>&1 || true
+    if [ -z "$(ls -A /sys/class/drm 2>/dev/null)" ]; then
+        echo "[init] WARNING: /sys/class/drm EMPTY -> virtio-gpu driver not bound (PCI slot collision? check host pciSlot=0x06 vs NE2000 0x05)" > /dev/ttyS0 2>/dev/null || true
+        echo "[init] PCI devices:" > /dev/ttyS0 2>/dev/null || true
+        cat /proc/bus/pci/devices 2>/dev/ttyS0 2>&1 | head -n 20 || true
+    else
+        echo "[init] DRM driver bound, devices present (good for surfaceflinger)" > /dev/ttyS0 2>/dev/null || true
+    fi
+else
+    echo "[init] WARNING: /sys/class/drm missing entirely -> DRM subsystem not loaded" > /dev/ttyS0 2>/dev/null || true
 fi
 if [ -d /dev/dri ]; then
     echo "[init] /dev/dri contents:" > /dev/ttyS0 2>/dev/null || true
     ls -la /dev/dri/ > /dev/ttyS0 2>&1 || true
+    if [ ! -e /dev/dri/card0 ]; then
+        echo "[init] WARNING: /dev/dri/card0 missing -> surfaceflinger will get ENODEV (errno 19)" > /dev/ttyS0 2>/dev/null || true
+    fi
 fi
-sleep 0.1 2>/dev/null || true
+sleep 0.2 2>/dev/null || true
+echo "[init] Starting surfaceflinger in 0.3s (wait for DRM to settle)..." > /dev/ttyS0 2>/dev/null || true
+sleep 0.3 2>/dev/null || true
 
 # 3b. Start SurfaceFlinger (Linked against egl_webgpu.so, gralloc.virtgpu.so, hwcomposer.virtgpu.so)
 if [ -x /system/bin/surfaceflinger ]; then

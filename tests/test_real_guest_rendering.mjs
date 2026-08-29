@@ -69,7 +69,7 @@ describe('Real Guest Pipeline Canvas Rendering (Phase 1-3 E2E)', () => {
         dev.registerWithV86(fakeV86);
 
         assert.ok(registeredDevice !== null, 'VirtioGpuDevice registered with v86');
-        assert.strictEqual(registeredSlot, 0x05 << 3, 'PCI BDF matches slot 0x05 (0x28)');
+        assert.strictEqual(registeredSlot, 0x06 << 3, 'PCI BDF matches slot 0x06 (0x30) avoids NE2000 at 0x05');
     });
 
     it('Leaf 2.3: BGRX to RGBA swizzle in renderScanoutToCanvas', () => {
@@ -120,15 +120,21 @@ describe('Real Guest Pipeline Canvas Rendering (Phase 1-3 E2E)', () => {
 
         const fakeGpuDevice = {
             guestActive: true,
+            guestHasPresented: true,
+            hostInjectionBlocked: true,
+            isHostInjectionAllowed: () => false,
             processControlQueue: () => { controlQueuePackets++; }
         };
 
         const runtime = new AndroidRuntime();
         runtime.setGpuDevice(fakeGpuDevice);
 
-        runtime.renderActivityUi({ packageName: 'org.fdroid.fdroid' });
+        // Also set canvas to avoid early return due to synthetic fallback? Need real package with zip
+        // This test checks gating: when guestHasPresented true, no VirtIO injection should happen
+        // Verbose log should show [VirtIO] SKIP
+        runtime.renderActivityUi({ packageName: 'org.fdroid.fdroid', zip: null });
 
-        assert.strictEqual(controlQueuePackets, 0, 'Zero synthetic control queue packets injected while guestActive');
+        assert.strictEqual(controlQueuePackets, 0, 'Zero synthetic control queue packets injected while guestHasPresented (pure guest mode)');
     });
 
     it('Leaf 3.2: Full guest pipeline to scanout pixel verification with Shannon entropy', async () => {

@@ -73,7 +73,7 @@ describe('VirtioGpuDevice & Virtqueue Phase 2 Integration Tests', () => {
 
         const dev = new VirtioGpuDevice(fakeV86, null, { width: 1280, height: 720 });
         assert.ok(registeredPciDevice !== null);
-        assert.strictEqual(registeredPciDevice.slotMask, 0x05 << 3);
+        assert.strictEqual(registeredPciDevice.slotMask, 0x06 << 3); // slot 0x06 avoids NE2000 collision at 0x05 (verbose logs: pciSlot=0x06 io=0xC140)
         assert.strictEqual(registeredPorts.size, 128); // 64 read + 64 write handlers
     });
 

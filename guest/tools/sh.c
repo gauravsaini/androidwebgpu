@@ -10,6 +10,8 @@
 #include <sys/types.h>
 #include <sys/sysmacros.h>
 #include <sys/wait.h>
+#include <sys/syscall.h>
+#include <dirent.h>
 
 static int g_tty_fd = -1;
 
@@ -49,7 +51,7 @@ static int run_line(char *line) {
         }
     }
 
-    // echo command
+    // echo command (with $(basename ...) expansion for init module logs)
     char *echo_pos = strstr(line, "echo ");
     if (echo_pos) {
         const char *msg = echo_pos + 5;
@@ -63,6 +65,31 @@ static int run_line(char *line) {
         if (end_pipe) *end_pipe = '\0';
         size_t c_len = strlen(clean_msg);
         while (c_len > 0 && (clean_msg[c_len - 1] == '"' || clean_msg[c_len - 1] == '\'' || clean_msg[c_len - 1] == ' ')) clean_msg[--c_len] = '\0';
+        char *bpat = strstr(clean_msg, "$(basename");
+        if (bpat) {
+            char *ps = strchr(bpat, '"');
+            if (!ps) ps = strchr(bpat, '\'');
+            if (ps) {
+                ps++;
+                char *pe = strchr(ps, '"');
+                if (!pe) pe = strchr(ps, '\'');
+                if (!pe) pe = strchr(ps, ')');
+                if (pe) {
+                    *pe='\0';
+                    char *sl = strrchr(ps, '/');
+                    const char *base = sl ? sl+1 : ps;
+                    char exp[512];
+                    size_t pre = bpat - clean_msg;
+                    strncpy(exp, clean_msg, pre);
+                    exp[pre]='\0';
+                    strncat(exp, base, sizeof(exp)-strlen(exp)-1);
+                    char *after = strchr(pe+1, ')');
+                    if (!after) after = pe+1; else after++;
+                    strncat(exp, after, sizeof(exp)-strlen(exp)-1);
+                    strncpy(clean_msg, exp, sizeof(clean_msg)-1);
+                }
+            }
+        }
         if (c_len > 0) log_line(clean_msg);
     }
 
@@ -119,12 +146,168 @@ static int run_line(char *line) {
         symlink("/dev/binderfs/vndbinder", "/dev/vndbinder");
     }
 
-    // device nodes
+    // device nodes - conditional fallback with logging (don't hide ENODEV)
     if (strstr(line, "mknod") || strstr(line, "/dev/dri") || strstr(line, "/dev/fb0")) {
-        mknod("/dev/dri/card0", S_IFCHR | 0666, makedev(226, 0));
-        mknod("/dev/dri/renderD128", S_IFCHR | 0666, makedev(226, 128));
-        mknod("/dev/fb0", S_IFCHR | 0666, makedev(29, 0));
+        struct stat st;
+        if (stat("/dev/dri/card0", &st) != 0) {
+            log_line("[sh] WARNING: /dev/dri/card0 missing after driver load - creating dummy fallback node (ENODEV if driver not bound)");
+            mknod("/dev/dri/card0", S_IFCHR | 0666, makedev(226, 0));
+        } else {
+            log_line("[sh] /dev/dri/card0 exists (driver/devtmpfs) - skip dummy mknod");
+        }
+        if (stat("/dev/dri/renderD128", &st) != 0) mknod("/dev/dri/renderD128", S_IFCHR | 0666, makedev(226, 128));
+        if (stat("/dev/fb0", &st) != 0) mknod("/dev/fb0", S_IFCHR | 0666, makedev(29, 0));
         mknod("/dev/ttyS0", S_IFCHR | 0666, makedev(4, 64));
+    }
+
+    // insmod/modprobe via direct init_module syscall (no external binary in initrd) + verbose logs
+    // [VERBOSE FIX 2026-08-29] skip echo lines containing "insmod" substring (prevents false "attempting: ..." noise)
+    // and handle multiple insmod tokens per line (e.g. "insmod A || insmod B")
+    if ((strstr(line, "insmod ") || strstr(line, "modprobe "))) {
+        // Skip if line is an echo statement that merely mentions insmod (e.g. echo "... insmod ...")
+        char *echo_chk = strstr(line, "echo ");
+        char *ins_chk = strstr(line, "insmod ");
+        if (echo_chk && ins_chk && echo_chk < ins_chk) {
+            // echo line mentioning insmod -> treat as log_line already handled, not real insmod
+            char lb_skip[512];
+            snprintf(lb_skip,sizeof(lb_skip),"[sh][VERBOSE] skip insmod parse on echo line: %.120s", line);
+            log_line(lb_skip);
+        } else {
+            // Loop over all insmod/modprobe occurrences in line (handles "insmod A || insmod B")
+            char *search = line;
+            int mod_idx=0;
+            while (search) {
+                char *found_ins = strstr(search, "insmod ");
+                char *found_mod = strstr(search, "modprobe ");
+                char *ms=NULL;
+                char keyword[16]={0};
+                if (found_ins && (!found_mod || found_ins < found_mod)) { ms=found_ins+7; strcpy(keyword,"insmod"); search=found_ins+7; }
+                else if (found_mod) { ms=found_mod+9; strcpy(keyword,"modprobe"); search=found_mod+9; }
+                else break;
+                // skip spaces/quotes
+                while (*ms==' '||*ms=='"'||*ms=='\'') ms++;
+                char mod_path[256]={0};
+                int mi=0;
+                while (ms[mi] && ms[mi]!=' '&&ms[mi]!='"'&&ms[mi]!='\''&&ms[mi]!=';'&&ms[mi]!='&'&&ms[mi]!='>'&&ms[mi]!='|'&&mi<255){mod_path[mi]=ms[mi];mi++;}
+                mod_path[mi]='\0';
+                int ml=strlen(mod_path);
+                while(ml>0&&(mod_path[ml-1]=='"'||mod_path[ml-1]=='\'')) mod_path[--ml]='\0';
+                if (ml==0) continue;
+                // Skip placeholder $MODDIR or "..." or variable remnants
+                if (mod_path[0]=='$' || strstr(mod_path, "...") || strcmp(mod_path,"...")==0) {
+                    char lb_var[512];
+                    snprintf(lb_var,sizeof(lb_var),"[sh][VERBOSE] skip variable/placeholder path: %s (sh.c no $ expansion)",mod_path);
+                    log_line(lb_var);
+                    continue;
+                }
+                mod_idx++;
+                char lb[512];
+                snprintf(lb,sizeof(lb),"[sh][VERBOSE][%d] %s attempting: %s", mod_idx, keyword, mod_path);
+                log_line(lb);
+                int fd=open(mod_path,O_RDONLY);
+                if (fd>=0) {
+                    struct stat st;
+                    if (fstat(fd,&st)==0) {
+                        void *buf=malloc(st.st_size);
+                        if (buf) {
+                            ssize_t r=read(fd,buf,st.st_size);
+                            close(fd);
+                            if (r==st.st_size) {
+                                long ret=syscall(128, buf, r, "");
+                                if (ret==0) { snprintf(lb,sizeof(lb),"[sh][VERBOSE][%d] %s %s -> OK (%ld bytes) [OK]",mod_idx, keyword, mod_path,r); log_line(lb); }
+                                else { snprintf(lb,sizeof(lb),"[sh][VERBOSE][%d] init_module %s -> ret=%ld errno=%d (%s) [FAIL]",mod_idx, mod_path,ret,errno,strerror(errno)); log_line(lb); }
+                            } else { snprintf(lb,sizeof(lb),"[sh][VERBOSE][%d] read %s failed %ld",mod_idx, mod_path,r); log_line(lb); close(fd); }
+                            free(buf);
+                        } else { close(fd); snprintf(lb,sizeof(lb),"[sh][VERBOSE][%d] malloc fail for %s",mod_idx, mod_path); log_line(lb); }
+                    } else { snprintf(lb,sizeof(lb),"[sh][VERBOSE][%d] fstat %s fail %d",mod_idx, mod_path,errno); log_line(lb); close(fd); }
+                } else {
+                    snprintf(lb,sizeof(lb),"[sh][VERBOSE][%d] open %s fail errno=%d (%s) [FAIL]",mod_idx, mod_path,errno,strerror(errno));
+                    log_line(lb);
+                }
+            }
+        }
+    }
+
+    // Diagnostic handlers for pure-guest debugging (ls, cat, dmesg, lsmod, lspci, pci rescan)
+    // These provide host-visible logs via log_line since bare binaries don't exist in initrd
+    if (strstr(line, "cat /proc/bus/pci/devices") || strstr(line, "cat /proc/bus/pci/")) {
+        int fd=open("/proc/bus/pci/devices", O_RDONLY);
+        if (fd>=0) { char buf[4096]; ssize_t r=read(fd,buf,sizeof(buf)-1); if (r>0){buf[r]='\0'; char lb2[8192]; snprintf(lb2,sizeof(lb2),"[sh][DIAG] /proc/bus/pci/devices (%ld bytes):\n%s",r,buf); log_line(lb2);} close(fd);} else { log_line("[sh][DIAG] cat /proc/bus/pci/devices: open fail"); }
+    }
+    if (strstr(line, "ls -la /sys/class/drm") || strstr(line, "ls -A /sys/class/drm")) {
+        // Directly list /sys/class/drm via opendir for reliable diagnostics
+        DIR *d=opendir("/sys/class/drm");
+        if (d){ char lb2[2048]; snprintf(lb2,sizeof(lb2),"[sh][DIAG] /sys/class/drm entries:"); struct dirent *e; while((e=readdir(d))){ if(e->d_name[0]=='.') continue; strncat(lb2," ",sizeof(lb2)-strlen(lb2)-1); strncat(lb2,e->d_name,sizeof(lb2)-strlen(lb2)-1); } closedir(d); log_line(lb2); } else { char lb2[256]; snprintf(lb2,sizeof(lb2),"[sh][DIAG] opendir /sys/class/drm fail errno=%d",errno); log_line(lb2); }
+    }
+    if (strstr(line, "ls -la /dev/dri") ) {
+        DIR *d=opendir("/dev/dri");
+        if (d){ char lb2[2048]; snprintf(lb2,sizeof(lb2),"[sh][DIAG] /dev/dri entries:"); struct dirent *e; while((e=readdir(d))){ if(e->d_name[0]=='.') continue; strncat(lb2," ",sizeof(lb2)-strlen(lb2)-1); strncat(lb2,e->d_name,sizeof(lb2)-strlen(lb2)-1); } closedir(d); log_line(lb2); } else { log_line("[sh][DIAG] opendir /dev/dri fail"); }
+    }
+    if (strstr(line, "ls -la /sys/bus/pci/devices")) {
+        DIR *d=opendir("/sys/bus/pci/devices");
+        if (d){ char lb2[4096]; snprintf(lb2,sizeof(lb2),"[sh][DIAG] /sys/bus/pci/devices:"); struct dirent *e; int c=0; while((e=readdir(d)) && c<20){ if(e->d_name[0]=='.') continue; strncat(lb2," ",sizeof(lb2)-strlen(lb2)-1); strncat(lb2,e->d_name,sizeof(lb2)-strlen(lb2)-1); c++; } closedir(d); log_line(lb2); } else { char lb2[256]; snprintf(lb2,sizeof(lb2),"[sh][DIAG] opendir /sys/bus/pci fail errno=%d",errno); log_line(lb2); }
+    }
+    if (strstr(line, "cat /proc/ioports") || strstr(line, "/proc/ioports")) {
+        int fd=open("/proc/ioports", O_RDONLY);
+        if (fd>=0){ char buf[8192]; ssize_t r=read(fd,buf,sizeof(buf)-1); if(r>0){buf[r]='\0'; log_line("[sh][DIAG] /proc/ioports start"); int off=0; while(off<r){ int chunk=400; if(off+chunk>r) chunk=r-off; char piece[512]; strncpy(piece, buf+off, chunk); piece[chunk]='\0'; for(int i=0;i<chunk;i++) if(piece[i]=='\n') piece[i]='|'; char lb2[600]; snprintf(lb2,sizeof(lb2),"[sh][DIAG] ioports chunk %d: %s", off/400, piece); log_line(lb2); off+=chunk; } log_line("[sh][DIAG] /proc/ioports end");} else {log_line("[sh][DIAG] /proc/ioports empty");} close(fd);} else { char lb2[256]; snprintf(lb2,sizeof(lb2),"[sh][DIAG] /proc/ioports open fail errno=%d",errno); log_line(lb2); }
+    }
+    if (strstr(line, "cat /sys/bus/pci/devices/0000:00:06.0/resource") || strstr(line, "/sys/bus/pci/devices/0000:00:06.0/resource")) {
+        int fd=open("/sys/bus/pci/devices/0000:00:06.0/resource", O_RDONLY);
+        if (fd>=0){ char buf[4096]; ssize_t r=read(fd,buf,sizeof(buf)-1); if(r>0){buf[r]='\0'; log_line("[sh][DIAG] resource start"); int off=0; while(off<r){ int chunk=400; if(off+chunk>r) chunk=r-off; char piece[512]; strncpy(piece, buf+off, chunk); piece[chunk]='\0'; for(int i=0;i<chunk;i++) if(piece[i]=='\n') piece[i]='|'; char lb2[600]; snprintf(lb2,sizeof(lb2),"[sh][DIAG] resource chunk %d: %s", off/400, piece); log_line(lb2); off+=chunk; } log_line("[sh][DIAG] resource end");} else {log_line("[sh][DIAG] resource empty");} close(fd);} else { char lb2[256]; snprintf(lb2,sizeof(lb2),"[sh][DIAG] resource open fail errno=%d",errno); log_line(lb2); }
+    }
+    if (strstr(line, "ls -la /sys/bus/virtio") || strstr(line, "/sys/bus/virtio")) {
+        DIR *d=opendir("/sys/bus/virtio/devices");
+        if (d){ char lb2[2048]; snprintf(lb2,sizeof(lb2),"[sh][DIAG] /sys/bus/virtio/devices entries:"); struct dirent *e; int c=0; while((e=readdir(d))){ if(e->d_name[0]=='.') continue; if(c++>20) break; strncat(lb2," ",sizeof(lb2)-strlen(lb2)-1); strncat(lb2,e->d_name,sizeof(lb2)-strlen(lb2)-1); } closedir(d); if(c==0) strncat(lb2," (empty)",sizeof(lb2)-strlen(lb2)-1); log_line(lb2);} else { char lb2[256]; snprintf(lb2,sizeof(lb2),"[sh][DIAG] opendir /sys/bus/virtio/devices fail errno=%d",errno); log_line(lb2); }
+        DIR *d2=opendir("/sys/bus/virtio/drivers");
+        if (d2){ char lb2[2048]; snprintf(lb2,sizeof(lb2),"[sh][DIAG] /sys/bus/virtio/drivers entries:"); struct dirent *e; int c=0; while((e=readdir(d2))){ if(e->d_name[0]=='.') continue; if(c++>20) break; strncat(lb2," ",sizeof(lb2)-strlen(lb2)-1); strncat(lb2,e->d_name,sizeof(lb2)-strlen(lb2)-1); } closedir(d2); if(c==0) strncat(lb2," (empty)",sizeof(lb2)-strlen(lb2)-1); log_line(lb2); } else { log_line("[sh][DIAG] opendir /sys/bus/virtio/drivers fail"); }
+        DIR *d3=opendir("/sys/bus/pci/drivers/virtio-pci");
+        if (d3){ char lb2[2048]; snprintf(lb2,sizeof(lb2),"[sh][DIAG] /sys/bus/pci/drivers/virtio-pci entries:"); struct dirent *e; int c=0; while((e=readdir(d3))){ if(e->d_name[0]=='.') continue; if(c++>20) break; strncat(lb2," ",sizeof(lb2)-strlen(lb2)-1); strncat(lb2,e->d_name,sizeof(lb2)-strlen(lb2)-1); } closedir(d3); if(c==0) strncat(lb2," (empty) -> driver not bound!",sizeof(lb2)-strlen(lb2)-1); log_line(lb2);} else { char lb2[256]; snprintf(lb2,sizeof(lb2),"[sh][DIAG] opendir /sys/bus/pci/drivers/virtio-pci fail errno=%d",errno); log_line(lb2); }
+        DIR *d4=opendir("/sys/bus/pci/drivers/virtio_gpu");
+        if (d4){ char lb2[2048]; snprintf(lb2,sizeof(lb2),"[sh][DIAG] /sys/bus/pci/drivers/virtio_gpu entries:"); struct dirent *e; int c=0; while((e=readdir(d4))){ if(e->d_name[0]=='.') continue; if(c++>20) break; strncat(lb2," ",sizeof(lb2)-strlen(lb2)-1); strncat(lb2,e->d_name,sizeof(lb2)-strlen(lb2)-1); } closedir(d4); if(c==0) strncat(lb2," (empty)",sizeof(lb2)-strlen(lb2)-1); log_line(lb2);} else { /* not an error, virtio_gpu may be under virtio bus */ }
+    }
+    if (strstr(line, "ls -la /sys/bus/pci/devices/0000:00:06.0/driver") || strstr(line, "/sys/bus/pci/devices/0000:00:06.0/driver")) {
+        char link[512]; ssize_t lr=readlink("/sys/bus/pci/devices/0000:00:06.0/driver", link, sizeof(link)-1);
+        if (lr>0){ link[lr]='\0'; char lb2[1024]; snprintf(lb2,sizeof(lb2),"[sh][DIAG] /sys/bus/pci/devices/0000:00:06.0/driver -> %s",link); log_line(lb2); } else { char lb2[256]; snprintf(lb2,sizeof(lb2),"[sh][DIAG] driver symlink FAIL errno=%d -> device not bound (ENODEV root cause)",errno); log_line(lb2); }
+        DIR *d=opendir("/sys/bus/pci/devices/0000:00:06.0"); if(d){ char lb2[4096]; snprintf(lb2,sizeof(lb2),"[sh][DIAG] 00:06.0 entries:"); struct dirent *e; int c=0; while((e=readdir(d)) && c<30){ if(e->d_name[0]=='.') continue; strncat(lb2," ",sizeof(lb2)-strlen(lb2)-1); strncat(lb2,e->d_name,sizeof(lb2)-strlen(lb2)-1); c++; } closedir(d); log_line(lb2); } else { log_line("[sh][DIAG] opendir 00:06.0 fail"); }
+        int fd2=open("/sys/bus/pci/devices/0000:00:06.0/enable", O_RDONLY); if(fd2>=0){ char b2[32]; ssize_t r2=read(fd2,b2,sizeof(b2)-1); if(r2>0){b2[r2]='\0'; char lb2[256]; snprintf(lb2,sizeof(lb2),"[sh][DIAG] 00:06.0 enable=%s",b2); log_line(lb2);} close(fd2);} 
+        int fd3=open("/sys/bus/pci/devices/0000:00:06.0/resource", O_RDONLY); if(fd3>=0){ char b3[512]; ssize_t r3=read(fd3,b3,sizeof(b3)-1); if(r3>0){b3[r3]='\0'; char lb2[1024]; snprintf(lb2,sizeof(lb2),"[sh][DIAG] 00:06.0 resource inline: %.400s", b3); log_line(lb2);} close(fd3);} 
+    }
+    if (strstr(line, "lspci") ) {
+        // Emulate lspci via /proc/bus/pci/devices hex dump
+        int fd=open("/proc/bus/pci/devices", O_RDONLY);
+        if (fd>=0){ char buf[4096]; ssize_t r=read(fd,buf,sizeof(buf)-1); if(r>0){buf[r]='\0'; char lb2[8192]; snprintf(lb2,sizeof(lb2),"[sh][DIAG] lspci (via /proc/bus/pci/devices):\n%s",buf); log_line(lb2);} close(fd);} else { log_line("[sh][DIAG] lspci: no pci devices file"); }
+    }
+    if (strstr(line, "lsmod")) {
+        int fd=open("/proc/modules", O_RDONLY);
+        if (fd>=0){ char buf[8192]; ssize_t r=read(fd,buf,sizeof(buf)-1); if(r>0){buf[r]='\0'; char lb2[8192]; snprintf(lb2,sizeof(lb2),"[sh][DIAG] lsmod (/proc/modules %ld bytes):\n%s",r,buf); log_line(lb2);} else {log_line("[sh][DIAG] lsmod: /proc/modules empty");} close(fd);} else { char lb2[256]; snprintf(lb2,sizeof(lb2),"[sh][DIAG] lsmod open fail errno=%d",errno); log_line(lb2); }
+    }
+    if (strstr(line, "dmesg") ) {
+        // Use syslog syscall (klogctl) to fetch kernel log - type 3 = read all, large buffer
+        char kbuf[32768]; long sz=syscall(103, 3, kbuf, sizeof(kbuf)-1); // SYS_syslog
+        if (sz>0){ kbuf[sz]='\0'; // log in chunks to avoid truncated log_line (512 limit)
+            log_line("[sh][DIAG] dmesg klogctl start");
+            // Chunk into 400 char pieces for log_line limit
+            int off=0;
+            while(off<sz){
+                int chunk=400;
+                if(off+chunk>sz) chunk=sz-off;
+                char piece[512]; strncpy(piece, kbuf+off, chunk); piece[chunk]='\0';
+                // escape newlines for single line log?
+                for(int i=0;i<chunk;i++) if(piece[i]=='\n') piece[i]=' ';
+                char lb2[600]; snprintf(lb2,sizeof(lb2),"[sh][DIAG] dmesg chunk %d: %s", off/400, piece);
+                log_line(lb2);
+                off+=chunk;
+            }
+            log_line("[sh][DIAG] dmesg klogctl end");
+        } else {
+            int fd=open("/dev/kmsg", O_RDONLY | O_NONBLOCK);
+            if (fd>=0){ char buf[8192]; ssize_t r=read(fd,buf,sizeof(buf)-1); if(r>0){buf[r]='\0'; char lb2[8192]; snprintf(lb2,sizeof(lb2),"[sh][DIAG] dmesg /dev/kmsg (%ld bytes tail):\n%.*s",r,4000,buf + (r>4000?r-4000:0)); log_line(lb2);} else {log_line("[sh][DIAG] dmesg /dev/kmsg empty");} close(fd);}
+            else { char lb2[256]; snprintf(lb2,sizeof(lb2),"[sh][DIAG] dmesg fail klogctl ret=%ld errno=%d",sz,errno); log_line(lb2); }
+        }
+    }
+    if (strstr(line, "/sys/bus/pci/rescan")) {
+        int fd=open("/sys/bus/pci/rescan", O_WRONLY);
+        if (fd>=0){ ssize_t w=write(fd,"1",1); char lb2[256]; snprintf(lb2,sizeof(lb2),"[sh][DIAG] pci rescan write 1 -> %ld errno=%d",w,errno); log_line(lb2); close(fd);} else { char lb2[256]; snprintf(lb2,sizeof(lb2),"[sh][DIAG] pci rescan open fail errno=%d",errno); log_line(lb2); }
     }
 
     // Execute binaries (even if inside if [ ... ])
@@ -178,9 +361,7 @@ int main(int argc, char **argv) {
     symlink("/dev/binderfs/hwbinder", "/dev/hwbinder");
     symlink("/dev/binderfs/vndbinder", "/dev/vndbinder");
     mkdir("/dev/dri", 0755);
-    mknod("/dev/dri/card0", S_IFCHR | 0666, makedev(226, 0));
-    mknod("/dev/dri/renderD128", S_IFCHR | 0666, makedev(226, 128));
-    mknod("/dev/fb0", S_IFCHR | 0666, makedev(29, 0));
+    // dummy DRM nodes deferred to /init after driver load (avoid hiding ENODEV)
     mknod("/dev/ttyS0", S_IFCHR | 0666, makedev(4, 64));
 
     const char *script_file = NULL;

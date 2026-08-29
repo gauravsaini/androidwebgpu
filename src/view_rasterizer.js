@@ -591,10 +591,16 @@ export class ViewHierarchyRasterizer {
      * Submits rasterized buffer to VirtIO GPU device control queue.
      */
     submitToVirtioGpu(device, resId = 100, scanoutId = 0, buffer = this.rgbaData) {
-        if (!device) return;
-        // ponytail: only block if guest genuinely presented via virtqueue
-        if (device.guestHasPresented && device.guestActive) return;
-        console.debug(`[ViewRasterizer] Submitting rasterized buffer (${buffer.length} bytes) to VirtIO-GPU scanout ${scanoutId}`);
+        if (!device) { console.warn(`[ViewRasterizer] submitToVirtioGpu aborted: no device (buffer ${buffer ? buffer.length : 0} bytes)`); return; }
+        // ponytail: only block if guest genuinely presented via virtqueue (pure guest mode)
+        if (device.guestHasPresented) {
+            console.info(`[ViewRasterizer] SKIP submitToVirtioGpu: guestHasPresented=true guestActive=${device.guestActive} -> host injection gated (buffer ${buffer.length} bytes dropped)`);
+            return;
+        }
+        if (device.guestActive && !device.guestHasPresented) {
+            console.warn(`[ViewRasterizer] Warning: guestActive true but guestHasPresented false -> inconsistent state, still submitting host buffer`);
+        }
+        console.info(`[ViewRasterizer] Submitting rasterized buffer (${buffer.length} bytes) to VirtIO-GPU scanout ${scanoutId} (host fallback path, guest not yet presented)`);
         const transferPkt = VirtioPacketBuilder.transferToHost2d(resId, this.width, this.height, 0, 0, buffer);
         device.processControlQueue(transferPkt);
         const flushPkt = VirtioPacketBuilder.resourceFlush(resId, this.width, this.height, 0, 0);
