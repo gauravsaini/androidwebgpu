@@ -137,7 +137,9 @@ export class AndroidRuntime {
     enableGuestRendering() {
         const prev = this.useGuestRendering;
         this.useGuestRendering = true;
-        this.log(`[gate] enableGuestRendering() transition: ${prev} -> true (blocking host ViewRasterizer)`, 'info', 'AndroidRuntime');
+        if (!prev) {
+            this.log(`[gate] enableGuestRendering() transition: ${prev} -> true (blocking host ViewRasterizer)`, 'info', 'AndroidRuntime');
+        }
         if (this.gpuDevice && typeof this.gpuDevice.blockHostInjection === 'function') {
             this.gpuDevice.blockHostInjection();
         }
@@ -146,7 +148,9 @@ export class AndroidRuntime {
     disableGuestRendering() {
         const prev = this.useGuestRendering;
         this.useGuestRendering = false;
-        this.log(`[gate] disableGuestRendering() transition: ${prev} -> false (allowing host fallback)`, 'info', 'AndroidRuntime');
+        if (prev) {
+            this.log(`[gate] disableGuestRendering() transition: ${prev} -> false (allowing host fallback)`, 'info', 'AndroidRuntime');
+        }
         if (this.gpuDevice && typeof this.gpuDevice.allowHostInjection === 'function') {
             this.gpuDevice.allowHostInjection();
         }

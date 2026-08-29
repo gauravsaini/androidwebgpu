@@ -431,9 +431,9 @@ async function startSystem() {
                 const iv = setInterval(() => {
                     const before = gpuDev ? gpuDev.guestHasPresented : false;
                     gateOnGuest();
-                    if ((gpuDev && gpuDev.guestHasPresented) || ++poll > 400) {
+                    if ((gpuDev && gpuDev.guestHasPresented) || ++poll > 1200) {
                         if (gpuDev && gpuDev.guestHasPresented && !before) console.info(`[gate] poll detected guestHasPresented transition at poll=${poll} -> guest rendering now ACTIVE`);
-                        if (poll > 400) console.warn(`[gate] poll timeout 400*100ms=40s guest never presented (DRM ENODEV? check v86-serial /sys/class/drm empty + surfaceflinger fd=-1)`);
+                        if (poll > 1200) console.warn(`[gate] poll timeout 1200*100ms=120s guest never presented (DRM ENODEV? check v86-serial /sys/class/drm empty + surfaceflinger fd=-1)`);
                         clearInterval(iv);
                     }
                     if (poll % 50 === 0 && poll !== 0) console.debug(`[gate] poll tick ${poll} guestHasPresented=${gpuDev ? gpuDev.guestHasPresented : false} guestActive=${gpuDev ? gpuDev.guestActive : false}`);
