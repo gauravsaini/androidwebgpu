@@ -192,26 +192,35 @@ async function main() {
 
         console.log(`[validate] Waiting for system bootstrap and APK ingestion...`);
         
-        // Wait for AndroidRuntime and F-Droid package installation
-        const maxWaitMs = 15000;
+        // Wait for AndroidRuntime and target package installation (firefox or fdroid)
+        const maxWaitMs = 25000;
         const pollStart = Date.now();
         let apkInstalled = false;
+        let installedPkg = '';
 
         while (Date.now() - pollStart < maxWaitMs) {
-            apkInstalled = await page.evaluate(() => {
+            const res = await page.evaluate(() => {
                 const rt = window.androidRuntime;
-                if (!rt) return false;
-                const inPms = rt.pms?.getPackageInfo?.('org.fdroid.fdroid') || rt.installedApps?.has?.('org.fdroid.fdroid');
-                const inActive = rt.activeApps?.has?.('org.fdroid.fdroid');
-                return !!(inPms && inActive);
+                if (!rt) return { installed: false };
+                const hasFdroid = (rt.pms?.getPackageInfo?.('org.fdroid.fdroid') || rt.installedApps?.has?.('org.fdroid.fdroid')) && rt.activeApps?.has?.('org.fdroid.fdroid');
+                const hasFirefox = (rt.pms?.getPackageInfo?.('org.mozilla.firefox') || rt.installedApps?.has?.('org.mozilla.firefox')) && (rt.activeApps?.has?.('org.mozilla.firefox') || rt.currentPackage === 'org.mozilla.firefox');
+                const anyActive = (rt.activeApps && rt.activeApps.size > 0) || (rt.installedApps && rt.installedApps.size > 0);
+                if (hasFirefox) return { installed: true, pkg: 'org.mozilla.firefox' };
+                if (hasFdroid) return { installed: true, pkg: 'org.fdroid.fdroid' };
+                if (anyActive && rt.currentPackage) return { installed: true, pkg: rt.currentPackage };
+                return { installed: false };
             });
-            if (apkInstalled) break;
+            if (res.installed) {
+                apkInstalled = true;
+                installedPkg = res.pkg;
+                break;
+            }
             await new Promise(r => setTimeout(r, 500));
         }
 
-        console.log(`[validate] F-Droid APK ingestion status: ${apkInstalled ? 'INSTALLED & READY' : 'TIMED OUT'}`);
+        console.log(`[validate] APK ingestion status: ${apkInstalled ? `INSTALLED & READY (${installedPkg})` : 'TIMED OUT'}`);
         if (!apkInstalled) {
-            throw new Error('Timed out waiting for F-Droid.apk to be loaded and installed into PMS');
+            throw new Error('Timed out waiting for target APK to be loaded and installed into PMS');
         }
 
         // Switch to WebGPU / Canvas screen
