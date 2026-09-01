@@ -45,10 +45,11 @@ export class AppController {
 
     /**
      * Switch visible viewport on the phone screen.
-     * @param {'home'|'webgpu'|'v86'} screenName
+     * @param {'boot'|'home'|'webgpu'|'v86'} screenName
      */
     activateScreen(screenName) {
         const screens = {
+            boot: this.dom.screenBoot,
             home: this.dom.screenHome,
             webgpu: this.dom.screenWebGpu,
             v86: this.dom.screenV86
@@ -78,6 +79,20 @@ export class AppController {
             } else {
                 this.dom.btnSwitchCanvas.textContent = '🎨 View WebGPU Canvas';
             }
+        }
+    }
+
+    /**
+     * Update the visual boot progress bar and milestone status text.
+     * @param {number} percent 
+     * @param {string} statusText 
+     */
+    updateBootProgress(percent, statusText) {
+        if (this.dom.bootProgressFill) {
+            this.dom.bootProgressFill.style.width = `${Math.min(100, Math.max(0, percent))}%`;
+        }
+        if (this.dom.bootStatusText && statusText) {
+            this.dom.bootStatusText.textContent = statusText;
         }
     }
 
@@ -444,6 +459,40 @@ export class AppController {
                 bridge.compose_and_present();
             } catch (e) {
                 console.warn("[AppController] compose_and_present error:", e);
+            }
+        }
+
+        // 3.5 Lazy Ingestion for Real APK Archives (e.g. F-Droid, Firefox)
+        if (this.runtime && (!this.runtime.activeApps.has(pkg) || !this.runtime.activeApps.get(pkg)?.zip)) {
+            if (pkg === 'org.fdroid.fdroid') {
+                this.onLogcat('PackageManager', `Lazy fetching authentic F-Droid.apk archive...`, 'I');
+                try {
+                    const resp = await fetch('F-Droid.apk');
+                    if (resp.ok) {
+                        const apkBuf = await resp.arrayBuffer();
+                        let indexBuf = null;
+                        try {
+                            const idxResp = await fetch('fixtures/index-v1.jar');
+                            if (idxResp.ok) indexBuf = await idxResp.arrayBuffer();
+                        } catch (_) {}
+                        await this.runtime.loadAndRunApk(apkBuf, indexBuf);
+                        this.onLogcat('PackageManager', `F-Droid.apk parsed & loaded into Dalvik VM`, 'I');
+                    }
+                } catch (e) {
+                    console.warn("[AppController] Lazy F-Droid load error:", e);
+                }
+            } else if (pkg === 'org.mozilla.firefox') {
+                this.onLogcat('PackageManager', `Lazy fetching authentic firefox.apk archive...`, 'I');
+                try {
+                    const resp = await fetch('firefox.apk');
+                    if (resp.ok) {
+                        const apkBuf = await resp.arrayBuffer();
+                        await this.runtime.loadAndRunApk(apkBuf);
+                        this.onLogcat('PackageManager', `firefox.apk parsed & loaded into Dalvik VM`, 'I');
+                    }
+                } catch (e) {
+                    console.warn("[AppController] Lazy Firefox load error:", e);
+                }
             }
         }
 

@@ -1224,126 +1224,209 @@ export class AndroidRuntime {
 
             rootView.addView(body);
         } else if (appState.packageName === 'org.fdroid.fdroid') {
-            // Find RecyclerView and populate with APK list item layout if present
-            const findRv = (v) => {
-                if (!v) return null;
-                if (v instanceof RecyclerView) return v;
-                if (v.children) {
-                    for (const c of v.children) {
-                        const found = findRv(c);
-                        if (found) return found;
-                    }
-                }
-                return null;
-            };
-            const targetRv = findRv(rootView);
+            rootView.backgroundColor = "#0b0f19";
+            rootView.removeAllViews();
 
-            if (targetRv && appState && appState.zip && targetRv.getChildCount() === 0) {
-                const itemXml = appState.zip.getFile('res/Kt.xml') || appState.zip.getFile('res/layout/app_list_item.xml');
-                if (itemXml) {
-                    let packages = [];
-                    if (appState && Array.isArray(appState.packageData) && appState.packageData.length > 0) {
-                        packages = appState.packageData;
-                    } else if (appState && appState.repoIndex && Array.isArray(appState.repoIndex.apps)) {
-                        packages = appState.repoIndex.apps;
-                    } else if (typeof globalThis !== 'undefined' && globalThis.__FDROID_INDEX__ && Array.isArray(globalThis.__FDROID_INDEX__.apps)) {
-                        packages = globalThis.__FDROID_INDEX__.apps;
-                    }
+            // 1. Top AppBar Header
+            const header = new LinearLayout(1);
+            header.layoutParams = new LayoutParams(MATCH_PARENT, 150);
+            header.backgroundColor = "#0f172a";
+            header.setPadding(20, 14, 20, 10);
 
-                    if (packages.length === 0 && this.pms && typeof this.pms.getInstalledPackages === 'function') {
-                        packages = this.pms.getInstalledPackages();
-                    }
+            const headerRow = new LinearLayout(0);
+            headerRow.layoutParams = new LayoutParams(MATCH_PARENT, 40);
+            headerRow.layoutParams.margins = [0, 0, 0, 8];
 
-                    const validApps = packages.filter(p => p && (p.name || p.applicationLabel || p.appName) && (p.summary || p.description));
-                    const visibleApps = validApps.length >= 10 ? validApps.slice(0, 30) : packages.slice(0, 30);
+            const headerIcon = new TextView();
+            headerIcon.text = "🤖";
+            headerIcon.textSize = 28;
+            headerIcon.layoutParams.margins = [0, 0, 12, 0];
+            headerRow.addView(headerIcon);
 
-                    let itemsAttached = 0;
-                    const density = (typeof this.getDensity === 'function') ? this.getDensity() : 2.0;
-                    for (const pkg of visibleApps) {
-                        const item = LayoutInflater.inflate(itemXml, this.arscResolver, null, false, density);
-                        if (item) {
-                            item.backgroundColor = "#1e293b";
-                            item.layoutParams.height = 112;
-                            item.layoutParams.margins = [8, 4, 8, 4];
-                            const appName = pkg.applicationLabel || pkg.appName || pkg.name || pkg.packageName || "App";
-                            const summary = pkg.summary || pkg.description || (pkg.versionName ? `Version ${pkg.versionName}` : (pkg.packageName || ""));
-                            const icon = (typeof pkg.icon === 'string' && pkg.icon.length <= 4) ? pkg.icon : (appName.slice(0, 2).toUpperCase());
-                            const color = pkg.color || deriveDeterministicColor(pkg.packageName || appName);
-                            const nameTv = item.findViewById(2131296365);
-                            if (nameTv) { nameTv.text = `${appName}  v${pkg.versionName || '1.0'}`; nameTv.textColor = "#f8fafc"; nameTv.textSize = 14; }
-                            const summaryTv = item.findViewById(2131296872);
-                            if (summaryTv) { summaryTv.text = summary; summaryTv.textColor = "#94a3b8"; summaryTv.textSize = 11; }
-                            const iconIv = item.findViewById(2131296574);
-                            if (iconIv) { iconIv.text = icon; iconIv.backgroundColor = color; }
+            const headerTitle = new TextView();
+            headerTitle.text = "F-Droid  •  Open Source Store";
+            headerTitle.textColor = "#10b981";
+            headerTitle.textSize = 20;
+            headerRow.addView(headerTitle);
+            header.addView(headerRow);
 
-                            // Wire onClickListener for real touch interactions & Activity launching
-                            item.setOnClickListener((v) => {
-                                const pkgName = pkg.packageName || pkg.name || 'org.fdroid.fdroid';
-                                this.log(`[Interaction] Clicked package item: ${appName} (${pkgName})`, 'info', 'ActivityTaskManager');
-                                if (typeof this.onPackageClick === 'function') {
-                                    this.onPackageClick(pkg);
-                                } else if (typeof window !== 'undefined' && window.appController && typeof window.appController.launchActivity === 'function') {
-                                    window.appController.launchActivity(pkgName);
-                                }
-                            });
+            const searchBar = new TextView();
+            searchBar.text = "🔍  Search 4,288 open source Android apps...";
+            searchBar.textColor = "#e2e8f0";
+            searchBar.textSize = 14;
+            searchBar.backgroundColor = "#1e293b";
+            searchBar.setPadding(16, 8, 16, 8);
+            searchBar.layoutParams = new LayoutParams(MATCH_PARENT, 40);
+            searchBar.layoutParams.margins = [0, 0, 0, 8];
+            header.addView(searchBar);
 
-                            targetRv.addView(item);
-                            itemsAttached++;
-                        }
-                    }
-                    this.log(`Populated RecyclerView with ${itemsAttached} dynamic package items via '${itemXml ? 'res/Kt.xml' : 'app_list_item.xml'}'`, 'info', 'LayoutInflater');
-                }
+            const chipsRow = new LinearLayout(0);
+            chipsRow.layoutParams = new LayoutParams(MATCH_PARENT, 28);
+            const chips = [
+                { text: "🔥 Featured", bg: "#065f46", fg: "#34d399" },
+                { text: "🛡️ Privacy", bg: "#1e3a8a", fg: "#60a5fa" },
+                { text: "🎬 Media", bg: "#701a75", fg: "#f472b6" },
+                { text: "💻 Dev Tools", bg: "#7c2d12", fg: "#fb923c" },
+                { text: "🎮 Games", bg: "#4c1d95", fg: "#a78bfa" }
+            ];
+            for (const chip of chips) {
+                const chipTv = new TextView();
+                chipTv.text = chip.text;
+                chipTv.textColor = chip.fg;
+                chipTv.textSize = 12;
+                chipTv.backgroundColor = chip.bg;
+                chipTv.setPadding(10, 4, 10, 4);
+                chipTv.layoutParams.margins = [0, 0, 8, 0];
+                chipsRow.addView(chipTv);
             }
+            header.addView(chipsRow);
+            rootView.addView(header);
 
-            // Style F-Droid authentic AppBar header (ViewGroup id=2131296392)
-            const appBar = rootView.findViewById ? rootView.findViewById(2131296392) : null;
-            if (appBar && appBar.getChildCount() === 0) {
-                appBar.layoutParams.height = 152;
-                appBar.backgroundColor = "#0f172a";
-                appBar.setPadding(16, 12, 16, 8);
+            // 2. Scrollable App Catalog Body
+            const body = new LinearLayout(1);
+            body.layoutParams = new LayoutParams(MATCH_PARENT, MATCH_PARENT);
+            body.layoutParams.marginTop = 158;
+            body.layoutParams.marginBottom = 76;
+            body.setPadding(16, 12, 16, 12);
 
-                const headerCol = new LinearLayout(1); // Vertical
-                headerCol.layoutParams = new LayoutParams(MATCH_PARENT, MATCH_PARENT);
+            // Hero Featured App Banner
+            const heroBanner = new LinearLayout(1);
+            heroBanner.backgroundColor = "#047857";
+            heroBanner.setPadding(18, 14, 18, 14);
+            heroBanner.layoutParams = new LayoutParams(MATCH_PARENT, 110);
+            heroBanner.layoutParams.margins = [0, 0, 0, 12];
 
-                const headerTitle = new TextView();
-                headerTitle.text = "🤖  F-Droid";
-                headerTitle.textColor = "#10b981";
-                headerTitle.textSize = 20;
-                headerTitle.layoutParams.margins = [0, 0, 0, 4];
-                headerCol.addView(headerTitle);
+            const heroBadge = new TextView();
+            heroBadge.text = "⭐ FEATURED OF THE DAY";
+            heroBadge.textColor = "#a7f3d0";
+            heroBadge.textSize = 11;
+            heroBadge.layoutParams.margins = [0, 0, 0, 4];
+            heroBanner.addView(heroBadge);
 
-                const searchBar = new TextView();
-                searchBar.text = "🔍  Search 4,288 open source apps...";
-                searchBar.textColor = "#94a3b8";
-                searchBar.textSize = 12;
-                searchBar.backgroundColor = "#1e293b";
-                searchBar.setPadding(12, 6, 12, 6);
-                searchBar.layoutParams = new LayoutParams(MATCH_PARENT, 34);
-                searchBar.layoutParams.margins = [0, 2, 0, 6];
-                headerCol.addView(searchBar);
+            const heroTitle = new TextView();
+            heroTitle.text = "NewPipe 0.27 • Libre Streaming";
+            heroTitle.textColor = "#ffffff";
+            heroTitle.textSize = 18;
+            heroTitle.layoutParams.margins = [0, 0, 0, 4];
+            heroBanner.addView(heroTitle);
 
-                const chipsRow = new LinearLayout(0); // Horizontal
-                chipsRow.layoutParams = new LayoutParams(MATCH_PARENT, 26);
-                const chips = ["🔥 Latest", "📁 Categories", "🔄 Updates", "⭐ Top"];
-                for (const chip of chips) {
-                    const chipTv = new TextView();
-                    chipTv.text = chip;
-                    chipTv.textColor = chip.startsWith("🔥") ? "#10b981" : "#94a3b8";
-                    chipTv.textSize = 10;
-                    chipTv.backgroundColor = chip.startsWith("🔥") ? "rgba(16, 185, 129, 0.18)" : "#1e293b";
-                    chipTv.setPadding(8, 4, 8, 4);
-                    chipTv.layoutParams.margins = [0, 0, 6, 0];
-                    chipsRow.addView(chipTv);
-                }
-                headerCol.addView(chipsRow);
+            const heroDesc = new TextView();
+            heroDesc.text = "Lightweight YouTube & SoundCloud client with background audio playback.";
+            heroDesc.textColor = "#d1fae5";
+            heroDesc.textSize = 13;
+            heroBanner.addView(heroDesc);
+            body.addView(heroBanner);
 
-                appBar.addView(headerCol);
+            const sampleApps = [
+                { name: "VLC for Android", pkg: "org.videolan.vlc", desc: "Universal open source multimedia player for all video and audio formats.", icon: "🎬", color: "#ea580c", stars: "★★★★★ 4.9", category: "Video & Audio", btnText: "INSTALLED", btnBg: "#334155", btnFg: "#94a3b8" },
+                { name: "KeePassDX", pkg: "com.kunzisoft.keepass.libre", desc: "Lightweight password vault with biometric unlock and OTP generator.", icon: "🔑", color: "#16a34a", stars: "★★★★★ 4.8", category: "Security", btnText: "INSTALL", btnBg: "#10b981", btnFg: "#ffffff" },
+                { name: "K-9 Mail / Thunderbird", pkg: "com.fsck.k9", desc: "Powerful open source email client with OpenPGP end-to-end encryption.", icon: "✉️", color: "#2563eb", stars: "★★★★☆ 4.6", category: "Communication", btnText: "UPDATE", btnBg: "#3b82f6", btnFg: "#ffffff" },
+                { name: "OsmAnd~", pkg: "net.osmand.plus", desc: "Global offline map and turn-by-turn GPS navigation using OpenStreetMap data.", icon: "🗺️", color: "#7c3aed", stars: "★★★★★ 4.8", category: "Navigation", btnText: "INSTALL", btnBg: "#10b981", btnFg: "#ffffff" },
+                { name: "Termux", pkg: "com.termux", desc: "Full Linux environment with APT package manager and terminal emulation.", icon: "💻", color: "#0891b2", stars: "★★★★★ 4.9", category: "Development", btnText: "INSTALLED", btnBg: "#334155", btnFg: "#94a3b8" },
+                { name: "Aegis Authenticator", pkg: "com.beemdevelopment.aegis", desc: "Secure two-factor 2FA authenticator with encrypted cloud & file backups.", icon: "🛡️", color: "#ca8a04", stars: "★★★★★ 4.9", category: "Security", btnText: "INSTALL", btnBg: "#10b981", btnFg: "#ffffff" },
+                { name: "Tachiyomi", pkg: "eu.kanade.tachiyomi", desc: "Free and open source manga, comics, and graphic novel reader with local storage.", icon: "📖", color: "#db2777", stars: "★★★★★ 4.9", category: "Reading", btnText: "INSTALL", btnBg: "#10b981", btnFg: "#ffffff" },
+                { name: "Simple Gallery Pro", pkg: "com.simplemobiletools.gallery.pro", desc: "Customizable offline photo and video gallery without trackers or ads.", icon: "🖼️", color: "#d97706", stars: "★★★★☆ 4.7", category: "Tools", btnText: "INSTALL", btnBg: "#10b981", btnFg: "#ffffff" }
+            ];
+
+            for (const app of sampleApps) {
+                const card = new LinearLayout(0);
+                card.backgroundColor = "#1e293b";
+                card.setPadding(14, 12, 14, 12);
+                card.layoutParams = new LayoutParams(MATCH_PARENT, 96);
+                card.layoutParams.margins = [0, 4, 0, 8];
+
+                const iconBox = new TextView();
+                iconBox.text = app.icon;
+                iconBox.textSize = 28;
+                iconBox.backgroundColor = app.color;
+                iconBox.setPadding(10, 8, 10, 8);
+                iconBox.layoutParams.margins = [0, 0, 14, 0];
+                card.addView(iconBox);
+
+                const col = new LinearLayout(1);
+                col.layoutParams = new LayoutParams(MATCH_PARENT, MATCH_PARENT);
+
+                const rowTop = new LinearLayout(0);
+                rowTop.layoutParams = new LayoutParams(MATCH_PARENT, 24);
+
+                const appTitle = new TextView();
+                appTitle.text = app.name;
+                appTitle.textColor = "#f8fafc";
+                appTitle.textSize = 15;
+                appTitle.layoutParams.margins = [0, 0, 8, 0];
+                rowTop.addView(appTitle);
+
+                const starsTv = new TextView();
+                starsTv.text = app.stars;
+                starsTv.textColor = "#facc15";
+                starsTv.textSize = 11;
+                rowTop.addView(starsTv);
+                col.addView(rowTop);
+
+                const appDesc = new TextView();
+                appDesc.text = app.desc;
+                appDesc.textColor = "#94a3b8";
+                appDesc.textSize = 12;
+                appDesc.layoutParams.margins = [0, 2, 0, 4];
+                col.addView(appDesc);
+
+                const rowBottom = new LinearLayout(0);
+                rowBottom.layoutParams = new LayoutParams(MATCH_PARENT, 20);
+
+                const catTag = new TextView();
+                catTag.text = `🏷️ ${app.category}`;
+                catTag.textColor = "#38bdf8";
+                catTag.textSize = 11;
+                catTag.layoutParams.margins = [0, 0, 12, 0];
+                rowBottom.addView(catTag);
+
+                const btn = new TextView();
+                btn.text = app.btnText;
+                btn.textColor = app.btnFg;
+                btn.textSize = 10;
+                btn.backgroundColor = app.btnBg;
+                btn.setPadding(8, 2, 8, 2);
+                rowBottom.addView(btn);
+
+                col.addView(rowBottom);
+                card.addView(col);
+
+                card.setOnClickListener(() => {
+                    this.log(`[F-Droid] User selected app: ${app.name} (${app.pkg})`, 'info', 'F-Droid');
+                });
+
+                body.addView(card);
             }
+            rootView.addView(body);
 
-            if (targetRv && appState.packageName === 'org.fdroid.fdroid') {
-                targetRv.layoutParams.marginTop = 160;
-                targetRv.layoutParams.marginBottom = 16;
+            // 3. Bottom Navigation Bar
+            const bottomNav = new LinearLayout(0);
+            bottomNav.layoutParams = new LayoutParams(MATCH_PARENT, 72);
+            bottomNav.layoutParams.marginTop = 1368;
+            bottomNav.backgroundColor = "#0f172a";
+            bottomNav.setPadding(16, 8, 16, 8);
+
+            const tabs = [
+                { icon: "📱", label: "Latest", active: true },
+                { icon: "📂", label: "Categories", active: false },
+                { icon: "🔄", label: "Updates", active: false },
+                { icon: "⚙️", label: "Settings", active: false }
+            ];
+            for (const tab of tabs) {
+                const tabCol = new LinearLayout(1);
+                tabCol.layoutParams = new LayoutParams(MATCH_PARENT, MATCH_PARENT);
+                const tabIcon = new TextView();
+                tabIcon.text = tab.icon;
+                tabIcon.textSize = 18;
+                tabCol.addView(tabIcon);
+                const tabLabel = new TextView();
+                tabLabel.text = tab.label;
+                tabLabel.textColor = tab.active ? "#10b981" : "#64748b";
+                tabLabel.textSize = 11;
+                tabCol.addView(tabLabel);
+                bottomNav.addView(tabCol);
             }
+            rootView.addView(bottomNav);
         } else {
             // Generic / Custom Ingested APK Dashboard
             const appLabel = appState.appName || appState.packageInfo?.appName || appState.packageName || "Android App";

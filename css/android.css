@@ -262,10 +262,108 @@ main {
 }
 
 .screen-view.active,
+#screen-boot.active,
 #screen-home.active,
 #screen-v86.active,
 #screen-webgpu.active {
     display: flex !important;
+}
+
+/* Boot Sequence Viewport */
+#screen-boot {
+    background: #000000;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    z-index: 10;
+}
+
+.boot-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    width: 80%;
+    max-width: 320px;
+}
+
+.boot-logo-wrapper {
+    position: relative;
+    width: 90px;
+    height: 90px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 24px;
+}
+
+.boot-android-icon {
+    font-size: 54px;
+    z-index: 2;
+    filter: drop-shadow(0 0 20px rgba(56, 189, 248, 0.7));
+    animation: bootPulse 2s ease-in-out infinite alternate;
+}
+
+.boot-glow-ring {
+    position: absolute;
+    width: 80px;
+    height: 80px;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(56, 189, 248, 0.4) 0%, rgba(99, 102, 241, 0.1) 60%, transparent 80%);
+    animation: bootGlowSpin 3s linear infinite;
+}
+
+@keyframes bootPulse {
+    0% { transform: scale(0.95); opacity: 0.85; filter: drop-shadow(0 0 12px rgba(56, 189, 248, 0.5)); }
+    100% { transform: scale(1.06); opacity: 1; filter: drop-shadow(0 0 28px rgba(56, 189, 248, 0.9)); }
+}
+
+@keyframes bootGlowSpin {
+    0% { transform: rotate(0deg) scale(0.9); }
+    50% { transform: rotate(180deg) scale(1.1); }
+    100% { transform: rotate(360deg) scale(0.9); }
+}
+
+.boot-title {
+    font-family: var(--font-sans);
+    font-size: 32px;
+    font-weight: 700;
+    letter-spacing: -0.04em;
+    color: #ffffff;
+    margin-bottom: 6px;
+}
+
+.boot-version {
+    font-size: 13px;
+    color: #64748b;
+    margin-bottom: 36px;
+    letter-spacing: 0.02em;
+}
+
+.boot-progress-bar {
+    width: 100%;
+    height: 4px;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 9999px;
+    overflow: hidden;
+    margin-bottom: 16px;
+}
+
+.boot-progress-fill {
+    width: 15%;
+    height: 100%;
+    background: linear-gradient(90deg, #38bdf8, #818cf8);
+    border-radius: 9999px;
+    transition: width 0.4s ease;
+    box-shadow: 0 0 10px rgba(56, 189, 248, 0.6);
+}
+
+.boot-status-text {
+    font-size: 12px;
+    color: #94a3b8;
+    font-family: var(--font-mono);
+    min-height: 18px;
 }
 
 /* Real WebGPU Canvas Viewport */

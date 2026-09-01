@@ -49,22 +49,26 @@
                         </div>
 
                         <div class="android-viewport-container">
-                            <div class="screen-view active" id="screen-home">
+                            <div class="screen-view active" id="screen-boot">
+                                <div class="boot-container">
+                                    <div class="boot-logo-wrapper"><div class="boot-android-icon">🤖</div><div class="boot-glow-ring"></div></div>
+                                    <div class="boot-title">android</div>
+                                    <div class="boot-version">Material You • Linux 5.10 x86 VM</div>
+                                    <div class="boot-progress-bar"><div class="boot-progress-fill" id="boot-progress-fill"></div></div>
+                                    <div class="boot-status-text" id="boot-status-text">Powering on x86 virtual machine...</div>
+                                </div>
+                            </div>
+                            <div class="screen-view" id="screen-home">
                                 <div class="home-wallpaper"></div>
                                 <div class="home-content">
-                                    <div class="home-widget-clock">
-                                        <div class="home-clock-time" id="home-clock">12:00</div>
-                                        <div class="home-clock-date" id="home-date">Monday, Aug 25</div>
-                                    </div>
+                                    <div class="home-widget-clock"><div class="home-clock-time" id="home-clock">12:00</div><div class="home-clock-date" id="home-date">Monday, Aug 25</div></div>
                                     <div class="home-search-pill" id="btn-home-search"><span class="home-search-icon">🔍</span><span>Search apps, web, &amp; F-Droid...</span></div>
                                     <div class="app-grid" id="home-app-grid"></div>
                                     <div class="home-dock" id="home-dock"></div>
                                 </div>
                             </div>
                             <div class="screen-view" id="screen-v86"><div id="v86-screen-container"></div></div>
-                            <div class="screen-view" id="screen-webgpu">
-                                <canvas id="screen" width="720" height="1440"></canvas>
-                            </div>
+                            <div class="screen-view" id="screen-webgpu"><canvas id="screen" width="720" height="1440"></canvas></div>
                         </div>
 
                         <div class="android-nav-bar" id="android-nav-bar">

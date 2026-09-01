@@ -35,9 +35,12 @@ const dom = {
     fpsPill: document.getElementById('fps-pill'),
 
     // Viewports
+    screenBoot: document.getElementById('screen-boot'),
     screenHome: document.getElementById('screen-home'),
     screenV86: document.getElementById('screen-v86'),
     screenWebGpu: document.getElementById('screen-webgpu'),
+    bootProgressFill: document.getElementById('boot-progress-fill'),
+    bootStatusText: document.getElementById('boot-status-text'),
     v86ScreenContainer: document.getElementById('v86-screen-container'),
     canvas: document.getElementById('screen'),
     canvasHudFps: document.getElementById('canvas-hud-fps'),
@@ -146,13 +149,37 @@ const bootstrap = new SystemBootstrap({
     cmdline: 'console=ttyS0 earlyprintk=serial,ttyS0,115200 root=/dev/ram0 rdinit=/init nosmp maxcpus=1 noapic nolapic panic=1 loglevel=8 androidboot.hardware=android_x86 androidboot.selinux=permissive binder.debug_mask=0x07 video=virtio-gpu',
     bootMode: 'direct',
     onMilestone: (milestone) => {
-        // Milestone already recorded into globalLogcat and logger by v86_guest_manager
+        const milestoneProgress = {
+            'BIOS_POST': { pct: 20, text: 'Executing SeaBIOS POST & PCI setup...' },
+            'KERNEL_BOOT': { pct: 40, text: 'Booting Linux 5.10 x86 Kernel...' },
+            'KERNEL_UNCOMPRESS': { pct: 45, text: 'Extracting Kernel & RAM disk...' },
+            'VIRTIO_GPU_INIT': { pct: 60, text: 'VirtIO-GPU initialized on /dev/dri/card0' },
+            'BINDERFS_MOUNT': { pct: 70, text: 'Mounting /dev/binderfs IPC...' },
+            'BINDERFS_READY': { pct: 75, text: 'Binder IPC subsystem ready' },
+            'INIT_USERSPACE': { pct: 80, text: 'Starting AOSP /init userspace...' },
+            'SERVICEMANAGER_READY': { pct: 85, text: 'ServiceManager context ready' },
+            'RUST_SERVICES_READY': { pct: 90, text: 'Starting Rust native services...' },
+            'ZYGOTE_ART_READY': { pct: 95, text: 'Zygote & Android Runtime ready' },
+            'SYSTEM_BOOT_COMPLETED': { pct: 100, text: 'Android 14 ready!' }
+        };
+        const info = milestoneProgress[milestone];
+        if (info && typeof appController !== 'undefined') {
+            appController.updateBootProgress(info.pct, info.text);
+        }
     },
     onSerial: (line) => {
         // Serial line already recorded into globalLogcat by v86_guest_manager
     },
     onStateChange: (state) => {
-        // State change already recorded into globalLogcat by v86_guest_manager
+        if (typeof appController !== 'undefined') {
+            if (state === 'KERNEL_READY') {
+                appController.updateBootProgress(50, 'Kernel initialized • Loading drivers...');
+            } else if (state === 'SERVICES_READY') {
+                appController.updateBootProgress(85, 'AOSP System Services Online');
+            } else if (state === 'RUNNING') {
+                appController.updateBootProgress(100, 'Android 14 Ready');
+            }
+        }
     },
     onFpsUpdate: (fps, gpuTime) => {
         updateMetrics({
@@ -449,47 +476,55 @@ async function startSystem() {
     // Dump AOSP System Services status to console
     dumpAospServiceStatus();
 
-    // Preload target APK into Dalvik VM & PMS (F-Droid.apk by default, or firefox.apk if configured)
     if (dom.canvas) {
         runtime.setCanvas(dom.canvas);
     }
+
+    // Complete boot sequence: transition to Launcher (Home Screen)
+    appController.updateBootProgress(100, 'Android 14 Ready');
+    setTimeout(() => {
+        if (appController.activeScreen === 'boot' || !appController.activeScreen || appController.activeScreen === 'initial') {
+            appController.activateScreen('home');
+        }
+    }, 400);
+
+    // Only auto-launch an app if explicitly requested via query parameter (?apk=...) or window.TARGET_APK
     try {
         const urlParams = (typeof window !== 'undefined' && window.location && window.location.search) ? new URLSearchParams(window.location.search) : null;
-        let targetApk = (urlParams && urlParams.get('apk')) || (typeof window !== 'undefined' && window.TARGET_APK) || 'firefox.apk';
-        if (targetApk === 'firefox') targetApk = 'firefox.apk';
-        if (targetApk === 'fdroid' || targetApk === 'f-droid') targetApk = 'F-Droid.apk';
+        const explicitApk = (urlParams && urlParams.get('apk')) || (typeof window !== 'undefined' && window.TARGET_APK);
 
-        appendLogcat('PackageManager', `Auto-ingesting target APK archive: ${targetApk}`, 'I');
-        const resp = await fetch(targetApk);
-        if (resp.ok) {
-            const buf = await resp.arrayBuffer();
-            console.info(`[Pipeline][Phase 1/8: APK] Fetch: ${targetApk} (${buf.byteLength} bytes) retrieved`);
-            console.info(`[AndroidOS] ${targetApk} fetched:`, buf.byteLength, "bytes");
-            let indexBuf = null;
-            if (targetApk.toLowerCase().includes('fdroid') || targetApk.toLowerCase().includes('f-droid')) {
-                try {
-                    const indexResp = await fetch('fixtures/index-v1.jar');
-                    if (indexResp.ok) {
-                        indexBuf = await indexResp.arrayBuffer();
-                    }
-                } catch (_) {}
+        if (explicitApk) {
+            let targetApk = explicitApk;
+            if (targetApk === 'firefox') targetApk = 'firefox.apk';
+            if (targetApk === 'fdroid' || targetApk === 'f-droid') targetApk = 'F-Droid.apk';
+
+            appendLogcat('PackageManager', `Auto-ingesting requested target APK: ${targetApk}`, 'I');
+            const resp = await fetch(targetApk);
+            if (resp.ok) {
+                const buf = await resp.arrayBuffer();
+                console.info(`[Pipeline][Phase 1/8: APK] Fetch: ${targetApk} (${buf.byteLength} bytes) retrieved`);
+                let indexBuf = null;
+                if (targetApk.toLowerCase().includes('fdroid') || targetApk.toLowerCase().includes('f-droid')) {
+                    try {
+                        const indexResp = await fetch('fixtures/index-v1.jar');
+                        if (indexResp.ok) {
+                            indexBuf = await indexResp.arrayBuffer();
+                        }
+                    } catch (_) {}
+                }
+                console.info(`[Pipeline][Phase 1/8: APK] Ingesting APK into DalvikVM runtime...`);
+                const appState = await runtime.loadAndRunApk(buf, indexBuf);
+                const targetPkg = appState?.packageName || (targetApk.toLowerCase().includes('firefox') ? 'org.mozilla.firefox' : 'org.fdroid.fdroid');
+                appendLogcat('PackageManager', `${targetApk} loaded into Dalvik VM & registered in PMS (${targetPkg}).`, 'I');
+                console.info(`[Pipeline][Phase 1/8: APK] Package [${targetPkg}] ready in PackageManagerService`);
+                await appController.launchActivity(targetPkg);
+                appController.activateScreen('webgpu');
+            } else {
+                console.warn(`[AndroidOS] ${targetApk} fetch failed:`, resp.status, resp.statusText);
+                appendLogcat('PackageManager', `Target APK fetch failed: ${targetApk} (HTTP ${resp.status})`, 'W');
             }
-            console.info(`[Pipeline][Phase 1/8: APK] Parsing & decoding APK binary archive into Dalvik VM...`);
-            console.info(`[AndroidOS] Ingesting APK into DalvikVM runtime...`);
-            const appState = await runtime.loadAndRunApk(buf, indexBuf);
-            const targetPkg = appState?.packageName || (targetApk.toLowerCase().includes('firefox') ? 'org.mozilla.firefox' : 'org.fdroid.fdroid');
-            appendLogcat('PackageManager', `${targetApk} loaded into Dalvik VM & registered in PMS (${targetPkg}).`, 'I');
-            console.info(`[Pipeline][Phase 1/8: APK] Package [${targetPkg}] ready in PackageManagerService`);
-            console.info(`[AndroidOS] ${targetPkg} installed into PMS successfully -> launching Activity`);
-            console.info(`[AndroidOS] Launching Activity ${targetPkg} -> will auto-switch viewport to webgpu (guest fallback visible until guest presents)`);
-            await appController.launchActivity(targetPkg);
-            const dev = bootstrap.getGpuDevice();
-            console.info(`[AndroidOS] launchActivity done for ${targetPkg}, now activateScreen('webgpu') gate active=${dev ? !!dev.guestHasPresented : false} useGuest=${runtime ? runtime.useGuestRendering : '?'}`);
-            appController.activateScreen('webgpu');
-            console.info(`[AndroidOS] ${targetPkg} launched. Viewport=webgpu activeScreen=${appController.activeScreen} canvas=${dom.canvas ? dom.canvas.width+'x'+dom.canvas.height : 'none'} isHostInjectionAllowed=${dev && typeof dev.isHostInjectionAllowed === 'function' ? dev.isHostInjectionAllowed() : '?'}`);
         } else {
-            console.warn(`[AndroidOS] ${targetApk} fetch failed:`, resp.status, resp.statusText);
-            appendLogcat('PackageManager', `Target APK fetch failed: ${targetApk} (HTTP ${resp.status})`, 'W');
+            console.info("[AndroidOS] Boot complete -> Staying on Android Launcher (Home Screen)");
         }
     } catch (e) {
         console.error("[AndroidOS] Target APK bootstrap error:", e);

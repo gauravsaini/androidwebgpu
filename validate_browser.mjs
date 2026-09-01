@@ -188,8 +188,9 @@ async function main() {
             console.error(`[browser pageerror] ${err.message}`);
         });
 
-        console.log(`[validate] Navigating page to ${hostUrl}...`);
-        await page.goto(hostUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
+        const targetUrl = hostUrl.includes('?') ? hostUrl : `${hostUrl}?apk=fdroid`;
+        console.log(`[validate] Navigating page to ${targetUrl}...`);
+        await page.goto(targetUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
 
         console.log(`[validate] Waiting for system bootstrap and APK ingestion...`);
         
