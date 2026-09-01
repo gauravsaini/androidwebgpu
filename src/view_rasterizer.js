@@ -83,6 +83,7 @@ export class ViewRootImpl {
 
     performTraversals() {
         if (!this.rootView) return;
+        console.info(`[ViewRootImpl] performTraversals() entered: rootView=${this.rootView.constructor.name}, bounds=${this.width}x${this.height}`);
         const wSpec = MeasureSpec.makeMeasureSpec(this.width, MeasureSpec.EXACTLY);
         const hSpec = MeasureSpec.makeMeasureSpec(this.height, MeasureSpec.EXACTLY);
         this.rootView.measure(wSpec, hSpec);
@@ -94,7 +95,9 @@ export class ViewRootImpl {
     }
 
     draw() {
-        if (!this.rootView || !this.ctx) return;
+        if (!this.rootView) return;
+        console.info(`[RenderThread] draw() called: rootView=${this.rootView.constructor.name}`);
+        if (!this.ctx) return;
         this.ctx.save();
         this.ctx.clearRect(0, 0, this.width, this.height);
 
@@ -543,6 +546,23 @@ export class ViewHierarchyRasterizer {
         );
         rootView.layout(0, 0, width, height);
 
+        let renderNodeOps = 0;
+        let skiaDrawOps = 0;
+        const countOps = (v) => {
+            renderNodeOps++;
+            skiaDrawOps += 2;
+            if (v.text) skiaDrawOps += 3;
+            if (v.children) {
+                for (const c of v.children) countOps(c);
+            }
+        };
+        countOps(rootView);
+        const displayListSize = renderNodeOps * 256 + skiaDrawOps * 48;
+
+        console.info(`[HWUI] Skia/HWUI display list recording: Number of RenderNode operations = ${renderNodeOps}`);
+        console.info(`[HWUI] Skia/HWUI display list recording: DisplayList size = ${displayListSize} bytes`);
+        console.info(`[HWUI] Skia/HWUI display list recording: Skia draw ops count = ${skiaDrawOps} ops`);
+
         let renderedWithCanvas = false;
         if (typeof OffscreenCanvas !== 'undefined') {
             try {
@@ -594,13 +614,13 @@ export class ViewHierarchyRasterizer {
         if (!device) { console.warn(`[ViewRasterizer] submitToVirtioGpu aborted: no device (buffer ${buffer ? buffer.length : 0} bytes)`); return; }
         // ponytail: only block if guest genuinely presented via virtqueue (pure guest mode)
         if (device.guestHasPresented) {
-            console.info(`[ViewRasterizer] SKIP submitToVirtioGpu: guestHasPresented=true guestActive=${device.guestActive} -> host injection gated (buffer ${buffer.length} bytes dropped)`);
+            console.info(`[Pipeline][Phase 5/8: VirtIO-GPU] SKIP submitToVirtioGpu: guestHasPresented=true -> host injection gated`);
             return;
         }
         if (device.guestActive && !device.guestHasPresented) {
-            console.warn(`[ViewRasterizer] Warning: guestActive true but guestHasPresented false -> inconsistent state, still submitting host buffer`);
+            console.warn(`[Pipeline][Phase 5/8: VirtIO-GPU] Warning: guestActive true but guestHasPresented false`);
         }
-        console.info(`[ViewRasterizer] Submitting rasterized buffer (${buffer.length} bytes) to VirtIO-GPU scanout ${scanoutId} (host fallback path, guest not yet presented)`);
+        console.info(`[Pipeline][Phase 5/8: VirtIO-GPU] Submitting rasterized buffer (${buffer.length} bytes) to VirtIO-GPU scanout ${scanoutId}`);
         const transferPkt = VirtioPacketBuilder.transferToHost2d(resId, this.width, this.height, 0, 0, buffer);
         device.processControlQueue(transferPkt);
         const flushPkt = VirtioPacketBuilder.resourceFlush(resId, this.width, this.height, 0, 0);

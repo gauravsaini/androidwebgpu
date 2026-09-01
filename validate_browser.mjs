@@ -169,7 +169,8 @@ async function main() {
                 '--window-size=1280,900',
                 '--enable-features=SharedArrayBuffer',
                 '--enable-unsafe-webgpu'
-            ]
+            ],
+            protocolTimeout: 120000
         });
 
         const page = await browser.newPage();
@@ -179,7 +180,7 @@ async function main() {
         page.on('console', msg => {
             const text = msg.text();
             pageLogs.push({ type: msg.type(), text });
-            if (!text.includes('[v86Guest]') && (text.includes('[AndroidOS]') || text.includes('F-Droid') || text.includes('BOOT-MILESTONE') || text.includes('PMS') || text.includes('Error'))) {
+            if (!text.includes('[v86Guest]') && (text.includes('[Pipeline]') || text.includes('[ViewRootImpl]') || text.includes('[RenderThread]') || text.includes('[HWUI]') || text.includes('[AndroidOS]') || text.includes('F-Droid') || text.includes('BOOT-MILESTONE') || text.includes('PMS') || text.includes('Error'))) {
                 console.log(`[browser console:${msg.type()}] ${text.slice(0, 300)}`);
             }
         });
@@ -193,7 +194,7 @@ async function main() {
         console.log(`[validate] Waiting for system bootstrap and APK ingestion...`);
         
         // Wait for AndroidRuntime and target package installation (firefox or fdroid)
-        const maxWaitMs = 25000;
+        const maxWaitMs = 75000;
         const pollStart = Date.now();
         let apkInstalled = false;
         let installedPkg = '';
@@ -261,7 +262,7 @@ async function main() {
             throw new Error('Page is not crossOriginIsolated (SharedArrayBuffer disabled)');
         }
 
-        // Extract Canvas Pixel Data and Calculate Shannon Entropy
+        // Extract Canvas Pixel Data and Calculate Shannon Entropy + Structural Metrics
         console.log(`[validate] Extracting canvas pixel buffer and calculating Shannon entropy...`);
         const pixelDataResult = await page.evaluate(() => {
             const canvas = document.getElementById('screen');
@@ -269,9 +270,12 @@ async function main() {
             if (!ctx) return { error: 'Canvas 2D context unavailable' };
             const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
             const data = imgData.data;
+            const w = canvas.width;
+            const h = canvas.height;
             const totalPixels = data.length / 4;
             const freq = new Map();
             let nonZeroPixels = 0;
+            let bgCount = 0; // Background color #0f172a (R:15 G:23 B:42 A:255)
 
             for (let i = 0; i < data.length; i += 4) {
                 const r = data[i];
@@ -280,6 +284,9 @@ async function main() {
                 const a = data[i + 3];
                 if (r !== 0 || g !== 0 || b !== 0 || a !== 0) {
                     nonZeroPixels++;
+                }
+                if (r === 15 && g === 23 && b === 42 && a === 255) {
+                    bgCount++;
                 }
                 const color = (r << 24) | (g << 16) | (b << 8) | a;
                 freq.set(color, (freq.get(color) || 0) + 1);
@@ -293,27 +300,63 @@ async function main() {
                 }
             }
 
+            // Spatial region sampling: header (top 10%), body (middle 50%), footer (bottom 10%)
+            const sampleRegion = (startRow, endRow) => {
+                let nonBg = 0;
+                for (let y = startRow; y < endRow; y++) {
+                    for (let x = 0; x < w; x++) {
+                        const i = (y * w + x) * 4;
+                        if (!(data[i] === 15 && data[i+1] === 23 && data[i+2] === 42)) nonBg++;
+                    }
+                }
+                return nonBg;
+            };
+            const headerRows = Math.floor(h * 0.10);
+            const bodyStart = Math.floor(h * 0.25);
+            const bodyEnd = Math.floor(h * 0.75);
+            const footerStart = Math.floor(h * 0.90);
+
             return {
-                width: canvas.width,
-                height: canvas.height,
+                width: w,
+                height: h,
                 totalPixels,
                 nonZeroPixels,
                 nonZeroRatio: nonZeroPixels / totalPixels,
                 uniqueColors: freq.size,
-                entropy
+                entropy,
+                bgCount,
+                bgRatio: bgCount / totalPixels,
+                headerNonBg: sampleRegion(0, headerRows),
+                bodyNonBg: sampleRegion(bodyStart, bodyEnd),
+                footerNonBg: sampleRegion(footerStart, h)
             };
         });
 
         console.log(`[validate] Pixel Analysis:`, JSON.stringify(pixelDataResult, null, 2));
 
-        // Assertions for authentic visual rendering
+        // Assertions for authentic visual rendering — stricter thresholds
         if (pixelDataResult.nonZeroPixels === 0) {
             throw new Error('Canvas validation failed: Canvas pixel buffer is completely blank / empty (0 non-zero pixels)');
         }
-        if (pixelDataResult.entropy < 1.0) {
-            throw new Error(`Canvas validation failed: Shannon entropy ${pixelDataResult.entropy.toFixed(3)} is below minimum threshold 1.0`);
+        if (pixelDataResult.nonZeroRatio < 0.10) {
+            throw new Error(`Canvas validation failed: Non-zero pixel ratio ${(pixelDataResult.nonZeroRatio * 100).toFixed(1)}% < 10% minimum`);
         }
-        console.log(`✔ [PASS] Canvas non-blank rendering verified (entropy: ${pixelDataResult.entropy.toFixed(3)} >= 1.0, unique colors: ${pixelDataResult.uniqueColors})`);
+        if (pixelDataResult.entropy < 2.0) {
+            throw new Error(`Canvas validation failed: Shannon entropy ${pixelDataResult.entropy.toFixed(3)} is below minimum threshold 2.0 (too few distinct visual elements)`);
+        }
+        if (pixelDataResult.uniqueColors < 50) {
+            throw new Error(`Canvas validation failed: Only ${pixelDataResult.uniqueColors} unique colors (need >= 50 for real UI)`);
+        }
+        if (pixelDataResult.bgRatio > 0.85) {
+            throw new Error(`Canvas validation failed: Background color dominance ${(pixelDataResult.bgRatio * 100).toFixed(1)}% exceeds 85% cap`);
+        }
+        if (pixelDataResult.headerNonBg === 0) {
+            throw new Error('Canvas validation failed: Header region (top 10%) contains only background pixels — no UI chrome rendered');
+        }
+        if (pixelDataResult.bodyNonBg === 0) {
+            throw new Error('Canvas validation failed: Body region (middle 50%) contains only background pixels — no content rendered');
+        }
+        console.log(`✔ [PASS] Canvas rendering verified (H=${pixelDataResult.entropy.toFixed(3)} >= 2.0, colors=${pixelDataResult.uniqueColors} >= 50, bgRatio=${(pixelDataResult.bgRatio*100).toFixed(1)}% <= 85%, header=${pixelDataResult.headerNonBg} body=${pixelDataResult.bodyNonBg} footer=${pixelDataResult.footerNonBg})`);
 
         // Capture screenshot of #phone-bezel and canvas
         const screenshotPath = path.resolve(projectRoot, 'screenshot.png');
@@ -322,18 +365,8 @@ async function main() {
 
         fs.mkdirSync(distDir, { recursive: true });
 
-        console.log(`[validate] Capturing screenshot of #phone-bezel...`);
-        const phoneElem = await page.$('#phone-bezel');
-        if (phoneElem) {
-            await phoneElem.screenshot({ path: screenshotPath });
-        } else {
-            const canvasElem = await page.$('#screen');
-            if (canvasElem) {
-                await canvasElem.screenshot({ path: screenshotPath });
-            } else {
-                await page.screenshot({ path: screenshotPath, fullPage: true });
-            }
-        }
+        console.log(`[validate] Capturing screenshot of view...`);
+        await page.screenshot({ path: screenshotPath });
 
         // Copy to dist/screenshot.png
         fs.copyFileSync(screenshotPath, distScreenshotPath);
@@ -347,13 +380,12 @@ async function main() {
             throw new Error('Captured screenshot file is empty (0 bytes)');
         }
 
-        // Validate Live Logcat Milestones
-        console.log(`[validate] Scrutinizing live logcat and milestone streams...`);
-        const logcatData = await page.evaluate(async () => {
+        const logcatData = await page.evaluate(() => {
             try {
-                const { globalLogcat, logger } = await import('./src/logger.js');
-                const entries = globalLogcat.entries || [];
-                const structLogs = (logger && logger.logs) ? logger.logs : [];
+                const globalLogcat = window.globalLogcat;
+                const logger = window.logger;
+                const entries = globalLogcat?.entries || [];
+                const structLogs = logger?.logs || [];
                 
                 const messages = entries.map(e => e.formatted || `[${e.tag}] ${e.msg || e.message}`);
                 

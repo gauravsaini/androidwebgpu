@@ -201,6 +201,5 @@ describe('Real Guest Pipeline Canvas Rendering (Phase 1-3 E2E)', () => {
 
         const entropy = computeShannonEntropy(fb);
         console.log(`  [Entropy] Computed Shannon Entropy H = ${entropy.toFixed(3)} bits/pixel`);
-        assert.ok(entropy >= 1.0, `Shannon entropy H must be >= 1.0 (got ${entropy.toFixed(3)})`);
-    });
+        assert.ok(entropy >= 2.0, `Shannon entropy H must be >= 2.0 (got ${entropy.toFixed(3)})`);    });
 });

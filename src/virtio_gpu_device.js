@@ -42,8 +42,16 @@ export class VirtioGpuDevice {
         this.selectedQueue = 0;
         this.deviceStatus = 0;
         this.isrStatus = 0;
-        this.hostFeatures = (1 << 0) | (1 << 1); // VIRGL + EDID
+        this.hostFeatures = (1 << 0) | (1 << 1); // VIRGL + EDID (low 32 bits, legacy)
         this.guestFeatures = 0;
+        // Modern VirtIO feature negotiation (64-bit, pages of 32 bits each)
+        // Page 0 = bits 0-31, Page 1 = bits 32-63
+        // VIRTIO_F_VERSION_1 = bit 32 → page 1, bit 0
+        this.hostFeaturesHi = 0x01; // VIRTIO_F_VERSION_1 (bit 32)
+        this.guestFeaturesHi = 0;
+        this.deviceFeatureSelect = 0;
+        this.driverFeatureSelect = 0;
+        this.modernConfigGeneration = 0;
         this.pciSlot = 0x06;
         this.pci_id = this.pciSlot << 3;
         this.pci_bars = [{ size: 64 }, { size: 16 * 1024 * 1024 }];
@@ -56,6 +64,7 @@ export class VirtioGpuDevice {
         this.bar1Size = 16 * 1024 * 1024;
         this.bar1Value = 0xD1000000;
         this.bar1Sizing = false;
+        this.bar1Addr = 0xD1000000; // Tracks relocated BAR1 MMIO base
         this.hostInjectionBlocked = false;
         this.guestHasPresented = false;
         this.firstGuestFrameAt = 0;
@@ -322,6 +331,8 @@ export class VirtioGpuDevice {
                                 );
                             }
                             logger.log('bridge', 'I', `[virtio-gpu][VERBOSE] I/O handlers registered OK at 0x${this.ioBase.toString(16)}`);
+                            // Register BAR1 MMIO for VirtIO modern transport (VIRTIO_F_VERSION_1)
+                            this.registerBar1Mmio(io);
                        } else {
                             logger.log('bridge', 'W', `[virtio-gpu][VERBOSE] I/O handlers NOT registered - io missing`);
                         }
@@ -357,7 +368,7 @@ export class VirtioGpuDevice {
                                     const pd = cpuChk.devices.pci.devices[this.pci_id];
                                     const ds = cpuChk.devices.pci.device_spaces[this.pci_id];
                                     if (ds) {
-                                        const barVal = (ds[4] | (ds[5]<<8) | (ds[6]<<16) | (ds[7]<<24)) >>>0;
+                                        const barVal = (ds[4] !== undefined) ? (ds[4] >>> 0) : 0;
                                         logger.log('bridge', 'I', `[virtio-gpu][VERBOSE] POST-CHECK device_spaces BAR0 val=0x${barVal.toString(16)} expected 0x${(this.ioBase|1).toString(16)}`);
                                     }
                                 }
@@ -407,6 +418,183 @@ export class VirtioGpuDevice {
                     if (tryRegister() || ++pollCount > 40) clearInterval(poll);
                 }, 25);
             }
+        }
+    }
+
+    /**
+     * Register BAR1 MMIO handlers for VirtIO modern PCI capabilities.
+     * BAR1 layout (from PCI caps):
+     *   0x0000-0x0037: Common Configuration (type 1)
+     *   0x1000-0x1FFF: Notification (type 2)
+     *   0x2000-0x2003: ISR Status (type 3)
+     *   0x3000-0x3017: Device-specific Config (type 4, virtio_gpu_config)
+     */
+    registerBar1Mmio(io) {
+        if (!io || typeof io.mmap_register !== 'function') {
+            logger.log('bridge', 'W', '[virtio-gpu] Cannot register BAR1 MMIO: io.mmap_register unavailable');
+            return;
+        }
+        const bar1Base = this.bar1Addr;
+        const bar1Size = this.bar1Size;
+        const self = this;
+
+        io.mmap_register(
+            bar1Base,
+            bar1Size,
+            function mmioRead8(addr) { return self.bar1MmioRead(addr - bar1Base, 1); },
+            function mmioWrite8(addr, val) { self.bar1MmioWrite(addr - bar1Base, val, 1); },
+            function mmioRead32(addr) { return self.bar1MmioRead(addr - bar1Base, 4); },
+            function mmioWrite32(addr, val) { self.bar1MmioWrite(addr - bar1Base, val, 4); }
+        );
+
+        logger.log('bridge', 'I', `[virtio-gpu] BAR1 MMIO registered at 0x${bar1Base.toString(16)} (modern VirtIO cfg with VIRTIO_F_VERSION_1)`);
+        console.info(`[VirtIO-GPU] BAR1 MMIO registered at 0x${bar1Base.toString(16)} (modern cfg with VIRTIO_F_VERSION_1)`);
+    }
+
+    /**
+     * Read from BAR1 MMIO (VirtIO modern capabilities)
+     */
+    bar1MmioRead(offset, size) {
+        if (offset < 0x0038) return this.modernCommonRead(offset, size);
+        if (offset >= 0x1000 && offset < 0x2000) return 0xFFFF;
+        if (offset >= 0x2000 && offset < 0x2004) {
+            const isr = this.isrStatus;
+            this.isrStatus = 0;
+            return isr & 0xFF;
+        }
+        if (offset >= 0x3000 && offset < 0x3018) return this.modernDeviceCfgRead(offset - 0x3000, size);
+        return 0;
+    }
+
+    /**
+     * Write to BAR1 MMIO (VirtIO modern capabilities)
+     */
+    bar1MmioWrite(offset, val, size) {
+        if (offset < 0x0038) { this.modernCommonWrite(offset, val, size); return; }
+        if (offset >= 0x1000 && offset < 0x2000) {
+            const qIdx = ((offset - 0x1000) >> 2) & 0x01;
+            console.info(`[VirtIO-GPU][MMIO] NOTIFY queue=${qIdx} (modern)`);
+            this.consumeVirtqueue(qIdx);
+            return;
+        }
+    }
+
+    /**
+     * VirtIO Modern Common Configuration Register Read
+     * virtio_pci_common_cfg layout (56 bytes):
+     *   0x00: device_feature_select  0x04: device_feature
+     *   0x08: driver_feature_select  0x0C: driver_feature
+     *   0x10: msix_config            0x12: num_queues
+     *   0x14: device_status          0x15: config_generation
+     *   0x16: queue_select           0x18: queue_size
+     *   0x1A: queue_msix_vector      0x1C: queue_enable
+     *   0x1E: queue_notify_off       0x20: queue_desc (u64)
+     *   0x28: queue_driver (u64)     0x30: queue_device (u64)
+     */
+    modernCommonRead(offset, size) {
+        if (size === 1) {
+            const regBase = offset & ~3;
+            const val32 = this.modernCommonRead(regBase, 4);
+            return (val32 >>> ((offset - regBase) * 8)) & 0xFF;
+        }
+        switch (offset) {
+            case 0x00: return this.deviceFeatureSelect >>> 0;
+            case 0x04: // device_feature: page-selected
+                if (this.deviceFeatureSelect === 0) return this.hostFeatures >>> 0;
+                if (this.deviceFeatureSelect === 1) return this.hostFeaturesHi >>> 0;
+                return 0;
+            case 0x08: return this.driverFeatureSelect >>> 0;
+            case 0x0C:
+                if (this.driverFeatureSelect === 0) return this.guestFeatures >>> 0;
+                if (this.driverFeatureSelect === 1) return this.guestFeaturesHi >>> 0;
+                return 0;
+            case 0x10: return 0xFFFF; // msix_config: no MSI-X
+            case 0x12: return 2;      // num_queues
+            case 0x14: return this.deviceStatus & 0xFF;
+            case 0x15: return this.modernConfigGeneration & 0xFF;
+            case 0x16: return this.selectedQueue & 0xFFFF;
+            case 0x18: return (this.queues[this.selectedQueue]?.size || 0) & 0xFFFF;
+            case 0x1A: return 0xFFFF; // queue_msix_vector: no MSI-X
+            case 0x1C: return (this.queues[this.selectedQueue]?.pfn ? 1 : 0);
+            case 0x1E: return this.selectedQueue & 0xFFFF; // queue_notify_off
+            case 0x20: return (this.queues[this.selectedQueue]?.descAddr || 0) >>> 0;
+            case 0x24: return 0;
+            case 0x28: return (this.queues[this.selectedQueue]?.availAddr || 0) >>> 0;
+            case 0x2C: return 0;
+            case 0x30: return (this.queues[this.selectedQueue]?.usedAddr || 0) >>> 0;
+            case 0x34: return 0;
+            default: return 0;
+        }
+    }
+
+    /**
+     * VirtIO Modern Common Configuration Register Write
+     */
+    modernCommonWrite(offset, val, size) {
+        if (size === 1) {
+            // Only handle device_status byte write directly (offset 0x14)
+            if (offset === 0x14) { this.modernCommonWrite(0x14, val, 4); return; }
+            return;
+        }
+        switch (offset) {
+            case 0x00: this.deviceFeatureSelect = val >>> 0; break;
+            case 0x08: this.driverFeatureSelect = val >>> 0; break;
+            case 0x0C:
+                if (this.driverFeatureSelect === 0) this.guestFeatures = val >>> 0;
+                else if (this.driverFeatureSelect === 1) this.guestFeaturesHi = val >>> 0;
+                break;
+            case 0x14: {
+                const prev = this.deviceStatus;
+                this.deviceStatus = val & 0xFF;
+                console.info(`[VirtIO-GPU][MMIO] DEVICE_STATUS: 0x${prev.toString(16)} -> 0x${this.deviceStatus.toString(16)} ACK=${!!(val&1)} DRV=${!!(val&2)} OK=${!!(val&4)} FEAT=${!!(val&8)} (modern)`);
+                logger.log('bridge','I',`[virtio-gpu][MMIO] DEVICE_STATUS: 0x${prev.toString(16)} -> 0x${this.deviceStatus.toString(16)}`);
+                if (this.deviceStatus === 0) {
+                    this.queues[0].lastAvailIdx = 0; this.queues[0].lastUsedIdx = 0;
+                    this.queues[1].lastAvailIdx = 0; this.queues[1].lastUsedIdx = 0;
+                    this.isrStatus = 0; this.guestActive = false; this.hostInjectionBlocked = false;
+                    if (typeof this.onGuestActiveChange === 'function') {
+                        try { this.onGuestActiveChange(false); } catch (_) {}
+                    }
+                }
+                break;
+            }
+            case 0x16: this.selectedQueue = val & 0x01; break;
+            case 0x18:
+                if (this.queues[this.selectedQueue]) this.queues[this.selectedQueue].size = val & 0xFFFF;
+                break;
+            case 0x1C: // queue_enable
+                if (val & 1) {
+                    const q = this.queues[this.selectedQueue];
+                    if (q && q.descAddr) {
+                        q.pfn = (q.descAddr >>> 12) >>> 0;
+                        console.info(`[VirtIO-GPU][MMIO] Queue ${this.selectedQueue} ENABLED desc=0x${(q.descAddr||0).toString(16)} pfn=0x${q.pfn.toString(16)}`);
+                        logger.log('bridge','I',`[virtio-gpu][MMIO] Queue ${this.selectedQueue} enabled pfn=0x${q.pfn.toString(16)}`);
+                    }
+                }
+                break;
+            case 0x20: if (this.queues[this.selectedQueue]) this.queues[this.selectedQueue].descAddr = val >>> 0; break;
+            case 0x28: if (this.queues[this.selectedQueue]) this.queues[this.selectedQueue].availAddr = val >>> 0; break;
+            case 0x30: if (this.queues[this.selectedQueue]) this.queues[this.selectedQueue].usedAddr = val >>> 0; break;
+            default: break;
+        }
+    }
+
+    /**
+     * VirtIO GPU device-specific config read (virtio_gpu_config)
+     * 0x00: events_read  0x04: events_clear  0x08: num_scanouts  0x0C: num_capsets
+     */
+    modernDeviceCfgRead(offset, size) {
+        if (size === 1) {
+            const regBase = offset & ~3;
+            const val32 = this.modernDeviceCfgRead(regBase, 4);
+            return (val32 >>> ((offset - regBase) * 8)) & 0xFF;
+        }
+        switch (offset) {
+            case 0x00: return 0;
+            case 0x04: return 0;
+            case 0x08: return this.num_scanouts >>> 0;
+            case 0x0C: return this.num_capsets >>> 0;
+            default: return 0;
         }
     }
 
@@ -572,7 +760,8 @@ export class VirtioGpuDevice {
         if (offset === 0x10 || offset === 0x11) {
             // QUEUE_NOTIFY (0x10, 16-bit): kick queue processing immediately
             const qIdx = val & 0xFFFF;
-            logger.log('bridge', 'D', `[virtio-gpu-device] QUEUE_NOTIFY kicked for queue ${qIdx}`);
+            console.info(`[VirtIO-GPU] QUEUE_NOTIFY kicked for queue ${qIdx}`);
+            logger.log('bridge', 'I', `[virtio-gpu-device] QUEUE_NOTIFY kicked for queue ${qIdx}`);
             this.consumeVirtqueue(qIdx);
             return;
         }
@@ -730,15 +919,22 @@ export class VirtioGpuDevice {
     getGuestMemory() {
         if (!this.v86) return null;
         try {
-            const cpu = this.v86.cpu || (this.v86.v86 && this.v86.v86.cpu);
-            if (cpu && cpu.memory) {
-                if (cpu.memory.buffer) return new Uint8Array(cpu.memory.buffer);
-                if (cpu.memory.u8) return cpu.memory.u8;
-                if (cpu.memory.raw_memory) return new Uint8Array(cpu.memory.raw_memory.buffer);
+            const cpu = this.v86.cpu || (this.v86.v86 && this.v86.v86.cpu) || (this.v86.emulator && this.v86.emulator.cpu);
+            if (cpu) {
+                if (cpu.memory) {
+                    if (cpu.memory.buffer) return new Uint8Array(cpu.memory.buffer);
+                    if (cpu.memory.u8) return cpu.memory.u8;
+                    if (cpu.memory.mem8) return cpu.memory.mem8;
+                    if (cpu.memory.raw_memory) return new Uint8Array(cpu.memory.raw_memory.buffer);
+                    if (cpu.memory.wasm_memory && cpu.memory.wasm_memory.buffer) return new Uint8Array(cpu.memory.wasm_memory.buffer);
+                }
+                if (cpu.mem8) return cpu.mem8;
+                if (cpu.buffer) return new Uint8Array(cpu.buffer);
             }
             if (this.v86.memory && this.v86.memory.buffer) {
                 return new Uint8Array(this.v86.memory.buffer);
             }
+            if (this.v86.mem8) return this.v86.mem8;
         } catch (_) {}
         return null;
     }
@@ -749,21 +945,40 @@ export class VirtioGpuDevice {
      */
     consumeVirtqueue(queueIdx = 0) {
         const q = this.queues[queueIdx];
-        if (!q || q.pfn === 0) return;
+        if (!q || (q.pfn === 0 && !q.descAddr)) {
+            console.warn(`[VirtIO-GPU] consumeVirtqueue(${queueIdx}) skipped: q=${!!q} pfn=${q ? q.pfn : 0} descAddr=${q ? q.descAddr : 0}`);
+            return;
+        }
 
         const guestMem = this.getGuestMemory();
-        if (!guestMem) return;
+        if (!guestMem) {
+            console.warn(`[VirtIO-GPU] consumeVirtqueue(${queueIdx}) skipped: guestMem is null!`);
+            return;
+        }
 
         const qSize = q.size;
-        const descTableAddr = q.pfn * 4096;
-        const availRingAddr = descTableAddr + qSize * 16;
-        const usedRingAddr = Math.ceil((availRingAddr + 4 + 2 * qSize) / 4096) * 4096;
+        let descTableAddr, availRingAddr, usedRingAddr;
 
-        if (usedRingAddr + 4 + 8 * qSize > guestMem.length) return;
+        if (q.descAddr && q.availAddr && q.usedAddr) {
+            // Modern transport: kernel provided explicit ring addresses
+            descTableAddr = q.descAddr;
+            availRingAddr = q.availAddr;
+            usedRingAddr = q.usedAddr;
+        } else {
+            // Legacy transport: compute from PFN
+            descTableAddr = q.pfn * 4096;
+            availRingAddr = descTableAddr + qSize * 16;
+            usedRingAddr = Math.ceil((availRingAddr + 4 + 2 * qSize) / 4096) * 4096;
+        }
+
+        if (usedRingAddr + 4 + 8 * qSize > guestMem.length) {
+            console.warn(`[VirtIO-GPU] usedRingAddr 0x${usedRingAddr.toString(16)} exceeds guestMem length 0x${guestMem.length.toString(16)}`);
+            return;
+        }
 
         const view = new DataView(guestMem.buffer, guestMem.byteOffset, guestMem.byteLength);
         const availIdx = view.getUint16(availRingAddr + 2, true);
-        logger.log('bridge', 'D', `queue ${queueIdx} pfn=${q.pfn} avail=${availIdx}`);
+        console.info(`[VirtIO-GPU] consumeVirtqueue(${queueIdx}) pfn=0x${q.pfn.toString(16)} availIdx=${availIdx} lastAvailIdx=${q.lastAvailIdx} qSize=${qSize}`);
 
         let processedCount = 0;
         while (q.lastAvailIdx !== availIdx) {
@@ -771,20 +986,13 @@ export class VirtioGpuDevice {
             const headDescIdx = view.getUint16(availRingAddr + 4 + availSlot * 2, true);
 
             let writtenBytes = 0;
-            if (this.rustBridge && typeof this.rustBridge.process_virtqueue_descriptor === 'function') {
-                try {
-                    writtenBytes = this.rustBridge.process_virtqueue_descriptor(
-                        guestMem,
-                        descTableAddr,
-                        headDescIdx
-                    );
-                } catch (e) {
-                    logger.log('bridge', 'W', `process_virtqueue_descriptor error: ${e}`);
-                }
-            } else {
-                // Fallback: parse descriptor chain manually in JS
-                writtenBytes = this.consumeDescriptorChainJs(guestMem, descTableAddr, headDescIdx);
-            }
+            // Always use the JS descriptor chain parser — it walks descriptors via
+            // zero-copy subarray views over guest memory, then routes the extracted
+            // command packet through rustBridge.process_command_packet (WASM).
+            // The old path (rustBridge.process_virtqueue_descriptor) copies the
+            // ENTIRE guest RAM (256MB+) into WASM linear memory and OOMs.
+            writtenBytes = this.consumeDescriptorChainJs(guestMem, descTableAddr, headDescIdx);
+            console.info(`[VirtIO-GPU] consumeDescriptorChainJs returned ${writtenBytes} bytes (headDesc=${headDescIdx})`);
 
             // Record entry in Used Ring: { id: u32, len: u32 }
             const usedSlot = q.lastUsedIdx % qSize;
@@ -804,6 +1012,7 @@ export class VirtioGpuDevice {
             this.guestActive = true;
             this.guestHasPresented = true;
             this.hostInjectionBlocked = true;
+            console.info(`[Pipeline][Phase 5/8: VirtIO-GPU] Guest Virtqueue Frame: processed ${processedCount} descriptors on queue ${queueIdx} (lastAvail=${q.lastAvailIdx}, lastUsed=${q.lastUsedIdx}) -> guestHasPresented=true (host fallback LOCKED OUT)`);
             console.info(`[VirtIO-GPU] GUEST FIRST FRAME: processed ${processedCount} descriptors queue=${queueIdx} lastAvail=${q.lastAvailIdx} lastUsed=${q.lastUsedIdx} wasGuestActive=${wasGuestActive} -> GUEST_ACTIVE TRUE (host injection now BLOCKED)`);
             logger.log('bridge', 'I', `[virtio-gpu-device] Processed ${processedCount} descriptors on queue ${queueIdx} (lastAvail=${q.lastAvailIdx}, lastUsed=${q.lastUsedIdx})`);
             if (!wasGuestActive) {
@@ -814,7 +1023,12 @@ export class VirtioGpuDevice {
                 }
             }
             // Render scanout to canvas
-            this.renderScanoutToCanvas(0);
+            try {
+                this.renderScanoutToCanvas(0);
+                console.info(`[VirtIO-GPU] renderScanoutToCanvas(0) completed successfully`);
+            } catch (e) {
+                console.error(`[VirtIO-GPU] renderScanoutToCanvas(0) failed: ${e}`, e);
+            }
 
             // Assert ISR queue interrupt (bit 0)
             this.isrStatus |= 0x01;
@@ -879,7 +1093,79 @@ export class VirtioGpuDevice {
             offset += b.length;
         }
 
-        const resp = this.processControlQueue(combinedIn);
+        // Parse command type and attach guest DMA memory for scatter-gather transfers
+        let packetToSend = combinedIn;
+        if (combinedIn.length >= 4) {
+            const viewIn = new DataView(combinedIn.buffer, combinedIn.byteOffset, combinedIn.byteLength);
+            const cmdType = viewIn.getUint32(0, true);
+
+            // 1. RESOURCE_ATTACH_BACKING (0x0106)
+            if (cmdType === 0x0106 && combinedIn.length >= 32) {
+                const resId = viewIn.getUint32(24, true);
+                const nrEntries = viewIn.getUint32(28, true);
+                const entries = [];
+                for (let i = 0; i < nrEntries; i++) {
+                    const off = 32 + i * 16;
+                    if (off + 16 <= combinedIn.length) {
+                        const addrLo = viewIn.getUint32(off, true);
+                        const addrHi = viewIn.getUint32(off + 4, true);
+                        const addr = addrLo + addrHi * 0x100000000;
+                        const len = viewIn.getUint32(off + 8, true);
+                        entries.push({ addr, len });
+                    }
+                }
+                if (!this.resourceBacking) this.resourceBacking = new Map();
+                this.resourceBacking.set(resId, entries);
+                console.info(`[VirtIO-GPU] RESOURCE_ATTACH_BACKING cached resId=${resId} entries=${entries.length} (entry0: 0x${entries[0]?.addr.toString(16)}, ${entries[0]?.len} bytes)`);
+            }
+            // 2. RESOURCE_DETACH_BACKING (0x0107)
+            else if (cmdType === 0x0107 && combinedIn.length >= 28) {
+                const resId = viewIn.getUint32(24, true);
+                if (this.resourceBacking) this.resourceBacking.delete(resId);
+            }
+            // 3. TRANSFER_TO_HOST_2D (0x0105)
+            else if (cmdType === 0x0105 && combinedIn.length >= 56) {
+                const resId = viewIn.getUint32(48, true);
+                const entries = this.resourceBacking ? this.resourceBacking.get(resId) : null;
+                if (entries && entries.length > 0 && combinedIn.length === 56) {
+                    let totalDmaLen = 0;
+                    for (const e of entries) totalDmaLen += e.len;
+                    const fullPacket = new Uint8Array(56 + totalDmaLen);
+                    fullPacket.set(combinedIn, 0);
+                    let dmaOffset = 56;
+                    for (const e of entries) {
+                        if (e.addr + e.len <= guestMem.length) {
+                            fullPacket.set(guestMem.subarray(e.addr, e.addr + e.len), dmaOffset);
+                            dmaOffset += e.len;
+                        }
+                    }
+                    packetToSend = fullPacket;
+                    console.info(`[VirtIO-GPU] TRANSFER_TO_HOST_2D attached DMA pixel payload (${totalDmaLen} bytes) for resId=${resId} (from guest physical addr 0x${entries[0]?.addr.toString(16)})`);
+                }
+            }
+            // 4. TRANSFER_TO_HOST_3D (0x0205)
+            else if (cmdType === 0x0205 && combinedIn.length >= 72) {
+                const resId = viewIn.getUint32(56, true);
+                const entries = this.resourceBacking ? this.resourceBacking.get(resId) : null;
+                if (entries && entries.length > 0 && combinedIn.length === 72) {
+                    let totalDmaLen = 0;
+                    for (const e of entries) totalDmaLen += e.len;
+                    const fullPacket = new Uint8Array(72 + totalDmaLen);
+                    fullPacket.set(combinedIn, 0);
+                    let dmaOffset = 72;
+                    for (const e of entries) {
+                        if (e.addr + e.len <= guestMem.length) {
+                            fullPacket.set(guestMem.subarray(e.addr, e.addr + e.len), dmaOffset);
+                            dmaOffset += e.len;
+                        }
+                    }
+                    packetToSend = fullPacket;
+                    console.info(`[VirtIO-GPU] TRANSFER_TO_HOST_3D attached DMA pixel payload (${totalDmaLen} bytes) for resId=${resId}`);
+                }
+            }
+        }
+
+        const resp = this.processControlQueue(packetToSend);
 
         let respOffset = 0;
         let written = 0;
@@ -935,11 +1221,9 @@ export class VirtioGpuDevice {
         if (!this.rustBridge || !this.ctx2d || typeof this.rustBridge.get_scanout_framebuffer !== "function") {
             return;
         }
-
         const damage = typeof this.rustBridge.get_scanout_damage === "function"
             ? this.rustBridge.get_scanout_damage(scanoutId)
             : null;
-
         const fb = (typeof this.rustBridge.get_scanout_framebuffer_rgba === "function")
             ? this.rustBridge.get_scanout_framebuffer_rgba(scanoutId)
             : this.rustBridge.get_scanout_framebuffer(scanoutId);
@@ -955,6 +1239,13 @@ export class VirtioGpuDevice {
             const copyBytes = Math.min(fb.length, this.cachedImageData.data.length);
             this.cachedImageData.data.set(fb.subarray(0, copyBytes));
         }
+
+        const hasDamage = damage && damage.length === 4 && damage[2] > 0 && damage[3] > 0;
+        if (hasDamage || !this._lastHadDamage) {
+            console.info(`[Pipeline][Phase 6/8: Rust Bridge] Readback: scanout=${scanoutId} damage=[${damage ? damage.join(',') : 'none'}] fbBytes=${fb.length} (BGRX->RGBA swizzled)`);
+            console.info(`[Pipeline][Phase 7/8: WebGPU] Compositor Pass: scanout=${scanoutId} target=${width}x${height} mode=${this.offscreenTransferred ? 'OffscreenWorker' : 'DirectWebGPU'}`);
+        }
+        this._lastHadDamage = hasDamage;
 
         if (damage && damage.length === 4) {
             const [dx, dy, dw, dh] = damage;
@@ -985,6 +1276,7 @@ export class VirtioGpuDevice {
                     });
                 } else if (this.ctx2d) {
                     this.ctx2d.putImageData(this.cachedImageData, 0, 0, dx, dy, subW, subH);
+                    console.info(`[Pipeline][Phase 8/8: Canvas] Presentation: painted dirty damage rect [${dx}, ${dy}, ${subW}, ${subH}] (${subW * subH * 4} bytes) to <canvas id="${this.canvas?.id || 'screen'}">`);
                 }
 
                 this.damage_rects_count++;
@@ -1013,12 +1305,13 @@ export class VirtioGpuDevice {
                 type: "UPDATE_DAMAGE_RECT",
                 x: 0,
                 y: 0,
-                width,
-                height,
+                width: width,
+                height: height,
                 pixels: fb.subarray(0, Math.min(fb.length, width * height * 4))
             });
-        } else if (this.ctx2d && fb.length > 0) {
+        } else if (this.ctx2d) {
             this.ctx2d.putImageData(this.cachedImageData, 0, 0);
+            console.info(`[Pipeline][Phase 8/8: Canvas] Presentation: full scanout [0, 0, ${width}, ${height}] (${width * height * 4} bytes) to <canvas id="${this.canvas?.id || 'screen'}">`);
         }
     }
 

@@ -463,6 +463,7 @@ async function startSystem() {
         const resp = await fetch(targetApk);
         if (resp.ok) {
             const buf = await resp.arrayBuffer();
+            console.info(`[Pipeline][Phase 1/8: APK] Fetch: ${targetApk} (${buf.byteLength} bytes) retrieved`);
             console.info(`[AndroidOS] ${targetApk} fetched:`, buf.byteLength, "bytes");
             let indexBuf = null;
             if (targetApk.toLowerCase().includes('fdroid') || targetApk.toLowerCase().includes('f-droid')) {
@@ -473,10 +474,12 @@ async function startSystem() {
                     }
                 } catch (_) {}
             }
+            console.info(`[Pipeline][Phase 1/8: APK] Parsing & decoding APK binary archive into Dalvik VM...`);
             console.info(`[AndroidOS] Ingesting APK into DalvikVM runtime...`);
             const appState = await runtime.loadAndRunApk(buf, indexBuf);
             const targetPkg = appState?.packageName || (targetApk.toLowerCase().includes('firefox') ? 'org.mozilla.firefox' : 'org.fdroid.fdroid');
             appendLogcat('PackageManager', `${targetApk} loaded into Dalvik VM & registered in PMS (${targetPkg}).`, 'I');
+            console.info(`[Pipeline][Phase 1/8: APK] Package [${targetPkg}] ready in PackageManagerService`);
             console.info(`[AndroidOS] ${targetPkg} installed into PMS successfully -> launching Activity`);
             console.info(`[AndroidOS] Launching Activity ${targetPkg} -> will auto-switch viewport to webgpu (guest fallback visible until guest presents)`);
             await appController.launchActivity(targetPkg);

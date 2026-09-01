@@ -2675,15 +2675,58 @@ fn fs_normals(in: VertexOutput) -> @location(0) vec4<f32> {
                 if (navigationStack[navigationStack.length - 1] !== 'fdroid') {
                     navigationStack.push('fdroid');
                 }
-                runningTasks.set('fdroid', { title: 'F-Droid', pkg: 'org.fdroid.fdroid', screenId: 'screen-fdroid' });
+                runningTasks.set('fdroid', { title: 'F-Droid', pkg: 'org.fdroid.fdroid', screenId: 'screen-native-surface' });
                 fdroidDetailModal.style.display = 'none';
-                activateScreen('screen-fdroid');
+                activateScreen('screen-native-surface');
                 
-                // Execute F-Droid Activity in Dalvik Runtime
-                if (androidRuntime && androidRuntime.activeApps.has('org.fdroid.fdroid')) {
-                    androidRuntime.renderActivityUi(androidRuntime.activeApps.get('org.fdroid.fdroid'), screenFdroid);
-                } else if (androidRuntime) {
-                    androidRuntime.renderActivityUi({ packageName: 'org.fdroid.fdroid', appName: 'F-Droid' }, screenFdroid);
+                // Execute F-Droid Activity in Dalvik Runtime on WebGPU canvas
+                if (androidRuntime) {
+                    androidRuntime.setCanvas(canvas);
+                    androidRuntime.startActivity('org.fdroid.fdroid', 'org.fdroid.fdroid.views.main.MainActivity');
+                }
+                if (arcade && !tabArcade.classList.contains('active')) arcade.stop();
+            } else if (appId === 'firefox' || appId === 'org.mozilla.firefox') {
+                if (navigationStack[navigationStack.length - 1] !== 'firefox') {
+                    navigationStack.push('firefox');
+                }
+                runningTasks.set('firefox', { title: 'Firefox', pkg: 'org.mozilla.firefox', screenId: 'screen-native-surface' });
+                activateScreen('screen-native-surface');
+                if (androidRuntime) {
+                    androidRuntime.setCanvas(canvas);
+                    androidRuntime.startActivity('org.mozilla.firefox', 'org.mozilla.firefox.AppCool');
+                }
+                if (arcade && !tabArcade.classList.contains('active')) arcade.stop();
+            } else if (appId === 'settings' || appId === 'com.android.settings') {
+                if (navigationStack[navigationStack.length - 1] !== 'settings') {
+                    navigationStack.push('settings');
+                }
+                runningTasks.set('settings', { title: 'Settings', pkg: 'com.android.settings', screenId: 'screen-native-surface' });
+                activateScreen('screen-native-surface');
+                if (androidRuntime) {
+                    androidRuntime.setCanvas(canvas);
+                    androidRuntime.startActivity('com.android.settings', 'com.android.settings.SettingsActivity');
+                }
+                if (arcade && !tabArcade.classList.contains('active')) arcade.stop();
+            } else if (appId === 'terminal' || appId === 'com.android.terminal') {
+                if (navigationStack[navigationStack.length - 1] !== 'terminal') {
+                    navigationStack.push('terminal');
+                }
+                runningTasks.set('terminal', { title: 'Terminal', pkg: 'com.android.terminal', screenId: 'screen-native-surface' });
+                activateScreen('screen-native-surface');
+                if (androidRuntime) {
+                    androidRuntime.setCanvas(canvas);
+                    androidRuntime.startActivity('com.android.terminal', 'com.android.terminal.TerminalActivity');
+                }
+                if (arcade && !tabArcade.classList.contains('active')) arcade.stop();
+            } else if (appId === 'files' || appId === 'com.android.files') {
+                if (navigationStack[navigationStack.length - 1] !== 'files') {
+                    navigationStack.push('files');
+                }
+                runningTasks.set('files', { title: 'Files', pkg: 'com.android.files', screenId: 'screen-native-surface' });
+                activateScreen('screen-native-surface');
+                if (androidRuntime) {
+                    androidRuntime.setCanvas(canvas);
+                    androidRuntime.startActivity('com.android.files', 'com.android.files.FilesActivity');
                 }
                 if (arcade && !tabArcade.classList.contains('active')) arcade.stop();
             } else if (appId === 'unity' || appId === 'godot') {
@@ -2713,18 +2756,15 @@ fn fs_normals(in: VertexOutput) -> @location(0) vec4<f32> {
                     desc: 'Android Application Runtime Surface.'
                 };
                 
-                if (androidRuntime && androidRuntime.activeApps.has(appInfo.packageName)) {
-                    genericAppTitle.textContent = appInfo.appName;
-                    androidRuntime.renderActivityUi(androidRuntime.activeApps.get(appInfo.packageName), genericAppBody);
-                } else {
-                    renderGenericApp(appInfo);
+                activateScreen('screen-native-surface');
+                if (androidRuntime) {
+                    androidRuntime.setCanvas(canvas);
+                    androidRuntime.startActivity(appInfo.packageName, `${appInfo.packageName}.MainActivity`);
                 }
-                
-                activateScreen('screen-generic-app');
                 if (navigationStack[navigationStack.length - 1] !== appId) {
                     navigationStack.push(appId);
                 }
-                runningTasks.set(appId, { title: appInfo.appName, pkg: appInfo.packageName, screenId: 'screen-generic-app' });
+                runningTasks.set(appId, { title: appInfo.appName, pkg: appInfo.packageName, screenId: 'screen-native-surface' });
                 if (arcade && !tabArcade.classList.contains('active')) arcade.stop();
             }
 

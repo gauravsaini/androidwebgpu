@@ -2503,13 +2503,26 @@ export class LayoutInflater {
 
         // String decoding
         const resolveStringVal = () => {
-            if (rawVal) return rawVal;
+            if (dataType === TypedValue.TYPE_REFERENCE && resResolver) {
+                const s = resResolver.resolveString(data);
+                if (s !== null && s !== undefined && s !== '') return s;
+            }
+            if (rawVal) {
+                if (typeof rawVal === 'string' && (/^\d+$/.test(rawVal) || rawVal.startsWith('@'))) {
+                    const num = parseInt(rawVal.replace(/^[@]/, ''), 10);
+                    if (resResolver && num > 0) {
+                        const s = resResolver.resolveString(num);
+                        if (s !== null && s !== undefined && s !== '') return s;
+                    }
+                }
+                return rawVal;
+            }
             if (dataType === TypedValue.TYPE_STRING && resResolver) {
                 return resResolver.globalStrings[data] || '';
             }
-            if (dataType === TypedValue.TYPE_REFERENCE && resResolver) {
+            if (resResolver && typeof data === 'number' && data > 0x01000000) {
                 const s = resResolver.resolveString(data);
-                if (s !== null) return s;
+                if (s !== null && s !== undefined && s !== '') return s;
             }
             return String(data);
         };

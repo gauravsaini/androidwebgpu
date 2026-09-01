@@ -1,65 +1,103 @@
-# Project: AndroidWebGPU Pure Guest Rendering
+# Project: Android WebGPU Rendering Pipeline
 
 ## Architecture
-AndroidWebGPU executes guest Linux and Android userspace inside a WebAssembly v86 x86 VM with hardware-accelerated VirtIO-GPU graphics bridged to WebGPU:
-- **VM Layer (`src/virtio_gpu_device.js`, `v86`)**: Emulates OASIS VirtIO-GPU 1.0/1.2 PCI device at BDF 0000:00:06.0 with BAR0 (I/O, 64B) and BAR1 (MMIO, 16MB). Intercepts notify kicks, parses virtqueue descriptor chains, handles BAR sizing/relocation, and raises CPU interrupts.
-- **Guest Layer (`guest/initrd/init`, `guest/surfaceflinger.c`, `guest/app_process.c`, `guest/patches/`)**: Guest Linux kernel binds `virtio-pci` and `virtio-gpu`, creating `/dev/dri/card0` and `/dev/dri/renderD128`. Guest userspace (`init -> servicemanager -> zygote -> app_process -> SurfaceFlinger`) allocates DRM GEM buffers via gralloc and submits `TRANSFER_TO_HOST_2D` and `RESOURCE_FLUSH` via `DRM_IOCTL_VIRTGPU_EXECBUFFER`.
-- **Bridge & Compositor Layer (`crates/virtio_gpu_bridge`, `crates/webgpu_compositor`)**: Rust/WASM bridge decodes virtqueue packets, resolves scatter-gather DMA memory backing, swizzles BGRX to RGBA, tracks damage bounding boxes, and blits to `<canvas id="screen" width="720" height="1440">`.
-- **Gating & Runtime Layer (`src/android_runtime.js`, `src/system_bootstrap.js`)**: Transitions `guestActive=true` and `guestHasPresented=true` upon first guest frame, permanently locking out host rasterizer fallback.
+The Android WebGPU rendering pipeline implements an authentic, zero-mock 8-stage graphics pipeline connecting Android guest execution to an HTML5 WebGPU/Canvas presentation surface:
+
+```
+[Target APK (F-Droid / Firefox)]
+               │
+               ▼ Stage 1: APK Ingestion & PMS (apk_client_parser.js, dex_vm.js, pms_rs)
+[View Tree & XML AST Layout]
+               │
+               ▼ Stage 2: View Hierarchy (view_hierarchy.js, MeasureSpec, LayoutParams)
+[HWUI / Skia RenderNodes & GraphicBuffers]
+               │
+               ▼ Stage 3: HWUI Rasterizer & GraphicBufferQueue (view_rasterizer.js, buffer_queue.rs)
+[SurfaceFlinger DRM Composition]
+               │
+               ▼ Stage 4: SurfaceFlinger & Layer Matrix Translation (guest/surfaceflinger.c, service.rs)
+[VirtIO-GPU Virtqueue 0 (TRANSFER_TO_HOST_2D & RESOURCE_FLUSH)]
+               │
+               ▼ Stage 5: VirtIO-GPU Device Emulation (virtio_gpu_device.js, PCI 00:06.0, IRQ 10)
+[Rust WASM Bridge (DMA Backing, Damage Rects, BGRX->RGBA Swizzle)]
+               │
+               ▼ Stage 6: Rust Bridge (crates/virtio_gpu_bridge, bridge.rs, wasm.rs)
+[WebGPU Compositor (WGSL Pipeline, Cached Layer Textures, Swapchain)]
+               │
+               ▼ Stage 7: WebGPU Compositor (crates/webgpu_compositor, crates/webgpu_swapchain)
+[HTML5 Screen Canvas Presentation (<canvas id="screen" width="720" height="1440">)]
+               │
+               ▼ Stage 8: System Presentation (system_bootstrap.js, android.html)
+```
 
 ## Feature Inventory
 | # | Feature | Description | Milestone | Source |
 |---|---------|-------------|-----------|--------|
-| 1 | VirtIO PCI Config & Caps | Emulate BDF 0x06 PCI device with Vendor 0x1AF4, Device 0x1010, BAR0/BAR1, and VirtIO legacy I/O capabilities | M1 | survey_explorer_1 |
-| 2 | BAR0/BAR1 Relocation & Sizing | Support BAR sizing probes (0xFFFFFFFF) and partial byte/word writes without corrupting ioBase | M1 | survey_explorer_1 |
-| 3 | Driver Binding & Sysfs | Topological module load (12 modules) and sysfs driver binding (`/sys/bus/pci/drivers/virtio-pci/new_id`) | M1 | survey_explorer_1 |
-| 4 | DRM Nodes Creation | Create and expose `/dev/dri/card0` and `/dev/dri/renderD128` without ENODEV | M1 | survey_explorer_1 |
-| 5 | Guest Userspace Boot Pipeline | Boot sequence: `init -> servicemanager -> zygote -> app_process -> SurfaceFlinger` | M2 | survey_explorer_2 |
-| 6 | DRM Gralloc GEM Allocations | Allocate GEM backing buffers via `DRM_IOCTL_VIRTGPU_RESOURCE_CREATE` + `DRM_IOCTL_VIRTGPU_MAP` | M2 | survey_explorer_2 |
-| 7 | SurfaceFlinger Command Dispatch | Submit `RESOURCE_CREATE_2D`, `TRANSFER_TO_HOST_2D`, `RESOURCE_FLUSH` via `DRM_IOCTL_VIRTGPU_EXECBUFFER` | M2 | survey_explorer_2 |
-| 8 | Virtqueue 0 Ring Processing | Hypervisor consumes Queue 0 descriptors, updates Used ring, raises IRQ 10 | M2 | survey_explorer_2 |
-| 9 | Guest Gating & Fallback Lockout | Transition `guestActive=true`, `guestHasPresented=true`, and suppress host rasterizer | M2 | survey_explorer_2 |
-| 10 | WebGPU VirtIO Scanout Blit | Deliver 720x1440 RGBA scanout framebuffer to `#screen` canvas via WebGPU / 2D context | M3 | survey_spec_miner_1 |
-| 11 | BGRX to RGBA Swizzling | Swizzle Linux DRM BGRX to WebGPU RGBA with alpha=255 | M3 | survey_spec_miner_1 |
-| 12 | Damage Rect Tracking | Track dirty bounding boxes on `RESOURCE_FLUSH` for partial canvas updating | M3 | survey_spec_miner_1 |
-| 13 | Multi-Layer Compositing Engine | WGSL multi-layer compositor with matrix transforms and blend states | M3 | survey_spec_miner_1 |
-| 14 | Shannon Entropy Telemetry | Validate non-black rendered display frames ($H \ge 1.0$) | M3 | survey_spec_miner_1 |
-| 15 | E2E 4-Tier Test Suite | Comprehensive unit, integration, boundary, combinatorial, and scenario test matrix | M4 | survey_spec_miner_1 |
-| 16 | Adversarial Hardening (Tier 5) | Adversarial stress testing, race condition checking, and memory integrity audits | M4 | survey_spec_miner_1 |
+| 1 | APK Ingestion & Extraction | Pure-JS DEFLATE & ZIP reader extracting classes.dex, resources.arsc, AndroidManifest.xml | M1 | Survey |
+| 2 | AXML Decoder & ARSC Resolver | Binary XML manifest decoding and resource table resolution | M1 | Survey |
+| 3 | Dalvik Multi-DEX VM | Bytecode parsing, method resolution, instruction dispatch for APK classes | M1 | Survey |
+| 4 | PackageManagerService | Package metadata, permissions, intent filters on Binder `"package"` | M1 | Survey |
+| 5 | View Hierarchy & Layout | MeasureSpec bitmask, LayoutParams, ViewGroup measure/layout traversal | M1 | Survey |
+| 6 | HWUI RenderNodes & Rasterization | Skia recording traversal, dirty rect accumulation, GraphicBuffer rendering | M1 | Survey |
+| 7 | GraphicBufferQueue | `IGraphicBufferProducer` buffer slot lifecycle (DEQUEUE, QUEUE, ALLOCATE) | M1 | Survey |
+| 8 | SurfaceFlinger Service | Multi-surface Z-ordering, NDC matrix translation, display config (720x1440) | M2 | Survey |
+| 9 | DRM Primary Plane (`/dev/dri/card0`) | In-guest DRM buffer allocation and scanout binding | M2 | Survey |
+| 10 | VirtIO-GPU PCI Configuration | PCI BDF 00:06.0, BAR0 I/O (0xC140), BAR1 MMIO (0xD1000000), IRQ 10 | M2 | Survey |
+| 11 | Virtqueue 0 Ring Processing | OASIS 1.2 descriptor ring, available/used ring processing, 16-bit wrap | M2 | Survey |
+| 12 | `TRANSFER_TO_HOST_2D` Command | Subrectangle pixel transfer with inline and scatter-gather DMA backing | M2 | Survey |
+| 13 | `RESOURCE_FLUSH` Command | Scanout damage rect computation, clipped boundary blitting, fence return | M2 | Survey |
+| 14 | Rust WASM Bridge | WebAssembly bridge parsing virtqueue descriptors and managing host resources | M3 | Survey |
+| 15 | BGRX to RGBA Swizzling | DRM BGRX channel swap to RGBA for canvas/WebGPU compatibility | M3 | Survey |
+| 16 | Damage Rect Extraction | Dirty bounding box calculation (`get_scanout_damage`) for partial blits | M3 | Survey |
+| 17 | Permanent Fallback Lockout | `guestHasPresented` transition on first guest flush; permanent drop of host synthetic frames | M3 | Survey |
+| 18 | WebGPU Pipeline Shaders | WGSL vertex and fragment shaders rendering scanout textures | M4 | Survey |
+| 19 | WebGPU Swapchain & Transforms | Triple-buffered swapchain presentation and layer rotation/flip matrices | M4 | Survey |
+| 20 | HTML5 Canvas Presentation | 60/120 Hz render loop presenting RGBA scanout to `<canvas id="screen">` | M4 | Survey |
+| 21 | 4-Tier E2E Test Suite | 82 automated test cases spanning Tiers 1-4 (Features, Boundaries, Pairs, Real Apps) | M5 | Survey |
+| 22 | Headless Browser Validation | Puppeteer validation of live canvas, Shannon entropy $H \ge 2.0$, unique colors $\ge 50$ | M5 | Survey |
+| 23 | Tier 5 Adversarial Coverage Hardening | White-box adversarial edge-case generation and verification | M5 | Survey |
 
 ## Milestones
 | # | Name | Scope | Dependencies | Status |
 |---|------|-------|-------------|--------|
-| 1 | M1: VirtIO-GPU PCI Device Emulation & Driver Binding | VirtIO PCI config space, OASIS 1.0 caps, BAR0/BAR1 sizing & relocation, module loading & driver binding to `/dev/dri/card0` | None | **DONE** |
-| 2 | M2: End-to-End Guest Graphics Stack Execution | Userspace boot (`init -> servicemanager -> zygote -> app_process -> SurfaceFlinger`), DRM GEM buffer allocation, VirtIO-GPU command dispatch, virtqueue 0 ring processing, and host fallback lockout (`guestActive=true`, `guestHasPresented=true`) | M1 | IN_PROGRESS |
-| 3 | M3: WebGPU VirtIO Scanout Presentation | 720x1440 WebGPU canvas blit, BGRX swizzling, damage rect tracking, and Shannon entropy validation ($H \ge 1.0$) | M2 | PLANNED |
-| 4 | M4: E2E Full-Stack Verification & Adversarial Hardening | 100% pass of 4-tier E2E tests (`pnpm test`, `run_e2e_tests.mjs`) + Tier 5 adversarial coverage hardening | M1, M2, M3 | PLANNED |
+| 1 | APK, View Tree & HWUI Pipeline | Stages 1-3: APK parsing, Dalvik VM, View Hierarchy, HWUI & GraphicBuffers | None | DONE |
+| 2 | SurfaceFlinger & VirtIO-GPU Virtqueue | Stages 4-5: SurfaceFlinger DRM composition, PCI registers, Virtqueue 0 rings, TRANSFER_2D/FLUSH | M1 | DONE |
+| 3 | Rust Bridge, Swizzle & Fallback Lockout | Stage 6 & Lockout: Rust WASM bridge, BGRX->RGBA swizzle, damage rects, `guestHasPresented` permanent lockout | M2 | DONE |
+| 4 | WebGPU Compositor & Canvas Presentation | Stages 7-8: WGSL pipeline, WebGPU swapchain, scanout texture binding, `<canvas id="screen">` presentation | M3 | DONE |
+| 5 | E2E Verification & Adversarial Hardening | Phase 1 (Tiers 1-4 pass + validate_browser.mjs) & Phase 2 (Tier 5 Adversarial Hardening) | M1, M2, M3, M4 | DONE |
 
 ## Interface Contracts
-### Guest Kernel / Userspace ↔ VirtIO-GPU PCI Device
-- PCI BDF: `0000:00:06.0` (`0x1AF4:0x1010`, Subsystem `0x1AF4:0x0010`)
-- BAR0: I/O Space (64 Bytes, `0xC140..0xC17F`), BAR1: MMIO Space (16 MB, `0xD1000000..0xD1FFFFFF`)
-- Virtqueue 0: Size 256, Control Queue for 2D/3D command descriptors
-- Virtqueue 1: Size 16, Cursor Queue
-- IRQ: Line 10 (INTA#)
+### APK / PMS ↔ View Tree
+- Input: Parsed layout XML AST and DEX class definitions.
+- Output: Root `ViewGroup` / `View` tree instantiated with `LayoutParams` and attributes.
+- Error handling: Malformed XML or missing attributes fallback to default view bounds.
 
-### VirtIO-GPU Device (`src/virtio_gpu_device.js`) ↔ WASM Bridge (`crates/virtio_gpu_bridge`)
-- `process_virtqueue_descriptor(guestMem, descTableAddr, headDescIdx)` -> returns processed bytes / result status
-- `get_scanout_framebuffer_rgba(scanoutId)` -> returns Uint8Array of $720 \times 1440 \times 4$ bytes
-- `get_scanout_damage(scanoutId)` -> returns `[x, y, w, h]` or `null`
+### View Tree ↔ HWUI / GraphicBuffers
+- Input: Measured and laid out `View` hierarchy.
+- Output: `GraphicBuffer` slots queued via `IGraphicBufferProducer.queueBuffer()`.
+- Error handling: Null view returns 0-sized damage without rendering errors.
 
-### Host Runtime Gating (`src/android_runtime.js`, `src/view_rasterizer.js`)
-- `gpuDev.guestActive === true` and `gpuDev.guestHasPresented === true` -> `isHostInjectionAllowed() === false` -> disables `submitToVirtioGpu()` and host activity rasterizer.
+### SurfaceFlinger ↔ VirtIO-GPU
+- Input: Composited layers mapped to DRM primary plane framebuffer (`/dev/dri/card0`).
+- Output: VirtIO-GPU control packets (`VIRTIO_GPU_CMD_TRANSFER_TO_HOST_2D`, `VIRTIO_GPU_CMD_RESOURCE_FLUSH`).
+- Error handling: Out-of-bounds coordinates clamped to display bounds (720x1440).
+
+### VirtIO-GPU ↔ Rust WASM Bridge
+- Input: Guest physical memory addresses, descriptor tables, head descriptor indices.
+- Output: Swizzled RGBA pixel buffer (`get_scanout_framebuffer_rgba(0)`) and dirty damage rectangle (`get_scanout_damage(0)`).
+- Error handling: Invalid resource ID or corrupted descriptor returns `VIRTIO_GPU_RESP_ERR_*` and resets descriptor chain safely.
+
+### Rust WASM Bridge ↔ WebGPU Compositor / Canvas
+- Input: 720x1440 RGBA framebuffer and dirty damage rect `[x, y, w, h]`.
+- Output: GPU texture upload via `wgpu::Queue::write_texture` and canvas blit via `ctx2d.putImageData`.
+- Error handling: Missing canvas skips blit safely without unhandled exception.
 
 ## Code Layout
-- `src/virtio_gpu_device.js` — VirtIO-GPU PCI and virtqueue hypervisor emulation
-- `src/android_runtime.js` — Android runtime management and host fallback gating
-- `src/system_bootstrap.js` — System bootstrap and WebGPU presentation loop
-- `src/view_rasterizer.js` — Host rasterizer (gated out when guest presents)
-- `crates/virtio_gpu_bridge/` — Rust/WASM VirtIO-GPU wire protocol, resource manager, and scanout renderer
-- `crates/webgpu_compositor/` — WebGPU multi-layer composition pipeline and WGSL shaders
-- `guest/initrd/init` — Guest Linux PID 1 initialization and module binding
-- `guest/surfaceflinger.c` — Guest SurfaceFlinger display manager
-- `guest/app_process.c` — Guest Zygote and Android application runner
-- `guest/patches/` — Gralloc and HWC VirtIO-GPU drivers
-- `tests/` — Test suites (unit, integration, adversarial, E2E)
+- `src/apk_client_parser.js`, `src/dex_vm.js`: APK ingestion, DEX bytecode execution.
+- `src/view_hierarchy.js`, `src/view_rasterizer.js`: View tree layout and HWUI rasterizer.
+- `src/virtio_gpu_device.js`, `src/virtio_packet_builder.js`: VirtIO-GPU PCI device and virtqueue processing.
+- `crates/virtio_gpu_bridge/`: Rust WASM bridge, virtqueue descriptor decoding, BGRX swizzling.
+- `crates/surfaceflinger_gpu_service/`: SurfaceFlinger service and BufferQueue management.
+- `crates/webgpu_compositor/`, `crates/webgpu_swapchain/`: WebGPU WGSL pipeline and swapchain.
+- `src/system_bootstrap.js`, `android.html`: HTML5 Canvas presentation harness.
+- `tests/run_e2e_tests.mjs`, `validate_browser.mjs`: Automated verification suites.

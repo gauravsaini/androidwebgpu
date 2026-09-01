@@ -155,10 +155,21 @@ def check_image(path):
     print(f"Left edge active rows: {left_active}/{h} ({left_active/h*100:.2f}%)")
     print(f"Right edge active rows: {right_active}/{h} ({right_active/h*100:.2f}%)")
     
-    assert res['entropy'] >= 1.0, f"Entropy {res['entropy']} < 1.0"
+    assert res['entropy'] >= 2.0, f"Entropy {res['entropy']:.4f} < 2.0 — too few distinct visual elements for real UI"
+    assert res['unique_colors'] >= 50, f"Only {res['unique_colors']} unique colors (need >= 50 for real UI)"
     assert res['non_zero_pixels'] > 0, "Image is blank"
     assert bot_active > 0, "Bottom 10% is completely empty"
-    print(f"✔ [PASS] {path} is valid and meets all empirical entropy/boundary criteria.")
+    # Background dominance cap: #0f172a (R:15 G:23 B:42 A:255) must not dominate
+    bg_color = (15 << 24) | (23 << 16) | (42 << 8) | 255
+    bg_count = 0
+    for i in range(0, len(rgba), 4):
+        r, g, b, a = rgba[i], rgba[i+1], rgba[i+2], rgba[i+3]
+        if r == 15 and g == 23 and b == 42 and a == 255:
+            bg_count += 1
+    bg_ratio = bg_count / (w * h)
+    print(f"Background dominance: {bg_ratio*100:.2f}%")
+    assert bg_ratio <= 0.85, f"Background dominance {bg_ratio*100:.1f}% exceeds 85% cap"
+    print(f"✔ [PASS] {path} meets all entropy/boundary/structural criteria (H={res['entropy']:.3f}, colors={res['unique_colors']}, bgRatio={bg_ratio*100:.1f}%).")
 
 def main():
     check_image('screenshot.png')

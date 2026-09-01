@@ -306,7 +306,7 @@ const googleRgbaCopy = new Uint8Array(frameGooglePage.rgbaData);
 const entropyGoogle = calculateShannonEntropy(googleRgbaCopy);
 metrics.shannonEntropyScores.google = entropyGoogle;
 console.log(`  📊 Measured Google Search page Shannon entropy: H = ${entropyGoogle.toFixed(4)} bits/pixel`);
-assert(entropyGoogle >= 1.0, `Google page Shannon entropy must be >= 1.0 (actual: ${entropyGoogle.toFixed(4)})`);
+assert(entropyGoogle >= 2.0, `Google page Shannon entropy must be >= 2.0 (actual: ${entropyGoogle.toFixed(4)})`);
 
 // 2. Home Page Entropy
 appState.activeUrl = 'https://www.mozilla.org/firefox';
@@ -317,7 +317,7 @@ const homeRgbaCopy = new Uint8Array(frameHomePage.rgbaData);
 const entropyHome = calculateShannonEntropy(homeRgbaCopy);
 metrics.shannonEntropyScores.home = entropyHome;
 console.log(`  📊 Measured Home / Top Sites page Shannon entropy: H = ${entropyHome.toFixed(4)} bits/pixel`);
-assert(entropyHome >= 1.0, `Home page Shannon entropy must be >= 1.0 (actual: ${entropyHome.toFixed(4)})`);
+assert(entropyHome >= 2.0, `Home page Shannon entropy must be >= 2.0 (actual: ${entropyHome.toFixed(4)})`);
 
 // 3. Generic Web Page Entropy (Wikipedia)
 appState.activeUrl = 'https://wikipedia.org';
@@ -328,7 +328,7 @@ const wikiRgbaCopy = new Uint8Array(frameWikiPage.rgbaData);
 const entropyWiki = calculateShannonEntropy(wikiRgbaCopy);
 metrics.shannonEntropyScores.wikipedia = entropyWiki;
 console.log(`  📊 Measured Wikipedia page Shannon entropy: H = ${entropyWiki.toFixed(4)} bits/pixel`);
-assert(entropyWiki >= 1.0, `Wikipedia page Shannon entropy must be >= 1.0 (actual: ${entropyWiki.toFixed(4)})`);
+assert(entropyWiki >= 2.0, `Wikipedia page Shannon entropy must be >= 2.0 (actual: ${entropyWiki.toFixed(4)})`);
 
 // Verify Distinct Visual Fingerprints Between Pages
 let diffGoogleVsHome = 0;

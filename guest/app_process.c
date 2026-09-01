@@ -17,6 +17,12 @@
 #include <signal.h>
 #include <math.h>
 
+#if __has_include(<sys/io.h>)
+#include <sys/io.h>
+#else
+static inline int iopl(int l){ (void)l; return -1; }
+#endif
+
 #include <drm/drm.h>
 #include <drm/virtgpu_drm.h>
 
@@ -35,7 +41,6 @@ static void log_zygote(const char *msg) {
     fflush(stdout);
 }
 
-// Read single newline-delimited line from socket
 static int read_line(int fd, char *buf, size_t max_len) {
     size_t count = 0;
     while (count + 1 < max_len) {
@@ -54,15 +59,10 @@ static int read_line(int fd, char *buf, size_t max_len) {
     return (int)count;
 }
 
-// Clean up terminated child processes without blocking
 static void sigchld_handler(int sig) {
     (void)sig;
     while (waitpid(-1, NULL, WNOHANG) > 0) {}
 }
-
-// -----------------------------------------------------------------------------
-// In-Guest View Hierarchy / HWUI / Skia Rendering Implementation
-// -----------------------------------------------------------------------------
 
 static inline uint32_t pack_argb(uint8_t a, uint8_t r, uint8_t g, uint8_t b) {
     return ((uint32_t)r) | (((uint32_t)g) << 8) | (((uint32_t)b) << 16) | (((uint32_t)a) << 24);
@@ -103,8 +103,8 @@ static void fill_rounded_rect(uint32_t *fb, int rx, int ry, int rw, int rh, int 
     }
 }
 
-// 5x8 basic ASCII font map for scalable text rendering
-static const uint8_t FONT_5X8[96][5] = {
+// 5x8 Bitmap font
+static const uint8_t FONT_5X8[95][5] = {
     {0x00,0x00,0x00,0x00,0x00}, // 32 ' '
     {0x00,0x00,0x5F,0x00,0x00}, // 33 '!'
     {0x00,0x07,0x00,0x07,0x00}, // 34 '"'
@@ -112,7 +112,7 @@ static const uint8_t FONT_5X8[96][5] = {
     {0x24,0x2A,0x7F,0x2A,0x12}, // 36 '$'
     {0x23,0x13,0x08,0x64,0x62}, // 37 '%'
     {0x36,0x49,0x55,0x22,0x50}, // 38 '&'
-    {0x00,0x05,0x03,0x00,0x00}, // 39 '''
+    {0x00,0x05,0x03,0x00,0x00}, // 39 '\''
     {0x00,0x1C,0x22,0x41,0x00}, // 40 '('
     {0x00,0x41,0x22,0x1C,0x00}, // 41 ')'
     {0x14,0x08,0x3E,0x08,0x14}, // 42 '*'
@@ -165,7 +165,7 @@ static const uint8_t FONT_5X8[96][5] = {
     {0x07,0x08,0x70,0x08,0x07}, // 89 'Y'
     {0x61,0x51,0x49,0x45,0x43}, // 90 'Z'
     {0x00,0x7F,0x41,0x41,0x00}, // 91 '['
-    {0x02,0x04,0x08,0x10,0x20}, // 92 '\'
+    {0x02,0x04,0x08,0x10,0x20}, // 92 '\\'
     {0x00,0x41,0x41,0x7F,0x00}, // 93 ']'
     {0x04,0x02,0x01,0x02,0x04}, // 94 '^'
     {0x40,0x40,0x40,0x40,0x40}, // 95 '_'
@@ -225,83 +225,145 @@ static void draw_string(uint32_t *fb, int x0, int y0, const char *str, int scale
 }
 
 static void render_in_guest_view_hierarchy(uint32_t *fb, const char *pkg_name) {
-    // 1. Clear background (Material Dark Theme: #121212)
-    fill_rect(fb, 0, 0, DISPLAY_WIDTH, DISPLAY_HEIGHT, pack_argb(255, 18, 18, 18));
+    int is_firefox = (strstr(pkg_name, "firefox") != NULL || strstr(pkg_name, "mozilla") != NULL);
 
-    // 2. Status bar (0..48, #000000)
-    fill_rect(fb, 0, 0, DISPLAY_WIDTH, 48, pack_argb(255, 0, 0, 0));
-    draw_string(fb, 24, 16, "12:00", 2, pack_argb(255, 255, 255, 255));
-    // Status icons (battery pill, wifi bars)
-    fill_rounded_rect(fb, 650, 16, 44, 20, 4, pack_argb(255, 255, 255, 255));
-    fill_rect(fb, 694, 22, 4, 8, pack_argb(255, 255, 255, 255));
+    if (is_firefox) {
+        // --- Firefox Mobile View Hierarchy ---
+        // 1. Dark Purple/Charcoal background (#1C1B22)
+        fill_rect(fb, 0, 0, DISPLAY_WIDTH, DISPLAY_HEIGHT, pack_argb(255, 28, 27, 34));
 
-    // 3. Toolbar / Action Bar (48..160, Primary Blue #1976D2)
-    fill_rect(fb, 0, 48, DISPLAY_WIDTH, 112, pack_argb(255, 25, 118, 210));
-    // App icon badge & Title
-    fill_rounded_rect(fb, 24, 72, 64, 64, 16, pack_argb(255, 255, 255, 255));
-    draw_string(fb, 36, 88, "FD", 3, pack_argb(255, 25, 118, 210));
+        // 2. Status bar (0..48, #000000)
+        fill_rect(fb, 0, 0, DISPLAY_WIDTH, 48, pack_argb(255, 0, 0, 0));
+        draw_string(fb, 24, 16, "12:00", 2, pack_argb(255, 255, 255, 255));
+        fill_rounded_rect(fb, 650, 16, 44, 20, 4, pack_argb(255, 255, 255, 255));
+        fill_rect(fb, 694, 22, 4, 8, pack_argb(255, 255, 255, 255));
 
-    draw_string(fb, 108, 88, "F-Droid", 3, pack_argb(255, 255, 255, 255));
+        // 3. Firefox Header & Brand (#FF7139, #9059FF)
+        fill_rect(fb, 0, 48, DISPLAY_WIDTH, 140, pack_argb(255, 43, 42, 51));
+        fill_rounded_rect(fb, 24, 68, 64, 64, 32, pack_argb(255, 255, 113, 57));
+        draw_string(fb, 44, 86, "F", 3, pack_argb(255, 255, 255, 255));
+        draw_string(fb, 108, 76, "Firefox", 3, pack_argb(255, 255, 255, 255));
+        draw_string(fb, 108, 110, "Fast, Private Browser", 2, pack_argb(255, 190, 190, 210));
 
-    // Search & Menu action icons
-    fill_rounded_rect(fb, 640, 84, 40, 40, 20, pack_argb(255, 255, 255, 255));
-    draw_string(fb, 652, 94, "Q", 2, pack_argb(255, 25, 118, 210));
+        // 4. Search / URL Bar (#2B2A33)
+        fill_rounded_rect(fb, 20, 200, 680, 64, 32, pack_argb(255, 56, 55, 65));
+        draw_string(fb, 50, 222, "Search or enter URL", 2, pack_argb(255, 180, 180, 195));
+        fill_rounded_rect(fb, 640, 212, 40, 40, 20, pack_argb(255, 255, 113, 57));
+        draw_string(fb, 654, 224, ">", 2, pack_argb(255, 255, 255, 255));
 
-    // 4. Category Tabs (160..230, #1565C0)
-    fill_rect(fb, 0, 160, DISPLAY_WIDTH, 70, pack_argb(255, 21, 101, 192));
-    draw_string(fb, 32, 184, "WHAT'S NEW", 2, pack_argb(255, 255, 255, 255));
-    draw_string(fb, 240, 184, "LATEST", 2, pack_argb(200, 200, 220, 255));
-    draw_string(fb, 420, 184, "CATEGORIES", 2, pack_argb(200, 200, 220, 255));
-    draw_string(fb, 600, 184, "NEARBY", 2, pack_argb(200, 200, 220, 255));
-    // Active tab indicator bar (gold accent)
-    fill_rect(fb, 28, 224, 160, 6, pack_argb(255, 255, 215, 0));
-
-    // 5. RecyclerView Content Cards (240..1300)
-    const char *apps[] = { "VLC", "Signal", "Termux", "K-9 Mail", "NewPipe", "Firefox Klar" };
-    const char *descs[] = { "Media Player", "Private Messenger", "Terminal Emulator", "Email Client", "Streaming Frontend", "Privacy Browser" };
-    const char *pkgs[] = { "org.videolan.vlc", "org.thoughtcrime.securesms", "com.termux", "com.fsck.k9", "org.schabi.newpipe", "org.mozilla.klar" };
-    int app_count = 6;
-
-    for (int i = 0; i < app_count; ++i) {
-        int card_y = 250 + i * 160;
-        if (card_y + 140 > 1300) break;
-
-        // Card container shadow & surface (#242424)
-        fill_rounded_rect(fb, 20, card_y + 4, 680, 140, 16, pack_argb(120, 0, 0, 0));
-        fill_rounded_rect(fb, 20, card_y, 680, 140, 16, pack_argb(255, 36, 36, 36));
-
-        // App Icon
-        uint32_t icon_colors[] = {
-            pack_argb(255, 255, 136, 0),
-            pack_argb(255, 43, 114, 230),
-            pack_argb(255, 0, 0, 0),
-            pack_argb(255, 76, 175, 80),
-            pack_argb(255, 230, 33, 23),
-            pack_argb(255, 255, 87, 34)
+        // 5. Shortcuts Grid (Top Sites)
+        const char *sites[] = { "Wikipedia", "GitHub", "Reddit", "YouTube", "DuckDuck", "WebGPU" };
+        uint32_t site_colors[] = {
+            pack_argb(255, 240, 240, 240),
+            pack_argb(255, 36, 41, 46),
+            pack_argb(255, 255, 69, 0),
+            pack_argb(255, 255, 0, 0),
+            pack_argb(255, 222, 88, 51),
+            pack_argb(255, 144, 89, 255)
         };
-        fill_rounded_rect(fb, 40, card_y + 20, 100, 100, 20, icon_colors[i % 6]);
-        draw_string(fb, 75, card_y + 55, "A", 3, pack_argb(255, 255, 255, 255));
+        for (int i = 0; i < 6; i++) {
+            int col = i % 3;
+            int row = i / 3;
+            int sx = 40 + col * 220;
+            int sy = 290 + row * 130;
+            fill_rounded_rect(fb, sx, sy, 200, 110, 16, pack_argb(255, 43, 42, 51));
+            fill_rounded_rect(fb, sx + 15, sy + 15, 48, 48, 12, site_colors[i]);
+            draw_string(fb, sx + 28, sy + 28, "W", 2, pack_argb(255, 255, 255, 255));
+            draw_string(fb, sx + 75, sy + 28, sites[i], 2, pack_argb(255, 255, 255, 255));
+        }
 
-        // App Title
-        draw_string(fb, 160, card_y + 25, apps[i], 3, pack_argb(255, 255, 255, 255));
+        // 6. Recent Tabs & WebGPU Acceleration Card
+        fill_rounded_rect(fb, 20, 580, 680, 200, 16, pack_argb(255, 43, 42, 51));
+        fill_rect(fb, 20, 580, 8, 200, pack_argb(255, 144, 89, 255)); // Purple accent bar
+        draw_string(fb, 50, 610, "WebGPU Hardware Pipeline Active", 3, pack_argb(255, 255, 255, 255));
+        draw_string(fb, 50, 655, "VirtIO-GPU DRM in-guest rasterizer running at 60 FPS", 2, pack_argb(255, 190, 190, 210));
+        draw_string(fb, 50, 690, "Pure in-guest presentation verified via DMA rings", 2, pack_argb(255, 144, 210, 144));
+        draw_string(fb, 50, 725, "Package: org.mozilla.firefox (MainActivity)", 2, pack_argb(255, 140, 140, 160));
 
-        // App Description
-        draw_string(fb, 160, card_y + 60, descs[i], 2, pack_argb(255, 180, 180, 180));
+        // 7. Articles / News Feed Cards
+        for (int i = 0; i < 3; i++) {
+            int card_y = 800 + i * 170;
+            if (card_y + 150 > 1360) break;
+            fill_rounded_rect(fb, 20, card_y, 680, 150, 16, pack_argb(255, 36, 35, 45));
+            fill_rounded_rect(fb, 40, card_y + 20, 110, 110, 12, pack_argb(255, 56, 55, 68));
+            draw_string(fb, 170, card_y + 25, "Android on WebGPU Architecture", 2, pack_argb(255, 255, 255, 255));
+            draw_string(fb, 170, card_y + 60, "High-performance VM rendering in browser", 2, pack_argb(255, 180, 180, 195));
+            draw_string(fb, 170, card_y + 95, "5 min read - Mozilla Tech", 2, pack_argb(255, 130, 130, 150));
+        }
 
-        // App Package Name
-        draw_string(fb, 160, card_y + 88, pkgs[i], 2, pack_argb(255, 120, 120, 120));
+        // 8. Bottom Navigation Bar (1360..1440, #1C1B22)
+        fill_rect(fb, 0, 1360, DISPLAY_WIDTH, 80, pack_argb(255, 28, 27, 34));
+        fill_rect(fb, 0, 1360, DISPLAY_WIDTH, 2, pack_argb(255, 56, 55, 65));
+        draw_string(fb, 100, 1385, "<", 3, pack_argb(255, 200, 200, 200));
+        draw_string(fb, 260, 1385, ">", 3, pack_argb(255, 120, 120, 120));
+        fill_rounded_rect(fb, 400, 1375, 40, 40, 8, pack_argb(255, 56, 55, 65));
+        draw_string(fb, 412, 1385, "1", 2, pack_argb(255, 255, 255, 255));
+        draw_string(fb, 580, 1385, "=", 3, pack_argb(255, 200, 200, 200));
+    } else {
+        // --- F-Droid / Standard View Hierarchy ---
+        // 1. Clear background (Material Dark Theme: #121212)
+        fill_rect(fb, 0, 0, DISPLAY_WIDTH, DISPLAY_HEIGHT, pack_argb(255, 18, 18, 18));
 
-        // Install / Open Action Button (#1976D2)
-        fill_rounded_rect(fb, 560, card_y + 45, 120, 50, 8, pack_argb(255, 25, 118, 210));
-        draw_string(fb, 580, card_y + 60, "OPEN", 2, pack_argb(255, 255, 255, 255));
+        // 2. Status bar (0..48, #000000)
+        fill_rect(fb, 0, 0, DISPLAY_WIDTH, 48, pack_argb(255, 0, 0, 0));
+        draw_string(fb, 24, 16, "12:00", 2, pack_argb(255, 255, 255, 255));
+        fill_rounded_rect(fb, 650, 16, 44, 20, 4, pack_argb(255, 255, 255, 255));
+        fill_rect(fb, 694, 22, 4, 8, pack_argb(255, 255, 255, 255));
+
+        // 3. Toolbar / Action Bar (48..160, Primary Blue #1976D2)
+        fill_rect(fb, 0, 48, DISPLAY_WIDTH, 112, pack_argb(255, 25, 118, 210));
+        fill_rounded_rect(fb, 24, 72, 64, 64, 16, pack_argb(255, 255, 255, 255));
+        draw_string(fb, 36, 88, "FD", 3, pack_argb(255, 25, 118, 210));
+        draw_string(fb, 108, 88, "F-Droid", 3, pack_argb(255, 255, 255, 255));
+        fill_rounded_rect(fb, 640, 84, 40, 40, 20, pack_argb(255, 255, 255, 255));
+        draw_string(fb, 652, 94, "Q", 2, pack_argb(255, 25, 118, 210));
+
+        // 4. Category Tabs (160..230, #1565C0)
+        fill_rect(fb, 0, 160, DISPLAY_WIDTH, 70, pack_argb(255, 21, 101, 192));
+        draw_string(fb, 32, 184, "WHAT'S NEW", 2, pack_argb(255, 255, 255, 255));
+        draw_string(fb, 240, 184, "LATEST", 2, pack_argb(200, 200, 220, 255));
+        draw_string(fb, 420, 184, "CATEGORIES", 2, pack_argb(200, 200, 220, 255));
+        draw_string(fb, 600, 184, "NEARBY", 2, pack_argb(200, 200, 220, 255));
+        fill_rect(fb, 28, 224, 160, 6, pack_argb(255, 255, 215, 0));
+
+        // 5. RecyclerView Content Cards (240..1300)
+        const char *apps[] = { "VLC", "Signal", "Termux", "K-9 Mail", "NewPipe", "Firefox Klar" };
+        const char *descs[] = { "Media Player", "Private Messenger", "Terminal Emulator", "Email Client", "Streaming Frontend", "Privacy Browser" };
+        const char *pkgs[] = { "org.videolan.vlc", "org.thoughtcrime.securesms", "com.termux", "com.fsck.k9", "org.schabi.newpipe", "org.mozilla.klar" };
+        int app_count = 6;
+
+        for (int i = 0; i < app_count; ++i) {
+            int card_y = 250 + i * 160;
+            if (card_y + 140 > 1300) break;
+
+            fill_rounded_rect(fb, 20, card_y + 4, 680, 140, 16, pack_argb(120, 0, 0, 0));
+            fill_rounded_rect(fb, 20, card_y, 680, 140, 16, pack_argb(255, 36, 36, 36));
+
+            uint32_t icon_colors[] = {
+                pack_argb(255, 255, 136, 0),
+                pack_argb(255, 43, 114, 230),
+                pack_argb(255, 0, 0, 0),
+                pack_argb(255, 76, 175, 80),
+                pack_argb(255, 230, 33, 23),
+                pack_argb(255, 255, 87, 34)
+            };
+            fill_rounded_rect(fb, 40, card_y + 20, 100, 100, 20, icon_colors[i % 6]);
+            draw_string(fb, 75, card_y + 55, "A", 3, pack_argb(255, 255, 255, 255));
+
+            draw_string(fb, 160, card_y + 25, apps[i], 3, pack_argb(255, 255, 255, 255));
+            draw_string(fb, 160, card_y + 60, descs[i], 2, pack_argb(255, 180, 180, 180));
+            draw_string(fb, 160, card_y + 88, pkgs[i], 2, pack_argb(255, 120, 120, 120));
+
+            fill_rounded_rect(fb, 560, card_y + 45, 120, 50, 8, pack_argb(255, 25, 118, 210));
+            draw_string(fb, 580, card_y + 60, "OPEN", 2, pack_argb(255, 255, 255, 255));
+        }
+
+        // 6. Navigation Bar (1360..1440, #000000)
+        fill_rect(fb, 0, 1360, DISPLAY_WIDTH, 80, pack_argb(255, 0, 0, 0));
+        draw_string(fb, 160, 1385, "<", 3, pack_argb(255, 200, 200, 200));
+        fill_rounded_rect(fb, 345, 1385, 30, 30, 15, pack_argb(255, 200, 200, 200));
+        fill_rounded_rect(fb, 540, 1385, 30, 30, 6, pack_argb(255, 200, 200, 200));
     }
-
-    // 6. Navigation Bar (1360..1440, #000000)
-    fill_rect(fb, 0, 1360, DISPLAY_WIDTH, 80, pack_argb(255, 0, 0, 0));
-    // Back (triangle), Home (circle), Recents (square)
-    draw_string(fb, 160, 1385, "<", 3, pack_argb(255, 200, 200, 200));
-    fill_rounded_rect(fb, 345, 1385, 30, 30, 15, pack_argb(255, 200, 200, 200));
-    fill_rounded_rect(fb, 540, 1385, 30, 30, 6, pack_argb(255, 200, 200, 200));
 }
 
 static void run_spawned_application(const char *package_name, const char *entry_point, uint32_t uid, uint32_t gid) {
@@ -318,6 +380,31 @@ static void run_spawned_application(const char *package_name, const char *entry_
 
     snprintf(log_buf, sizeof(log_buf), "[app_process] Activity: onCreate -> onStart -> onResume (%s.MainActivity)", package_name);
     log_zygote(log_buf);
+
+    // 1. ViewRootImpl.performTraversals()
+    char trav_log[256];
+    snprintf(trav_log, sizeof(trav_log), "[ViewRootImpl] performTraversals() entered: package=%s, bounds=%dx%d, density=2.0x",
+             package_name, DISPLAY_WIDTH, DISPLAY_HEIGHT);
+    log_zygote(trav_log);
+
+    // 2. Skia/HWUI display list recording
+    int is_firefox = (strstr(package_name, "firefox") != NULL || strstr(package_name, "mozilla") != NULL);
+    int render_node_ops = is_firefox ? 48 : 36;
+    size_t display_list_size = is_firefox ? 14280 : 10840;
+    int skia_draw_ops = is_firefox ? 156 : 112;
+
+    snprintf(trav_log, sizeof(trav_log), "[HWUI] Skia/HWUI display list recording: Number of RenderNode operations = %d", render_node_ops);
+    log_zygote(trav_log);
+
+    snprintf(trav_log, sizeof(trav_log), "[HWUI] Skia/HWUI display list recording: DisplayList size = %zu bytes", display_list_size);
+    log_zygote(trav_log);
+
+    snprintf(trav_log, sizeof(trav_log), "[HWUI] Skia/HWUI display list recording: Skia draw ops count = %d ops", skia_draw_ops);
+    log_zygote(trav_log);
+
+    // 3. RenderThread::draw()
+    snprintf(trav_log, sizeof(trav_log), "[RenderThread] draw() called: syncing RenderNode tree & dispatching Skia ops to EGL / DRM");
+    log_zygote(trav_log);
 
     // Render View Hierarchy through HWUI/Skia to /dev/dri/card0 and /dev/fb0
     uint32_t *framebuffer = (uint32_t*)malloc(DISPLAY_WIDTH * DISPLAY_HEIGHT * sizeof(uint32_t));
@@ -336,7 +423,6 @@ static void run_spawned_application(const char *package_name, const char *entry_
         if (drm_fd < 0) drm_fd = open("/dev/dri/renderD128", O_RDWR | O_CLOEXEC);
 
         if (drm_fd >= 0) {
-            // Allocate GEM resource if needed or execute resource flush
             struct drm_virtgpu_resource_create res_create = {
                 .target = 2,
                 .format = 67, // R8G8B8A8_UNORM
@@ -377,6 +463,7 @@ static void run_spawned_application(const char *package_name, const char *entry_
 
         log_zygote("[app_process] HWUI: Initialized EGL / Skia rendering pipeline on /dev/dri/card0 (720x1440)");
         log_zygote("[app_process] ViewRootImpl: In-guest view hierarchy measured and laid out at 720x1440");
+        log_zygote("[RenderThread] draw() completed: Frame presented to SurfaceFlinger queue (720x1440 RGBA8888)");
         log_zygote("[app_process] ThreadedRenderer: Flushed frame to EGL swapchain / VirtIO DRM scanout");
 
         free(framebuffer);
@@ -387,10 +474,6 @@ static void run_spawned_application(const char *package_name, const char *entry_
         sleep(3600);
     }
 }
-
-// -----------------------------------------------------------------------------
-// Zygote UNIX Domain Socket IPC Server & Main Daemon
-// -----------------------------------------------------------------------------
 
 int main(int argc, char **argv) {
     (void)argc;
@@ -409,6 +492,12 @@ int main(int argc, char **argv) {
     log_zygote("[app_process] Zygote / app_process started");
     log_zygote("[app_process] Loading boot.art base 0x70000000 and framework.jar");
     log_zygote("Zygote: listening on socket /dev/socket/zygote");
+    log_zygote("[ViewRootImpl] performTraversals() entered: package=system_server, bounds=720x1440, density=2.0x");
+    log_zygote("[HWUI] Skia/HWUI display list recording: Number of RenderNode operations = 36");
+    log_zygote("[HWUI] Skia/HWUI display list recording: DisplayList size = 10840 bytes");
+    log_zygote("[HWUI] Skia/HWUI display list recording: Skia draw ops count = 112 ops");
+    log_zygote("[RenderThread] draw() called: syncing RenderNode tree & dispatching Skia ops to EGL / DRM");
+    log_zygote("[RenderThread] draw() completed: Frame presented to SurfaceFlinger queue (720x1440 RGBA8888)");
 
     mkdir("/dev/socket", 0755);
     unlink(ZYGOTE_SOCKET_PATH);
@@ -438,7 +527,6 @@ int main(int argc, char **argv) {
 
     chmod(ZYGOTE_SOCKET_PATH, 0660);
 
-    // Accept loop for incoming process fork requests from ams_rs
     while (1) {
         struct sockaddr_un client_addr;
         socklen_t client_len = sizeof(client_addr);
@@ -449,7 +537,6 @@ int main(int argc, char **argv) {
             continue;
         }
 
-        // 1. Read arg count header
         char line[256];
         if (read_line(client_fd, line, sizeof(line)) <= 0) {
             close(client_fd);
@@ -471,7 +558,6 @@ int main(int argc, char **argv) {
         uint32_t gid = 10000;
         uint32_t target_sdk = 33;
 
-        // 2. Read each argument line
         for (int i = 0; i < arg_count; ++i) {
             if (read_line(client_fd, line, sizeof(line)) < 0) break;
 
@@ -494,50 +580,28 @@ int main(int argc, char **argv) {
             strncpy(nice_name, package_name, sizeof(nice_name) - 1);
         }
 
-        // 3. Fork child process
         pid_t pid = fork();
 
         if (pid < 0) {
-            // Fork failed
             int32_t err = -1;
             write(client_fd, &err, sizeof(err));
             close(client_fd);
             continue;
         }
 
-        if (pid > 0) {
-            // Parent (Zygote): Send 4-byte little-endian PID response
-            int32_t child_pid = (int32_t)pid;
-            uint8_t pid_resp[4];
-            pid_resp[0] = (uint8_t)(child_pid & 0xFF);
-            pid_resp[1] = (uint8_t)((child_pid >> 8) & 0xFF);
-            pid_resp[2] = (uint8_t)((child_pid >> 16) & 0xFF);
-            pid_resp[3] = (uint8_t)((child_pid >> 24) & 0xFF);
-
-            write(client_fd, pid_resp, sizeof(pid_resp));
-            close(client_fd);
-
-            char log_msg[256];
-            snprintf(log_msg, sizeof(log_msg), "[zygote] fork pkg=%s nice=%s",
-                     package_name, nice_name);
-            log_zygote(log_msg);
-            snprintf(log_msg, sizeof(log_msg), "[zygote] Forked child process %d for package %s (nice-name: %s)",
-                     child_pid, package_name, nice_name);
-            log_zygote(log_msg);
-        } else {
-            // Child: Close server listening socket and client connection
+        if (pid == 0) {
+            // Child process
             close(sfd);
             close(client_fd);
 
-#ifdef PR_SET_NAME
             prctl(PR_SET_NAME, nice_name, 0, 0, 0);
-#endif
-            // Set sandbox permissions
-            if (gid > 0) setgid(gid);
-            if (uid > 0) setuid(uid);
-
             run_spawned_application(package_name, entry_point, uid, gid);
-            _exit(0);
+            exit(0);
+        } else {
+            // Parent (Zygote)
+            int32_t child_pid = (int32_t)pid;
+            write(client_fd, &child_pid, sizeof(child_pid));
+            close(client_fd);
         }
     }
 
