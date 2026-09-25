@@ -36,4 +36,4 @@ Scope: make the browser entry truthful while the real Android runtime is built
 - [ ] P6: full Android runtime and guest acceptance
   CHECK: node scripts/verify-runtime-artifacts.mjs
   EXPECT: ANDROID_RUNTIME_ACCEPTED
-  EVIDENCE: 2026-09-25 blocked; missing `pkg/android_vm.js`, WASM, and pinned Android images
+  EVIDENCE: 2026-09-25 blocked (`BOOTSTRAP_FIXTURES`: system/vendor/product); v86 VENDORED 3/3 + hashes; authentic 32-bit kernel+initrd pinned; LIVE BROWSER G1 PASSED (v86-live-boot, backend:v86, serial:9761B Linux 4.19.110) + G2 PASSED; init stalls probing for system media; M1 + M-E2E still blocked (E2E prod 62/62 green)

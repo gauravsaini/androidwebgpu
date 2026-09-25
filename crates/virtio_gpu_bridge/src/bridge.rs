@@ -392,7 +392,7 @@ impl VirtioGpuBridge {
                     // DRAW_ELEMENTS (mode: u32, count: u32, type: u32, offset: u32)
                     if cmd_payload.len() >= 16 {
                         let mode = u32::from_le_bytes(cmd_payload[0..4].try_into().unwrap());
-                        let count = u32::from_le_bytes(cmd_payload[8..12].try_into().unwrap());
+                        let count = u32::from_le_bytes(cmd_payload[4..8].try_into().unwrap());
                         let type_ = u32::from_le_bytes(cmd_payload[8..12].try_into().unwrap());
                         let offset = u32::from_le_bytes(cmd_payload[12..16].try_into().unwrap()) as usize;
                         self.gl_context.gl_draw_elements(mode, count, type_, offset);

@@ -35,6 +35,12 @@ struct egl_context_t {
     uint32_t current_program;
 };
 
+// Tracked current bindings (single-threaded guest driver).
+static EGLDisplay g_current_display = EGL_NO_DISPLAY;
+static EGLSurface g_current_draw = EGL_NO_SURFACE;
+static EGLSurface g_current_read = EGL_NO_SURFACE;
+static EGLContext g_current_context = EGL_NO_CONTEXT;
+
 EGLAPI EGLDisplay EGLAPIENTRY eglGetDisplay(EGLNativeDisplayType display_id) {
     egl_display_t* dpy = (egl_display_t*)malloc(sizeof(egl_display_t));
     dpy->magic = 0x12345678;
@@ -143,6 +149,24 @@ EGLAPI EGLBoolean EGLAPIENTRY eglDestroyContext(EGLDisplay dpy, EGLContext ctx) 
 
 EGLAPI EGLBoolean EGLAPIENTRY eglMakeCurrent(EGLDisplay dpy, EGLSurface draw,
                                             EGLSurface read, EGLContext ctx) {
+    // Tracked current state: success requires valid display; draw/read/ctx
+    // may be EGL_NO_* for unbind. Never claim success on a dead display.
+    if (dpy == EGL_NO_DISPLAY) return EGL_FALSE;
+    egl_display_t* d = (egl_display_t*)dpy;
+    if (d->magic != 0x12345678) return EGL_FALSE;
+    if (ctx != EGL_NO_CONTEXT) {
+        egl_context_t* c = (egl_context_t*)ctx;
+        if (c->ctx_id <= 0) return EGL_FALSE;
+        c->current_program = c->current_program; // bound on next draw
+    }
+    if (draw != EGL_NO_SURFACE) {
+        egl_surface_t* s = (egl_surface_t*)draw;
+        if (s->width <= 0 || s->height <= 0) return EGL_FALSE;
+    }
+    g_current_display = dpy;
+    g_current_draw = draw;
+    g_current_read = read;
+    g_current_context = ctx;
     return EGL_TRUE;
 }
 
@@ -151,12 +175,20 @@ EGLAPI EGLBoolean EGLAPIENTRY eglSwapBuffers(EGLDisplay dpy, EGLSurface surface)
     egl_surface_t* s = (egl_surface_t*)surface;
 
     if (d && d->drm_fd >= 0 && s) {
-        // Submit VIRTIO_GPU_CMD_TRANSFER_TO_HOST_2D followed by RESOURCE_FLUSH
-        uint32_t cmds[16] = {
-            // Transfer to host 2D
-            0x0105, 0, 0, 0, 0, 0, (uint32_t)s->width, (uint32_t)s->height, 0, 0, s->res_id, 0,
-            // Resource Flush
-            0x0104, 0, 0, 0, 0, 0, (uint32_t)s->width, (uint32_t)s->height, s->res_id, 0
+        // Two complete virtio-gpu commands, each with a 24-byte control
+        // header: TRANSFER_TO_HOST_2D (hdr + 24B box payload) and
+        // RESOURCE_FLUSH (hdr + 24B flush payload). 16 words was too short
+        // for both packets; size for the full wire encoding.
+        uint32_t cmds[32] = {
+            // virtio_gpu_ctrl_hdr (TRANSFER_TO_HOST_2D = 0x0105)
+            0x0105, 0, 0, 0, 0, 0,
+            // virtio_gpu_transfer_to_host_2d: x,y,w,h @ +24B
+            0, 0, (uint32_t)s->width, (uint32_t)s->height, 0, 0,
+            s->res_id, 0, 0, 0, 0, 0,
+            // virtio_gpu_ctrl_hdr (RESOURCE_FLUSH = 0x0104)
+            0x0104, 0, 0, 0, 0, 0,
+            // virtio_gpu_resource_flush payload
+            0, 0, (uint32_t)s->width, (uint32_t)s->height, s->res_id, 0,
         };
 
         uint32_t bo_handles[1] = { s->bo_handle };

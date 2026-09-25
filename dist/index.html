@@ -1,0 +1,798 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Android OS Browser Validation</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600&family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg: #06080e;
+            --surface: #0e1320;
+            --surface-border: #1d253b;
+            --surface-hover: #161e32;
+            --primary: #6366f1;
+            --primary-glow: rgba(99, 102, 241, 0.4);
+            --accent-cyan: #06b6d4;
+            --accent-pink: #ec4899;
+            --success: #10b981;
+            --success-glow: rgba(16, 185, 129, 0.3);
+            --error: #ef4444;
+            --text-main: #f8fafc;
+            --text-muted: #94a3b8;
+            --font-ui: 'Outfit', -apple-system, BlinkMacSystemFont, sans-serif;
+            --font-mono: 'Fira Code', monospace;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            background-color: var(--bg);
+            color: var(--text-main);
+            font-family: var(--font-ui);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow-x: hidden;
+            background-image: 
+                radial-gradient(circle at 10% 15%, rgba(99, 102, 241, 0.09) 0%, transparent 45%),
+                radial-gradient(circle at 90% 85%, rgba(6, 182, 212, 0.07) 0%, transparent 45%);
+        }
+
+        header {
+            padding: 1rem 2rem;
+            background: rgba(14, 19, 32, 0.85);
+            backdrop-filter: blur(14px);
+            border-bottom: 1px solid var(--surface-border);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            position: sticky;
+            top: 0;
+            z-index: 50;
+        }
+
+        .brand {
+            display: flex;
+            align-items: center;
+            gap: 0.85rem;
+        }
+
+        .logo-badge {
+            background: linear-gradient(135deg, #6366f1, #06b6d4);
+            width: 40px;
+            height: 40px;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 800;
+            font-size: 1.25rem;
+            color: white;
+            box-shadow: 0 0 20px var(--primary-glow);
+        }
+
+        h1 {
+            font-size: 1.2rem;
+            font-weight: 700;
+            letter-spacing: -0.02em;
+        }
+
+        .subtitle {
+            font-size: 0.78rem;
+            color: var(--text-muted);
+            font-weight: 400;
+        }
+
+        .nav-tabs {
+            display: flex;
+            background: rgba(0, 0, 0, 0.4);
+            border: 1px solid var(--surface-border);
+            border-radius: 12px;
+            padding: 4px;
+            gap: 4px;
+        }
+
+        .tab-btn {
+            padding: 0.5rem 1.1rem;
+            border-radius: 8px;
+            font-family: var(--font-ui);
+            font-size: 0.85rem;
+            font-weight: 600;
+            background: transparent;
+            color: var(--text-muted);
+            border: none;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            gap: 0.4rem;
+        }
+
+        .tab-btn.active {
+            background: var(--primary);
+            color: white;
+            box-shadow: 0 2px 10px var(--primary-glow);
+        }
+
+        .header-stats {
+            display: flex;
+            gap: 1.5rem;
+            align-items: center;
+        }
+
+        .stat-item {
+            text-align: right;
+        }
+
+        .stat-value {
+            font-family: var(--font-mono);
+            font-size: 0.95rem;
+            font-weight: 600;
+            color: var(--success);
+        }
+
+        .stat-label {
+            font-size: 0.68rem;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        main {
+            padding: 1.75rem 2rem;
+            display: grid;
+            grid-template-columns: 1fr 440px;
+            gap: 1.75rem;
+            max-width: 1440px;
+            width: 100%;
+            margin: 0 auto;
+            flex: 1;
+        }
+
+        .phone-frame {
+            background: #000;
+            border: 10px solid #1a2035;
+            border-radius: 36px;
+            box-shadow: 0 25px 60px rgba(0, 0, 0, 0.9), 0 0 0 1px rgba(255, 255, 255, 0.08), 0 0 40px rgba(99, 102, 241, 0.15);
+            overflow: hidden;
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .camera-notch {
+            position: absolute;
+            top: 8px;
+            width: 80px;
+            height: 16px;
+            background: #0d111d;
+            border-radius: 12px;
+            z-index: 20;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .camera-lens {
+            width: 8px;
+            height: 8px;
+            background: #04060a;
+            border-radius: 50%;
+            box-shadow: inset 0 0 2px #3b82f6;
+        }
+
+        .viewport-card {
+            background: var(--surface);
+            border: 1px solid var(--surface-border);
+            border-radius: 20px;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
+        }
+
+        .card-header {
+            padding: 1rem 1.25rem;
+            background: rgba(255, 255, 255, 0.02);
+            border-bottom: 1px solid var(--surface-border);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .card-title {
+            font-size: 0.95rem;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .live-dot {
+            width: 8px;
+            height: 8px;
+            background: var(--success);
+            border-radius: 50%;
+            box-shadow: 0 0 8px var(--success);
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.5; transform: scale(0.85); }
+        }
+
+        .screen-container {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: #05070e;
+            padding: 1.5rem;
+            position: relative;
+        }
+
+        canvas#screen {
+            background: #050505;
+            border-radius: 12px;
+            box-shadow: 0 0 25px rgba(0, 0, 0, 0.8);
+            max-width: 100%;
+            height: auto;
+            cursor: grab;
+            image-rendering: pixelated;
+        }
+
+        canvas#screen:active {
+            cursor: grabbing;
+        }
+
+        .screen-footer {
+            padding: 0.75rem 1.25rem;
+            background: rgba(255, 255, 255, 0.02);
+            border-top: 1px solid var(--surface-border);
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.8rem;
+            font-family: var(--font-mono);
+            color: var(--text-muted);
+        }
+
+        .sidebar {
+            display: flex;
+            flex-direction: column;
+            gap: 1.25rem;
+        }
+
+        .controls-card, .results-card, .log-card {
+            background: var(--surface);
+            border: 1px solid var(--surface-border);
+            border-radius: 18px;
+            padding: 1.25rem;
+        }
+
+        .btn-group {
+            display: flex;
+            flex-direction: column;
+            gap: 0.6rem;
+            margin-top: 1rem;
+        }
+
+        .btn {
+            padding: 0.75rem 1rem;
+            border-radius: 10px;
+            font-family: var(--font-ui);
+            font-size: 0.9rem;
+            font-weight: 600;
+            cursor: pointer;
+            border: 1px solid transparent;
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #6366f1, #4f46e5);
+            color: white;
+            box-shadow: 0 4px 14px var(--primary-glow);
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 6px 20px var(--primary-glow);
+        }
+
+        .gate-list {
+            display: flex;
+            flex-direction: column;
+            gap: 0.6rem;
+            margin-top: 0.8rem;
+        }
+
+        .gate-item {
+            padding: 0.75rem 1rem;
+            background: rgba(0, 0, 0, 0.25);
+            border: 1px solid var(--surface-border);
+            border-radius: 10px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .gate-info {
+            display: flex;
+            flex-direction: column;
+            gap: 0.15rem;
+        }
+
+        .gate-title {
+            font-size: 0.85rem;
+            font-weight: 600;
+        }
+
+        .gate-desc {
+            font-size: 0.7rem;
+            color: var(--text-muted);
+        }
+
+        .badge {
+            padding: 0.25rem 0.6rem;
+            border-radius: 20px;
+            font-size: 0.7rem;
+            font-weight: 700;
+            font-family: var(--font-mono);
+            letter-spacing: 0.03em;
+        }
+
+        .badge-pending {
+            background: rgba(148, 163, 184, 0.15);
+            color: #94a3b8;
+        }
+
+        .badge-passed {
+            background: var(--success-glow);
+            color: var(--success);
+            border: 1px solid rgba(16, 185, 129, 0.4);
+        }
+
+        .badge-running {
+            background: rgba(99, 102, 241, 0.22);
+            color: #a5b4fc;
+            border: 1px solid rgba(99, 102, 241, 0.45);
+        }
+
+        .badge-blocked {
+            background: rgba(245, 158, 11, 0.18);
+            color: #fbbf24;
+            border: 1px solid rgba(245, 158, 11, 0.45);
+        }
+
+        .badge-failed {
+            background: rgba(239, 68, 68, 0.2);
+            color: var(--error);
+            border: 1px solid rgba(239, 68, 68, 0.4);
+        }
+
+        .code-viewer {
+            background: #04060a;
+            border: 1px solid #141a2e;
+            border-radius: 10px;
+            padding: 0.85rem;
+            font-family: var(--font-mono);
+            font-size: 0.72rem;
+            color: #cbd5e1;
+            height: 140px;
+            overflow-y: auto;
+            line-height: 1.45;
+            margin-top: 0.6rem;
+        }
+
+        .log-terminal {
+            background: #04060a;
+            border: 1px solid #141a2e;
+            border-radius: 10px;
+            padding: 0.75rem;
+            font-family: var(--font-mono);
+            font-size: 0.75rem;
+            color: #cbd5e1;
+            height: 150px;
+            overflow-y: auto;
+            line-height: 1.5;
+            margin-top: 0.75rem;
+        }
+
+        .log-line {
+            margin-bottom: 0.25rem;
+            word-break: break-word;
+        }
+
+        .log-line.success { color: var(--success); }
+        .log-line.error { color: var(--error); }
+        .log-line.info { color: #38bdf8; }
+    </style>
+</head>
+<body>
+    <header>
+        <div class="brand">
+            <div class="logo-badge">W</div>
+            <div>
+                <h1>Android OS Browser Validation</h1>
+                <div class="subtitle">VM boot / Virtio I/O / WebGPU gate loop</div>
+            </div>
+        </div>
+
+        <div class="nav-tabs">
+            <button class="tab-btn" id="tab-runtime">🖥 Android VM</button>
+            <button class="tab-btn active" id="tab-gates">🧪 OS Validation</button>
+        </div>
+
+        <div class="header-stats">
+            <div class="stat-item">
+                <div class="stat-value" id="fps-counter">-- FPS</div>
+                <div class="stat-label">Frame Rate</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-value" id="status-pill">BOOT WAIT</div>
+                <div class="stat-label">Stack Status</div>
+            </div>
+        </div>
+    </header>
+
+    <main>
+        <!-- Left: Phone Enclosure Viewport -->
+        <div class="phone-frame">
+            <div class="camera-notch">
+                <div class="camera-lens"></div>
+            </div>
+            <div class="screen-container">
+                <canvas id="screen" width="640" height="480"></canvas>
+            </div>
+            <div class="screen-footer" style="width: 100%;">
+                <span id="cursor-pos">Guest display output</span>
+                <span id="pixel-color">No guest frame</span>
+                <span id="pipeline-status">No guest boot</span>
+            </div>
+        </div>
+
+        <div class="sidebar">
+            <div class="controls-card" id="runtime-card" style="display: none;">
+                <div class="card-title">🖥 Android VM Runtime</div>
+                <div class="gate-desc" id="runtime-summary">
+                    A real guest runtime is required. No synthetic frame path is used.
+                </div>
+                <div class="btn-group">
+                    <button class="btn btn-primary" id="btn-run-runtime">
+                        ▶ Run Full OS Check
+                    </button>
+                </div>
+            </div>
+
+            <div class="results-card" id="gates-card">
+                <div class="card-title">🧪 Runtime Validation Loop</div>
+                <div class="btn-group" style="margin-bottom: 1rem;">
+                    <button class="btn btn-primary" id="btn-run-all">
+                        ⚡ Run Full OS Validation
+                    </button>
+                </div>
+                <div class="gate-desc" id="validation-summary" aria-live="polite">
+                    No run yet. All OS gates are pending.
+                </div>
+                <div class="gate-list">
+                    <div class="gate-item">
+                        <div class="gate-info">
+                            <div class="gate-title">G0: Browser Bundle</div>
+                            <div class="gate-desc">Assets, WASM, and runtime module load</div>
+                        </div>
+                        <span class="badge badge-pending" id="badge-g0">PENDING</span>
+                    </div>
+                    <div class="gate-item">
+                        <div class="gate-info">
+                            <div class="gate-title">G1: VM Boot</div>
+                            <div class="gate-desc">x86 VM reaches Android kernel</div>
+                        </div>
+                        <span class="badge badge-pending" id="badge-g1">PENDING</span>
+                    </div>
+                    <div class="gate-item">
+                        <div class="gate-info">
+                            <div class="gate-title">G2: Virtio Core</div>
+                            <div class="gate-desc">PCI, queues, DMA, and IRQ flow</div>
+                        </div>
+                        <span class="badge badge-pending" id="badge-g2">PENDING</span>
+                    </div>
+                    <div class="gate-item">
+                        <div class="gate-info">
+                            <div class="gate-title">G3: Block + Persist</div>
+                            <div class="gate-desc">Boot disk and userdata survive reset</div>
+                        </div>
+                        <span class="badge badge-pending" id="badge-g3">PENDING</span>
+                    </div>
+                    <div class="gate-item">
+                        <div class="gate-info">
+                            <div class="gate-title">G4: Input + Console</div>
+                            <div class="gate-desc">Guest input and boot log reach Android</div>
+                        </div>
+                        <span class="badge badge-pending" id="badge-g4">PENDING</span>
+                    </div>
+                    <div class="gate-item">
+                        <div class="gate-info">
+                            <div class="gate-title">G5: Net + Audio</div>
+                            <div class="gate-desc">Declared browser I/O modes work</div>
+                        </div>
+                        <span class="badge badge-pending" id="badge-g5">PENDING</span>
+                    </div>
+                    <div class="gate-item">
+                        <div class="gate-info">
+                            <div class="gate-title">G6: GPU Wire</div>
+                            <div class="gate-desc">Real guest virtio-gpu traffic and fences</div>
+                        </div>
+                        <span class="badge badge-pending" id="badge-g6">PENDING</span>
+                    </div>
+                    <div class="gate-item">
+                        <div class="gate-info">
+                            <div class="gate-title">G7: Android Boot</div>
+                            <div class="gate-desc">init, zygote, SystemUI, SurfaceFlinger</div>
+                        </div>
+                        <span class="badge badge-pending" id="badge-g7">PENDING</span>
+                    </div>
+                    <div class="gate-item">
+                        <div class="gate-info">
+                            <div class="gate-title">G8: Android App</div>
+                            <div class="gate-desc">Real EGL/GLES APK renders in guest</div>
+                        </div>
+                        <span class="badge badge-pending" id="badge-g8">PENDING</span>
+                    </div>
+                    <div class="gate-item">
+                        <div class="gate-info">
+                            <div class="gate-title">G9: Recovery</div>
+                            <div class="gate-desc">Reset, loss, resize, and reload recover</div>
+                        </div>
+                        <span class="badge badge-pending" id="badge-g9">PENDING</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="log-card">
+                <div class="card-title">📟 Execution Logs</div>
+                <div class="log-terminal" id="log-term"></div>
+            </div>
+        </div>
+    </main>
+
+    <script type="module">
+        const logTerm = document.getElementById('log-term');
+        const statusPill = document.getElementById('status-pill');
+        const fpsCounter = document.getElementById('fps-counter');
+        const canvas = document.getElementById('screen');
+        const pipelineStatus = document.getElementById('pipeline-status');
+        const runtimeSummary = document.getElementById('runtime-summary');
+        const validationSummary = document.getElementById('validation-summary');
+        const btnRunAll = document.getElementById('btn-run-all');
+        const btnRunRuntime = document.getElementById('btn-run-runtime');
+        const tabRuntime = document.getElementById('tab-runtime');
+        const tabGates = document.getElementById('tab-gates');
+        const runtimeCard = document.getElementById('runtime-card');
+        const gatesCard = document.getElementById('gates-card');
+
+        const VALIDATION_GATES = [
+            'g0', 'g1', 'g2', 'g3', 'g4', 'g5', 'g6', 'g7', 'g8', 'g9'
+        ];
+        const BADGE_CLASS = {
+            PENDING: 'badge-pending',
+            RUNNING: 'badge-running',
+            BLOCKED: 'badge-blocked',
+            PASSED: 'badge-passed',
+            FAILED: 'badge-failed'
+        };
+        const VALID_STATUSES = new Set(['PENDING', 'RUNNING', 'BLOCKED', 'PASSED', 'FAILED']);
+        const RUNTIME_MODULE_URL = './pkg/android_vm.js';
+
+        let runtime = null;
+        let runtimeError = null;
+        let validationEpoch = 0;
+
+        function appendLog(msg, type = 'info') {
+            const line = document.createElement('div');
+            line.className = `log-line ${type}`;
+            line.textContent = `[${new Date().toISOString().substring(11, 19)}] ${msg}`;
+            logTerm.appendChild(line);
+            logTerm.scrollTop = logTerm.scrollHeight;
+        }
+
+        function setGateStatus(id, status, detail = '') {
+            const badge = document.getElementById(`badge-${id}`);
+            if (!badge) return;
+            const safeStatus = VALID_STATUSES.has(status) ? status : 'FAILED';
+            badge.className = `badge ${BADGE_CLASS[safeStatus]}`;
+            badge.textContent = safeStatus;
+            badge.title = detail;
+        }
+
+        function resetGateStatus() {
+            VALIDATION_GATES.forEach((id) => setGateStatus(id, 'PENDING'));
+        }
+
+        function newRunId() {
+            if (globalThis.crypto && typeof globalThis.crypto.randomUUID === 'function') {
+                return globalThis.crypto.randomUUID();
+            }
+            return `run-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+        }
+
+        function setRuntimeState(label, detail, color = 'var(--text-muted)') {
+            statusPill.textContent = label;
+            statusPill.style.color = color;
+            pipelineStatus.textContent = detail;
+            runtimeSummary.textContent = detail;
+        }
+
+        function blockedRun(run, reason) {
+            run.ready = false;
+            run.error = reason;
+            run.gates.runtime = { status: 'BLOCKED', evidence: [], error: reason };
+            VALIDATION_GATES.forEach((id) => {
+                run.gates[id] = { status: 'BLOCKED', evidence: [], error: reason };
+                setGateStatus(id, 'BLOCKED', reason);
+            });
+            run.endedAt = new Date().toISOString();
+            window.__VALIDATION_RESULTS__ = run;
+            validationSummary.textContent = `Run blocked: ${reason}. No OS gate passed.`;
+            appendLog(`Validation blocked: ${reason}`, 'error');
+            return run;
+        }
+
+        function onRuntimeEvent(event) {
+            if (!event || typeof event.kind !== 'string') return;
+            if (event.kind === 'frame_presented' && Number.isFinite(event.fps)) {
+                fpsCounter.textContent = `${Number(event.fps).toFixed(1)} FPS`;
+            }
+            appendLog(`${event.kind}${event.code ? ` (${event.code})` : ''}`, event.kind === 'fatal_error' ? 'error' : 'info');
+        }
+
+        async function prepareRuntime() {
+            if (runtime) return runtime;
+            if (!navigator.gpu) throw new Error('WEBGPU_UNAVAILABLE');
+
+            const module = await import(RUNTIME_MODULE_URL);
+            if (typeof module.default !== 'function') throw new Error('RUNTIME_WASM_INIT_MISSING');
+            if (typeof module.createAndroidRuntime !== 'function') throw new Error('RUNTIME_FACTORY_MISSING');
+            await module.default();
+
+            runtime = await module.createAndroidRuntime({
+                canvas,
+                onEvent: onRuntimeEvent
+            });
+            if (!runtime || typeof runtime.runValidationLoop !== 'function') {
+                throw new Error('VALIDATION_LOOP_CONTRACT_MISSING');
+            }
+            setRuntimeState('VM READY', 'Runtime loaded; Android boot not yet proven.', 'var(--success)');
+            appendLog('Real Android VM runtime loaded.', 'success');
+            return runtime;
+        }
+
+        async function bootstrap() {
+            resetGateStatus();
+            appendLog('Preflight: loading full Android runtime...', 'info');
+            try {
+                await prepareRuntime();
+            } catch (err) {
+                runtimeError = err instanceof Error ? err.message : String(err);
+                setRuntimeState('BLOCKED', `Full runtime blocked: ${runtimeError}`, 'var(--error)');
+                VALIDATION_GATES.forEach((id) => setGateStatus(id, 'BLOCKED', runtimeError));
+                appendLog(`Preflight failed: ${runtimeError}`, 'error');
+            }
+        }
+
+        async function runValidationLoop() {
+            const epoch = ++validationEpoch;
+            const run = {
+                runId: newRunId(),
+                epoch,
+                startedAt: new Date().toISOString(),
+                endedAt: null,
+                ready: false,
+                gates: {}
+            };
+
+            resetGateStatus();
+            btnRunAll.disabled = true;
+            btnRunRuntime.disabled = true;
+            appendLog(`Full OS validation ${run.runId} started.`, 'info');
+
+            try {
+                await prepareRuntime();
+            } catch (err) {
+                const reason = err instanceof Error ? err.message : String(err);
+                runtimeError = reason;
+                setRuntimeState('BLOCKED', `Full runtime blocked: ${reason}`, 'var(--error)');
+                const result = blockedRun(run, reason);
+                btnRunAll.disabled = false;
+                btnRunRuntime.disabled = false;
+                return result;
+            }
+
+            VALIDATION_GATES.forEach((id) => setGateStatus(id, 'RUNNING'));
+            setRuntimeState('RUNNING', 'Full Android validation is in progress.', 'var(--primary)');
+
+            try {
+                const observed = await runtime.runValidationLoop({
+                    runId: run.runId,
+                    epoch,
+                    onGate: (gate) => {
+                        if (!gate || !VALIDATION_GATES.includes(gate.id)) {
+                            throw new Error('VALIDATION_GATE_ID_INVALID');
+                        }
+                        if (!VALID_STATUSES.has(gate.status) || gate.status === 'PENDING' || gate.status === 'RUNNING') {
+                            throw new Error(`VALIDATION_GATE_STATUS_INVALID:${gate.id}`);
+                        }
+                        run.gates[gate.id] = gate;
+                        setGateStatus(gate.id, gate.status, gate.error || gate.evidence?.join('; ') || '');
+                    }
+                });
+
+                if (epoch !== validationEpoch) return run;
+                if (!observed || observed.runId !== run.runId || !observed.gates) {
+                    throw new Error('VALIDATION_RESULT_INVALID');
+                }
+                for (const id of VALIDATION_GATES) {
+                    if (!run.gates[id] && observed.gates[id]) run.gates[id] = observed.gates[id];
+                    if (!run.gates[id]) throw new Error(`VALIDATION_GATE_MISSING:${id}`);
+                    setGateStatus(id, run.gates[id].status, run.gates[id].error || '');
+                }
+                run.ready = observed.ready === true && VALIDATION_GATES.every((id) => run.gates[id].status === 'PASSED');
+                run.evidence = observed.evidence || [];
+                run.error = observed.error || null;
+            } catch (err) {
+                const reason = err instanceof Error ? err.message : String(err);
+                run.error = reason;
+                VALIDATION_GATES.forEach((id) => {
+                    if (!run.gates[id] || run.gates[id].status === 'RUNNING') {
+                        run.gates[id] = { status: 'FAILED', evidence: [], error: reason };
+                        setGateStatus(id, 'FAILED', reason);
+                    }
+                });
+                appendLog(`Validation failed: ${reason}`, 'error');
+            }
+
+            if (epoch !== validationEpoch) return run;
+            run.endedAt = new Date().toISOString();
+            window.__VALIDATION_RESULTS__ = run;
+            const pass = VALIDATION_GATES.filter((id) => run.gates[id]?.status === 'PASSED').length;
+            const blocked = VALIDATION_GATES.filter((id) => run.gates[id]?.status === 'BLOCKED').length;
+            const fail = VALIDATION_GATES.filter((id) => run.gates[id]?.status === 'FAILED').length;
+            setRuntimeState(run.ready ? 'ANDROID READY' : 'NOT READY', `${pass}/10 pass; ${blocked} blocked; ${fail} fail.`, run.ready ? 'var(--success)' : 'var(--error)');
+            validationSummary.textContent = `Run ${run.runId}: ${pass}/10 pass, ${blocked} blocked, ${fail} fail.`;
+            appendLog(`Full OS validation done: ${pass}/10 pass.`, run.ready ? 'success' : 'error');
+            btnRunAll.disabled = false;
+            btnRunRuntime.disabled = false;
+            return run;
+        }
+
+        function showTab(tab) {
+            const showRuntime = tab === 'runtime';
+            tabRuntime.classList.toggle('active', showRuntime);
+            tabGates.classList.toggle('active', !showRuntime);
+            runtimeCard.style.display = showRuntime ? 'block' : 'none';
+            gatesCard.style.display = showRuntime ? 'none' : 'block';
+        }
+
+        tabRuntime.addEventListener('click', () => showTab('runtime'));
+        tabGates.addEventListener('click', () => showTab('gates'));
+        btnRunAll.addEventListener('click', () => runValidationLoop().catch((err) => appendLog(`Loop crash: ${err.message}`, 'error')));
+        btnRunRuntime.addEventListener('click', () => runValidationLoop().catch((err) => appendLog(`Loop crash: ${err.message}`, 'error')));
+
+        window.runValidationLoop = runValidationLoop;
+        window.__VALIDATION_RESULTS__ = null;
+        showTab('gates');
+        bootstrap();
+    </script>
+</body>
+</html>

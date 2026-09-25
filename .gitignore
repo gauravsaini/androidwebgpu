@@ -1,5 +1,6 @@
 /target/
 /pkg/
+.agents/
 node_modules/
 *.log
 .DS_Store

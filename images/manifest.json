@@ -1,0 +1,61 @@
+{
+  "androidVersion": "9.0-r2",
+  "abi": "x86",
+  "kernelVersion": "4.19.110-android-x86_64",
+  "virtioMode": "modern",
+  "netMode": "websocket-tunnel",
+  "graphicsStack": "virtio-gpu + android-webgpu-gles-v1 (declared; virgl/gfxstream deferred)",
+  "note": "PARTIAL media: authentic kernel+initrd.img; remaining roles are bootstrap fixtures. NOT bootable until all roles are authentic.",
+  "iso": {
+    "file": "android-x86-9.0-r2.iso",
+    "size": 761266176,
+    "sha256": "91cedb534ba095a0c9b3eceede4147967fd27beea9bba640776f787dc3555021",
+    "url": "https://sourceforge.net/projects/android-x86/files/Release%209.0/android-x86-9.0-r2.iso/download"
+  },
+  "sha256": {
+    "kernel": "bccab9f1bd3d8b50e878ec66f5ffe3651aba00c207d2f429fa5fa279a36fa62e",
+    "initrd.img": "64cdfb033ddd01c75d32aa848179d606463001a52f25375d0252e1aceb7e66b0",
+    "system.img": "a3a0c062e6ee4b340837953cc4d1290cf3acce1ea3f5e6f77d23395fccf4160e",
+    "vendor.img": "c819ecf2cc72839511a77671c3125b9a926313fec4414116cd46f5b488364cde",
+    "product.img": "388686882a7a693805124fd42b4f5f94a35eb43314fb684ea5ae3e1e0d5d0f80"
+  },
+  "images": {
+    "kernel": {
+      "file": "kernel",
+      "role": "kernel",
+      "size": 6482208,
+      "sha256": "bccab9f1bd3d8b50e878ec66f5ffe3651aba00c207d2f429fa5fa279a36fa62e",
+      "alignment": 512,
+      "authentic": "android-x86-9.0-r2"
+    },
+    "initrd.img": {
+      "file": "initrd.img",
+      "role": "initrd.img",
+      "size": 1358743,
+      "sha256": "64cdfb033ddd01c75d32aa848179d606463001a52f25375d0252e1aceb7e66b0",
+      "alignment": 512,
+      "authentic": "android-x86-9.0-r2"
+    },
+    "system.img": {
+      "file": "system.img",
+      "role": "system.img",
+      "size": 1048576,
+      "sha256": "a3a0c062e6ee4b340837953cc4d1290cf3acce1ea3f5e6f77d23395fccf4160e",
+      "alignment": 512
+    },
+    "vendor.img": {
+      "file": "vendor.img",
+      "role": "vendor.img",
+      "size": 524288,
+      "sha256": "c819ecf2cc72839511a77671c3125b9a926313fec4414116cd46f5b488364cde",
+      "alignment": 512
+    },
+    "product.img": {
+      "file": "product.img",
+      "role": "product.img",
+      "size": 524288,
+      "sha256": "388686882a7a693805124fd42b4f5f94a35eb43314fb684ea5ae3e1e0d5d0f80",
+      "alignment": 512
+    }
+  }
+}

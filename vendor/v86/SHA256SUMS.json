@@ -1,0 +1,21 @@
+{
+  "vendor/v86/libv86.js": "8715206b8c5ab0a206f6e8913c5f705a15547df51d3e0c032e3d00439303c94c",
+  "vendor/v86/v86.wasm": "aa0d0e149d6b60063b85de4871e78505637ce92821e14a9f9802c4008ba2336e",
+  "vendor/v86/bios.bin": "73e3f359102e3a9982c35fce98eb7cd08f18303ac7f1ba6ebfbe6cdc1c244d98",
+  "_tarball": {
+    "commit": "5f9a90f2be01243dd0ea4fe014cce12686cf3ced",
+    "sha256": "05723b91af25922cb8c0bd6ab49816fd4f1e690047c598bacebf81936c61b277",
+    "url": "https://github.com/copy/v86/archive/5f9a90f2be01243dd0ea4fe014cce12686cf3ced.tar.gz"
+  },
+  "vendor/v86/build/libv86.mjs": "581c169db27daad9d64679bd117f4a90c37c23c6ad9e660b7e89ee731eb2a446",
+  "vendor/v86/build/libv86.js": "8715206b8c5ab0a206f6e8913c5f705a15547df51d3e0c032e3d00439303c94c",
+  "vendor/v86/build/v86.wasm": "aa0d0e149d6b60063b85de4871e78505637ce92821e14a9f9802c4008ba2336e",
+  "vendor/v86/build/v86-fallback.wasm": "ea95aff75edd5136576026dc5a2d3350b333530d647df3dc3798daf3f30022b9",
+  "vendor/v86/libv86.mjs": "581c169db27daad9d64679bd117f4a90c37c23c6ad9e660b7e89ee731eb2a446",
+  "_npm": {
+    "package": "v86",
+    "version": "0.5.462",
+    "tarball": "https://registry.npmjs.org/v86/-/v86-0.5.462.tgz",
+    "shasum": "6da4d03be3aeaa37c6cfca94b501990bf92c2f20"
+  }
+}

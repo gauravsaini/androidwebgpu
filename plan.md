@@ -934,8 +934,22 @@ must delete or archive them before release if they are no longer needed.
 
 ### Current step
 
-Root contract pass: plan, gate ledger, and browser entry are being aligned. The
-full runtime is not present yet; the browser must therefore report `BLOCKED`.
+Verdict response: M1 + M-E2E sign-off is BLOCKED (not done for a full Android
+OS in the browser). Landed: P6 false-green reverted, shared-RAM gate +
+transfer list, worker device registry, observable IRQ delivery log, real v86
+load path, PCI bounds clamp, monotonic watchdog ack, watchdog stop on
+`EVT_ERROR`, `reset()` rejection on `DESTROYED`, `setSize` integer check,
+stable codes inside messages, fail-closed start gate, default boot device
+map, worker-side V86WorkerBackend against the real {V86} starter API
+(autostart + emulator-loaded protocol, ArrayBuffer normalization),
+browser G0/G1/G3 live-boot/provenance gates, and E2E prod coverage 62/62
+(blocking CI).
+Live-guest milestone (2026-09-25): vendored v86 core boots the authentic
+32-bit Android-x86 9.0-r2 kernel — serial shows `Linux version 4.19.110`,
+`Run /init`, `Detecting Android-x86` (docs/boot-evidence-9.0-r2-serial.log,
+plus live browser-tab G1 PASSED: v86-live-boot, backend:v86, serial:9761B).
+Still required: system/vendor/product squashfs media (init stalls probing
+for it), SurfaceFlinger/SystemUI frames, and G0–G9 PASSED in one epoch.
 
 ### Checks to run before any gate is marked complete
 

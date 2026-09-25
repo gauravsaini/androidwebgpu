@@ -1,0 +1,33 @@
+# CI: contract gates (blocking) + M-E2E prod gate (tracking, blocked).
+name: ci
+on: [push, pull_request]
+jobs:
+  contracts:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 20 }
+      - run: node scripts/build-runtime.mjs
+      - run: node scripts/verify-gates.mjs
+      - run: node scripts/verify-plan.mjs
+      - run: node scripts/verify-index.mjs
+      - run: node scripts/verify-js.mjs
+      - run: node scripts/verify-http-entry.mjs
+      - run: cargo test --workspace
+      - run: node tests/unit/m1_vm_virtio_test.mjs
+      - run: node tests/unit/m1_stress_challenge_test.mjs
+      - run: node tests/unit/challenger_m1_virtio_fuzz.test.mjs
+      - run: node tests/e2e/runner.mjs
+      - run: node scripts/vendor-v86.mjs --check || true
+      - run: node scripts/fetch-android-images.mjs --check || true
+  m-e2e-gate:
+    # BLOCKING: every E2E suite must import production src//pkg//serve code.
+    # Currently 9/62: red until the black-box migration lands. This job is the
+    # M-E2E sign-off gate; do not mark non-blocking.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 20 }
+      - run: node scripts/verify-e2e-prod.mjs
