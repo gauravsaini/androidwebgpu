@@ -1,21 +1,39 @@
-# Verification Gates: Interactive 3D Android Game Arcade (Demo 1)
+# Gates: Android OS browser contract
 
-- [x] G1: Rust Workspace Tests & Wasm Package Build
+OWNS: plan.md, index.html, GATES.md, scripts/**
+Scope: make the browser entry truthful while the real Android runtime is built
+
+- [x] P0: gate ledger syntax is valid
+  CHECK: node scripts/verify-gates.mjs
+  EXPECT: GATES_FORMAT_OK
+  EVIDENCE: 2026-09-25 `GATES_FORMAT_OK`
+
+- [x] P1: plan contract is complete
+  CHECK: node scripts/verify-plan.mjs
+  EXPECT: PLAN_CONTRACT_OK
+  EVIDENCE: 2026-09-25 `PLAN_CONTRACT_OK`
+
+- [x] P2: browser entry uses only the production runtime contract
+  CHECK: node scripts/verify-index.mjs
+  EXPECT: INDEX_CONTRACT_OK
+  EVIDENCE: 2026-09-25 `INDEX_CONTRACT_OK`
+
+- [x] P3: JavaScript sources parse
+  CHECK: node scripts/verify-js.mjs
+  EXPECT: JS_CONTRACT_OK
+  EVIDENCE: 2026-09-25 `JS_CONTRACT_OK`
+
+- [x] P4: Rust workspace tests pass
   CHECK: cargo test --workspace
   EXPECT: test result: ok
+  EVIDENCE: 2026-09-25 workspace tests passed; 21 non-doc tests, 0 failed
 
-- [x] G2: Arcade 3D Mesh & GLES Shader Pipeline
-  CHECK: test -f src/arcade_demo.js && test -f src/virtio_packet_builder.js && echo "ARCADE_MODULES_EXIST"
-  EXPECT: ARCADE_MODULES_EXIST
+- [x] P5: HTTP entry has a fail-closed runtime load
+  CHECK: node scripts/verify-http-entry.mjs
+  EXPECT: HTTP_FAIL_CLOSED_OK
+  EVIDENCE: 2026-09-25 `HTTP_FAIL_CLOSED_OK`; live page showed missing runtime as `BLOCKED`
 
-- [x] G3: Multi-Layer Android System UI Composition
-  CHECK: grep -q "drawStatusBar" src/arcade_demo.js && grep -q "drawNavigationBar" src/arcade_demo.js && echo "COMPOSITOR_WIRED"
-  EXPECT: COMPOSITOR_WIRED
-
-- [x] G4: Interactive Phone Frame & Shader Switcher in UI
-  CHECK: grep -q "phone-frame" index.html && grep -q "data-shader" index.html && echo "UI_INTEGRATION_OK"
-  EXPECT: UI_INTEGRATION_OK
-
-- [x] G5: Automated Gate Validation in Test Suite
-  CHECK: grep -q "runGate5_Arcade3DFlight" src/test_suite.js && echo "GATE5_TEST_EXISTS"
-  EXPECT: GATE5_TEST_EXISTS
+- [ ] P6: full Android runtime and guest acceptance
+  CHECK: node scripts/verify-runtime-artifacts.mjs
+  EXPECT: ANDROID_RUNTIME_ACCEPTED
+  EVIDENCE: 2026-09-25 blocked; missing `pkg/android_vm.js`, WASM, and pinned Android images

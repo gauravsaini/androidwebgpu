@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Android WebGPU Interactive 3D Arcade & Virtio-GPU Test Bench</title>
+    <title>Android OS Browser Validation</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600&family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -271,50 +271,11 @@
             gap: 1.25rem;
         }
 
-        .controls-card, .results-card, .log-card, .shader-card {
+        .controls-card, .results-card, .log-card {
             background: var(--surface);
             border: 1px solid var(--surface-border);
             border-radius: 18px;
             padding: 1.25rem;
-        }
-
-        .control-group-title {
-            font-size: 0.75rem;
-            color: var(--text-muted);
-            text-transform: uppercase;
-            letter-spacing: 0.06em;
-            margin-bottom: 0.6rem;
-            margin-top: 0.8rem;
-        }
-
-        .chip-group {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 0.5rem;
-        }
-
-        .chip {
-            padding: 0.4rem 0.8rem;
-            background: var(--surface-hover);
-            border: 1px solid var(--surface-border);
-            border-radius: 8px;
-            font-size: 0.8rem;
-            font-weight: 500;
-            color: var(--text-muted);
-            cursor: pointer;
-            transition: all 0.2s ease;
-        }
-
-        .chip:hover {
-            border-color: var(--primary);
-            color: var(--text-main);
-        }
-
-        .chip.active {
-            background: rgba(99, 102, 241, 0.2);
-            border-color: var(--primary);
-            color: #a5b4fc;
-            font-weight: 600;
         }
 
         .btn-group {
@@ -348,17 +309,6 @@
         .btn-primary:hover {
             transform: translateY(-1px);
             box-shadow: 0 6px 20px var(--primary-glow);
-        }
-
-        .btn-action {
-            background: linear-gradient(135deg, #ec4899, #be185d);
-            color: white;
-            box-shadow: 0 4px 14px rgba(236, 72, 153, 0.35);
-        }
-
-        .btn-action:hover {
-            transform: translateY(-1px);
-            box-shadow: 0 6px 20px rgba(236, 72, 153, 0.5);
         }
 
         .gate-list {
@@ -414,6 +364,18 @@
             border: 1px solid rgba(16, 185, 129, 0.4);
         }
 
+        .badge-running {
+            background: rgba(99, 102, 241, 0.22);
+            color: #a5b4fc;
+            border: 1px solid rgba(99, 102, 241, 0.45);
+        }
+
+        .badge-blocked {
+            background: rgba(245, 158, 11, 0.18);
+            color: #fbbf24;
+            border: 1px solid rgba(245, 158, 11, 0.45);
+        }
+
         .badge-failed {
             background: rgba(239, 68, 68, 0.2);
             color: var(--error);
@@ -463,23 +425,23 @@
         <div class="brand">
             <div class="logo-badge">W</div>
             <div>
-                <h1>Android WebGPU 3D Arcade</h1>
-                <div class="subtitle">Virtio-GPU Wire Protocol & GLES2/3 Emulation Stack</div>
+                <h1>Android OS Browser Validation</h1>
+                <div class="subtitle">VM boot / Virtio I/O / WebGPU gate loop</div>
             </div>
         </div>
 
         <div class="nav-tabs">
-            <button class="tab-btn active" id="tab-arcade">🎮 3D Arcade Mode</button>
-            <button class="tab-btn" id="tab-gates">🧪 Verification Gates</button>
+            <button class="tab-btn" id="tab-runtime">🖥 Android VM</button>
+            <button class="tab-btn active" id="tab-gates">🧪 OS Validation</button>
         </div>
 
         <div class="header-stats">
             <div class="stat-item">
-                <div class="stat-value" id="fps-counter">60.0 FPS</div>
+                <div class="stat-value" id="fps-counter">-- FPS</div>
                 <div class="stat-label">Frame Rate</div>
             </div>
             <div class="stat-item">
-                <div class="stat-value" id="status-pill">ONLINE</div>
+                <div class="stat-value" id="status-pill">BOOT WAIT</div>
                 <div class="stat-label">Stack Status</div>
             </div>
         </div>
@@ -495,106 +457,105 @@
                 <canvas id="screen" width="640" height="480"></canvas>
             </div>
             <div class="screen-footer" style="width: 100%;">
-                <span id="cursor-pos">Drag to Rotate 3D Model</span>
-                <span id="pixel-color">Shader: Phong Lighting</span>
-                <span id="pipeline-status">OASIS Virtio 1.2 Active</span>
+                <span id="cursor-pos">Guest display output</span>
+                <span id="pixel-color">No guest frame</span>
+                <span id="pipeline-status">No guest boot</span>
             </div>
         </div>
 
-        <!-- Right: Interactive Controls & Live Shader Switcher -->
         <div class="sidebar">
-            <div class="controls-card" id="arcade-controls">
-                <div class="card-title">🕹 Arcade GPU Controls</div>
-
-                <div class="control-group-title">Shader Pipeline (Naga WGSL)</div>
-                <div class="chip-group">
-                    <button class="chip active" data-shader="phong">✨ Phong Diffuse</button>
-                    <button class="chip" data-shader="neon_cyber">⚡ Neon Cyber</button>
-                    <button class="chip" data-shader="hologram">🔮 Hologram</button>
-                    <button class="chip" data-shader="normals">🌈 Normals</button>
+            <div class="controls-card" id="runtime-card" style="display: none;">
+                <div class="card-title">🖥 Android VM Runtime</div>
+                <div class="gate-desc" id="runtime-summary">
+                    A real guest runtime is required. No synthetic frame path is used.
                 </div>
-
-                <div class="control-group-title">Engine Theme & Texture</div>
-                <div class="chip-group">
-                    <button class="chip active" data-theme="unity">Unity 3D</button>
-                    <button class="chip" data-theme="godot">Godot Engine</button>
-                    <button class="chip" data-theme="cyber">Cyberpunk</button>
-                    <button class="chip" data-theme="magma">Magma Core</button>
-                </div>
-
                 <div class="btn-group">
-                    <button class="btn btn-action" id="btn-action-pulse">
-                        💥 Trigger Jump & Particle Pulse (Space)
-                    </button>
-                    <button class="btn btn-primary" id="btn-toggle-autorotate">
-                        🔄 Toggle Auto-Rotation
+                    <button class="btn btn-primary" id="btn-run-runtime">
+                        ▶ Run Full OS Check
                     </button>
                 </div>
             </div>
 
-            <!-- Live Shader Decompiler Card -->
-            <div class="shader-card">
-                <div class="card-title">🧬 Live Naga WGSL Shader Output</div>
-                <div class="code-viewer" id="shader-code">
-// Naga Translated WGSL Vertex & Fragment Shader
-struct VertexOutput {
-    @builtin(position) position: vec4<f32>,
-    @location(0) v_uv: vec2<f32>,
-    @location(1) v_normal: vec3<f32>,
-};
-
-@fragment
-fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
-    let light_dir = normalize(vec3<f32>(0.577, 0.577, 0.577));
-    let NdotL = max(dot(in.v_normal, light_dir), 0.15);
-    return vec4<f32>(NdotL, NdotL * 0.8, NdotL * 1.2, 1.0);
-}
-                </div>
-            </div>
-
-            <!-- Verification Gates Card (Hidden in arcade tab, visible in gates tab) -->
-            <div class="results-card" id="gates-card" style="display: none;">
-                <div class="card-title">🧪 End-to-End Verification Gates</div>
+            <div class="results-card" id="gates-card">
+                <div class="card-title">🧪 Runtime Validation Loop</div>
                 <div class="btn-group" style="margin-bottom: 1rem;">
                     <button class="btn btn-primary" id="btn-run-all">
-                        ⚡ Run All 5 Verification Gates
+                        ⚡ Run Full OS Validation
                     </button>
+                </div>
+                <div class="gate-desc" id="validation-summary" aria-live="polite">
+                    No run yet. All OS gates are pending.
                 </div>
                 <div class="gate-list">
                     <div class="gate-item">
                         <div class="gate-info">
-                            <div class="gate-title">Gate 1: 2D Scanout & Flush</div>
-                            <div class="gate-desc">ResourceCreate2D + Transfer + Flush</div>
+                            <div class="gate-title">G0: Browser Bundle</div>
+                            <div class="gate-desc">Assets, WASM, and runtime module load</div>
                         </div>
-                        <span class="badge badge-passed" id="badge-gate1">PASSED</span>
+                        <span class="badge badge-pending" id="badge-g0">PENDING</span>
                     </div>
                     <div class="gate-item">
                         <div class="gate-info">
-                            <div class="gate-title">Gate 2: 3D Submit GLES</div>
-                            <div class="gate-desc">GLES Clear + Viewport stream</div>
+                            <div class="gate-title">G1: VM Boot</div>
+                            <div class="gate-desc">x86 VM reaches Android kernel</div>
                         </div>
-                        <span class="badge badge-passed" id="badge-gate2">PASSED</span>
+                        <span class="badge badge-pending" id="badge-g1">PENDING</span>
                     </div>
                     <div class="gate-item">
                         <div class="gate-info">
-                            <div class="gate-title">Gate 3: Compositor & HUD</div>
-                            <div class="gate-desc">Multi-layer quad composition</div>
+                            <div class="gate-title">G2: Virtio Core</div>
+                            <div class="gate-desc">PCI, queues, DMA, and IRQ flow</div>
                         </div>
-                        <span class="badge badge-passed" id="badge-gate3">PASSED</span>
+                        <span class="badge badge-pending" id="badge-g2">PENDING</span>
                     </div>
                     <div class="gate-item">
                         <div class="gate-info">
-                            <div class="gate-title">Gate 4: Real APK Flight</div>
-                            <div class="gate-desc">Unity Cube / Godot GLES2 frame stream</div>
+                            <div class="gate-title">G3: Block + Persist</div>
+                            <div class="gate-desc">Boot disk and userdata survive reset</div>
                         </div>
-                        <span class="badge badge-passed" id="badge-gate4">PASSED</span>
+                        <span class="badge badge-pending" id="badge-g3">PENDING</span>
                     </div>
                     <div class="gate-item">
                         <div class="gate-info">
-                            <div class="gate-title">Gate 5: 3D Arcade Flight</div>
-                            <div class="gate-desc">Interactive 3D game + Android System UI</div>
+                            <div class="gate-title">G4: Input + Console</div>
+                            <div class="gate-desc">Guest input and boot log reach Android</div>
                         </div>
-                        <span class="badge badge-passed" id="badge-gate5">PASSED</span>
+                        <span class="badge badge-pending" id="badge-g4">PENDING</span>
+                    </div>
+                    <div class="gate-item">
+                        <div class="gate-info">
+                            <div class="gate-title">G5: Net + Audio</div>
+                            <div class="gate-desc">Declared browser I/O modes work</div>
+                        </div>
+                        <span class="badge badge-pending" id="badge-g5">PENDING</span>
+                    </div>
+                    <div class="gate-item">
+                        <div class="gate-info">
+                            <div class="gate-title">G6: GPU Wire</div>
+                            <div class="gate-desc">Real guest virtio-gpu traffic and fences</div>
+                        </div>
+                        <span class="badge badge-pending" id="badge-g6">PENDING</span>
+                    </div>
+                    <div class="gate-item">
+                        <div class="gate-info">
+                            <div class="gate-title">G7: Android Boot</div>
+                            <div class="gate-desc">init, zygote, SystemUI, SurfaceFlinger</div>
+                        </div>
+                        <span class="badge badge-pending" id="badge-g7">PENDING</span>
+                    </div>
+                    <div class="gate-item">
+                        <div class="gate-info">
+                            <div class="gate-title">G8: Android App</div>
+                            <div class="gate-desc">Real EGL/GLES APK renders in guest</div>
+                        </div>
+                        <span class="badge badge-pending" id="badge-g8">PENDING</span>
+                    </div>
+                    <div class="gate-item">
+                        <div class="gate-info">
+                            <div class="gate-title">G9: Recovery</div>
+                            <div class="gate-desc">Reset, loss, resize, and reload recover</div>
+                        </div>
+                        <span class="badge badge-pending" id="badge-g9">PENDING</span>
                     </div>
                 </div>
             </div>
@@ -607,26 +568,36 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     </main>
 
     <script type="module">
-        import init, { WasmVirtioGpuBridge } from './pkg/virtio_gpu_bridge.js';
-        import { VirtioGpuDevice } from './src/virtio_gpu_device.js';
-        import { VirtioPacketBuilder } from './src/virtio_packet_builder.js';
-        import { VisualTestSuite } from './src/test_suite.js';
-        import { Arcade3DScene } from './src/arcade_demo.js';
-
         const logTerm = document.getElementById('log-term');
         const statusPill = document.getElementById('status-pill');
         const fpsCounter = document.getElementById('fps-counter');
         const canvas = document.getElementById('screen');
-        const cursorPos = document.getElementById('cursor-pos');
-        const pixelColor = document.getElementById('pixel-color');
+        const pipelineStatus = document.getElementById('pipeline-status');
+        const runtimeSummary = document.getElementById('runtime-summary');
+        const validationSummary = document.getElementById('validation-summary');
         const btnRunAll = document.getElementById('btn-run-all');
-        const btnActionPulse = document.getElementById('btn-action-pulse');
-        const btnToggleAutoRotate = document.getElementById('btn-toggle-autorotate');
-        const tabArcade = document.getElementById('tab-arcade');
+        const btnRunRuntime = document.getElementById('btn-run-runtime');
+        const tabRuntime = document.getElementById('tab-runtime');
         const tabGates = document.getElementById('tab-gates');
-        const arcadeControls = document.getElementById('arcade-controls');
+        const runtimeCard = document.getElementById('runtime-card');
         const gatesCard = document.getElementById('gates-card');
-        const shaderCodeView = document.getElementById('shader-code');
+
+        const VALIDATION_GATES = [
+            'g0', 'g1', 'g2', 'g3', 'g4', 'g5', 'g6', 'g7', 'g8', 'g9'
+        ];
+        const BADGE_CLASS = {
+            PENDING: 'badge-pending',
+            RUNNING: 'badge-running',
+            BLOCKED: 'badge-blocked',
+            PASSED: 'badge-passed',
+            FAILED: 'badge-failed'
+        };
+        const VALID_STATUSES = new Set(['PENDING', 'RUNNING', 'BLOCKED', 'PASSED', 'FAILED']);
+        const RUNTIME_MODULE_URL = './pkg/android_vm.js';
+
+        let runtime = null;
+        let runtimeError = null;
+        let validationEpoch = 0;
 
         function appendLog(msg, type = 'info') {
             const line = document.createElement('div');
@@ -636,177 +607,192 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
             logTerm.scrollTop = logTerm.scrollHeight;
         }
 
-        let bridge = null;
-        let gpuDev = null;
-        let suite = null;
-        let arcade = null;
+        function setGateStatus(id, status, detail = '') {
+            const badge = document.getElementById(`badge-${id}`);
+            if (!badge) return;
+            const safeStatus = VALID_STATUSES.has(status) ? status : 'FAILED';
+            badge.className = `badge ${BADGE_CLASS[safeStatus]}`;
+            badge.textContent = safeStatus;
+            badge.title = detail;
+        }
 
-        const WGSL_SHADERS = {
-            phong: `// Naga Translated WGSL - Phong Specular
-@fragment
-fn fs_phong(in: VertexOutput) -> @location(0) vec4<f32> {
-    let N = normalize(in.v_normal);
-    let L = normalize(vec3<f32>(0.577, 0.577, 0.577));
-    let diff = max(dot(N, L), 0.15);
-    let spec = pow(max(dot(reflect(-L, N), vec3<f32>(0.0, 0.0, 1.0)), 0.0), 16.0) * 0.4;
-    return vec4<f32>(vec3<f32>(0.31, 0.27, 0.9) * diff + spec, 1.0);
-}`,
-            neon_cyber: `// Naga Translated WGSL - Neon Cyber Edge
-@fragment
-fn fs_neon(in: VertexOutput) -> @location(0) vec4<f32> {
-    let edge = 1.0 - abs(dot(in.v_normal, vec3<f32>(0.0, 0.0, 1.0)));
-    return vec4<f32>(edge * 1.2, 0.9, 1.0, 1.0);
-}`,
-            hologram: `// Naga Translated WGSL - Hologram Scanlines
-@fragment
-fn fs_hologram(in: VertexOutput) -> @location(0) vec4<f32> {
-    let scan = sin(in.position.y * 0.5) * 0.5 + 0.5;
-    return vec4<f32>(0.08, 0.8 * scan, 0.9 * scan, 0.85);
-}`,
-            normals: `// Naga Translated WGSL - Normal Vectors
-@fragment
-fn fs_normals(in: VertexOutput) -> @location(0) vec4<f32> {
-    return vec4<f32>(in.v_normal * 0.5 + 0.5, 1.0);
-}`
-        };
+        function resetGateStatus() {
+            VALIDATION_GATES.forEach((id) => setGateStatus(id, 'PENDING'));
+        }
 
-        // Tab Switching
-        tabArcade.addEventListener('click', () => {
-            tabArcade.classList.add('active');
-            tabGates.classList.remove('active');
-            arcadeControls.style.display = 'block';
-            gatesCard.style.display = 'none';
-            if (arcade) arcade.start();
-        });
-
-        tabGates.addEventListener('click', () => {
-            tabGates.classList.add('active');
-            tabArcade.classList.remove('active');
-            arcadeControls.style.display = 'none';
-            gatesCard.style.display = 'block';
-            if (arcade) arcade.stop();
-        });
-
-        // Mouse & Touch Dragging for 3D Mesh
-        let isMouseDown = false;
-        let lastX = 0;
-        let lastY = 0;
-
-        canvas.addEventListener('mousedown', (e) => {
-            isMouseDown = true;
-            lastX = e.clientX;
-            lastY = e.clientY;
-            if (arcade) arcade.isDragging = true;
-        });
-
-        window.addEventListener('mouseup', () => {
-            isMouseDown = false;
-            if (arcade) arcade.isDragging = false;
-        });
-
-        window.addEventListener('mousemove', (e) => {
-            if (isMouseDown && arcade) {
-                const dx = e.clientX - lastX;
-                const dy = e.clientY - lastY;
-                arcade.targetRotY += dx * 0.6;
-                arcade.targetRotX = Math.max(-85, Math.min(85, arcade.targetRotX + dy * 0.6));
-                lastX = e.clientX;
-                lastY = e.clientY;
+        function newRunId() {
+            if (globalThis.crypto && typeof globalThis.crypto.randomUUID === 'function') {
+                return globalThis.crypto.randomUUID();
             }
-        });
+            return `run-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+        }
 
-        // Keyboard Shortcuts
-        window.addEventListener('keydown', (e) => {
-            if (e.code === 'Space') {
-                if (arcade) arcade.triggerAction();
-            }
-        });
+        function setRuntimeState(label, detail, color = 'var(--text-muted)') {
+            statusPill.textContent = label;
+            statusPill.style.color = color;
+            pipelineStatus.textContent = detail;
+            runtimeSummary.textContent = detail;
+        }
 
-        btnActionPulse.addEventListener('click', () => {
-            if (arcade) arcade.triggerAction();
-        });
-
-        btnToggleAutoRotate.addEventListener('click', () => {
-            if (arcade) {
-                arcade.autoRotate = !arcade.autoRotate;
-                btnToggleAutoRotate.textContent = arcade.autoRotate ? '🔄 Disable Auto-Rotation' : '🔄 Enable Auto-Rotation';
-            }
-        });
-
-        // Shader Selector Chips
-        document.querySelectorAll('[data-shader]').forEach(btn => {
-            btn.addEventListener('click', () => {
-                document.querySelectorAll('[data-shader]').forEach(b => b.classList.remove('active'));
-                btn.classList.add('active');
-                const shader = btn.getAttribute('data-shader');
-                if (arcade) arcade.setShader(shader);
-                if (WGSL_SHADERS[shader]) shaderCodeView.textContent = WGSL_SHADERS[shader];
-                pixelColor.textContent = `Shader: ${btn.textContent.trim()}`;
-                appendLog(`Switched active shader pipeline to [${shader}].`, 'info');
+        function blockedRun(run, reason) {
+            run.ready = false;
+            run.error = reason;
+            run.gates.runtime = { status: 'BLOCKED', evidence: [], error: reason };
+            VALIDATION_GATES.forEach((id) => {
+                run.gates[id] = { status: 'BLOCKED', evidence: [], error: reason };
+                setGateStatus(id, 'BLOCKED', reason);
             });
-        });
+            run.endedAt = new Date().toISOString();
+            window.__VALIDATION_RESULTS__ = run;
+            validationSummary.textContent = `Run blocked: ${reason}. No OS gate passed.`;
+            appendLog(`Validation blocked: ${reason}`, 'error');
+            return run;
+        }
 
-        // Theme Selector Chips
-        document.querySelectorAll('[data-theme]').forEach(btn => {
-            btn.addEventListener('click', () => {
-                document.querySelectorAll('[data-theme]').forEach(b => b.classList.remove('active'));
-                btn.classList.add('active');
-                const theme = btn.getAttribute('data-theme');
-                if (arcade) arcade.setTheme(theme);
-                appendLog(`Loaded engine texture resource for [${theme}].`, 'info');
+        function onRuntimeEvent(event) {
+            if (!event || typeof event.kind !== 'string') return;
+            if (event.kind === 'frame_presented' && Number.isFinite(event.fps)) {
+                fpsCounter.textContent = `${Number(event.fps).toFixed(1)} FPS`;
+            }
+            appendLog(`${event.kind}${event.code ? ` (${event.code})` : ''}`, event.kind === 'fatal_error' ? 'error' : 'info');
+        }
+
+        async function prepareRuntime() {
+            if (runtime) return runtime;
+            if (!navigator.gpu) throw new Error('WEBGPU_UNAVAILABLE');
+
+            const module = await import(RUNTIME_MODULE_URL);
+            if (typeof module.default !== 'function') throw new Error('RUNTIME_WASM_INIT_MISSING');
+            if (typeof module.createAndroidRuntime !== 'function') throw new Error('RUNTIME_FACTORY_MISSING');
+            await module.default();
+
+            runtime = await module.createAndroidRuntime({
+                canvas,
+                onEvent: onRuntimeEvent
             });
-        });
+            if (!runtime || typeof runtime.runValidationLoop !== 'function') {
+                throw new Error('VALIDATION_LOOP_CONTRACT_MISSING');
+            }
+            setRuntimeState('VM READY', 'Runtime loaded; Android boot not yet proven.', 'var(--success)');
+            appendLog('Real Android VM runtime loaded.', 'success');
+            return runtime;
+        }
 
         async function bootstrap() {
+            resetGateStatus();
+            appendLog('Preflight: loading full Android runtime...', 'info');
             try {
-                appendLog('Initializing Wasm Virtio-GPU Bridge...', 'info');
-                await init();
-                bridge = new WasmVirtioGpuBridge();
-                await bridge.initialize(640, 480);
-
-                gpuDev = new VirtioGpuDevice(null, bridge, canvas);
-                suite = new VisualTestSuite(gpuDev, canvas, appendLog);
-
-                statusPill.textContent = 'ONLINE';
-                statusPill.style.color = 'var(--success)';
-                appendLog('Virtio-GPU Stack online. Initializing 3D Game Arcade...', 'success');
-
-                // Launch 3D Arcade Engine
-                arcade = new Arcade3DScene(gpuDev, canvas, (stats) => {
-                    fpsCounter.textContent = `${stats.fps.toFixed(1)} FPS`;
-                });
-                arcade.start();
+                await prepareRuntime();
             } catch (err) {
-                statusPill.textContent = 'ERROR';
-                statusPill.style.color = 'var(--error)';
-                appendLog(`Bootstrap failed: ${err.message}`, 'error');
+                runtimeError = err instanceof Error ? err.message : String(err);
+                setRuntimeState('BLOCKED', `Full runtime blocked: ${runtimeError}`, 'var(--error)');
+                VALIDATION_GATES.forEach((id) => setGateStatus(id, 'BLOCKED', runtimeError));
+                appendLog(`Preflight failed: ${runtimeError}`, 'error');
             }
         }
 
-        btnRunAll.addEventListener('click', async () => {
-            if (!suite) return;
-            if (arcade) arcade.stop();
-            btnRunAll.disabled = true;
-            appendLog('Starting automated verification run...', 'info');
-            const results = await suite.runAllGates();
-            for (let i = 1; i <= 5; i++) {
-                const badge = document.getElementById(`badge-gate${i}`);
-                const res = results.results[`gate${i}`];
-                if (res && res.status === 'PASSED') {
-                    badge.className = 'badge badge-passed';
-                    badge.textContent = 'PASSED';
-                } else {
-                    badge.className = 'badge badge-failed';
-                    badge.textContent = 'FAILED';
-                }
-            }
-            window.__TEST_RESULTS__ = results;
-            appendLog(`Verification complete: ${results.passed}/${results.total} passed.`, results.failed === 0 ? 'success' : 'error');
-            btnRunAll.disabled = false;
-        });
+        async function runValidationLoop() {
+            const epoch = ++validationEpoch;
+            const run = {
+                runId: newRunId(),
+                epoch,
+                startedAt: new Date().toISOString(),
+                endedAt: null,
+                ready: false,
+                gates: {}
+            };
 
+            resetGateStatus();
+            btnRunAll.disabled = true;
+            btnRunRuntime.disabled = true;
+            appendLog(`Full OS validation ${run.runId} started.`, 'info');
+
+            try {
+                await prepareRuntime();
+            } catch (err) {
+                const reason = err instanceof Error ? err.message : String(err);
+                runtimeError = reason;
+                setRuntimeState('BLOCKED', `Full runtime blocked: ${reason}`, 'var(--error)');
+                const result = blockedRun(run, reason);
+                btnRunAll.disabled = false;
+                btnRunRuntime.disabled = false;
+                return result;
+            }
+
+            VALIDATION_GATES.forEach((id) => setGateStatus(id, 'RUNNING'));
+            setRuntimeState('RUNNING', 'Full Android validation is in progress.', 'var(--primary)');
+
+            try {
+                const observed = await runtime.runValidationLoop({
+                    runId: run.runId,
+                    epoch,
+                    onGate: (gate) => {
+                        if (!gate || !VALIDATION_GATES.includes(gate.id)) {
+                            throw new Error('VALIDATION_GATE_ID_INVALID');
+                        }
+                        if (!VALID_STATUSES.has(gate.status) || gate.status === 'PENDING' || gate.status === 'RUNNING') {
+                            throw new Error(`VALIDATION_GATE_STATUS_INVALID:${gate.id}`);
+                        }
+                        run.gates[gate.id] = gate;
+                        setGateStatus(gate.id, gate.status, gate.error || gate.evidence?.join('; ') || '');
+                    }
+                });
+
+                if (epoch !== validationEpoch) return run;
+                if (!observed || observed.runId !== run.runId || !observed.gates) {
+                    throw new Error('VALIDATION_RESULT_INVALID');
+                }
+                for (const id of VALIDATION_GATES) {
+                    if (!run.gates[id] && observed.gates[id]) run.gates[id] = observed.gates[id];
+                    if (!run.gates[id]) throw new Error(`VALIDATION_GATE_MISSING:${id}`);
+                    setGateStatus(id, run.gates[id].status, run.gates[id].error || '');
+                }
+                run.ready = observed.ready === true && VALIDATION_GATES.every((id) => run.gates[id].status === 'PASSED');
+                run.evidence = observed.evidence || [];
+                run.error = observed.error || null;
+            } catch (err) {
+                const reason = err instanceof Error ? err.message : String(err);
+                run.error = reason;
+                VALIDATION_GATES.forEach((id) => {
+                    if (!run.gates[id] || run.gates[id].status === 'RUNNING') {
+                        run.gates[id] = { status: 'FAILED', evidence: [], error: reason };
+                        setGateStatus(id, 'FAILED', reason);
+                    }
+                });
+                appendLog(`Validation failed: ${reason}`, 'error');
+            }
+
+            if (epoch !== validationEpoch) return run;
+            run.endedAt = new Date().toISOString();
+            window.__VALIDATION_RESULTS__ = run;
+            const pass = VALIDATION_GATES.filter((id) => run.gates[id]?.status === 'PASSED').length;
+            const blocked = VALIDATION_GATES.filter((id) => run.gates[id]?.status === 'BLOCKED').length;
+            const fail = VALIDATION_GATES.filter((id) => run.gates[id]?.status === 'FAILED').length;
+            setRuntimeState(run.ready ? 'ANDROID READY' : 'NOT READY', `${pass}/10 pass; ${blocked} blocked; ${fail} fail.`, run.ready ? 'var(--success)' : 'var(--error)');
+            validationSummary.textContent = `Run ${run.runId}: ${pass}/10 pass, ${blocked} blocked, ${fail} fail.`;
+            appendLog(`Full OS validation done: ${pass}/10 pass.`, run.ready ? 'success' : 'error');
+            btnRunAll.disabled = false;
+            btnRunRuntime.disabled = false;
+            return run;
+        }
+
+        function showTab(tab) {
+            const showRuntime = tab === 'runtime';
+            tabRuntime.classList.toggle('active', showRuntime);
+            tabGates.classList.toggle('active', !showRuntime);
+            runtimeCard.style.display = showRuntime ? 'block' : 'none';
+            gatesCard.style.display = showRuntime ? 'none' : 'block';
+        }
+
+        tabRuntime.addEventListener('click', () => showTab('runtime'));
+        tabGates.addEventListener('click', () => showTab('gates'));
+        btnRunAll.addEventListener('click', () => runValidationLoop().catch((err) => appendLog(`Loop crash: ${err.message}`, 'error')));
+        btnRunRuntime.addEventListener('click', () => runValidationLoop().catch((err) => appendLog(`Loop crash: ${err.message}`, 'error')));
+
+        window.runValidationLoop = runValidationLoop;
+        window.__VALIDATION_RESULTS__ = null;
+        showTab('gates');
         bootstrap();
     </script>
 </body>
 </html>
-
