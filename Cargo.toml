@@ -19,6 +19,7 @@ members = [
   "units/u6-virtio-transport",
   "units/u7-gpu-device",
   "units/u8-gpu-host",
+  "units/u13-adapters",
 ]
 
 [workspace.dependencies]
