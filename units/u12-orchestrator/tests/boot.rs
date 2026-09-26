@@ -1,0 +1,221 @@
+//! Wave-3 G4: boot/integration tests for the U12 orchestrator.
+//!
+//! HONEST SCOPE (see lib.rs docs): the frozen U1/U2/U3 pipeline lifts only a
+//! subset of AArch64 (MOVZ, ADD imm/reg, B; everything else → typed Trap),
+//! and U3's `() -> i64` module shape cannot thread register state across
+//! calls. The real 4.1 guest (`pathn-sh`) uses ADRP/LDRB/CBZ/WFI, so it
+//! cannot boot to a shell prompt through the current pipeline — Wave-4 work.
+//!
+//! What these tests prove, for real:
+//! - `boot_real_image_halts_with_typed_reason`: the REAL 4.1 image boots
+//!   through the REAL pipeline and halts at the first unlifted instruction
+//!   with U2's exact trap string (no fake boot, no invented semantics).
+//! - `boot_pipeline_chains_blocks_through_wasmtime`: a real AArch64 program
+//!   (MOVZ/ADD/B) executes through decode→lift→compile→wasmtime with exit
+//!   addresses chaining blocks — the JIT path is genuinely live.
+//! - `boot_determinism_same_inputs_same_hash`: same image + scripted inputs,
+//!   run twice → identical state hash.
+//! - `boot_virtio_gpu_submit3d_path`: hand-built virtio ring → QueueNotify →
+//!   U6 pop_chain → U7 SUBMIT_3D decode → U6 push_used → IrqAssert.
+
+use guest_image::image::{build, GuestManifest};
+use pathn_contracts::device::{DevOut, GpuCmd, TransportState, VirtQueue};
+use u12_orchestrator::{HaltReason, Orchestrator, RAM_BASE};
+
+fn real_image() -> Vec<u8> {
+    let manifest = GuestManifest {
+        name: "pathn-sh".to_string(),
+        version: 1,
+        load_addr: RAM_BASE,
+    };
+    build(&manifest).0
+}
+
+#[test]
+fn boot_real_image_halts_with_typed_reason() {
+    let img = real_image();
+    let mut o = Orchestrator::new();
+    o.load_image(&img).unwrap();
+    // The guest's first instruction is ADRP X10, #0 (0xB000000A) — U1's
+    // decoder has no PC-relative-addressing class, so it is honestly
+    // reported as illegal rather than lifted. This is the exact Wave-4
+    // contract gap: the 4.1 guest cannot boot through the frozen U1/U2.
+    let first = u32::from_le_bytes(o.machine().ram[0..4].try_into().unwrap());
+    assert_eq!(first, 0xB000000A, "guest's first word per the 4.1 build");
+    let halt = o.run_until_halt(10_000);
+    assert_eq!(
+        halt,
+        HaltReason::IllegalInstruction {
+            addr: 0x4000_0000,
+            word: first,
+        },
+        "the real pipeline must name the exact unlifted instruction"
+    );
+    // Halted on the very first step: nothing was faked past it.
+    assert_eq!(o.steps(), 0);
+    assert_eq!(o.machine().cpu[0].pc, 0x4000_0000);
+}
+
+#[test]
+fn boot_pipeline_chains_blocks_through_wasmtime() {
+    // Real AArch64 words, all inside U2's lift set:
+    //   MOVZ X1, #5          -> 0xD28000A1
+    //   MOVZ X2, #7          -> 0xD28000E2
+    //   ADD  X3, X1, X2      -> 0x8B020023
+    //   B    +8 (to 0x14)    -> 0x14000002
+    //   WFI                  -> 0xD503207F (System: trap if reached)
+    //   B    +12 (to 0x20)   -> 0x14000003
+    //   0xFFFFFFFF           -> illegal
+    let mut o = Orchestrator::new();
+    let words: &[u32] = &[
+        0xD28000A1, 0xD28000E2, 0x8B020023, 0x14000002, 0xD503207F, 0x14000003,
+    ];
+    for (i, w) in words.iter().enumerate() {
+        let off = i * 4;
+        o.machine_mut().ram[off..off + 4].copy_from_slice(&w.to_le_bytes());
+    }
+    let illegal_off = 8 * 4;
+    o.machine_mut().ram[illegal_off..illegal_off + 4]
+        .copy_from_slice(&0xFFFF_FFFFu32.to_le_bytes());
+
+    let halt = o.run_until_halt(100);
+    // The branch at 0xC was TAKEN (via real wasmtime exit addresses):
+    // fallthrough would have halted at 0x10 with Unsupported (WFI).
+    assert_eq!(
+        halt,
+        HaltReason::IllegalInstruction {
+            addr: 0x4000_0020,
+            word: 0xFFFF_FFFF
+        }
+    );
+    // 5 blocks executed through real wasmtime (one per lifted
+    // instruction); the 6th step halted at decode and never executed.
+    assert_eq!(o.steps(), 5);
+    assert_eq!(
+        o.machine().irq.timer_count,
+        5 * u12_orchestrator::TIMER_CYCLES_PER_STEP
+    );
+    // The block cache actually cached: 5 distinct pcs compiled.
+    assert_eq!(o.block_cache_len(), 5);
+}
+
+#[test]
+fn boot_determinism_same_inputs_same_hash() {
+    let img = real_image();
+    let run_once = |input: &[u8]| {
+        let mut o = Orchestrator::new();
+        o.load_image(&img).unwrap();
+        o.console_mut().feed_rx(input);
+        let halt = o.run_until_halt(1_000);
+        (halt, o.state_hash())
+    };
+    let (halt_a, hash_a) = run_once(b"echo hi\n");
+    let (halt_b, hash_b) = run_once(b"echo hi\n");
+    assert_eq!(halt_a, halt_b);
+    assert_eq!(
+        hash_a, hash_b,
+        "same image + same inputs must hash identically"
+    );
+    // Different input → different hash (the hash covers input state).
+    let (_, hash_c) = run_once(b"help\n");
+    assert_ne!(hash_a, hash_c);
+}
+
+#[test]
+fn boot_virtio_gpu_submit3d_path() {
+    let mut o = Orchestrator::new();
+
+    // --- hand-built virtio ring in guest RAM ---
+    // U6 works in ram-slice offsets (PA - RAM_BASE); the queue addresses
+    // stored in VirtQueue follow that convention (see queue_notify docs).
+    let desc_off: u64 = 0x1_0000;
+    let avail_off: u64 = 0x2_0000;
+    let used_off: u64 = 0x3_0000;
+    let cmd_off: u64 = 0x4_0000;
+
+    // SUBMIT_3D wire bytes: hdr(cmd=0x0207, flags=0, fence=0, ctx=42, pad) +
+    // size u32 + pad u32 + 4 payload bytes.
+    let mut cmd = Vec::new();
+    cmd.extend_from_slice(&0x0207u32.to_le_bytes());
+    cmd.extend_from_slice(&0u32.to_le_bytes());
+    cmd.extend_from_slice(&0u64.to_le_bytes());
+    cmd.extend_from_slice(&42u32.to_le_bytes());
+    cmd.extend_from_slice(&0u32.to_le_bytes());
+    cmd.extend_from_slice(&4u32.to_le_bytes());
+    cmd.extend_from_slice(&0u32.to_le_bytes());
+    cmd.extend_from_slice(&[0xDE, 0xAD, 0xBE, 0xEF]);
+
+    let w = |o: &mut Orchestrator, off: u64, bytes: &[u8]| {
+        let off = off as usize;
+        o.machine_mut().ram[off..off + bytes.len()].copy_from_slice(bytes);
+    };
+    w(&mut o, cmd_off, &cmd);
+    // Descriptor 0: addr=cmd_pa, len=cmd.len(), flags=0 (device-readable), next=0.
+    let mut desc = Vec::new();
+    desc.extend_from_slice(&cmd_off.to_le_bytes());
+    desc.extend_from_slice(&(cmd.len() as u32).to_le_bytes());
+    desc.extend_from_slice(&0u16.to_le_bytes());
+    desc.extend_from_slice(&0u16.to_le_bytes());
+    w(&mut o, desc_off, &desc);
+    // Avail ring: flags=0, idx=1, ring[0]=0.
+    let mut avail = Vec::new();
+    avail.extend_from_slice(&0u16.to_le_bytes());
+    avail.extend_from_slice(&1u16.to_le_bytes());
+    avail.extend_from_slice(&0u16.to_le_bytes());
+    w(&mut o, avail_off, &avail);
+    // Used ring: flags=0, idx=0 (avail_event left 0).
+    w(&mut o, used_off, &[0u8; 8]);
+
+    *o.transport_mut() = TransportState {
+        queue_count: 1,
+        features: 0,
+        status: 4, // DRIVER_OK
+        queues: vec![VirtQueue {
+            desc_addr: desc_off,
+            avail_addr: avail_off,
+            used_addr: used_off,
+            size: 16,
+            ready: true,
+            last_avail_idx: 0,
+            last_used_idx: 0,
+        }],
+    };
+
+    let outs = o.queue_notify(0).unwrap();
+    // U7 decoded the SUBMIT_3D from the chain's bytes: ctx_id=42.
+    assert!(
+        outs.iter().any(|d| matches!(
+            d,
+            DevOut::GpuCommands(cmds)
+                if cmds.iter().any(|c| matches!(
+                    c,
+                    GpuCmd::Submit3D { ctx_id: 42, commands }
+                    if commands == &vec![0xDE, 0xAD, 0xBE, 0xEF]
+                ))
+        )),
+        "expected Submit3D ctx=42 in {outs:?}"
+    );
+    // Used ring committed: idx advanced to 1.
+    let used_off = used_off as usize;
+    assert_eq!(
+        u16::from_le_bytes(
+            o.machine().ram[used_off + 2..used_off + 4]
+                .try_into()
+                .unwrap()
+        ),
+        1
+    );
+    // Queue cursors advanced.
+    assert_eq!(o.transport().queues[0].last_avail_idx, 1);
+    assert_eq!(o.transport().queues[0].last_used_idx, 1);
+    // IRQ: need_event_idx(1, event=0, old=0) → 1-0-1 < 1-0 → 0 < 1 → true.
+    assert!(
+        outs.iter()
+            .any(|d| matches!(d, DevOut::IrqAssert { num: 48 })),
+        "expected IrqAssert in {outs:?}"
+    );
+    assert_ne!(o.machine().irq.pending & (1u64 << 48), 0);
+    // Second notify: nothing new available → no work, no error.
+    let outs2 = o.queue_notify(0).unwrap();
+    assert!(outs2.is_empty());
+}

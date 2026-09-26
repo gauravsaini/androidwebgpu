@@ -1,0 +1,27 @@
+[package]
+name = "u12-orchestrator"
+version = "0.1.0"
+edition = "2021"
+description = "Path N U12: the single quarantined orchestrator — owns MachineState, threads it through every unit"
+
+[lib]
+name = "u12_orchestrator"
+path = "src/lib.rs"
+
+[dependencies]
+pathn-contracts = { path = "../../contracts" }
+u1-decode = { path = "../u1-decode" }
+u2-ir-lift = { path = "../u2-ir-lift" }
+u3-wasm-jit = { path = "../u3-wasm-jit" }
+u4-mmu = { path = "../u4-mmu" }
+u5-gic-timer = { path = "../u5-gic-timer" }
+u6-virtio-transport = { path = "../u6-virtio-transport" }
+u7-gpu-device = { path = "../u7-gpu-device" }
+u8-gpu-host = { path = "../u8-gpu-host" }
+u11-snapshot = { path = "../u11-snapshot" }
+u13-adapters = { path = "../u13-adapters" }
+wasmtime = "24"
+sha2 = "0.10"
+
+[dev-dependencies]
+guest-image = { path = "../../guest-image" }
