@@ -1,0 +1,11 @@
+[package]
+name = "u11-snapshot"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+name = "u11_snapshot"
+path = "src/lib.rs"
+
+[dependencies]
+pathn-contracts = { path = "../../contracts" }

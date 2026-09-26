@@ -1,0 +1,11 @@
+[package]
+name = "u14-metrics"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+name = "u14_metrics"
+path = "src/lib.rs"
+
+[dependencies]
+pathn-contracts = { path = "../../contracts" }

@@ -1,0 +1,11 @@
+[package]
+name = "u7-gpu-device"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+name = "u7_gpu_device"
+path = "src/lib.rs"
+
+[dependencies]
+pathn-contracts = { path = "../../contracts" }

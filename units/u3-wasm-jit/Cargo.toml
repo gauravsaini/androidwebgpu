@@ -1,0 +1,11 @@
+[package]
+name = "u3-wasm-jit"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+name = "u3_wasm_jit"
+path = "src/lib.rs"
+
+[dependencies]
+pathn-contracts = { path = "../../contracts" }

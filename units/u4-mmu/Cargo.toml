@@ -1,0 +1,11 @@
+[package]
+name = "u4-mmu"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+name = "u4_mmu"
+path = "src/lib.rs"
+
+[dependencies]
+pathn-contracts = { path = "../../contracts" }

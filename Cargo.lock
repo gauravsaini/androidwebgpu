@@ -966,6 +966,83 @@ dependencies = [
 ]
 
 [[package]]
+name = "u1-decode"
+version = "0.1.0"
+dependencies = [
+ "pathn-contracts",
+]
+
+[[package]]
+name = "u10-analyzer"
+version = "0.1.0"
+dependencies = [
+ "pathn-contracts",
+]
+
+[[package]]
+name = "u11-snapshot"
+version = "0.1.0"
+dependencies = [
+ "pathn-contracts",
+]
+
+[[package]]
+name = "u14-metrics"
+version = "0.1.0"
+dependencies = [
+ "pathn-contracts",
+]
+
+[[package]]
+name = "u2-ir-lift"
+version = "0.1.0"
+dependencies = [
+ "pathn-contracts",
+]
+
+[[package]]
+name = "u3-wasm-jit"
+version = "0.1.0"
+dependencies = [
+ "pathn-contracts",
+]
+
+[[package]]
+name = "u4-mmu"
+version = "0.1.0"
+dependencies = [
+ "pathn-contracts",
+]
+
+[[package]]
+name = "u5-gic-timer"
+version = "0.1.0"
+dependencies = [
+ "pathn-contracts",
+]
+
+[[package]]
+name = "u6-virtio-transport"
+version = "0.1.0"
+dependencies = [
+ "pathn-contracts",
+]
+
+[[package]]
+name = "u7-gpu-device"
+version = "0.1.0"
+dependencies = [
+ "pathn-contracts",
+]
+
+[[package]]
+name = "u8-gpu-host"
+version = "0.1.0"
+dependencies = [
+ "pathn-contracts",
+]
+
+[[package]]
 name = "unicode-ident"
 version = "1.0.24"
 source = "registry+https://github.com/rust-lang/crates.io-index"
