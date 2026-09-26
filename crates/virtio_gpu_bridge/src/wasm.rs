@@ -40,10 +40,11 @@ impl WasmVirtioGpuBridge {
     #[wasm_bindgen]
     pub fn get_scanout_framebuffer(&self, scanout_id: u32) -> Vec<u8> {
         if let Some(bridge) = &self.bridge {
-            bridge.get_scanout_framebuffer(scanout_id).unwrap_or_default()
+            bridge
+                .get_scanout_framebuffer(scanout_id)
+                .unwrap_or_default()
         } else {
             Vec::new()
         }
     }
 }
-

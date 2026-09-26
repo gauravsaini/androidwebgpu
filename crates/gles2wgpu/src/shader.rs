@@ -37,7 +37,10 @@ impl ShaderTranslator {
                 has_version = true;
             } else if trimmed.starts_with("#extension") {
                 lines.push(format!("// {}", line));
-            } else if trimmed.starts_with("uniform ") && !trimmed.contains("sampler") && !trimmed.contains("{") {
+            } else if trimmed.starts_with("uniform ")
+                && !trimmed.contains("sampler")
+                && !trimmed.contains("{")
+            {
                 // Collect loose uniform variables to pack into std140 uniform block at binding 2
                 let member = trimmed.trim_start_matches("uniform ").trim();
                 uniform_members.push(format!("    {}", member));
@@ -76,7 +79,10 @@ impl ShaderTranslator {
         }
 
         if stage == ShaderStage::Fragment && has_gl_fragcolor {
-            lines.insert(1, "layout(location = 0) out vec4 _out_gl_fragcolor;".to_string());
+            lines.insert(
+                1,
+                "layout(location = 0) out vec4 _out_gl_fragcolor;".to_string(),
+            );
         }
 
         // Insert packed std140 uniform block at binding 2 if uniforms were present
@@ -85,7 +91,14 @@ impl ShaderTranslator {
                 "layout(std140, set = 0, binding = 2) uniform UniformBlock {{\n{}\n}};",
                 uniform_members.join("\n")
             );
-            lines.insert(if stage == ShaderStage::Fragment && has_gl_fragcolor { 2 } else { 1 }, block);
+            lines.insert(
+                if stage == ShaderStage::Fragment && has_gl_fragcolor {
+                    2
+                } else {
+                    1
+                },
+                block,
+            );
         }
 
         lines.join("\n")

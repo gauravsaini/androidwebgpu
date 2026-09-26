@@ -121,7 +121,10 @@ impl GlContext {
                 force_fallback_adapter: false,
             })
             .await
-            .ok_or_else(|| "Failed to find an appropriate GPU adapter (WebGPU disabled or unavailable)".to_string())?;
+            .ok_or_else(|| {
+                "Failed to find an appropriate GPU adapter (WebGPU disabled or unavailable)"
+                    .to_string()
+            })?;
 
         let limits = adapter.limits();
         let (device, queue) = adapter
@@ -224,7 +227,7 @@ impl GlContext {
             blend_dst_factor: 0x0303, // GL_ONE_MINUS_SRC_ALPHA
             depth_func: 0x0201,       // GL_LESS
             depth_mask: true,
-            last_error: 0,            // GL_NO_ERROR
+            last_error: 0, // GL_NO_ERROR
             current_program_id: 0,
             bound_array_buffer_id: 0,
             bound_element_array_buffer_id: 0,
@@ -330,7 +333,9 @@ impl GlContext {
         let target_view = if self.bound_framebuffer_id != 0 {
             if let Some(fb) = self.framebuffers.get(&self.bound_framebuffer_id) {
                 if let Some(tex_id) = fb.color_attachment_texture_id {
-                    self.textures.get(&tex_id).and_then(|t| t.wgpu_view.as_ref())
+                    self.textures
+                        .get(&tex_id)
+                        .and_then(|t| t.wgpu_view.as_ref())
                 } else {
                     None
                 }
@@ -342,13 +347,14 @@ impl GlContext {
         };
 
         if let Some(view) = target_view {
-            let mut encoder =
-                self.device
-                    .create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                        label: Some("glClear Encoder"),
-                    });
+            let mut encoder = self
+                .device
+                .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                    label: Some("glClear Encoder"),
+                });
 
-            let load_op = if mask & 0x00004000 != 0 { // GL_COLOR_BUFFER_BIT
+            let load_op = if mask & 0x00004000 != 0 {
+                // GL_COLOR_BUFFER_BIT
                 wgpu::LoadOp::Clear(wgpu::Color {
                     r: self.clear_color[0] as f64,
                     g: self.clear_color[1] as f64,
@@ -359,19 +365,20 @@ impl GlContext {
                 wgpu::LoadOp::Load
             };
 
-            let depth_stencil_attachment = if (mask & 0x00000100 != 0 || mask & 0x00000400 != 0) // GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT
-                && self.default_depth_target.is_some()
-            {
-                Some(wgpu::RenderPassDepthStencilAttachment {
-                    view: self.default_depth_target.as_ref().unwrap(),
-                    depth_ops: Some(wgpu::Operations {
-                        load: wgpu::LoadOp::Clear(self.clear_depth),
-                        store: wgpu::StoreOp::Store,
-                    }),
-                    stencil_ops: Some(wgpu::Operations {
-                        load: wgpu::LoadOp::Clear(self.clear_stencil),
-                        store: wgpu::StoreOp::Store,
-                    }),
+            // GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT
+            let depth_stencil_attachment = if mask & 0x00000100 != 0 || mask & 0x00000400 != 0 {
+                self.default_depth_target.as_ref().map(|depth_target| {
+                    wgpu::RenderPassDepthStencilAttachment {
+                        view: depth_target,
+                        depth_ops: Some(wgpu::Operations {
+                            load: wgpu::LoadOp::Clear(self.clear_depth),
+                            store: wgpu::StoreOp::Store,
+                        }),
+                        stencil_ops: Some(wgpu::Operations {
+                            load: wgpu::LoadOp::Clear(self.clear_stencil),
+                            store: wgpu::StoreOp::Store,
+                        }),
+                    }
                 })
             } else {
                 None
@@ -440,7 +447,9 @@ impl GlContext {
 
     pub fn gl_create_shader(&mut self, stage: u32) -> u32 {
         let id = self.gen_id();
-        self.pipeline_cache.shaders.insert(id, Shader::new(id, stage));
+        self.pipeline_cache
+            .shaders
+            .insert(id, Shader::new(id, stage));
         id
     }
 
@@ -482,7 +491,10 @@ impl GlContext {
     pub fn gl_get_uniform_location(&mut self, program_id: u32, name: &str) -> i32 {
         if let Some(prog) = self.pipeline_cache.programs.get_mut(&program_id) {
             let next_loc = prog.uniform_locations.len() as u32;
-            let loc = *prog.uniform_locations.entry(name.to_string()).or_insert(next_loc);
+            let loc = *prog
+                .uniform_locations
+                .entry(name.to_string())
+                .or_insert(next_loc);
             loc as i32
         } else {
             -1
@@ -495,7 +507,8 @@ impl GlContext {
             if offset + 4 <= self.uniform_data.len() {
                 let bytes = v0.to_le_bytes();
                 self.uniform_data[offset..offset + 4].copy_from_slice(&bytes);
-                self.queue.write_buffer(&self.uniform_buffer, offset as u64, &bytes);
+                self.queue
+                    .write_buffer(&self.uniform_buffer, offset as u64, &bytes);
             }
         }
     }
@@ -507,18 +520,26 @@ impl GlContext {
             if offset + byte_len <= self.uniform_data.len() && value.len() >= count * 4 {
                 let bytes: &[u8] = bytemuck::cast_slice(&value[0..count * 4]);
                 self.uniform_data[offset..offset + bytes.len()].copy_from_slice(bytes);
-                self.queue.write_buffer(&self.uniform_buffer, offset as u64, bytes);
+                self.queue
+                    .write_buffer(&self.uniform_buffer, offset as u64, bytes);
             }
         }
     }
 
-    pub fn gl_uniform_matrix_4fv(&mut self, location: i32, _count: usize, _transpose: bool, value: &[f32]) {
+    pub fn gl_uniform_matrix_4fv(
+        &mut self,
+        location: i32,
+        _count: usize,
+        _transpose: bool,
+        value: &[f32],
+    ) {
         if location >= 0 && value.len() >= 16 {
             let offset = (location as usize) * 64;
             if offset + 64 <= self.uniform_data.len() {
                 let bytes: &[u8] = bytemuck::cast_slice(&value[0..16]);
                 self.uniform_data[offset..offset + 64].copy_from_slice(bytes);
-                self.queue.write_buffer(&self.uniform_buffer, offset as u64, bytes);
+                self.queue
+                    .write_buffer(&self.uniform_buffer, offset as u64, bytes);
             }
         }
     }
@@ -613,6 +634,7 @@ impl GlContext {
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn gl_tex_image_2d(
         &mut self,
         _target: u32,
@@ -718,22 +740,55 @@ impl GlContext {
         for (loc, attrib) in self.vertex_attribs.iter().enumerate() {
             if attrib.enabled {
                 let format_id = match attrib.attrib_type {
-                    0x1406 => match attrib.size { // GL_FLOAT
+                    0x1406 => match attrib.size {
+                        // GL_FLOAT
                         1 => 1,
                         2 => 2,
                         3 => 3,
                         4 => 4,
                         _ => 3,
                     },
-                    0x1401 => match attrib.size { // GL_UNSIGNED_BYTE
-                        2 => if attrib.normalized { 12 } else { 10 },
-                        4 => if attrib.normalized { 13 } else { 11 },
+                    0x1401 => match attrib.size {
+                        // GL_UNSIGNED_BYTE
+                        2 => {
+                            if attrib.normalized {
+                                12
+                            } else {
+                                10
+                            }
+                        }
+                        4 => {
+                            if attrib.normalized {
+                                13
+                            } else {
+                                11
+                            }
+                        }
                         _ => 13,
                     },
-                    0x1402 => match attrib.size { // GL_SHORT
-                        2 => if attrib.normalized { 20 } else { 22 },
-                        4 => if attrib.normalized { 21 } else { 23 },
-                        _ => if attrib.normalized { 20 } else { 22 },
+                    0x1402 => match attrib.size {
+                        // GL_SHORT
+                        2 => {
+                            if attrib.normalized {
+                                20
+                            } else {
+                                22
+                            }
+                        }
+                        4 => {
+                            if attrib.normalized {
+                                21
+                            } else {
+                                23
+                            }
+                        }
+                        _ => {
+                            if attrib.normalized {
+                                20
+                            } else {
+                                22
+                            }
+                        }
                     },
                     _ => 3,
                 };
@@ -771,7 +826,9 @@ impl GlContext {
         let target_view = if self.bound_framebuffer_id != 0 {
             if let Some(fb) = self.framebuffers.get(&self.bound_framebuffer_id) {
                 if let Some(tex_id) = fb.color_attachment_texture_id {
-                    self.textures.get(&tex_id).and_then(|t| t.wgpu_view.as_ref())
+                    self.textures
+                        .get(&tex_id)
+                        .and_then(|t| t.wgpu_view.as_ref())
                 } else {
                     None
                 }
@@ -796,23 +853,25 @@ impl GlContext {
                 self.depth_func,
             );
 
-            let mut encoder =
-                self.device
-                    .create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                        label: Some("glDrawArrays Encoder"),
-                    });
+            let mut encoder = self
+                .device
+                .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                    label: Some("glDrawArrays Encoder"),
+                });
 
-            let depth_stencil_attachment = if self.depth_test_enabled && self.default_depth_target.is_some() {
-                Some(wgpu::RenderPassDepthStencilAttachment {
-                    view: self.default_depth_target.as_ref().unwrap(),
-                    depth_ops: Some(wgpu::Operations {
-                        load: wgpu::LoadOp::Load,
-                        store: wgpu::StoreOp::Store,
-                    }),
-                    stencil_ops: Some(wgpu::Operations {
-                        load: wgpu::LoadOp::Load,
-                        store: wgpu::StoreOp::Store,
-                    }),
+            let depth_stencil_attachment = if self.depth_test_enabled {
+                self.default_depth_target.as_ref().map(|depth_target| {
+                    wgpu::RenderPassDepthStencilAttachment {
+                        view: depth_target,
+                        depth_ops: Some(wgpu::Operations {
+                            load: wgpu::LoadOp::Load,
+                            store: wgpu::StoreOp::Store,
+                        }),
+                        stencil_ops: Some(wgpu::Operations {
+                            load: wgpu::LoadOp::Load,
+                            store: wgpu::StoreOp::Store,
+                        }),
+                    }
                 })
             } else {
                 None
@@ -856,16 +915,19 @@ impl GlContext {
                     render_pass.set_pipeline(pipeline);
                 }
 
-                let bind_group_layout = self.pipeline_cache.get_or_create_main_bind_group_layout(&self.device);
-                let (wgpu_view, sampler) = if let Some(tex) = self.textures.get(&self.bound_texture_2d_id) {
-                    if let (Some(v), Some(s)) = (&tex.wgpu_view, &tex.wgpu_sampler) {
-                        (v, s)
+                let bind_group_layout = self
+                    .pipeline_cache
+                    .get_or_create_main_bind_group_layout(&self.device);
+                let (wgpu_view, sampler) =
+                    if let Some(tex) = self.textures.get(&self.bound_texture_2d_id) {
+                        if let (Some(v), Some(s)) = (&tex.wgpu_view, &tex.wgpu_sampler) {
+                            (v, s)
+                        } else {
+                            (&self.dummy_texture_view, &self.dummy_sampler)
+                        }
                     } else {
                         (&self.dummy_texture_view, &self.dummy_sampler)
-                    }
-                } else {
-                    (&self.dummy_texture_view, &self.dummy_sampler)
-                };
+                    };
 
                 let bind_group = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
                     label: Some("GLES Draw Bind Group"),
@@ -924,7 +986,9 @@ impl GlContext {
         let target_view = if self.bound_framebuffer_id != 0 {
             if let Some(fb) = self.framebuffers.get(&self.bound_framebuffer_id) {
                 if let Some(tex_id) = fb.color_attachment_texture_id {
-                    self.textures.get(&tex_id).and_then(|t| t.wgpu_view.as_ref())
+                    self.textures
+                        .get(&tex_id)
+                        .and_then(|t| t.wgpu_view.as_ref())
                 } else {
                     None
                 }
@@ -949,23 +1013,25 @@ impl GlContext {
                 self.depth_func,
             );
 
-            let mut encoder =
-                self.device
-                    .create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                        label: Some("glDrawElements Encoder"),
-                    });
+            let mut encoder = self
+                .device
+                .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                    label: Some("glDrawElements Encoder"),
+                });
 
-            let depth_stencil_attachment = if self.depth_test_enabled && self.default_depth_target.is_some() {
-                Some(wgpu::RenderPassDepthStencilAttachment {
-                    view: self.default_depth_target.as_ref().unwrap(),
-                    depth_ops: Some(wgpu::Operations {
-                        load: wgpu::LoadOp::Load,
-                        store: wgpu::StoreOp::Store,
-                    }),
-                    stencil_ops: Some(wgpu::Operations {
-                        load: wgpu::LoadOp::Load,
-                        store: wgpu::StoreOp::Store,
-                    }),
+            let depth_stencil_attachment = if self.depth_test_enabled {
+                self.default_depth_target.as_ref().map(|depth_target| {
+                    wgpu::RenderPassDepthStencilAttachment {
+                        view: depth_target,
+                        depth_ops: Some(wgpu::Operations {
+                            load: wgpu::LoadOp::Load,
+                            store: wgpu::StoreOp::Store,
+                        }),
+                        stencil_ops: Some(wgpu::Operations {
+                            load: wgpu::LoadOp::Load,
+                            store: wgpu::StoreOp::Store,
+                        }),
+                    }
                 })
             } else {
                 None
@@ -1009,16 +1075,19 @@ impl GlContext {
                     render_pass.set_pipeline(pipeline);
                 }
 
-                let bind_group_layout = self.pipeline_cache.get_or_create_main_bind_group_layout(&self.device);
-                let (wgpu_view, sampler) = if let Some(tex) = self.textures.get(&self.bound_texture_2d_id) {
-                    if let (Some(v), Some(s)) = (&tex.wgpu_view, &tex.wgpu_sampler) {
-                        (v, s)
+                let bind_group_layout = self
+                    .pipeline_cache
+                    .get_or_create_main_bind_group_layout(&self.device);
+                let (wgpu_view, sampler) =
+                    if let Some(tex) = self.textures.get(&self.bound_texture_2d_id) {
+                        if let (Some(v), Some(s)) = (&tex.wgpu_view, &tex.wgpu_sampler) {
+                            (v, s)
+                        } else {
+                            (&self.dummy_texture_view, &self.dummy_sampler)
+                        }
                     } else {
                         (&self.dummy_texture_view, &self.dummy_sampler)
-                    }
-                } else {
-                    (&self.dummy_texture_view, &self.dummy_sampler)
-                };
+                    };
 
                 let bind_group = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
                     label: Some("GLES Draw Bind Group"),

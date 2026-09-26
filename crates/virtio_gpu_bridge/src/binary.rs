@@ -81,7 +81,11 @@ impl BinaryWireParser {
                 }
                 let cmd: &VirtioGpuTransferToHost2d = try_from_bytes(&bytes[0..size])
                     .map_err(|e| format!("TransferToHost2d parse error: {:?}", e))?;
-                let payload = if bytes.len() > size { &bytes[size..] } else { &[] };
+                let payload = if bytes.len() > size {
+                    &bytes[size..]
+                } else {
+                    &[]
+                };
                 Ok(DecodedVirtioCommand::TransferToHost2d(*cmd, payload))
             }
             VIRTIO_GPU_CMD_TRANSFER_TO_HOST_3D => {
@@ -91,7 +95,11 @@ impl BinaryWireParser {
                 }
                 let cmd: &VirtioGpuTransferToHost3d = try_from_bytes(&bytes[0..size])
                     .map_err(|e| format!("TransferToHost3d parse error: {:?}", e))?;
-                let payload = if bytes.len() > size { &bytes[size..] } else { &[] };
+                let payload = if bytes.len() > size {
+                    &bytes[size..]
+                } else {
+                    &[]
+                };
                 Ok(DecodedVirtioCommand::TransferToHost3d(*cmd, payload))
             }
             VIRTIO_GPU_CMD_RESOURCE_ATTACH_BACKING => {
@@ -106,7 +114,9 @@ impl BinaryWireParser {
                 let mut curr = size;
                 for _ in 0..cmd.nr_entries {
                     if curr + entry_size <= bytes.len() {
-                        if let Ok(entry) = try_from_bytes::<VirtioGpuMemEntry>(&bytes[curr..curr + entry_size]) {
+                        if let Ok(entry) =
+                            try_from_bytes::<VirtioGpuMemEntry>(&bytes[curr..curr + entry_size])
+                        {
                             entries.push(*entry);
                         }
                         curr += entry_size;
@@ -167,7 +177,11 @@ impl BinaryWireParser {
                 }
                 let cmd: &VirtioGpuSubmit3d = try_from_bytes(&bytes[0..size])
                     .map_err(|e| format!("Submit3d parse error: {:?}", e))?;
-                let payload = if bytes.len() > size { &bytes[size..] } else { &[] };
+                let payload = if bytes.len() > size {
+                    &bytes[size..]
+                } else {
+                    &[]
+                };
                 Ok(DecodedVirtioCommand::Submit3d(*cmd, payload))
             }
             _ => Ok(DecodedVirtioCommand::Unknown(*hdr)),

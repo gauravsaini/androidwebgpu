@@ -49,11 +49,7 @@ fn test_full_stack_gles_virtio_compositor_swapchain_e2e() {
         gl_ctx.gl_link_program(prog_id).expect("Link error");
         gl_ctx.gl_use_program(prog_id);
 
-        let vertices: [f32; 9] = [
-            -1.0, -1.0, 0.0,
-             1.0, -1.0, 0.0,
-             0.0,  1.0, 0.0,
-        ];
+        let vertices: [f32; 9] = [-1.0, -1.0, 0.0, 1.0, -1.0, 0.0, 0.0, 1.0, 0.0];
 
         let buf_ids = gl_ctx.gl_gen_buffers(1);
         gl_ctx.gl_bind_buffer(0x8892, buf_ids[0]);
@@ -92,7 +88,8 @@ fn test_full_stack_gles_virtio_compositor_swapchain_e2e() {
 
         // 3. Initialize WebGPU Compositor & Compose multi-layer scene
         let surface_format = virtio_bridge.gl_context.surface_format;
-        let mut compositor = WebGpuCompositor::new(&virtio_bridge.gl_context.device, surface_format);
+        let mut compositor =
+            WebGpuCompositor::new(&virtio_bridge.gl_context.device, surface_format);
 
         // Layer 1: Background Android App Render Target
         let app_tex_view = virtio_bridge

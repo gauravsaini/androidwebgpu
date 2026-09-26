@@ -9,3 +9,7 @@ path = "src/lib.rs"
 
 [dependencies]
 pathn-contracts = { path = "../../contracts" }
+gles2wgpu = { path = "../../crates/gles2wgpu" }
+virtio_gpu_bridge = { path = "../../crates/virtio_gpu_bridge" }
+webgpu_compositor = { path = "../../crates/webgpu_compositor" }
+webgpu_swapchain = { path = "../../crates/webgpu_swapchain" }

@@ -124,11 +124,7 @@ impl VirtioGpuBridge {
                 if let Some(res) = self.resources.remove(&res_id) {
                     self.gl_context.gl_delete_textures(&[res.texture_id]);
                 }
-                BinaryWireParser::encode_header_response(
-                    VIRTIO_GPU_RESP_OK_NODATA,
-                    hdr.fence_id,
-                    0,
-                )
+                BinaryWireParser::encode_header_response(VIRTIO_GPU_RESP_OK_NODATA, hdr.fence_id, 0)
             }
             DecodedVirtioCommand::SetScanout(cmd) => {
                 let fb_size = (cmd.r.width * cmd.r.height * 4) as usize;
@@ -173,8 +169,9 @@ impl VirtioGpuBridge {
                                 if src_off + row_bytes <= res.backing_data.len()
                                     && dst_off + row_bytes <= scanout.fb_data.len()
                                 {
-                                    scanout.fb_data[dst_off..dst_off + row_bytes]
-                                        .copy_from_slice(&res.backing_data[src_off..src_off + row_bytes]);
+                                    scanout.fb_data[dst_off..dst_off + row_bytes].copy_from_slice(
+                                        &res.backing_data[src_off..src_off + row_bytes],
+                                    );
                                 }
                             }
                         }
@@ -209,7 +206,9 @@ impl VirtioGpuBridge {
                                 && dst_offset + sub_w * bpp <= res.backing_data.len()
                             {
                                 res.backing_data[dst_offset..dst_offset + sub_w * bpp]
-                                    .copy_from_slice(&payload[src_offset..src_offset + sub_w * bpp]);
+                                    .copy_from_slice(
+                                        &payload[src_offset..src_offset + sub_w * bpp],
+                                    );
                             }
                         }
                     }
@@ -258,7 +257,9 @@ impl VirtioGpuBridge {
                                 && dst_offset + sub_w * bpp <= res.backing_data.len()
                             {
                                 res.backing_data[dst_offset..dst_offset + sub_w * bpp]
-                                    .copy_from_slice(&payload[src_offset..src_offset + sub_w * bpp]);
+                                    .copy_from_slice(
+                                        &payload[src_offset..src_offset + sub_w * bpp],
+                                    );
                             }
                         }
                     }
@@ -289,19 +290,13 @@ impl VirtioGpuBridge {
                     )
                 }
             }
-            DecodedVirtioCommand::CtxCreate(cmd) => {
-                BinaryWireParser::encode_header_response(
-                    VIRTIO_GPU_RESP_OK_NODATA,
-                    cmd.hdr.fence_id,
-                    0,
-                )
-            }
+            DecodedVirtioCommand::CtxCreate(cmd) => BinaryWireParser::encode_header_response(
+                VIRTIO_GPU_RESP_OK_NODATA,
+                cmd.hdr.fence_id,
+                0,
+            ),
             DecodedVirtioCommand::CtxDestroy(hdr) => {
-                BinaryWireParser::encode_header_response(
-                    VIRTIO_GPU_RESP_OK_NODATA,
-                    hdr.fence_id,
-                    0,
-                )
+                BinaryWireParser::encode_header_response(VIRTIO_GPU_RESP_OK_NODATA, hdr.fence_id, 0)
             }
             DecodedVirtioCommand::CtxAttachResource(cmd) => {
                 BinaryWireParser::encode_header_response(
@@ -335,7 +330,7 @@ impl VirtioGpuBridge {
                 bytemuck::bytes_of(&resp).to_vec()
             }
             DecodedVirtioCommand::Submit3d(cmd, buf) => {
-                self.execute_submit_3d(&buf);
+                self.execute_submit_3d(buf);
                 BinaryWireParser::encode_header_response(
                     VIRTIO_GPU_RESP_OK_NODATA,
                     cmd.hdr.fence_id,
@@ -346,11 +341,7 @@ impl VirtioGpuBridge {
                     },
                 )
             }
-            _ => BinaryWireParser::encode_header_response(
-                VIRTIO_GPU_RESP_ERR_UNSPEC,
-                0,
-                0,
-            ),
+            _ => BinaryWireParser::encode_header_response(VIRTIO_GPU_RESP_ERR_UNSPEC, 0, 0),
         }
     }
 
@@ -394,19 +385,18 @@ impl VirtioGpuBridge {
                         let mode = u32::from_le_bytes(cmd_payload[0..4].try_into().unwrap());
                         let count = u32::from_le_bytes(cmd_payload[4..8].try_into().unwrap());
                         let type_ = u32::from_le_bytes(cmd_payload[8..12].try_into().unwrap());
-                        let offset = u32::from_le_bytes(cmd_payload[12..16].try_into().unwrap()) as usize;
+                        let offset =
+                            u32::from_le_bytes(cmd_payload[12..16].try_into().unwrap()) as usize;
                         self.gl_context.gl_draw_elements(mode, count, type_, offset);
                     }
                 }
-                0x04 => {
+                0x04 if cmd_payload.len() >= 16 => {
                     // VIEWPORT (x: i32, y: i32, w: u32, h: u32)
-                    if cmd_payload.len() >= 16 {
-                        let x = i32::from_le_bytes(cmd_payload[0..4].try_into().unwrap());
-                        let y = i32::from_le_bytes(cmd_payload[4..8].try_into().unwrap());
-                        let w = u32::from_le_bytes(cmd_payload[8..12].try_into().unwrap());
-                        let h = u32::from_le_bytes(cmd_payload[12..16].try_into().unwrap());
-                        self.gl_context.gl_viewport(x, y, w, h);
-                    }
+                    let x = i32::from_le_bytes(cmd_payload[0..4].try_into().unwrap());
+                    let y = i32::from_le_bytes(cmd_payload[4..8].try_into().unwrap());
+                    let w = u32::from_le_bytes(cmd_payload[8..12].try_into().unwrap());
+                    let h = u32::from_le_bytes(cmd_payload[12..16].try_into().unwrap());
+                    self.gl_context.gl_viewport(x, y, w, h);
                 }
                 _ => {}
             }
@@ -466,7 +456,9 @@ impl VirtioGpuBridge {
                             && dst_offset + (width as usize) * bpp <= res.backing_data.len()
                         {
                             res.backing_data[dst_offset..dst_offset + (width as usize) * bpp]
-                                .copy_from_slice(&data[src_offset..src_offset + (width as usize) * bpp]);
+                                .copy_from_slice(
+                                    &data[src_offset..src_offset + (width as usize) * bpp],
+                                );
                         }
                     }
 
@@ -529,7 +521,8 @@ impl VirtioGpuBridge {
                     for scanout in self.scanouts.values_mut() {
                         if scanout.resource_id == resource_id {
                             let min_len = scanout.fb_data.len().min(res.backing_data.len());
-                            scanout.fb_data[0..min_len].copy_from_slice(&res.backing_data[0..min_len]);
+                            scanout.fb_data[0..min_len]
+                                .copy_from_slice(&res.backing_data[0..min_len]);
                         }
                     }
                     CommandResponse {

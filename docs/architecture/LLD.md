@@ -141,6 +141,7 @@ pub enum EngineKind { Unity, Unreal, Godot, Other }
 - Dependencies: `GpuCmd` schema; WebGPU surface sirf U13 adapter ke through.
 - Acceptance: existing tests green rehte hain + **naya** end-to-end: synthetic `Submit3D`
   (triangle) → canvas pixel golden test. Ye woh wiring hai jo Path E mein kabhi hui nahi.
+- Cross-unit note (recorded 2026-09-27): U8's pure `dispatch` maps all 4 frozen `GpuCmd` variants to `HostAction`. Honest caveat — the bridge's *typed* `execute_command` catch-all returns OK_NODATA without executing Submit3D; the U13 adapter must route Submit3D via `process_binary_wire_command` (VIRTIO_GPU_CMD_SUBMIT_3D) until the typed path is extended. Scanout assumes single display (scanout_id 0).
 
 ### U9 — `guest-image` · PARTIAL (kernel REAL, system.img STUB) · build-time unit
 - Responsibility: AOSP arm64 source/config → bootable `system.img` + `vendor.img` + patched HALs.

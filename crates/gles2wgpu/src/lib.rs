@@ -22,7 +22,11 @@ void main() {
 }
 "#;
         let result = translator.translate_vertex(glsl_vert);
-        assert!(result.is_ok(), "Failed to translate vertex shader: {:?}", result.err());
+        assert!(
+            result.is_ok(),
+            "Failed to translate vertex shader: {:?}",
+            result.err()
+        );
         let wgsl = result.unwrap();
         assert!(wgsl.contains("main") || wgsl.contains("@vertex"));
     }
@@ -38,7 +42,11 @@ void main() {
 }
 "#;
         let result = translator.translate_fragment(glsl_frag);
-        assert!(result.is_ok(), "Failed to translate fragment shader: {:?}", result.err());
+        assert!(
+            result.is_ok(),
+            "Failed to translate fragment shader: {:?}",
+            result.err()
+        );
         let wgsl = result.unwrap();
         assert!(wgsl.contains("main") || wgsl.contains("@fragment"));
     }

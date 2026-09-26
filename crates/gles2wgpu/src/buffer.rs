@@ -26,17 +26,15 @@ impl GlBuffer {
     }
 
     pub fn sync_to_wgpu(&mut self, device: &wgpu::Device, usage: wgpu::BufferUsages) {
-        if self.dirty || self.wgpu_buffer.is_none() {
-            if !self.data.is_empty() {
-                use wgpu::util::DeviceExt;
-                let buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                    label: Some(&format!("GL_Buffer_{}", self.id)),
-                    contents: &self.data,
-                    usage,
-                });
-                self.wgpu_buffer = Some(buffer);
-                self.dirty = false;
-            }
+        if (self.dirty || self.wgpu_buffer.is_none()) && !self.data.is_empty() {
+            use wgpu::util::DeviceExt;
+            let buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: Some(&format!("GL_Buffer_{}", self.id)),
+                contents: &self.data,
+                usage,
+            });
+            self.wgpu_buffer = Some(buffer);
+            self.dirty = false;
         }
     }
 }

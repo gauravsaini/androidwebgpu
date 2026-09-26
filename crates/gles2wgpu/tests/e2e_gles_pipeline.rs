@@ -30,9 +30,11 @@ fn test_gles2wgpu_e2e_render_and_readback() {
             mapped_at_creation: false,
         });
 
-        let mut encoder = gl.device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
-            label: Some("GLES Readback Encoder"),
-        });
+        let mut encoder = gl
+            .device
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                label: Some("GLES Readback Encoder"),
+            });
 
         let tex = gl.default_render_target.wgpu_texture.as_ref().unwrap();
         encoder.copy_texture_to_buffer(
@@ -66,7 +68,10 @@ fn test_gles2wgpu_e2e_render_and_readback() {
         });
 
         gl.device.poll(wgpu::Maintain::Wait);
-        receiver.recv().unwrap().expect("Failed to map GLES readback buffer");
+        receiver
+            .recv()
+            .unwrap()
+            .expect("Failed to map GLES readback buffer");
 
         {
             let data = buffer_slice.get_mapped_range();
@@ -75,7 +80,10 @@ fn test_gles2wgpu_e2e_render_and_readback() {
             let g = data[center_offset + 1];
             let b = data[center_offset + 2];
             let a = data[center_offset + 3];
-            println!("GLES Clear Pixel Color (32, 32): R={}, G={}, B={}, A={}", r, g, b, a);
+            println!(
+                "GLES Clear Pixel Color (32, 32): R={}, G={}, B={}, A={}",
+                r, g, b, a
+            );
             assert_eq!(r, 0, "Expected R == 0");
             assert_eq!(g, 0, "Expected G == 0");
             assert!(b > 200, "Expected B > 200");
@@ -105,7 +113,8 @@ fn test_gles2wgpu_indexed_mesh_draw_elements() {
         gl.gl_compile_shader(vs).expect("VS compile failed");
 
         let fs = gl.gl_create_shader(0x8B30);
-        let fs_src = "precision mediump float; void main() { gl_FragColor = vec4(1.0, 0.0, 0.0, 1.0); }";
+        let fs_src =
+            "precision mediump float; void main() { gl_FragColor = vec4(1.0, 0.0, 0.0, 1.0); }";
         gl.gl_shader_source(fs, fs_src);
         gl.gl_compile_shader(fs).expect("FS compile failed");
 
@@ -125,10 +134,7 @@ fn test_gles2wgpu_indexed_mesh_draw_elements() {
 
         // 4 vertices (quad)
         let vertices: [f32; 12] = [
-            -1.0, -1.0, 0.0,
-             1.0, -1.0, 0.0,
-             1.0,  1.0, 0.0,
-            -1.0,  1.0, 0.0,
+            -1.0, -1.0, 0.0, 1.0, -1.0, 0.0, 1.0, 1.0, 0.0, -1.0, 1.0, 0.0,
         ];
         gl.gl_bind_buffer(0x8892, vbo); // GL_ARRAY_BUFFER
         gl.gl_buffer_data(0x8892, bytemuck::cast_slice(&vertices), 0x88E4);
@@ -157,9 +163,11 @@ fn test_gles2wgpu_indexed_mesh_draw_elements() {
             mapped_at_creation: false,
         });
 
-        let mut encoder = gl.device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
-            label: Some("DrawElements Encoder"),
-        });
+        let mut encoder = gl
+            .device
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                label: Some("DrawElements Encoder"),
+            });
         let tex = gl.default_render_target.wgpu_texture.as_ref().unwrap();
         encoder.copy_texture_to_buffer(
             wgpu::TexelCopyTextureInfo {
@@ -200,8 +208,14 @@ fn test_gles2wgpu_indexed_mesh_draw_elements() {
             let r = data[center_offset];
             let g = data[center_offset + 1];
             let b = data[center_offset + 2];
-            println!("glDrawElements Center Pixel Color: R={}, G={}, B={}", r, g, b);
-            assert!(r > 200, "Expected center pixel R > 200 after drawing red quad");
+            println!(
+                "glDrawElements Center Pixel Color: R={}, G={}, B={}",
+                r, g, b
+            );
+            assert!(
+                r > 200,
+                "Expected center pixel R > 200 after drawing red quad"
+            );
             assert_eq!(g, 0, "Expected center pixel G == 0");
         }
 
@@ -235,10 +249,7 @@ fn test_gles2wgpu_uniforms() {
         let mat_loc = gl.gl_get_uniform_location(prog, "u_matrix");
         assert_eq!(mat_loc, 1);
         let mat = [
-            1.0, 0.0, 0.0, 0.0,
-            0.0, 1.0, 0.0, 0.0,
-            0.0, 0.0, 1.0, 0.0,
-            0.0, 0.0, 0.0, 1.0,
+            1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0,
         ];
         gl.gl_uniform_matrix_4fv(mat_loc, 1, false, &mat);
         let mat_view: &[f32] = bytemuck::cast_slice(&gl.uniform_data[64..128]);

@@ -52,10 +52,21 @@ pub struct AttribLayoutKey {
     pub format_id: u32,
 }
 
+/// Key identifying a compiled render pipeline in the cache.
+type PipelineKey = (
+    u32,
+    wgpu::TextureFormat,
+    bool,
+    bool,
+    u32,
+    bool,
+    Vec<AttribLayoutKey>,
+);
+
 pub struct PipelineCache {
     pub shaders: HashMap<u32, Shader>,
     pub programs: HashMap<u32, ShaderProgram>,
-    pub wgpu_pipelines: HashMap<(u32, wgpu::TextureFormat, bool, bool, u32, bool, Vec<AttribLayoutKey>), wgpu::RenderPipeline>,
+    pub wgpu_pipelines: HashMap<PipelineKey, wgpu::RenderPipeline>,
     pub main_bind_group_layout: Option<wgpu::BindGroupLayout>,
 }
 
@@ -165,6 +176,7 @@ impl PipelineCache {
         Ok(())
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn get_or_create_pipeline(
         &mut self,
         device: &wgpu::Device,
@@ -333,5 +345,11 @@ impl PipelineCache {
         }
 
         Ok(self.wgpu_pipelines.get(&key).unwrap())
+    }
+}
+
+impl Default for PipelineCache {
+    fn default() -> Self {
+        Self::new()
     }
 }

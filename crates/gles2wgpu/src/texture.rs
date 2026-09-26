@@ -36,7 +36,7 @@ impl GlTexture {
     pub fn update_sampler(&mut self, device: &wgpu::Device) {
         let mag_filter = match self.mag_filter {
             0x2600 => wgpu::FilterMode::Nearest, // GL_NEAREST
-            _ => wgpu::FilterMode::Linear,        // GL_LINEAR
+            _ => wgpu::FilterMode::Linear,       // GL_LINEAR
         };
 
         let min_filter = match self.min_filter {
@@ -50,9 +50,9 @@ impl GlTexture {
         };
 
         let address_mode_u = match self.wrap_s {
-            0x2901 => wgpu::AddressMode::Repeat,         // GL_REPEAT
-            0x8370 => wgpu::AddressMode::MirrorRepeat,   // GL_MIRRORED_REPEAT
-            _ => wgpu::AddressMode::ClampToEdge,        // GL_CLAMP_TO_EDGE
+            0x2901 => wgpu::AddressMode::Repeat,       // GL_REPEAT
+            0x8370 => wgpu::AddressMode::MirrorRepeat, // GL_MIRRORED_REPEAT
+            _ => wgpu::AddressMode::ClampToEdge,       // GL_CLAMP_TO_EDGE
         };
 
         let address_mode_v = match self.wrap_t {
