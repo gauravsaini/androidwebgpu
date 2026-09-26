@@ -7,6 +7,7 @@ members = [
     "crates/webgpu_swapchain",
     "crates/apk_gpu_analyzer",
     "crates/metrics_overlay",
+    "contracts",
 ]
 
 [workspace.dependencies]

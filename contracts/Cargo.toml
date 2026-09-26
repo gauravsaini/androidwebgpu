@@ -1,0 +1,9 @@
+[package]
+name = "pathn-contracts"
+version = "0.1.0"
+edition = "2021"
+description = "Path N frozen contract schemas — the only coupling between swarm units (LLD §0)"
+
+[lib]
+name = "pathn_contracts"
+path = "src/lib.rs"
