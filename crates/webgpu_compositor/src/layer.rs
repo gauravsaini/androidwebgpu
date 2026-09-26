@@ -14,7 +14,7 @@ pub struct CompositionLayer {
     pub bounds: [f32; 4], // [x, y, width, height] in normalized device coordinates
     pub source_crop: [f32; 4], // [u_min, v_min, u_max, v_max]
     pub transform: [f32; 4], // [scale_x, scale_y, trans_x, trans_y]
-    pub hwc_transform: u32,  // Android HWC_TRANSFORM_* (0=None, 1=FLIP_H, 2=FLIP_V, 4=ROT_90, 3=ROT_180, 7=ROT_270)
+    pub hwc_transform: u32, // Android HWC_TRANSFORM_* (0=None, 1=FLIP_H, 2=FLIP_V, 4=ROT_90, 3=ROT_180, 7=ROT_270)
     pub damage_rect: Option<[f32; 4]>,
     pub z_order: i32,
     pub alpha: f32,
@@ -25,13 +25,7 @@ pub struct CompositionLayer {
 }
 
 impl CompositionLayer {
-    pub fn new_color(
-        id: u64,
-        name: &str,
-        bounds: [f32; 4],
-        z_order: i32,
-        color: [f32; 4],
-    ) -> Self {
+    pub fn new_color(id: u64, name: &str, bounds: [f32; 4], z_order: i32, color: [f32; 4]) -> Self {
         Self {
             id,
             name: name.to_string(),

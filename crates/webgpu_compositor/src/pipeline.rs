@@ -15,7 +15,7 @@ pub struct QuadVertex {
 pub struct LayerUniform {
     pub bounds: [f32; 4],
     pub color: [f32; 4],
-    pub params: [f32; 4], // [alpha, use_texture, 0.0, 0.0]
+    pub params: [f32; 4],      // [alpha, use_texture, 0.0, 0.0]
     pub source_crop: [f32; 4], // [u_min, v_min, u_max, v_max]
     pub transform: [[f32; 4]; 4],
 }
@@ -168,10 +168,7 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
                 BlendMode::Premultiplied,
                 Some(wgpu::BlendState::PREMULTIPLIED_ALPHA_BLENDING),
             ),
-            (
-                BlendMode::Coverage,
-                Some(wgpu::BlendState::ALPHA_BLENDING),
-            ),
+            (BlendMode::Coverage, Some(wgpu::BlendState::ALPHA_BLENDING)),
         ];
 
         for (mode, blend_state) in modes {

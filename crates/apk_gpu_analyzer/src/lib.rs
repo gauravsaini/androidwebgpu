@@ -38,6 +38,8 @@ mod tests {
         assert_eq!(profile.min_gles_version, 0x00030000);
         assert!(profile.requires_vulkan);
         assert_eq!(profile.engine, EngineType::Unity);
-        assert!(profile.required_extensions.contains(&"GL_OES_texture_float".to_string()));
+        assert!(profile
+            .required_extensions
+            .contains(&"GL_OES_texture_float".to_string()));
     }
 }

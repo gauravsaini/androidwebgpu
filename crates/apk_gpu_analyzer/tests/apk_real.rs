@@ -14,7 +14,9 @@ fn test_apk_real_unity_and_godot_virtio_flight() {
             .expect("Failed to analyze unity_cube.apk");
 
         assert_eq!(unity_profile.engine, EngineType::Unity);
-        assert!(unity_profile.native_libraries.contains(&"libunity.so".to_string()));
+        assert!(unity_profile
+            .native_libraries
+            .contains(&"libunity.so".to_string()));
 
         // 2. Load Real Godot GLES2 APK Fixture
         let godot_bytes = fs::read("fixtures/godot_gles2.apk")
@@ -24,7 +26,9 @@ fn test_apk_real_unity_and_godot_virtio_flight() {
             .expect("Failed to analyze godot_gles2.apk");
 
         assert_eq!(godot_profile.engine, EngineType::Godot);
-        assert!(godot_profile.native_libraries.contains(&"libgodot_android.so".to_string()));
+        assert!(godot_profile
+            .native_libraries
+            .contains(&"libgodot_android.so".to_string()));
 
         // 3. Initialize Virtio-GPU Bridge for Real Game Flight
         let width = 128u32;
@@ -32,7 +36,10 @@ fn test_apk_real_unity_and_godot_virtio_flight() {
         let mut bridge = match VirtioGpuBridge::new(width, height).await {
             Ok(b) => b,
             Err(e) => {
-                eprintln!("GPU adapter unavailable in test runner, skipping hardware pass: {:?}", e);
+                eprintln!(
+                    "GPU adapter unavailable in test runner, skipping hardware pass: {:?}",
+                    e
+                );
                 return;
             }
         };

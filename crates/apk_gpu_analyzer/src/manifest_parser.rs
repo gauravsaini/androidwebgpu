@@ -33,9 +33,16 @@ impl BinaryXmlParser {
         let mut info = ParsedManifestInfo::default();
 
         while offset + 8 <= bytes.len() {
-            let chunk_type = u16::from_le_bytes(bytes[offset..offset + 2].try_into().unwrap_or([0, 0]));
-            let header_size = u16::from_le_bytes(bytes[offset + 2..offset + 4].try_into().unwrap_or([0, 0])) as usize;
-            let chunk_size = u32::from_le_bytes(bytes[offset + 4..offset + 8].try_into().unwrap_or([0, 0, 0, 0])) as usize;
+            let chunk_type =
+                u16::from_le_bytes(bytes[offset..offset + 2].try_into().unwrap_or([0, 0]));
+            let header_size =
+                u16::from_le_bytes(bytes[offset + 2..offset + 4].try_into().unwrap_or([0, 0]))
+                    as usize;
+            let chunk_size = u32::from_le_bytes(
+                bytes[offset + 4..offset + 8]
+                    .try_into()
+                    .unwrap_or([0, 0, 0, 0]),
+            ) as usize;
 
             if chunk_size == 0 || offset + chunk_size > bytes.len() {
                 break;
@@ -47,54 +54,51 @@ impl BinaryXmlParser {
                         string_pool = pool;
                     }
                 }
-                RES_XML_START_ELEMENT_TYPE
-                    if offset + header_size + 20 <= offset + chunk_size =>
-                {
-                    {
-                        let attr_count_offset = offset + 28;
-                        if attr_count_offset + 2 <= bytes.len() {
-                            let attr_count = u16::from_le_bytes(
-                                bytes[attr_count_offset..attr_count_offset + 2]
-                                    .try_into()
-                                    .unwrap_or([0, 0]),
-                            ) as usize;
+                RES_XML_START_ELEMENT_TYPE if offset + header_size + 20 <= offset + chunk_size => {
+                    let attr_count_offset = offset + 28;
+                    if attr_count_offset + 2 <= bytes.len() {
+                        let attr_count = u16::from_le_bytes(
+                            bytes[attr_count_offset..attr_count_offset + 2]
+                                .try_into()
+                                .unwrap_or([0, 0]),
+                        ) as usize;
 
-                            let mut attr_cursor = offset + 36;
-                            for _ in 0..attr_count {
-                                if attr_cursor + 20 <= offset + chunk_size {
-                                    let name_idx = u32::from_le_bytes(
-                                        bytes[attr_cursor + 4..attr_cursor + 8]
-                                            .try_into()
-                                            .unwrap_or([0, 0, 0, 0]),
-                                    ) as usize;
-                                    let val_idx = u32::from_le_bytes(
-                                        bytes[attr_cursor + 8..attr_cursor + 12]
-                                            .try_into()
-                                            .unwrap_or([0, 0, 0, 0]),
-                                    ) as usize;
-                                    let raw_data = u32::from_le_bytes(
-                                        bytes[attr_cursor + 16..attr_cursor + 20]
-                                            .try_into()
-                                            .unwrap_or([0, 0, 0, 0]),
-                                    );
+                        let mut attr_cursor = offset + 36;
+                        for _ in 0..attr_count {
+                            if attr_cursor + 20 <= offset + chunk_size {
+                                let name_idx = u32::from_le_bytes(
+                                    bytes[attr_cursor + 4..attr_cursor + 8]
+                                        .try_into()
+                                        .unwrap_or([0, 0, 0, 0]),
+                                ) as usize;
+                                let val_idx = u32::from_le_bytes(
+                                    bytes[attr_cursor + 8..attr_cursor + 12]
+                                        .try_into()
+                                        .unwrap_or([0, 0, 0, 0]),
+                                ) as usize;
+                                let raw_data = u32::from_le_bytes(
+                                    bytes[attr_cursor + 16..attr_cursor + 20]
+                                        .try_into()
+                                        .unwrap_or([0, 0, 0, 0]),
+                                );
 
-                                    let attr_name = string_pool.get(name_idx).cloned().unwrap_or_default();
-                                    let str_val = string_pool.get(val_idx).cloned().unwrap_or_default();
+                                let attr_name =
+                                    string_pool.get(name_idx).cloned().unwrap_or_default();
+                                let str_val = string_pool.get(val_idx).cloned().unwrap_or_default();
 
-                                    if attr_name == "package" {
-                                        info.package_name = str_val;
-                                    } else if attr_name == "glEsVersion" {
-                                        info.min_gles_version = raw_data;
-                                    } else if attr_name == "name" {
-                                        if str_val.contains("vulkan") || str_val.contains("opengles") {
-                                            info.uses_features.push(str_val);
-                                        } else if str_val.starts_with("android.permission") {
-                                            info.permissions.push(str_val);
-                                        }
+                                if attr_name == "package" {
+                                    info.package_name = str_val;
+                                } else if attr_name == "glEsVersion" {
+                                    info.min_gles_version = raw_data;
+                                } else if attr_name == "name" {
+                                    if str_val.contains("vulkan") || str_val.contains("opengles") {
+                                        info.uses_features.push(str_val);
+                                    } else if str_val.starts_with("android.permission") {
+                                        info.permissions.push(str_val);
                                     }
-
-                                    attr_cursor += 20;
                                 }
+
+                                attr_cursor += 20;
                             }
                         }
                     }
@@ -113,16 +117,19 @@ impl BinaryXmlParser {
             return Err("String pool header too short".to_string());
         }
 
-        let string_count = u32::from_le_bytes(chunk[8..12].try_into().unwrap_or([0, 0, 0, 0])) as usize;
+        let string_count =
+            u32::from_le_bytes(chunk[8..12].try_into().unwrap_or([0, 0, 0, 0])) as usize;
         let flags = u32::from_le_bytes(chunk[16..20].try_into().unwrap_or([0, 0, 0, 0]));
-        let strings_start = u32::from_le_bytes(chunk[20..24].try_into().unwrap_or([0, 0, 0, 0])) as usize;
+        let strings_start =
+            u32::from_le_bytes(chunk[20..24].try_into().unwrap_or([0, 0, 0, 0])) as usize;
         let is_utf8 = (flags & (1 << 8)) != 0;
 
         let mut offsets = Vec::with_capacity(string_count);
         for i in 0..string_count {
             let pos = 28 + i * 4;
             if pos + 4 <= chunk.len() {
-                let off = u32::from_le_bytes(chunk[pos..pos + 4].try_into().unwrap_or([0, 0, 0, 0])) as usize;
+                let off = u32::from_le_bytes(chunk[pos..pos + 4].try_into().unwrap_or([0, 0, 0, 0]))
+                    as usize;
                 offsets.push(off);
             }
         }
@@ -142,7 +149,8 @@ impl BinaryXmlParser {
                     let mut u16_chars = Vec::new();
                     let mut curr = str_abs;
                     while curr + 2 <= chunk.len() {
-                        let c = u16::from_le_bytes(chunk[curr..curr + 2].try_into().unwrap_or([0, 0]));
+                        let c =
+                            u16::from_le_bytes(chunk[curr..curr + 2].try_into().unwrap_or([0, 0]));
                         if c == 0 {
                             break;
                         }

@@ -25,12 +25,16 @@ mod tests {
                 None => return,
             };
 
-            let (device, _) = match adapter.request_device(&wgpu::DeviceDescriptor::default(), None).await {
+            let (device, _) = match adapter
+                .request_device(&wgpu::DeviceDescriptor::default(), None)
+                .await
+            {
                 Ok(d) => d,
                 Err(_) => return,
             };
 
-            let mut swapchain = WebGpuSwapchain::new(&device, 64, 64, wgpu::TextureFormat::Rgba8UnormSrgb);
+            let mut swapchain =
+                WebGpuSwapchain::new(&device, 64, 64, wgpu::TextureFormat::Rgba8UnormSrgb);
             assert_eq!(swapchain.width, 64);
             assert_eq!(swapchain.height, 64);
 

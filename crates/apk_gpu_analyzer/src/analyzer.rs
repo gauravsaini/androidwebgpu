@@ -63,7 +63,11 @@ impl ApkGpuAnalyzer {
             min_gles_version: gl_es_version,
             requires_vulkan,
             engine,
-            supported_texture_formats: vec!["ETC2".to_string(), "ASTC".to_string(), "RGBA8".to_string()],
+            supported_texture_formats: vec![
+                "ETC2".to_string(),
+                "ASTC".to_string(),
+                "RGBA8".to_string(),
+            ],
             required_extensions: extensions,
             native_libraries: lib_names.iter().map(|s| s.to_string()).collect(),
         }
@@ -79,7 +83,9 @@ impl ApkGpuAnalyzer {
         let mut has_etc2 = false;
 
         for i in 0..zip.len() {
-            let mut file = zip.by_index(i).map_err(|e| format!("Zip entry error: {:?}", e))?;
+            let mut file = zip
+                .by_index(i)
+                .map_err(|e| format!("Zip entry error: {:?}", e))?;
             let name = file.name().to_string();
 
             if name == "AndroidManifest.xml" {
@@ -106,7 +112,11 @@ impl ApkGpuAnalyzer {
         }
 
         let lib_refs: Vec<&str> = native_libs.iter().map(|s| s.as_str()).collect();
-        let feature_refs: Vec<&str> = manifest_info.uses_features.iter().map(|s| s.as_str()).collect();
+        let feature_refs: Vec<&str> = manifest_info
+            .uses_features
+            .iter()
+            .map(|s| s.as_str())
+            .collect();
 
         let mut profile = Self::inspect_manifest(
             &manifest_info.package_name,
@@ -115,10 +125,18 @@ impl ApkGpuAnalyzer {
             &lib_refs,
         );
 
-        if has_astc && !profile.supported_texture_formats.contains(&"ASTC".to_string()) {
+        if has_astc
+            && !profile
+                .supported_texture_formats
+                .contains(&"ASTC".to_string())
+        {
             profile.supported_texture_formats.push("ASTC".to_string());
         }
-        if has_etc2 && !profile.supported_texture_formats.contains(&"ETC2".to_string()) {
+        if has_etc2
+            && !profile
+                .supported_texture_formats
+                .contains(&"ETC2".to_string())
+        {
             profile.supported_texture_formats.push("ETC2".to_string());
         }
 

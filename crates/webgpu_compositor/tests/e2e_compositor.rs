@@ -156,7 +156,10 @@ fn test_webgpu_compositor_e2e_rendering_and_readback() {
         });
 
         device.poll(wgpu::Maintain::Wait);
-        receiver.recv().unwrap().expect("Failed to map readback buffer");
+        receiver
+            .recv()
+            .unwrap()
+            .expect("Failed to map readback buffer");
 
         {
             let data = buffer_slice.get_mapped_range();
@@ -166,7 +169,10 @@ fn test_webgpu_compositor_e2e_rendering_and_readback() {
             let bl_r = data[bl_offset];
             let bl_g = data[bl_offset + 1];
             let bl_b = data[bl_offset + 2];
-            println!("Bottom-left pixel (x=16, y=48): R={}, G={}, B={}", bl_r, bl_g, bl_b);
+            println!(
+                "Bottom-left pixel (x=16, y=48): R={}, G={}, B={}",
+                bl_r, bl_g, bl_b
+            );
             assert!(bl_r > 200, "Expected red > 200, got {}", bl_r);
             assert_eq!(bl_g, 0, "Expected green == 0, got {}", bl_g);
 
@@ -175,7 +181,10 @@ fn test_webgpu_compositor_e2e_rendering_and_readback() {
             let tr_r = data[tr_offset];
             let tr_g = data[tr_offset + 1];
             let tr_b = data[tr_offset + 2];
-            println!("Top-right pixel (x=48, y=16): R={}, G={}, B={}", tr_r, tr_g, tr_b);
+            println!(
+                "Top-right pixel (x=48, y=16): R={}, G={}, B={}",
+                tr_r, tr_g, tr_b
+            );
             assert!(tr_g > 200, "Expected green > 200, got {}", tr_g);
             assert_eq!(tr_r, 0, "Expected red == 0, got {}", tr_r);
         }

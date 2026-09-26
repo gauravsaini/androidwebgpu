@@ -1,4 +1,4 @@
-use crate::layer::{CompositionLayer, BlendMode};
+use crate::layer::{BlendMode, CompositionLayer};
 use crate::pipeline::{CompositorPipeline, LayerUniform};
 use std::collections::HashMap;
 use wgpu::util::DeviceExt;
@@ -48,12 +48,12 @@ impl WebGpuCompositor {
         let ty = transform[3];
 
         let (r00, r01, r10, r11) = match hwc_transform {
-            1 => (-1.0, 0.0, 0.0, 1.0),   // FLIP_H
-            2 => (1.0, 0.0, 0.0, -1.0),   // FLIP_V
-            4 => (0.0, 1.0, -1.0, 0.0),   // ROT_90
-            3 => (-1.0, 0.0, 0.0, -1.0),  // ROT_180
-            7 => (0.0, -1.0, 1.0, 0.0),   // ROT_270
-            _ => (1.0, 0.0, 0.0, 1.0),    // None
+            1 => (-1.0, 0.0, 0.0, 1.0),  // FLIP_H
+            2 => (1.0, 0.0, 0.0, -1.0),  // FLIP_V
+            4 => (0.0, 1.0, -1.0, 0.0),  // ROT_90
+            3 => (-1.0, 0.0, 0.0, -1.0), // ROT_180
+            7 => (0.0, -1.0, 1.0, 0.0),  // ROT_270
+            _ => (1.0, 0.0, 0.0, 1.0),   // None
         };
 
         [
@@ -83,7 +83,11 @@ impl WebGpuCompositor {
             let color = layer.color.unwrap_or([0.0, 0.0, 0.0, 1.0]);
             let params = [
                 layer.alpha,
-                if layer.texture_view.is_some() { 1.0 } else { 0.0 },
+                if layer.texture_view.is_some() {
+                    1.0
+                } else {
+                    0.0
+                },
                 0.0,
                 0.0,
             ];
@@ -172,11 +176,7 @@ impl WebGpuCompositor {
                         source_crop,
                         transform,
                     };
-                    queue.write_buffer(
-                        &cached.uniform_buffer,
-                        0,
-                        bytemuck::cast_slice(&[uniform]),
-                    );
+                    queue.write_buffer(&cached.uniform_buffer, 0, bytemuck::cast_slice(&[uniform]));
                     cached.last_bounds = layer.bounds;
                     cached.last_color = color;
                     cached.last_params = params;

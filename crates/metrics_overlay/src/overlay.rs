@@ -1,5 +1,5 @@
 use crate::metrics::FrameMetrics;
-use webgpu_compositor::{CompositionLayer, BlendMode};
+use webgpu_compositor::{BlendMode, CompositionLayer};
 
 pub struct MetricsOverlayRenderer;
 

@@ -89,7 +89,6 @@ impl MetricsTracker {
         self.accumulated_time_ms += duration;
         self.frame_count += 1;
 
-
         if self.accumulated_time_ms >= 500.0 {
             let avg_fps = (self.frame_count as f32 * 1000.0) / self.accumulated_time_ms;
             let avg_frame_time = self.accumulated_time_ms / (self.frame_count as f32);
