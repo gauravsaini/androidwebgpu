@@ -102,6 +102,7 @@ pub enum EngineKind { Unity, Unreal, Godot, Other }
 - Purity: PURE. `pub fn compile(block: &IrBlock) -> WasmModule` — same input, byte-identical output.
 - Dependencies: U2 ka `IrBlock` (contract only).
 - Acceptance: compiled block ko WASM runtime mein chalakar golden output match; determinism test (do baar compile → identical bytes).
+- Cross-unit convention (U2→U3, recorded 2026-09-27): U2 materializes immediates via `Mov{dst: 32}` + `Add{b: 32}` — register index **32 is a reserved scratch slot**, never architectural. U3/the WASM runtime MUST provide ≥33 i64 locals; index 32 must not alias a guest register. Register-relative LDR/STR lift to `Trap` (frozen `IrOp::Store.addr` is static); dynamic-address memory ops need a contract amendment, not silent emission.
 
 ### U4 — `mmu` · NEW · EXPLICIT-STATE
 - Responsibility: virtual → physical address translation (AArch64 4-level tables).
