@@ -116,6 +116,7 @@ pub enum EngineKind { Unity, Unreal, Godot, Other }
 - In: `(&IrqState, elapsed_cycles: u64)` · Out: `(IrqState, Vec<Irq>)`
 - Purity: EXPLICIT-STATE.
 - Acceptance: timer compare match par exact IRQ number assert; no spurious IRQs in soak test.
+- Cross-unit convention (recorded 2026-09-27): timer interrupt = **INTID 27** (ARM virtual-timer PPI, SBSA) as owned unit constant `TIMER_IRQ_NUM`; `enabled` bit 0 mirrors CNTV_CTL_EL0.ENABLE; line is **level-triggered** — at most one `Irq` per tick on the rising edge, guest re-arms by writing a new `timer_compare`. Orchestrator (Wave 4) must route INTID 27 to the vCPU IRQ line.
 
 ### U6 — `virtio-transport` · PARTIAL (Path E: PCI config + queues REAL) · EXPLICIT-STATE
 - Responsibility: virtqueue ring parse, descriptor chains, used-ring update, config space.
