@@ -15,7 +15,9 @@ case "$phase" in
 esac
 if sh -c "$cmd" > "$log" 2>&1; then
   if [ "$phase" = "test" ]; then
-    if grep -q "test result: ok" "$log" && ! grep -q "0 passed" "$log"; then
+    # Pass only if at least one suite ran >=1 test (a "0 passed" doc-test
+    # section alone must not fail a crate whose unit tests all ran).
+    if grep -a "test result:" "$log" | grep -aq "[1-9][0-9]* passed"; then
       echo "$crate test passed"
     else
       echo "no tests ran or not ok:"
