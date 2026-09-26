@@ -9,3 +9,4 @@ path = "src/lib.rs"
 
 [dependencies]
 pathn-contracts = { path = "../../contracts" }
+apk_gpu_analyzer = { path = "../../crates/apk_gpu_analyzer" }

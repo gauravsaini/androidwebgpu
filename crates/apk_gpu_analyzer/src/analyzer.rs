@@ -85,7 +85,7 @@ impl ApkGpuAnalyzer {
             if name == "AndroidManifest.xml" {
                 let _ = file.read_to_end(&mut manifest_bytes);
             } else if name.starts_with("lib/") && name.ends_with(".so") {
-                if let Some(filename) = name.split('/').last() {
+                if let Some(filename) = name.split('/').next_back() {
                     native_libs.push(filename.to_string());
                 }
             } else if name.ends_with(".astc") {

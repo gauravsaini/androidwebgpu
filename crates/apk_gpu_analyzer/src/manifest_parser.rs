@@ -47,8 +47,10 @@ impl BinaryXmlParser {
                         string_pool = pool;
                     }
                 }
-                RES_XML_START_ELEMENT_TYPE => {
-                    if offset + header_size + 20 <= offset + chunk_size {
+                RES_XML_START_ELEMENT_TYPE
+                    if offset + header_size + 20 <= offset + chunk_size =>
+                {
+                    {
                         let attr_count_offset = offset + 28;
                         if attr_count_offset + 2 <= bytes.len() {
                             let attr_count = u16::from_le_bytes(
