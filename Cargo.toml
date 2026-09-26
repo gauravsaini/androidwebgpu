@@ -20,6 +20,7 @@ members = [
   "units/u7-gpu-device",
   "units/u8-gpu-host",
   "units/u13-adapters",
+  "guest-image",
 ]
 
 [workspace.dependencies]

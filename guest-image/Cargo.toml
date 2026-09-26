@@ -1,0 +1,14 @@
+[package]
+name = "guest-image"
+version = "0.1.0"
+edition = "2021"
+description = "Path N U9: reproducible ARM64 bare-metal guest-image build pipeline (mini-assembler + shell guest + SBOM)"
+
+[lib]
+name = "guest_image"
+path = "src/lib.rs"
+
+[dependencies]
+pathn-contracts = { path = "../contracts" }
+serde = { workspace = true }
+serde_json = { workspace = true }
