@@ -132,6 +132,7 @@ pub enum EngineKind { Unity, Unreal, Godot, Other }
 - Dependencies: U6 transport (via `DevEvent`), `GpuCmd` schema.
 - Acceptance: **Path E ka ulta** — `Submit3D` ab accept hota hai aur sahi `GpuCmd::Submit3D`
   banta hai (pehle test "rejected" assert karta tha; woh test ab flip hoga). Fence ordering preserved.
+- Cross-unit convention (recorded 2026-09-27): frozen `DevOut` has no error variant, so U7 signals decode failures as `DevOut::ConfigValue` with class tags — `ERR_UNKNOWN_COMMAND (0x4750_5500_0000_0000) | cmd_id` and `ERR_TRUNCATED (0x4750_5501_0000_0000) | needed_len`. Orchestrator (Wave 4) must check for these tag bits before treating a ConfigValue as a real config read.
 
 ### U8 — `gpu-host-stack` · EXISTS (bridge+gles2wgpu+compositor+swapchain) · PURE-ish
 - Responsibility: `GpuCmd` stream → WebGPU canvas frame. GLES→WGSL translate, layer composite, present.
