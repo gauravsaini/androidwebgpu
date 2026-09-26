@@ -8,6 +8,17 @@ members = [
     "crates/apk_gpu_analyzer",
     "crates/metrics_overlay",
     "contracts",
+  "units/u1-decode",
+  "units/u2-ir-lift",
+  "units/u3-wasm-jit",
+  "units/u11-snapshot",
+  "units/u10-analyzer",
+  "units/u14-metrics",
+  "units/u4-mmu",
+  "units/u5-gic-timer",
+  "units/u6-virtio-transport",
+  "units/u7-gpu-device",
+  "units/u8-gpu-host",
 ]
 
 [workspace.dependencies]
