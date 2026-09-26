@@ -16,8 +16,12 @@ pub enum DevEvent {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum DevOut {
     ConfigValue(u64),
-    UsedRingUpdate { queue_idx: u16 },
-    IrqAssert { num: u32 },
+    UsedRingUpdate {
+        queue_idx: u16,
+    },
+    IrqAssert {
+        num: u32,
+    },
     /// virtio-gpu → GPU half (U8). This is the stream Path E never wired.
     GpuCommands(Vec<GpuCmd>),
     /// virtio-net → net adapter (U13).
@@ -44,15 +48,35 @@ pub enum GpuCmd {
         w: u32,
         h: u32,
     },
-    Fence { id: u64 },
+    Fence {
+        id: u64,
+    },
 }
 
 /// Explicit virtio transport state (U6). Queues live here, not in globals.
+/// Per-queue ring configuration for the virtio transport (U6).
+/// Explicit storage for the MMIO-mapped queue registers (desc/avail/used
+/// addresses, size, ready flag) plus the driver's progress cursors.
+/// Added 2026-09-27 (Wave 2 amendment U6-G1): the frozen `TransportState`
+/// had no per-queue ring addresses, so `QueueNotify` could not drive a queue.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct VirtQueue {
+    pub desc_addr: u64,
+    pub avail_addr: u64,
+    pub used_addr: u64,
+    pub size: u16,
+    pub ready: bool,
+    pub last_avail_idx: u16,
+    pub last_used_idx: u16,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TransportState {
     pub queue_count: u16,
     pub features: u64,
     pub status: u8,
+    /// Per-queue ring state; `len` should equal `queue_count`.
+    pub queues: Vec<VirtQueue>,
 }
 
 /// Explicit virtio-gpu device state (U7).

@@ -31,13 +31,32 @@ pub enum DecodeResult {
 /// Single IR operation (SSA-style). The lifter (U2) is the only producer.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum IrOp {
-    Add { dst: u8, a: u8, b: u8 },
-    Mov { dst: u8, imm: u64 },
-    Load { dst: u8, addr: u64, size: u8 },
-    Store { src: u8, addr: u64, size: u8 },
-    Branch { target: u64 },
+    Add {
+        dst: u8,
+        a: u8,
+        b: u8,
+    },
+    Mov {
+        dst: u8,
+        imm: u64,
+    },
+    Load {
+        dst: u8,
+        addr: u64,
+        size: u8,
+    },
+    Store {
+        src: u8,
+        addr: u64,
+        size: u8,
+    },
+    Branch {
+        target: u64,
+    },
     /// Explicit trap for unimplemented/privileged semantics. Never a silent nop.
-    Trap { reason: &'static str },
+    Trap {
+        reason: &'static str,
+    },
 }
 
 /// Where an IR block can go.
@@ -127,7 +146,9 @@ mod tests {
     fn ir_block_exits_are_explicit() {
         let b = IrBlock {
             entry_addr: 0x4000,
-            ops: vec![IrOp::Trap { reason: "unimplemented" }],
+            ops: vec![IrOp::Trap {
+                reason: "unimplemented",
+            }],
             exits: vec![BlockExit::ExitVm],
         };
         assert_eq!(b.exits, vec![BlockExit::ExitVm]);

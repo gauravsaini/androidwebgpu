@@ -124,6 +124,7 @@ pub enum EngineKind { Unity, Unreal, Godot, Other }
 - Purity: EXPLICIT-STATE.
 - Dependencies: `DevEvent`/`DevOut` schemas.
 - Acceptance: Path E ke 311 tests yahan move honge; plus malformed descriptor chain → graceful error, kabhi OOB read nahi.
+- Contract amendment U6-G1 (2026-09-27): frozen `TransportState` had no per-queue ring addresses — added `queues: Vec<VirtQueue>` (desc/avail/used addrs, size, ready, cursors). U6 owns ring mechanics (`pop_chain`/`push_used`); the Wave 4 orchestrator drives QueueNotify → device step → used-ring commit. U6 never imports a device unit.
 
 ### U7 — `virtio-gpu-device` · PARTIAL (Path E: 2D decode REAL, 3D rejected) · EXPLICIT-STATE
 - Responsibility: virtio-gpu 3D command stream → typed `GpuCmd` events.
