@@ -228,7 +228,7 @@ fn boot_virtio_gpu_submit3d_path() {
 // -> guest `read_char` (real LDRB CONSOLE_RX) -> parser -> TX bytes.
 
 use pathn_contracts::adapters::{KeyCode, NormalizedInput};
-use u13_adapters::ScriptedInput;
+use u13_adapters::{KeyboardInput, ScriptedInput};
 
 /// Boot the real image to the first shell prompt (parks at the read-loop WFI).
 fn boot_to_prompt() -> Orchestrator {
@@ -289,6 +289,126 @@ fn rx_echo_command_prints_args() {
 fn rx_unknown_command_reports_word() {
     let mut o = boot_to_prompt();
     o.pump_input(&mut scripted_keys("bogus\n"));
+    let halt = o.run_until_halt(10_000);
+    assert_eq!(halt, HaltReason::Wfi { addr: 0x4000_0070 });
+    assert!(
+        o.console().rx_queue.is_empty(),
+        "guest consumed every input byte"
+    );
+    assert_eq!(
+        o.console().tx_bytes,
+        b"pathn-sh> bogus\nunknown cmd: bogus\npathn-sh> "
+    );
+}
+
+// ---------------------------------------------------------------------------
+// Wave 7 (9.2): DOM key events -> KeyboardInput -> pump_input -> real guest.
+//
+// Faithful simulated DOM event source: every keystroke is pushed exactly
+// as a browser keydown/keyup listener pair would deliver it (physical
+// `code` + resolved `key`). Releases are interleaved to prove they
+// produce no bytes; an F1 press proves unmapped keys are dropped at the
+// boundary. The REAL 4.1 guest parser executes; exact TX bytes pinned.
+// ---------------------------------------------------------------------------
+
+/// One DOM key press + release pair, as keydown/keyup listeners deliver.
+fn dom_key(kb: &mut KeyboardInput, code: &str, key: &str) {
+    kb.push_event(code, key, true); // keydown
+    kb.push_event(code, key, false); // keyup: must produce no byte
+}
+
+/// Type lowercase ASCII text the browser way: physical KeyX codes with the
+/// resolved lowercase `key` character per keystroke.
+fn dom_type_lower(kb: &mut KeyboardInput, text: &str) {
+    for ch in text.chars() {
+        match ch {
+            '\n' => dom_key(kb, "Enter", "Enter"),
+            ' ' => dom_key(kb, "Space", " "),
+            'a'..='z' => {
+                let code = format!("Key{}", ch.to_ascii_uppercase());
+                dom_key(kb, &code, &ch.to_string());
+            }
+            _ => panic!("dom_type_lower: no DOM mapping for {ch:?}"),
+        }
+    }
+}
+
+#[test]
+fn key_help_command_prints_help_text() {
+    let mut o = boot_to_prompt();
+    let mut kb = KeyboardInput::new();
+    dom_type_lower(&mut kb, "help\n");
+    // Unmapped key at the boundary: dropped, disturbs nothing.
+    kb.push_event("F1", "F1", true);
+    kb.push_event("F1", "F1", false);
+    o.pump_input(&mut kb);
+    let halt = o.run_until_halt(10_000);
+    assert_eq!(halt, HaltReason::Wfi { addr: 0x4000_0070 });
+    assert!(
+        o.console().rx_queue.is_empty(),
+        "guest consumed every input byte"
+    );
+    // The real do_help builtin printed; the F1 press left no trace.
+    assert_eq!(
+        o.console().tx_bytes,
+        b"pathn-sh> help\ncommands: echo <args> | help\npathn-sh> "
+    );
+}
+
+#[test]
+fn key_echo_command_prints_args() {
+    let mut o = boot_to_prompt();
+    let mut kb = KeyboardInput::new();
+    dom_type_lower(&mut kb, "echo hi\n");
+    o.pump_input(&mut kb);
+    let halt = o.run_until_halt(10_000);
+    assert_eq!(halt, HaltReason::Wfi { addr: 0x4000_0070 });
+    assert!(
+        o.console().rx_queue.is_empty(),
+        "guest consumed every input byte"
+    );
+    assert_eq!(o.console().tx_bytes, b"pathn-sh> echo hi\nhi\npathn-sh> ");
+}
+
+#[test]
+fn key_echo_uppercase_bytes_survive() {
+    let mut o = boot_to_prompt();
+    let mut kb = KeyboardInput::new();
+    // Shift-held typing: the browser resolves each key to its shifted
+    // character; the adapter never tracks modifiers. The guest matches
+    // lowercase builtins byte-exactly, so "ECHO" must arrive verbatim and
+    // dispatch to `unknown` — proving byte fidelity, not case folding.
+    for (code, key) in [
+        ("KeyE", "E"),
+        ("KeyC", "C"),
+        ("KeyH", "H"),
+        ("KeyO", "O"),
+        ("Space", " "),
+        ("KeyH", "H"),
+        ("KeyI", "I"),
+        ("Enter", "Enter"),
+    ] {
+        dom_key(&mut kb, code, key);
+    }
+    o.pump_input(&mut kb);
+    let halt = o.run_until_halt(10_000);
+    assert_eq!(halt, HaltReason::Wfi { addr: 0x4000_0070 });
+    assert!(
+        o.console().rx_queue.is_empty(),
+        "guest consumed every input byte"
+    );
+    assert_eq!(
+        o.console().tx_bytes,
+        b"pathn-sh> ECHO HI\nunknown cmd: ECHO\npathn-sh> "
+    );
+}
+
+#[test]
+fn key_unknown_command_reports_word() {
+    let mut o = boot_to_prompt();
+    let mut kb = KeyboardInput::new();
+    dom_type_lower(&mut kb, "bogus\n");
+    o.pump_input(&mut kb);
     let halt = o.run_until_halt(10_000);
     assert_eq!(halt, HaltReason::Wfi { addr: 0x4000_0070 });
     assert!(
