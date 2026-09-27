@@ -15,11 +15,21 @@
 //!   **static** `u64` guest address and `size` is the access width in bytes
 //!   (`4` or `8`). The lifter runs ahead of time and never knows register
 //!   contents, so only statically-known addresses lift: PC-relative literal
-//!   loads (`LDR (literal)` -> `addr = insn.addr + offset`). Any
-//!   register/SP-relative form has a dynamic effective address and therefore
-//!   traps — inventing a static address would be inventing semantics.
+//!   loads (`LDR (literal)` -> `addr = insn.addr + offset`).
+//! - `LoadDyn { dst, base, off, size }` / `StoreDyn { src, base, off, size }`
+//!   (Wave 4, U2-G1) — register-relative forms (`LDRB`/`STRB` unsigned
+//!   immediate): the effective address `regs[base] + off` is computed at
+//!   runtime by the execution backend. SP-relative (`Rn = 31`) forms trap:
+//!   the Wave-4 register file has no SP.
 //! - `Branch { target }` — statically computed `insn.addr + offset`; this is
 //!   the explicit control-flow exit for the block.
+//! - `CondBranch { reg, target, when_zero }` (Wave 4, U2-G1) — `CBZ`/`CBNZ`
+//!   (64-bit): runtime-tested register, static taken-target, fallthrough.
+//! - `OrrShift { dst, a, b, shift, amount }` (Wave 4, U2-G1) — `ORR`
+//!   (shifted register, 64-bit).
+//! - `Wfi` (Wave 4, U2-G1) — the `WFI` hint word.
+//! - `Mov { dst, imm }` also serves `ADR`/`ADRP` (`InsnKind::PcRel`, Wave 4,
+//!   U1-G1): the lifter knows `insn.addr`, so the target is a static immediate.
 //!
 //! ## Scratch register
 //!
@@ -33,12 +43,12 @@
 //!
 //! ## Honesty rule
 //!
-//! Anything the contract cannot express — flag-setting ALU ops, shifted
-//! register operands, 32-bit ALU widths (upper-bit zeroing is not expressible
-//! in `IrOp::Add`), sub-word memory widths, dynamic memory addresses,
-//! system/privileged instructions, unrecognized words — lifts to
-//! `IrOp::Trap { reason }` naming exactly what is unsupported. A trap is data,
-//! never a silent nop and never a panic.
+//! Anything the contract cannot express — flag-setting ALU ops, 32-bit ALU
+//! widths (upper-bit zeroing is not expressible in `IrOp::Add`/`OrrShift`),
+//! halfword memory widths, SP-relative addresses, unrecognized words, and
+//! the still-out-of-scope classes (BL/RET/B.cond, other system instructions)
+//! — lifts to `IrOp::Trap { reason }` naming exactly what is unsupported.
+//! A trap is data, never a silent nop and never a panic.
 
 use pathn_contracts::cpu::{InsnKind, Instruction, IrOp};
 
@@ -60,6 +70,10 @@ const R_LS_SUBWORD: &str = "LoadStore: sub-word access width is not expressible 
 const R_LS_DYNAMIC: &str =
     "LoadStore: register-relative address is dynamic; IrOp::Load/Store carry static addresses only";
 const R_BR_UNSUPPORTED: &str = "Branch: only unconditional immediate B is lifted";
+const R_CBZ32: &str = "Branch: 32-bit CBZ/CBNZ width is not expressible in IrOp::CondBranch";
+const R_ORR32: &str = "DataProc: 32-bit ORR width is not expressible in IrOp::OrrShift";
+const R_LS_SP: &str =
+    "LoadStore: SP-relative address is not expressible (no SP in the Wave-4 register file)";
 
 fn trap(reason: &'static str) -> Vec<IrOp> {
     vec![IrOp::Trap { reason }]
@@ -75,12 +89,44 @@ pub fn lift(insn: &Instruction) -> Vec<IrOp> {
         InsnKind::DataProc => lift_data_proc(insn.word),
         InsnKind::LoadStore => lift_load_store(insn),
         InsnKind::Branch => lift_branch(insn),
-        InsnKind::System => trap(R_SYSTEM),
+        InsnKind::PcRel => lift_pc_rel(insn),
+        InsnKind::System => lift_system(insn.word),
         InsnKind::Unknown => trap(R_UNKNOWN),
     }
 }
 
-/// Data-processing: MOVZ, ADD (immediate), ADD (shifted register, LSL #0).
+/// PC-relative addressing (Wave 4, U1-G1): ADR/ADRP lower to a static `Mov` —
+/// the lifter knows `insn.addr`, so the target is a link-time constant and no
+/// dynamic PC semantics are needed.
+fn lift_pc_rel(insn: &Instruction) -> Vec<IrOp> {
+    let word = insn.word;
+    let rd = (word & 0x1F) as u8;
+    let immlo = (word >> 29) & 0x3;
+    let immhi = (word >> 5) & 0x7FFFF;
+    let imm21 = (immhi << 2) | immlo;
+    // Sign-extend the 21-bit immediate.
+    let offset = (((imm21 << 11) as i32) >> 11) as i64;
+    let target = if (word >> 31) & 1 == 1 {
+        // ADRP: (PC & !0xFFF) + (offset << 12).
+        ((insn.addr & !0xFFF) as i64).wrapping_add(offset << 12) as u64
+    } else {
+        // ADR: PC + offset.
+        (insn.addr as i64).wrapping_add(offset) as u64
+    };
+    vec![IrOp::Mov { dst: rd, imm: target }]
+}
+
+/// System: only the WFI hint word lifts (Wave 4); everything else traps.
+fn lift_system(word: u32) -> Vec<IrOp> {
+    // WFI is HINT #3 with CRm:op2 = 00100:01111: exact word match, no aliases.
+    if word == 0xD503_207F {
+        return vec![IrOp::Wfi];
+    }
+    trap(R_SYSTEM)
+}
+
+/// Data-processing: MOVZ, ADD (immediate), ADD (shifted register, LSL #0),
+/// ORR (shifted register, 64-bit — Wave 4).
 fn lift_data_proc(word: u32) -> Vec<IrOp> {
     // MOVZ: sf 10 100101 hw imm16 Rd  (bits 30:23 = 0xA5)
     if (word >> 23) & 0xFF == 0xA5 {
@@ -137,10 +183,31 @@ fn lift_data_proc(word: u32) -> Vec<IrOp> {
             b: rm,
         }];
     }
+    // ORR (shifted register): sf opc 01010 shift N Rm imm6 Rn Rd, opc = 01
+    // (bits 31:24 = 0xAA for 64-bit, 0x2A for 32-bit). Wave 4 (U2-G1).
+    let top8 = (word >> 24) & 0xFF;
+    if top8 == 0xAA || top8 == 0x2A {
+        if top8 == 0x2A {
+            return trap(R_ORR32);
+        }
+        let shift = ((word >> 22) & 0x3) as u8;
+        let rm = ((word >> 16) & 0x1F) as u8;
+        let amount = ((word >> 10) & 0x3F) as u8;
+        let rn = ((word >> 5) & 0x1F) as u8;
+        let rd = (word & 0x1F) as u8;
+        return vec![IrOp::OrrShift {
+            dst: rd,
+            a: rn,
+            b: rm,
+            shift,
+            amount,
+        }];
+    }
     trap(R_DP_UNSUPPORTED)
 }
 
-/// Loads/stores: only forms with statically-known addresses lift.
+/// Loads/stores: LDR (literal) keeps its static form; LDRB/STRB
+/// (register-relative, unsigned offset) lift to dynamic ops (Wave 4, U2-G1).
 fn lift_load_store(insn: &Instruction) -> Vec<IrOp> {
     let word = insn.word;
     // LDR (literal): sf 00 011000 imm19 Rt  (bits 31:24 = 0x18 / 0x58).
@@ -161,11 +228,37 @@ fn lift_load_store(insn: &Instruction) -> Vec<IrOp> {
     // LD/ST (immediate, unsigned offset): size 11 111001 L imm12 Rn Rt
     // (bits 29:24 = 0x39; bit 22 L: 1 = load, 0 = store).
     if (word >> 24) & 0x3F == 0x39 {
-        // Sub-word widths are not expressible even before the address
-        // question arises.
-        match (word >> 30) & 0x3 {
-            0 | 1 => return trap(R_LS_SUBWORD),
-            _ => {}
+        let size_bits = (word >> 30) & 0x3;
+        let is_load = (word >> 22) & 1 == 1;
+        let imm12 = (word >> 10) & 0xFFF;
+        let rn = ((word >> 5) & 0x1F) as u8;
+        let rt = (word & 0x1F) as u8;
+        // Wave 4 (U2-G1): byte forms lift to dynamic ops. The unsigned
+        // offset is byte-scaled (x1), so off = imm12 directly.
+        if size_bits == 0 {
+            if rn == 31 {
+                // SP-relative: the Wave-4 register file has no SP.
+                return trap(R_LS_SP);
+            }
+            let off = imm12 as u64;
+            if is_load {
+                return vec![IrOp::LoadDyn {
+                    dst: rt,
+                    base: rn,
+                    off,
+                    size: 1,
+                }];
+            }
+            return vec![IrOp::StoreDyn {
+                src: rt,
+                base: rn,
+                off,
+                size: 1,
+            }];
+        }
+        // Halfword is still sub-word; word/doubleword keep the old traps.
+        if size_bits == 1 {
+            return trap(R_LS_SUBWORD);
         }
         // AArch64: for these forms Rn = 31 is SP, and any other Rn is a
         // general register — either way the base is a dynamic value the
@@ -175,7 +268,7 @@ fn lift_load_store(insn: &Instruction) -> Vec<IrOp> {
     trap(R_LS_UNSUPPORTED)
 }
 
-/// Branches: unconditional immediate B only.
+/// Branches: unconditional immediate B, plus CBZ/CBNZ (64-bit, Wave 4).
 fn lift_branch(insn: &Instruction) -> Vec<IrOp> {
     let word = insn.word;
     // B: 000101 imm26 — target = addr + sign_extend(imm26 << 2).
@@ -184,6 +277,23 @@ fn lift_branch(insn: &Instruction) -> Vec<IrOp> {
         let offset = (((imm26 as i32) << 6) >> 6) as i64 * 4;
         let target = (insn.addr as i64).wrapping_add(offset) as u64;
         return vec![IrOp::Branch { target }];
+    }
+    // CBZ/CBNZ (64-bit): sf 011010 op imm19 Rt (bits 31:24 = 0xB4/0xB5).
+    // 32-bit forms trap: the low-32 test is not expressible in CondBranch.
+    let top8 = (word >> 24) & 0xFF;
+    if top8 == 0xB4 || top8 == 0xB5 {
+        let imm19 = (word >> 5) & 0x7FFFF;
+        let offset = (((imm19 as i32) << 13) >> 13) as i64 * 4;
+        let target = (insn.addr as i64).wrapping_add(offset) as u64;
+        let rt = (word & 0x1F) as u8;
+        return vec![IrOp::CondBranch {
+            reg: rt,
+            target,
+            when_zero: top8 == 0xB4,
+        }];
+    }
+    if top8 == 0x34 || top8 == 0x35 {
+        return trap(R_CBZ32);
     }
     trap(R_BR_UNSUPPORTED)
 }
@@ -386,9 +496,10 @@ mod tests {
     }
 
     #[test]
-    fn trap_ldrb_subword() {
-        // LDRB W0, [X1]: 8-bit width not expressible
-        let ops = lift(&insn(0x4000, 0x3940_0420, InsnKind::LoadStore));
+    fn trap_ldrh_subword() {
+        // LDRH W0, [X1]: 16-bit width is still not expressible (Wave 4
+        // lifted only the byte forms).
+        let ops = lift(&insn(0x4000, 0x7940_0420, InsnKind::LoadStore));
         assert_eq!(
             ops,
             vec![IrOp::Trap {
@@ -443,5 +554,187 @@ mod tests {
     #[test]
     fn scratch_does_not_collide_with_arch_regs() {
         const { assert!(SCRATCH > 31) } // scratch must sit outside X0-X30/XZR-SP
+    }
+
+    // ---------- Wave 4 (U2-G1): ADR/ADRP, byte lifts, CBZ/CBNZ, ORR-shift, WFI ----------
+
+    #[test]
+    fn wave4_adrp_entry_word_lifts_to_static_mov() {
+        // Real guest entry: ADRP X10, #0x1000 at 0x4000_0000 -> X10 = 0x4000_1000.
+        let ops = lift(&insn(0x4000_0000, 0xB000_000A, InsnKind::PcRel));
+        assert_eq!(
+            ops,
+            vec![IrOp::Mov {
+                dst: 10,
+                imm: 0x4000_1000
+            }]
+        );
+    }
+
+    #[test]
+    fn wave4_adrp_negative_page() {
+        // ADRP X0, page-1 at 0x4000_1000 -> X0 = 0x4000_0000.
+        let ops = lift(&insn(0x4000_1000, 0xF0FF_FFE0, InsnKind::PcRel));
+        assert_eq!(
+            ops,
+            vec![IrOp::Mov {
+                dst: 0,
+                imm: 0x4000_0000
+            }]
+        );
+    }
+
+    #[test]
+    fn wave4_adr_plain() {
+        // ADR X0, #0 at 0x4000 -> X0 = 0x4000.
+        let ops = lift(&insn(0x4000, 0x1000_0000, InsnKind::PcRel));
+        assert_eq!(ops, vec![IrOp::Mov { dst: 0, imm: 0x4000 }]);
+    }
+
+    #[test]
+    fn wave4_ldrb_register_relative() {
+        // LDRB W2, [X0] (guest read_char): dynamic byte load.
+        let ops = lift(&insn(0x4000, 0x3940_0002, InsnKind::LoadStore));
+        assert_eq!(
+            ops,
+            vec![IrOp::LoadDyn {
+                dst: 2,
+                base: 0,
+                off: 0,
+                size: 1
+            }]
+        );
+    }
+
+    #[test]
+    fn wave4_ldrb_with_offset() {
+        // LDRB W1, [X10, #0x100] (guest word-buffer peek).
+        let word = 0x3940_0000 | (0x100 << 10) | (10 << 5) | 1;
+        let ops = lift(&insn(0x4000, word, InsnKind::LoadStore));
+        assert_eq!(
+            ops,
+            vec![IrOp::LoadDyn {
+                dst: 1,
+                base: 10,
+                off: 0x100,
+                size: 1
+            }]
+        );
+    }
+
+    #[test]
+    fn wave4_strb_wzr_source() {
+        // STRB WZR, [X11] (guest NUL terminator): stores zero, NOT dropped.
+        let word = 0x3900_0000 | (11 << 5) | 31;
+        let ops = lift(&insn(0x4000, word, InsnKind::LoadStore));
+        assert_eq!(
+            ops,
+            vec![IrOp::StoreDyn {
+                src: 31,
+                base: 11,
+                off: 0,
+                size: 1
+            }]
+        );
+    }
+
+    #[test]
+    fn wave4_strb_sp_base_traps() {
+        // STRB W0, [SP, #8]: SP-relative is not expressible in Wave 4.
+        let word = 0x3900_0000 | (8 << 10) | (31 << 5);
+        let ops = lift(&insn(0x4000, word, InsnKind::LoadStore));
+        assert_eq!(ops, vec![IrOp::Trap { reason: R_LS_SP }]);
+    }
+
+    #[test]
+    fn wave4_cbz_forward() {
+        // CBZ X2, +0x10 at 0x4000 -> taken to 0x4010 when X2 == 0.
+        let word = 0xB400_0000 | (4 << 5) | 2;
+        let ops = lift(&insn(0x4000, word, InsnKind::Branch));
+        assert_eq!(
+            ops,
+            vec![IrOp::CondBranch {
+                reg: 2,
+                target: 0x4010,
+                when_zero: true
+            }]
+        );
+    }
+
+    #[test]
+    fn wave4_cbnz_backward() {
+        // CBNZ X0, -8 at 0x4008 -> taken to 0x4000 when X0 != 0.
+        let word = 0xB500_0000 | (0x7FFFE << 5);
+        let ops = lift(&insn(0x4008, word, InsnKind::Branch));
+        assert_eq!(
+            ops,
+            vec![IrOp::CondBranch {
+                reg: 0,
+                target: 0x4000,
+                when_zero: false
+            }]
+        );
+    }
+
+    #[test]
+    fn wave4_cbz_32bit_traps() {
+        // CBZ W0, #0: 32-bit width is not expressible in CondBranch.
+        let ops = lift(&insn(0x4000, 0x3400_0000, InsnKind::Branch));
+        assert_eq!(ops, vec![IrOp::Trap { reason: R_CBZ32 }]);
+    }
+
+    #[test]
+    fn wave4_orr_shift_copy() {
+        // ORR X11, XZR, X10 (guest register copy).
+        let word = 0xAA00_0000 | (10 << 16) | (31 << 5) | 11;
+        let ops = lift(&insn(0x4000, word, InsnKind::DataProc));
+        assert_eq!(
+            ops,
+            vec![IrOp::OrrShift {
+                dst: 11,
+                a: 31,
+                b: 10,
+                shift: 0,
+                amount: 0
+            }]
+        );
+    }
+
+    #[test]
+    fn wave4_orr_shift_lsl56() {
+        // ORR X2, XZR, X1, LSL #56 (guest eq_byte trick).
+        let word = 0xAA00_0000 | (1 << 16) | (56 << 10) | (31 << 5) | 2;
+        let ops = lift(&insn(0x4000, word, InsnKind::DataProc));
+        assert_eq!(
+            ops,
+            vec![IrOp::OrrShift {
+                dst: 2,
+                a: 31,
+                b: 1,
+                shift: 0,
+                amount: 56
+            }]
+        );
+    }
+
+    #[test]
+    fn wave4_orr_32bit_traps() {
+        // ORR W0, WZR, W1: 32-bit zeroing is not expressible.
+        let word = 0x2A00_0000 | (1 << 16) | (31 << 5);
+        let ops = lift(&insn(0x4000, word, InsnKind::DataProc));
+        assert_eq!(ops, vec![IrOp::Trap { reason: R_ORR32 }]);
+    }
+
+    #[test]
+    fn wave4_wfi_lifts() {
+        let ops = lift(&insn(0x4000, 0xD503_207F, InsnKind::System));
+        assert_eq!(ops, vec![IrOp::Wfi]);
+    }
+
+    #[test]
+    fn wave4_other_system_still_traps() {
+        // NOP (HINT #0) is not WFI: still a trap.
+        let ops = lift(&insn(0x4000, 0xD503_201F, InsnKind::System));
+        assert_eq!(ops, vec![IrOp::Trap { reason: R_SYSTEM }]);
     }
 }

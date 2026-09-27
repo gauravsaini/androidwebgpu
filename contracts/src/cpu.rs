@@ -57,6 +57,55 @@ pub enum IrOp {
     Branch {
         target: u64,
     },
+    /// Added 2026-09-27 (Wave 4 amendment U2-G1): dynamic-address access.
+    /// `addr = regs[base] + off` computed at runtime; `size ∈ {1,2,4,8}`.
+    /// Register 31 as `base` reads as 0 (XZR); as `dst` the loaded value is
+    /// dropped but the access still happens (e.g. a console-RX read still
+    /// consumes a byte). The execution backend intercepts MMIO ranges —
+    /// they never alias RAM.
+    LoadDyn {
+        dst: u8,
+        base: u8,
+        off: u64,
+        size: u8,
+    },
+    /// Added 2026-09-27 (Wave 4 amendment U2-G1): dynamic-address store.
+    /// `mem[regs[base]+off] = low `size` bytes of regs[src]`. Register 31
+    /// as `src` stores 0 (WZR).
+    StoreDyn {
+        src: u8,
+        base: u8,
+        off: u64,
+        size: u8,
+    },
+    /// Added 2026-09-27 (Wave 4 amendment U2-G1): conditional branch
+    /// (CBZ/CBNZ). If `(regs[reg] == 0) == when_zero`, control goes to
+    /// `target`; otherwise it falls through to the next instruction.
+    /// `when_zero = true` for CBZ, `false` for CBNZ. Terminates the block
+    /// like [`IrOp::Branch`]; the fallthrough address is the block's
+    /// `BlockExit::FallThrough`.
+    CondBranch {
+        reg: u8,
+        target: u64,
+        when_zero: bool,
+    },
+    /// Added 2026-09-27 (Wave 4 amendment U2-G1): OR with shifted register.
+    /// `dst = regs[a] | shift(regs[b], shift, amount)`,
+    /// `shift ∈ {0=LSL, 1=LSR, 2=ASR}` (0b11 is reserved in the encoding).
+    /// 64-bit form only; the 32-bit form traps in the lifter (upper-bit
+    /// zeroing is not expressible). Register 31 reads as 0 (XZR); writes
+    /// to 31 are dropped.
+    OrrShift {
+        dst: u8,
+        a: u8,
+        b: u8,
+        shift: u8,
+        amount: u8,
+    },
+    /// Added 2026-09-27 (Wave 4 amendment U2-G1): wait-for-interrupt marker.
+    /// The execution backend yields the vCPU until an IRQ is pending;
+    /// resumable, never an error and never a silent nop.
+    Wfi,
     /// Explicit trap for unimplemented/privileged semantics. Never a silent nop.
     Trap {
         reason: &'static str,
