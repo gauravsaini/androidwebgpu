@@ -221,3 +221,82 @@ fn boot_virtio_gpu_submit3d_path() {
     let outs2 = o.queue_notify(0).unwrap();
     assert!(outs2.is_empty());
 }
+
+// Wave-6 8.1: console RX acceptance — the REAL 4.1 guest command parser
+// executes scripted input. Input path under test (nothing faked):
+// `ScriptedInput` (u13) -> `Orchestrator::pump_input` -> console RX FIFO
+// -> guest `read_char` (real LDRB CONSOLE_RX) -> parser -> TX bytes.
+
+use pathn_contracts::adapters::{KeyCode, NormalizedInput};
+use u13_adapters::ScriptedInput;
+
+/// Boot the real image to the first shell prompt (parks at the read-loop WFI).
+fn boot_to_prompt() -> Orchestrator {
+    let img = real_image();
+    let mut o = Orchestrator::new();
+    o.load_image(&img).unwrap();
+    let halt = o.run_until_halt(10_000);
+    assert_eq!(halt, HaltReason::Wfi { addr: 0x4000_0070 });
+    assert_eq!(o.console().tx_bytes, b"pathn-sh> ");
+    o
+}
+
+/// One `NormalizedInput::Key` press event per byte, as a single poll script.
+fn scripted_keys(s: &str) -> ScriptedInput {
+    let evs = s
+        .bytes()
+        .map(|b| NormalizedInput::Key {
+            code: KeyCode(b as u32),
+            pressed: true,
+        })
+        .collect();
+    ScriptedInput::new(vec![evs])
+}
+
+#[test]
+fn rx_help_command_prints_help_text() {
+    let mut o = boot_to_prompt();
+    // Host seam: drain the scripted source into the RX FIFO, then resume.
+    o.pump_input(&mut scripted_keys("help\n"));
+    let halt = o.run_until_halt(10_000);
+    // Guest echoed each byte, ran do_help, re-printed the prompt, parked.
+    assert_eq!(halt, HaltReason::Wfi { addr: 0x4000_0070 });
+    assert!(
+        o.console().rx_queue.is_empty(),
+        "guest consumed every input byte"
+    );
+    assert_eq!(
+        o.console().tx_bytes,
+        b"pathn-sh> help\ncommands: echo <args> | help\npathn-sh> "
+    );
+}
+
+#[test]
+fn rx_echo_command_prints_args() {
+    let mut o = boot_to_prompt();
+    o.pump_input(&mut scripted_keys("echo hi\n"));
+    let halt = o.run_until_halt(10_000);
+    assert_eq!(halt, HaltReason::Wfi { addr: 0x4000_0070 });
+    assert!(
+        o.console().rx_queue.is_empty(),
+        "guest consumed every input byte"
+    );
+    // do_echo prints line+5 ("hi") then a newline — from the guest's parser.
+    assert_eq!(o.console().tx_bytes, b"pathn-sh> echo hi\nhi\npathn-sh> ");
+}
+
+#[test]
+fn rx_unknown_command_reports_word() {
+    let mut o = boot_to_prompt();
+    o.pump_input(&mut scripted_keys("bogus\n"));
+    let halt = o.run_until_halt(10_000);
+    assert_eq!(halt, HaltReason::Wfi { addr: 0x4000_0070 });
+    assert!(
+        o.console().rx_queue.is_empty(),
+        "guest consumed every input byte"
+    );
+    assert_eq!(
+        o.console().tx_bytes,
+        b"pathn-sh> bogus\nunknown cmd: bogus\npathn-sh> "
+    );
+}

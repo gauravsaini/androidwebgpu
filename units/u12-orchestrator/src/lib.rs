@@ -318,6 +318,16 @@ impl Orchestrator {
         &mut self.console
     }
 
+    /// Drain one poll of an [`InputSource`](pathn_contracts::adapters::InputSource)
+    /// into the console RX FIFO. This is the host input seam: the production
+    /// host calls it on its input event loop (browser key events arrive as
+    /// `NormalizedInput::Key` and become RX bytes); the guest consumes them
+    /// through real `LDRB CONSOLE_RX` reads in `read_char`. Deterministic
+    /// under scripted sources (one `poll()` per call).
+    pub fn pump_input(&mut self, src: &mut dyn pathn_contracts::adapters::InputSource) {
+        self.console.poll_input(src);
+    }
+
     /// The virtio transport state (U6).
     pub fn transport(&self) -> &TransportState {
         &self.transport
