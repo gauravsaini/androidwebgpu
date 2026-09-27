@@ -57,6 +57,16 @@ pub enum IrOp {
     Branch {
         target: u64,
     },
+    /// Added 2026-09-27 (Wave 5 amendment, BL/RET scope): indirect branch by
+    /// register index. `control goes to regs[reg]` (64-bit value); register
+    /// 31 reads as 0 (XZR). The execution backend returns the register value
+    /// as the block's next PC — `run() -> i64`'s result IS the exit address,
+    /// so no new WASM imports are needed. Terminates the block like
+    /// [`IrOp::Branch`]; the declared exit is [`BlockExit::Dynamic`] because
+    /// no static address can be named ahead of time.
+    BranchDyn {
+        reg: u8,
+    },
     /// Added 2026-09-27 (Wave 4 amendment U2-G1): dynamic-address access.
     /// `addr = regs[base] + off` computed at runtime; `size ∈ {1,2,4,8}`.
     /// Register 31 as `base` reads as 0 (XZR); as `dst` the loaded value is
@@ -117,6 +127,10 @@ pub enum IrOp {
 pub enum BlockExit {
     FallThrough(u64),
     Branch(u64),
+    /// Added 2026-09-27 (Wave 5 amendment, BL/RET scope): control leaves the
+    /// block to a register-held address ([`IrOp::BranchDyn`]). No static
+    /// target is declared — the execution backend reports the runtime value.
+    Dynamic,
     ExitVm,
 }
 

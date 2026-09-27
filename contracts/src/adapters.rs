@@ -57,15 +57,24 @@ pub struct KeyCode(pub u32);
 /// the real Wave-4 impl normalizes `KeyboardEvent`/`PointerEvent` into these.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum NormalizedInput {
-    Key { code: KeyCode, pressed: bool },
-    PointerMove { x: i32, y: i32 },
+    Key {
+        code: KeyCode,
+        pressed: bool,
+    },
+    PointerMove {
+        x: i32,
+        y: i32,
+    },
     PointerButton {
         button: u8,
         pressed: bool,
         x: i32,
         y: i32,
     },
-    Scroll { dx: i32, dy: i32 },
+    Scroll {
+        dx: i32,
+        dy: i32,
+    },
 }
 
 /// WebGPU canvas surface. The real impl uploads `frame.rgba` to a texture and
