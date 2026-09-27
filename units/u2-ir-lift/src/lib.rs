@@ -22,7 +22,11 @@
 //!   runtime by the execution backend. SP-relative (`Rn = 31`) forms trap:
 //!   the Wave-4 register file has no SP.
 //! - `Branch { target }` — statically computed `insn.addr + offset`; this is
-//!   the explicit control-flow exit for the block.
+//!   the explicit control-flow exit for the block. `BL` lowers to a link
+//!   write (`Mov { dst: 30, imm: addr + 4 }`) followed by the same static
+//!   `Branch` — no new op needed. `RET <Xn>` lowers to `BranchDyn { reg }`
+//!   (Wave 5): the target is register-held, so only an indirect branch
+//!   expresses it.
 //! - `CondBranch { reg, target, when_zero }` (Wave 4, U2-G1) — `CBZ`/`CBNZ`
 //!   (64-bit): runtime-tested register, static taken-target, fallthrough.
 //! - `OrrShift { dst, a, b, shift, amount }` (Wave 4, U2-G1) — `ORR`
@@ -46,9 +50,9 @@
 //! Anything the contract cannot express — flag-setting ALU ops, 32-bit ALU
 //! widths (upper-bit zeroing is not expressible in `IrOp::Add`/`OrrShift`),
 //! halfword memory widths, SP-relative addresses, unrecognized words, and
-//! the still-out-of-scope classes (BL/RET/B.cond, other system instructions)
-//! — lifts to `IrOp::Trap { reason }` naming exactly what is unsupported.
-//! A trap is data, never a silent nop and never a panic.
+//! the still-out-of-scope classes (B.cond/TBZ/TBNZ, BR/BLR, other system
+//! instructions) — lifts to `IrOp::Trap { reason }` naming exactly what is
+//! unsupported. A trap is data, never a silent nop and never a panic.
 
 use pathn_contracts::cpu::{InsnKind, Instruction, IrOp};
 
@@ -69,7 +73,7 @@ const R_LS_UNSUPPORTED: &str = "LoadStore: unsupported encoding";
 const R_LS_SUBWORD: &str = "LoadStore: sub-word access width is not expressible in IrOp";
 const R_LS_DYNAMIC: &str =
     "LoadStore: register-relative address is dynamic; IrOp::Load/Store carry static addresses only";
-const R_BR_UNSUPPORTED: &str = "Branch: only unconditional immediate B is lifted";
+const R_BR_UNSUPPORTED: &str = "Branch: only B/BL/RET/CBZ/CBNZ are lifted";
 const R_CBZ32: &str = "Branch: 32-bit CBZ/CBNZ width is not expressible in IrOp::CondBranch";
 const R_ORR32: &str = "DataProc: 32-bit ORR width is not expressible in IrOp::OrrShift";
 const R_LS_SP: &str =
@@ -271,7 +275,8 @@ fn lift_load_store(insn: &Instruction) -> Vec<IrOp> {
     trap(R_LS_UNSUPPORTED)
 }
 
-/// Branches: unconditional immediate B, plus CBZ/CBNZ (64-bit, Wave 4).
+/// Branches: unconditional immediate B, BL (link + branch), RET (indirect),
+/// plus CBZ/CBNZ (64-bit, Wave 4).
 fn lift_branch(insn: &Instruction) -> Vec<IrOp> {
     let word = insn.word;
     // B: 000101 imm26 — target = addr + sign_extend(imm26 << 2).
@@ -280,6 +285,28 @@ fn lift_branch(insn: &Instruction) -> Vec<IrOp> {
         let offset = (((imm26 as i32) << 6) >> 6) as i64 * 4;
         let target = (insn.addr as i64).wrapping_add(offset) as u64;
         return vec![IrOp::Branch { target }];
+    }
+    // BL: 100101 imm26 — X30 = addr + 4 (the link), then branch to target.
+    // No new IrOp needed: the link is a plain Mov to register 30 and the
+    // transfer is the existing static Branch.
+    if (word >> 26) & 0x3F == 0x25 {
+        let imm26 = word & 0x3FFF_FFFF;
+        let offset = (((imm26 as i32) << 6) >> 6) as i64 * 4;
+        let target = (insn.addr as i64).wrapping_add(offset) as u64;
+        return vec![
+            IrOp::Mov {
+                dst: 30,
+                imm: insn.addr.wrapping_add(4),
+            },
+            IrOp::Branch { target },
+        ];
+    }
+    // RET: 1101011 0 010 11111 000000 Rn 00000 — indirect branch to regs[Rn].
+    // The mask clears only the Rn field, so any RET <Xn> matches; BR/BLR
+    // never reach the lifter as InsnKind::Branch (U1 rejects them).
+    if word & 0xFFFF_FC1F == 0xD65F_0000 {
+        let rn = ((word >> 5) & 0x1F) as u8;
+        return vec![IrOp::BranchDyn { reg: rn }];
     }
     // CBZ/CBNZ (64-bit): sf 011010 op imm19 Rt (bits 31:24 = 0xB4/0xB5).
     // 32-bit forms trap: the low-32 test is not expressible in CondBranch.
@@ -512,15 +539,80 @@ mod tests {
     }
 
     #[test]
-    fn trap_bl_not_plain_b() {
-        // BL: link semantics not lifted
-        let ops = lift(&insn(0x4000, 0x9400_0040, InsnKind::Branch));
+    fn trap_unrecognized_branch_word() {
+        // A Branch-kind word matching no known encoding still traps with the
+        // exact reason (U1 would have called this Illegal; the lifter is a
+        // pure function of &Instruction and must not guess).
+        let ops = lift(&insn(0x4000, 0x0000_0000, InsnKind::Branch));
         assert_eq!(
             ops,
             vec![IrOp::Trap {
                 reason: R_BR_UNSUPPORTED
             }]
         );
+    }
+
+    // ---------- Wave 5 (BL/RET scope) ----------
+
+    #[test]
+    fn wave5_bl_forward_sets_link_then_branches() {
+        // BL +0x100 at 0x4000: X30 = 0x4004, then Branch to 0x4100.
+        let ops = lift(&insn(0x4000, 0x9400_0040, InsnKind::Branch));
+        assert_eq!(
+            ops,
+            vec![
+                IrOp::Mov {
+                    dst: 30,
+                    imm: 0x4004
+                },
+                IrOp::Branch { target: 0x4100 },
+            ]
+        );
+    }
+
+    #[test]
+    fn wave5_bl_backward_sign_extended() {
+        // BL -4 at 0x4000 -> target 0x3FFC, link still addr+4.
+        let ops = lift(&insn(0x4000, 0x97FF_FFFF, InsnKind::Branch));
+        assert_eq!(
+            ops,
+            vec![
+                IrOp::Mov {
+                    dst: 30,
+                    imm: 0x4004
+                },
+                IrOp::Branch { target: 0x3FFC },
+            ]
+        );
+    }
+
+    #[test]
+    fn wave5_bl_link_is_addr_plus_4_not_target() {
+        // The link register holds the RETURN address, not the target:
+        // BL at 0x4000_004C (the real guest's first BL) links 0x4000_0050.
+        let ops = lift(&insn(0x4000_004C, 0x97FF_FF00, InsnKind::Branch));
+        assert_eq!(
+            ops[0],
+            IrOp::Mov {
+                dst: 30,
+                imm: 0x4000_0050
+            }
+        );
+        assert!(matches!(ops[1], IrOp::Branch { .. }));
+    }
+
+    #[test]
+    fn wave5_ret_x30_is_indirect_branch() {
+        // RET X30 (0xD65F03C0): control goes to regs[30].
+        let ops = lift(&insn(0x4000, 0xD65F_03C0, InsnKind::Branch));
+        assert_eq!(ops, vec![IrOp::BranchDyn { reg: 30 }]);
+    }
+
+    #[test]
+    fn wave5_ret_other_register() {
+        // RET X9 (0xD65F0120): indirect through regs[9], not just X30.
+        let ops = lift(&insn(0x4000, 0xD65F_0120, InsnKind::Branch));
+        assert_eq!(ops, vec![IrOp::BranchDyn { reg: 9 }]);
     }
 
     // ---------- structural properties ----------
