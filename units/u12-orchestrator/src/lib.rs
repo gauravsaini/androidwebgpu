@@ -873,7 +873,8 @@ fn branch_target(ops: &[IrOp]) -> Option<u64> {
 }
 
 /// Block exits for a lifted op sequence. A conditional branch declares both
-/// arms (U3 lowers the if/else from `Branch` + `FallThrough`); an explicit
+/// arms (U3 lowers the if/else from `Branch` + `FallThrough`); an indirect
+/// branch (Wave 5) declares `Dynamic` — no static target exists; an explicit
 /// `Branch` op wins; otherwise the block falls through. U3's `CondBranch`
 /// traps loudly when no `FallThrough` is present, so the orchestrator always
 /// supplies one here.
@@ -884,6 +885,11 @@ fn block_exits(pc: u64, ops: &[IrOp]) -> Vec<BlockExit> {
                 BlockExit::Branch(*target),
                 BlockExit::FallThrough(pc.wrapping_add(4)),
             ];
+        }
+    }
+    for op in ops {
+        if let IrOp::BranchDyn { .. } = op {
+            return vec![BlockExit::Dynamic];
         }
     }
     match branch_target(ops) {
@@ -1085,6 +1091,9 @@ fn match_static_reason(bytes: &[u8]) -> Option<&'static str> {
         "LoadStore: register-relative address is dynamic; IrOp::Load/Store carry static addresses only",
         "LoadStore: register-relative access via SP is not expressible in IrOp",
         "Branch: only unconditional immediate B is lifted",
+        // Wave 5 (BL/RET scope) renamed the reason above; the old string is
+        // kept so pre-Wave-5 snapshots still decode. New halts carry this:
+        "Branch: only B/BL/RET/CBZ/CBNZ are lifted",
         "Branch: unsupported encoding",
         "Branch: 32-bit CBZ/CBNZ width is not expressible in IrOp::CondBranch",
         "Branch: 32-bit ORR width is not expressible in IrOp::OrrShift",
@@ -1578,42 +1587,63 @@ mod tests {
     }
 
     #[test]
-    fn wave4_real_guest_past_adrp_halt() {
-        // The real 4.1 `pathn-sh` guest. Wave 3 halted at its entry word
-        // (ADRP); Wave 4 must execute past it and stop honestly at the
-        // first instruction class outside scope (BL -> link register).
+    fn wave5_bl_ret_link_register_roundtrip() {
+        // Hand-assembled call/return through the real pipeline:
+        //   0x4000_0000: BL +2          ; X30 = 0x4000_0004, pc -> 0x4000_0008
+        //   0x4000_0004: B +3           ; landing pad -> 0x4000_0010
+        //   0x4000_0008: MOVZ X7, #0x2A ; subroutine body
+        //   0x4000_000C: RET X30        ; indirect branch back to 0x4000_0004
+        //   0x4000_0010: WFI           ; park
+        let words = [
+            0x9400_0002, // BL +2
+            0x1400_0003, // B +3
+            0xD280_0547, // MOVZ X7, #0x2A
+            0xD65F_03C0, // RET X30
+            0xD503_207F, // WFI
+        ];
+        let mut o = Orchestrator::new();
+        o.load_image(&minimal_image(0x4000_0000, &words)).unwrap();
+        let halt = o.run_until_halt(100);
+        assert_eq!(halt, HaltReason::Wfi { addr: 0x4000_0010 });
+        assert_eq!(o.steps(), 5);
+        // Link register holds the return address; the body ran; control
+        // returned through the register-held target, not a static exit.
+        assert_eq!(o.machine.cpu[0].regs[30], 0x4000_0004);
+        assert_eq!(o.machine.cpu[0].regs[7], 0x2A);
+        assert_eq!(o.machine.cpu[0].pc, 0x4000_0014);
+    }
+
+    #[test]
+    fn wave5_real_guest_reaches_shell_prompt() {
+        // The real 4.1 `pathn-sh` guest. Wave 4 halted at the first BL
+        // (0x4000_004C); with BL/RET lifted the guest now runs THROUGH the
+        // call into print_cstr, prints the prompt, returns, runs the read
+        // loop, and parks at WFI waiting for input — the shell is live.
         let (image, _sbom) =
             guest_image::image::build(&guest_image::image::GuestManifest::pathn_sh());
         let mut o = Orchestrator::new();
         o.load_image(&image).unwrap();
-        let reason = o.run_until_halt(100);
+        let reason = o.run_until_halt(10_000);
         let cpu = &o.machine.cpu[0];
-        // Measured acceptance values (also printed for the Wave-4 report).
+        // Measured acceptance values (also printed for the Wave-5 report).
         println!("halt: {reason:?}");
         println!("pc: {:#x}", cpu.pc);
         println!("steps: {}", o.steps());
         println!("x10: {:#x}", cpu.regs[10]);
         println!("x0: {:#x}", cpu.regs[0]);
+        println!("x30: {:#x}", cpu.regs[30]);
         println!("console: {:?}", o.console.tx_bytes);
-        // Entry ran: x10 = data base (one page above the load address).
+        // 74 instructions executed: entry -> prompt -> BL print_cstr ->
+        // 10-char print loop -> RET -> read_loop -> BL read_char -> RET
+        // (x0 = 0, no input) -> CBNZ falls through -> WFI parks.
+        assert_eq!(o.steps(), 74);
+        // Parked at the read_loop WFI (0x4000_0070), resumable — not halted.
+        assert_eq!(reason, HaltReason::Wfi { addr: 0x4000_0070 });
+        assert_eq!(cpu.pc, 0x4000_0074);
+        // x10 (data base) survived the calls; x0 = 0 (read_char: no byte).
         assert_eq!(cpu.regs[10], 0x4000_1000);
-        // prompt ran: x0 = address of the "pathn-sh> " string.
-        assert_eq!(cpu.regs[0], 0x4000_1200);
-        // Five instructions executed (ADRP, ADD, B, ADRP, ADD), then BL.
-        // Measured: the BL sits at 0x4000004C — the prompt label follows
-        // the print_cstr/print_char/read_char subroutines, so the Wave-4
-        // plan's predicted 0x40000014 was wrong; this is the observed value.
-        assert_eq!(o.steps(), 5);
-        // The first BL is outside Wave-4 scope: honest halt, exact reason.
-        assert_eq!(
-            reason,
-            HaltReason::Unsupported {
-                addr: 0x4000_004C,
-                reason: "Branch: only unconditional immediate B is lifted",
-            }
-        );
-        assert_eq!(cpu.pc, 0x4000_004C);
-        // Nothing was printed yet: the BL to print_cstr never ran.
-        assert!(o.console.tx_bytes.is_empty());
+        assert_eq!(cpu.regs[0], 0x0);
+        // The prompt was actually printed through the console MMIO.
+        assert_eq!(o.console.tx_bytes, b"pathn-sh> ");
     }
 }

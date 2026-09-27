@@ -35,35 +35,27 @@ fn real_image() -> Vec<u8> {
 }
 
 #[test]
-fn boot_real_image_halts_with_typed_reason() {
+fn boot_real_image_reaches_shell_prompt() {
     let img = real_image();
     let mut o = Orchestrator::new();
     o.load_image(&img).unwrap();
     // The guest's first instruction is ADRP X10, #0 (0xB000000A) — lifted
-    // since Wave 4 (U1 PcRel class). The guest now executes entry:
-    //   ADRP X10 / ADD X10 / B prompt / ADRP X0 / ADD X0   (5 steps)
-    // then halts at its first BL (0x4000_004C) with U2's exact
-    // unsupported-branch string — BL/RET are out of Wave-4 scope.
+    // since Wave 4 (U1 PcRel class). With Wave-5 BL/RET the guest runs the
+    // whole prompt path: entry -> prompt -> BL print_cstr (prints
+    // "pathn-sh> ") -> RET -> read_loop -> BL read_char (no input, x0 = 0)
+    // -> RET -> CBNZ falls through -> WFI parks, resumable.
     let first = u32::from_le_bytes(o.machine().ram[0..4].try_into().unwrap());
     assert_eq!(first, 0xB000000A, "guest's first word per the 4.1 build");
     let halt = o.run_until_halt(10_000);
-    assert_eq!(
-        halt,
-        HaltReason::Unsupported {
-            addr: 0x4000_004C,
-            reason: "Branch: only unconditional immediate B is lifted",
-        },
-        "the real pipeline must name the exact unlifted instruction"
-    );
-    // Five real instructions executed past the Wave-3 halt.
-    assert_eq!(o.steps(), 5);
-    assert_eq!(o.machine().cpu[0].pc, 0x4000_004C);
-    // ADRP/ADD math, honestly executed through wasmtime:
-    // X10 = DATA_BASE = 0x4000_1000, X0 = DATA_BASE + 0x200 (the prompt).
+    // MEASURED 2026-09-27: 74 instructions, parked at the read_loop WFI.
+    assert_eq!(halt, HaltReason::Wfi { addr: 0x4000_0070 });
+    assert_eq!(o.steps(), 74);
+    assert_eq!(o.machine().cpu[0].pc, 0x4000_0074);
+    // x10 = DATA_BASE survived the calls; x0 = 0 (read_char: no byte yet).
     assert_eq!(o.machine().cpu[0].regs[10], 0x4000_1000);
-    assert_eq!(o.machine().cpu[0].regs[0], 0x4000_1200);
-    // No console output yet: print_cstr sits behind the unlifted BL.
-    assert!(o.console().tx_bytes.is_empty());
+    assert_eq!(o.machine().cpu[0].regs[0], 0x0);
+    // The shell prompt was actually printed through the console MMIO.
+    assert_eq!(o.console().tx_bytes, b"pathn-sh> ");
 }
 
 #[test]
