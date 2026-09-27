@@ -281,6 +281,10 @@ pub fn assemble_shell() -> ShellImage {
 
     // ---- process_line ----
     a.label("process_line");
+    // The builtins below reach print_cstr via BL, which clobbers the link
+    // register — save the caller's return address in x16 (the shell never
+    // touches x16-x29; without this, `ret` at pl_ret loops forever).
+    a.emit(enc_orr_shift(16, 31, 30, 0, 0)); // x16 = x30
     a.cbz(12, "pl_ret"); // empty line
     a.cbz(14, "pl_ret"); // whitespace-only line
     a.eq_count(14, 4, "m_echo"); // wordlen == 4?
@@ -345,6 +349,7 @@ pub fn assemble_shell() -> ShellImage {
     a.bl("print_cstr");
     a.b("pl_ret");
     a.label("pl_ret");
+    a.emit(enc_orr_shift(30, 31, 16, 0, 0)); // x30 = x16 (restore)
     a.emit(enc_ret(30));
 
     let code = a.finish();
