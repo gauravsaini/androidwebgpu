@@ -262,6 +262,103 @@ impl InputSource for ScriptedInput {
     }
 }
 
+// ---------------------------------------------------------------------------
+// Keyboard input: DOM key events -> console bytes
+//
+// The console is a byte stream, but `normalize_key` (above) emits Linux
+// KEY_* codes — wiring those straight into `poll_input` would send control
+// bytes (Enter → 0x1C FS). `KeyboardInput` is the host-side translator the
+// real browser's keydown/keyup listeners feed: it converts DOM key events
+// (`code` + `key` + pressed) into byte-carrying `NormalizedInput::Key`
+// values using the byte-channel convention (`KeyCode(b)`, b < 256 =
+// literal byte b), which is exactly what `ConsoleState::poll_input`
+// consumes. No contract change; the translation is pure and deterministic.
+//
+// Byte-channel convention (console input path): a pressed
+// `NormalizedInput::Key { code: KeyCode(b), pressed: true }` with `b < 256`
+// carries the literal byte `b`. Host adapters (this one) produce these;
+// `poll_input` forwards them into the RX FIFO.
+// ---------------------------------------------------------------------------
+
+/// One DOM key event, as a browser `keydown`/`keyup` listener delivers it:
+/// `KeyboardEvent.code` (physical key, e.g. `"KeyH"`),
+/// `KeyboardEvent.key` (resolved character, e.g. `"h"` / `"H"` / `"Enter"`),
+/// and press state.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DomKeyEvent {
+    pub code: String,
+    pub key: String,
+    pub pressed: bool,
+}
+
+/// Host-side keyboard adapter: DOM key events in, console bytes out.
+///
+/// The real browser calls [`KeyboardInput::push_event`] from its
+/// `keydown`/`keyup` listeners; the orchestrator drains it through
+/// [`InputSource::poll`] (via `pump_input`) once per input batch.
+/// Releases and unmappable keys are dropped at the boundary — raw junk is
+/// never forwarded, same discipline as `normalize_key`.
+#[derive(Debug, Default)]
+pub struct KeyboardInput {
+    queue: VecDeque<DomKeyEvent>,
+}
+
+impl KeyboardInput {
+    /// Empty adapter; events arrive via [`KeyboardInput::push_event`].
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Feed one DOM key event — exactly what a `keydown`/`keyup` listener
+    /// delivers (`event.code`, `event.key`, press state).
+    pub fn push_event(&mut self, code: &str, key: &str, pressed: bool) {
+        self.queue.push_back(DomKeyEvent {
+            code: code.to_string(),
+            key: key.to_string(),
+            pressed,
+        });
+    }
+
+    /// Translate one pressed event to a console byte. `None` means dropped
+    /// at the boundary: releases, multi-char keys (`"F1"`, `"Shift"`,
+    /// `"Dead"`, `"Unidentified"`), and non-ASCII input (MVP is ASCII-only).
+    fn event_to_byte(ev: &DomKeyEvent) -> Option<u8> {
+        if !ev.pressed {
+            return None;
+        }
+        // Layout-independent specials, matched on physical `code`.
+        match ev.code.as_str() {
+            "Enter" | "NumpadEnter" => return Some(b'\n'),
+            "Backspace" => return Some(0x7F), // DEL: standard terminal erase
+            "Tab" => return Some(b'\t'),
+            "Escape" => return Some(0x1B),
+            _ => {}
+        }
+        // Printables: the browser already resolved shift/layout into `key`
+        // ("h" vs "H"), so the adapter never tracks modifiers.
+        let bytes = ev.key.as_bytes();
+        if bytes.len() == 1 && (0x20..=0x7E).contains(&bytes[0]) {
+            return Some(bytes[0]);
+        }
+        None
+    }
+}
+
+impl InputSource for KeyboardInput {
+    fn poll(&mut self) -> Vec<NormalizedInput> {
+        let mut out = Vec::new();
+        while let Some(ev) = self.queue.pop_front() {
+            if let Some(b) = Self::event_to_byte(&ev) {
+                out.push(NormalizedInput::Key {
+                    code: KeyCode(b as u32),
+                    pressed: true,
+                });
+            }
+        }
+        out
+    }
+}
+
 /// HashMap-backed [`BlobStore`]. `save` overwrites; `load` of a missing key
 /// returns `None`. An empty `Vec<u8>` value round-trips as `Some(vec![])`,
 /// distinct from a missing key.
@@ -452,6 +549,110 @@ mod tests {
         assert_eq!(src.poll(), Vec::new());
     }
 
+    // ---------- KeyboardInput: DOM key events -> console bytes ----------
+
+    fn byte_key(b: u8) -> NormalizedInput {
+        NormalizedInput::Key {
+            code: KeyCode(b as u32),
+            pressed: true,
+        }
+    }
+
+    #[test]
+    fn keyboard_printable_lowercase_maps_to_byte() {
+        let mut kb = KeyboardInput::new();
+        kb.push_event("KeyH", "h", true);
+        assert_eq!(kb.poll(), vec![byte_key(b'h')]);
+    }
+
+    #[test]
+    fn keyboard_shift_uppercase_comes_from_key_not_modifiers() {
+        // The browser resolves Shift+KeyH into key="H"; the adapter never
+        // tracks modifiers.
+        let mut kb = KeyboardInput::new();
+        kb.push_event("KeyH", "H", true);
+        kb.push_event("Digit1", "!", true); // Shift+Digit1, browser-resolved
+        kb.push_event("Space", " ", true);
+        assert_eq!(
+            kb.poll(),
+            vec![byte_key(b'H'), byte_key(b'!'), byte_key(b' ')]
+        );
+    }
+
+    #[test]
+    fn keyboard_specials_matched_by_code() {
+        let mut kb = KeyboardInput::new();
+        kb.push_event("Enter", "Enter", true);
+        kb.push_event("NumpadEnter", "Enter", true);
+        kb.push_event("Backspace", "Backspace", true);
+        kb.push_event("Tab", "Tab", true);
+        kb.push_event("Escape", "Escape", true);
+        assert_eq!(
+            kb.poll(),
+            vec![
+                byte_key(b'\n'),
+                byte_key(b'\n'),
+                byte_key(0x7F),
+                byte_key(b'\t'),
+                byte_key(0x1B),
+            ]
+        );
+    }
+
+    #[test]
+    fn keyboard_releases_produce_no_bytes() {
+        let mut kb = KeyboardInput::new();
+        kb.push_event("KeyH", "h", true);
+        kb.push_event("KeyH", "h", false); // release: dropped
+        kb.push_event("Enter", "Enter", false); // release: dropped
+        assert_eq!(kb.poll(), vec![byte_key(b'h')]);
+    }
+
+    #[test]
+    fn keyboard_unmapped_keys_dropped_at_boundary() {
+        let mut kb = KeyboardInput::new();
+        kb.push_event("F1", "F1", true);
+        kb.push_event("ShiftLeft", "Shift", true);
+        kb.push_event("KeyA", "Dead", true);
+        kb.push_event("Unidentified", "Unidentified", true);
+        kb.push_event("", "", true);
+        assert_eq!(kb.poll(), Vec::new());
+    }
+
+    #[test]
+    fn keyboard_non_ascii_dropped_mvp_is_ascii_only() {
+        let mut kb = KeyboardInput::new();
+        kb.push_event("KeyE", "\u{e9}", true); // 'é': 2-byte UTF-8
+        assert_eq!(kb.poll(), Vec::new());
+    }
+
+    #[test]
+    fn keyboard_poll_drains_in_order_then_empties() {
+        let mut kb = KeyboardInput::new();
+        kb.push_event("KeyH", "h", true);
+        kb.push_event("KeyI", "i", true);
+        kb.push_event("F5", "F5", true); // dropped, order of the rest kept
+        kb.push_event("Enter", "Enter", true);
+        assert_eq!(
+            kb.poll(),
+            vec![byte_key(b'h'), byte_key(b'i'), byte_key(b'\n')]
+        );
+        // Drained: stays empty, never panics.
+        assert_eq!(kb.poll(), Vec::new());
+    }
+
+    #[test]
+    fn keyboard_linux_keycodes_are_not_bytes() {
+        // Regression guard for the Wave-6 lesson: normalize_key emits
+        // Linux KEY_* codes (Enter -> 28), which are NOT console bytes.
+        // KeyboardInput must not pass them through raw.
+        let mut kb = KeyboardInput::new();
+        kb.push_event("Enter", "Enter", true);
+        let out = kb.poll();
+        assert_eq!(out, vec![byte_key(b'\n')]);
+        assert_ne!(out, vec![byte_key(28)]);
+    }
+
     #[test]
     fn conform_blobstore_roundtrip() {
         let mut m = MemStore::new();
@@ -489,11 +690,14 @@ mod tests {
         assert_obj_safe_netsocket(&a);
         let src = ScriptedInput::new(vec![]);
         assert_obj_safe_inputsource(&src);
+        let kb = KeyboardInput::new();
+        assert_obj_safe_inputsource(&kb);
         let m = MemStore::new();
         assert_obj_safe_blobstore(&m);
         // Owned-data mocks are Send (LoopbackSocket is documented !Send).
         assert_send::<MockSurface>();
         assert_send::<ScriptedInput>();
+        assert_send::<KeyboardInput>();
         assert_send::<MemStore>();
         assert_send::<Frame>();
         assert_send::<NormalizedInput>();
