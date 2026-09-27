@@ -10,6 +10,10 @@ pub enum InsnKind {
     LoadStore,
     Branch,
     System,
+    /// Added 2026-09-27 (Wave 4 amendment U1-G1): PC-relative address
+    /// computation (ADR/ADRP). A distinct class because the lifter needs the
+    /// instruction address to compute the target; DataProc semantics never do.
+    PcRel,
     Unknown,
 }
 

@@ -75,7 +75,11 @@ fn decode_dp_imm(word: u32) -> Option<InsnKind> {
                 _ => None,                        // 01 unallocated; 11 = MOVK, out of scope
             }
         }
-        // PC-rel (ADR/ADRP), logical-imm, bitfield, extract: out of scope.
+        // PC-relative addressing (ADR/ADRP): bits[28:24]=0b10000 — Wave 4 (U1-G1).
+        // bits[23:22] are immhi[18:17] (either value); the class is exclusive
+        // to PC-rel within data-processing-immediate (0x44+ = add/sub-imm…).
+        0b1000000..=0b1000011 => Some(InsnKind::PcRel),
+        // Logical-imm, bitfield, extract: out of scope.
         _ => None,
     }
 }
@@ -236,9 +240,19 @@ mod tests {
         assert_illegal(0x3200_03E0); // logical-imm: out of scope
     }
 
+    // ---- PC-relative (Wave 4: U1-G1) ----
+
     #[test]
-    fn adrp_pc_rel_is_illegal() {
-        assert_illegal(0x9000_0000); // PC-rel addressing: out of scope
+    fn pcrel_adrp_vectors_are_pcrel() {
+        assert_eq!(ok_kind(0xB000_000A), InsnKind::PcRel); // ADRP X10, page+1 (real guest entry word)
+        assert_eq!(ok_kind(0xF0FF_FFE0), InsnKind::PcRel); // ADRP X0, page-1
+        assert_eq!(ok_kind(0x9000_0005), InsnKind::PcRel); // ADRP X5, page+0
+    }
+
+    #[test]
+    fn pcrel_adr_is_pcrel() {
+        assert_eq!(ok_kind(0x1000_0000), InsnKind::PcRel); // ADR X0, #0
+        assert_eq!(ok_kind(0x7000_001F), InsnKind::PcRel); // ADR X31, #3 (immlo=0b11)
     }
 
     // ---- data-processing register ----
