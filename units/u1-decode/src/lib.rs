@@ -137,8 +137,11 @@ fn decode_branch_sys(word: u32) -> Option<InsnKind> {
         0b000101 | 0b100101 => return Some(InsnKind::Branch),
         _ => {}
     }
-    // CBZ / CBNZ: sf op 110100 imm19 Rt. Mask clears sf+op; both are branches.
-    if (word >> 24) & 0x3F == 0b110100 {
+    // CBZ / CBNZ: sf 011010 op imm19 Rt. bits[29:24] = 0b11010_op, so the op
+    // bit (bit 24) distinguishes them: 0b110100 = CBZ, 0b110101 = CBNZ.
+    // (2026-09-27: the old mask only matched CBZ — real CBNZ words like
+    // 0xB5000060 decoded Illegal. The class comment always claimed both.)
+    if (word >> 24) & 0x3F == 0b110100 || (word >> 24) & 0x3F == 0b110101 {
         return Some(InsnKind::Branch);
     }
     // RET: 1101011 0 010 11111 000000 Rn 00000. Mask keeps everything except
@@ -348,7 +351,7 @@ mod tests {
 
     #[test]
     fn cbnz_w_is_branch() {
-        assert_eq!(ok_kind(0x7400_0020), InsnKind::Branch);
+        assert_eq!(ok_kind(0x3500_0020), InsnKind::Branch); // CBNZ W0 (genuine op=1 encoding)
     }
 
     #[test]
@@ -358,7 +361,13 @@ mod tests {
 
     #[test]
     fn cbnz_x_is_branch() {
-        assert_eq!(ok_kind(0xF400_0020), InsnKind::Branch);
+        assert_eq!(ok_kind(0xB500_0020), InsnKind::Branch); // CBNZ X0 (genuine op=1 encoding)
+    }
+
+    #[test]
+    fn cbnz_real_guest_word_is_branch() {
+        // The real guest's read_loop: CBNZ X0, got_byte (0x4000006c).
+        assert_eq!(ok_kind(0xB500_0060), InsnKind::Branch);
     }
 
     #[test]
