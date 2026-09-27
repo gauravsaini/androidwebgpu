@@ -9,24 +9,29 @@
 //!
 //! One step: fetch word at `pc` → U1 decode → U2 lift → U3 compile → execute
 //! the WASM block with wasmtime (native; the browser will use its own engine
-//! in Wave 4 — U3 emits standard WASM so the boundary is clean).
+//! in a later wave — U3 emits standard WASM so the boundary is clean).
 //!
-//! U3's module shape (frozen, Wave 1): ONE function `() -> i64` with 256
-//! zero-initialized `i64` locals, NO params, NO imports, NO exports. The i64
-//! result is the exit address (`-1` = ExitVm sentinel). Consequences the
-//! orchestrator honors, not works around:
+//! U3's module shape (contract `pathn_contracts::wasm_abi`, Wave-4 U3-G1):
+//! imports `env.mem_load` / `env.mem_store` / `env.wfi` plus 31 mutable `i64`
+//! globals `env.r0` … `env.r30` (X0–X30), and exports `run() -> i64`. The i64
+//! result is the exit address (`-1` = ExitVm sentinel). The orchestrator:
 //!
-//! - **Register state does not survive a call.** Locals are zero on entry,
-//!   and there is no channel to read them back — the only observable is the
-//!   exit address. The orchestrator therefore treats each compiled block as a
-//!   *control-flow evaluator*: it proves decode→lift→compile→execute chaining
-//!   is real (exit addresses chain blocks), but it never pretends registers
-//!   persist. Threading register state across calls needs a U3 module-shape
-//!   revision (params/globals/shared memory) — Wave-4 work, stated here.
-//! - **The function is not exported.** U3 emits sections 1/3/10 only. The
-//!   runtime's linking step appends a minimal export section
-//!   (`export "run" func 0`) to a *copy* of the bytes before instantiating.
-//!   U3's own bytes (the cache key) are never mutated.
+//! - **Threads register state across calls.** Before each call it writes the
+//!   checkpointed X0–X30 into the globals; after the call it reads them back
+//!   into `machine.cpu[0].regs`. Register 31 stays XZR (const 0 / dropped);
+//!   U2's scratch index 32 is U3's private local.
+//! - **Serves memory and console through host functions.** `mem_load` /
+//!   `mem_store` dispatch console MMIO (`CONSOLE_TX`/`CONSOLE_RX`) to the
+//!   [`ConsoleState`] and everything else through the RAM bounds check
+//!   ([`Orchestrator::ram_offset`]); faults become WASM traps, which halt
+//!   with [`HaltReason::WasmTrap`]. Guest RAM stays host-owned —
+//!   `MachineState.ram` is the single owner.
+//! - **Yields on WFI.** The `wfi` import only records that the block executed
+//!   WFI. After the call, with no IRQ pending, the step returns
+//!   [`StepOutcome::WfiYield`] WITHOUT setting `halted` — the vCPU is parked,
+//!   resumable by a later step (e.g. after input arrives). Interrupt
+//!   *injection* into the guest (vector jump) still needs an exception model —
+//!   future work, stated here, not faked.
 //! - **Trap ops halt before compiling.** If any lifted op is `IrOp::Trap`,
 //!   the orchestrator halts with [`HaltReason::Unsupported`] carrying U2's
 //!   exact reason string — it never compiles or executes the trap.
@@ -107,12 +112,31 @@ const IMAGE_HEADER_LEN: usize = 24;
 /// Why the vCPU stopped. Every variant is observable and hashable.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum HaltReason {
-    IllegalInstruction { addr: u64, word: u32 },
-    Unsupported { addr: u64, reason: &'static str },
-    WasmTrap { addr: u64, message: String },
-    FetchFault { addr: u64 },
+    IllegalInstruction {
+        addr: u64,
+        word: u32,
+    },
+    Unsupported {
+        addr: u64,
+        reason: &'static str,
+    },
+    WasmTrap {
+        addr: u64,
+        message: String,
+    },
+    FetchFault {
+        addr: u64,
+    },
     ExitVm,
     StepLimitExceeded,
+    /// WFI executed with no IRQ pending: the vCPU is parked, NOT dead.
+    /// Never stored in `Orchestrator.halted` by `step_vcpu` (it returns
+    /// `StepOutcome::WfiYield` instead, keeping the machine resumable);
+    /// `run_until_halt` surfaces it as its return value. Snapshot tag 7 is
+    /// reserved for it (additive — tags 0–6 decode exactly as before).
+    Wfi {
+        addr: u64,
+    },
 }
 
 /// Image load failure — data, not panic.
@@ -130,6 +154,13 @@ pub enum ImageError {
 pub enum StepOutcome {
     Continue,
     Halted(HaltReason),
+    /// The block executed WFI with no IRQ pending. The machine is NOT
+    /// halted: `pc` already points past the WFI block and the next
+    /// `step_vcpu` resumes normally (e.g. after the host feeds input or an
+    /// IRQ pends). `run_until_halt` reports this as `HaltReason::Wfi`.
+    WfiYield {
+        addr: u64,
+    },
 }
 
 // ---------------------------------------------------------------------------
@@ -350,16 +381,7 @@ impl Orchestrator {
     /// MMU disabled, so this is identity-with-bounds-check, documented here.
     /// (When the MMU is enabled in M1+, this routes through U4 `translate`.)
     fn ram_offset(&self, pa: u64, len: u64) -> Result<usize, MemFault> {
-        let off = pa
-            .checked_sub(RAM_BASE)
-            .ok_or(MemFault::TranslationFault { va: pa })?;
-        let end = off
-            .checked_add(len)
-            .ok_or(MemFault::TranslationFault { va: pa })?;
-        if end > self.machine.ram.len() as u64 {
-            return Err(MemFault::TranslationFault { va: pa });
-        }
-        Ok(off as usize)
+        ram_offset_in(&self.machine.ram, pa, len)
     }
 
     fn fetch_word(&self, pc: u64) -> Result<u32, HaltReason> {
@@ -446,11 +468,9 @@ impl Orchestrator {
             return StepOutcome::Halted(halt);
         }
 
-        // Block exits: an explicit Branch op wins, else fall through.
-        let exits = match branch_target(&ops) {
-            Some(t) => vec![BlockExit::Branch(t)],
-            None => vec![BlockExit::FallThrough(pc.wrapping_add(4))],
-        };
+        // Block exits: a conditional branch declares both arms (U3 lowers
+        // the if/else from them); an explicit Branch op wins; else fall through.
+        let exits = block_exits(pc, &ops);
         let block = IrBlock {
             entry_addr: pc,
             ops,
@@ -466,34 +486,42 @@ impl Orchestrator {
                 return StepOutcome::Halted(halt);
             }
         };
-        match call_run(&self.engine, &module) {
-            Ok(exit_addr) => {
-                if exit_addr < 0 {
-                    let halt = HaltReason::ExitVm;
-                    self.halted = Some(halt.clone());
-                    return StepOutcome::Halted(halt);
-                }
-                self.machine.cpu[0].pc = exit_addr as u64;
-            }
+        // Execute: registers and memory are threaded through host imports.
+        let (exit_addr, wfi_seen) = match self.execute_block(&module) {
+            Ok(pair) => pair,
             Err(message) => {
                 let halt = HaltReason::WasmTrap { addr: pc, message };
                 self.halted = Some(halt.clone());
                 return StepOutcome::Halted(halt);
             }
+        };
+        if exit_addr < 0 {
+            let halt = HaltReason::ExitVm;
+            self.halted = Some(halt.clone());
+            return StepOutcome::Halted(halt);
         }
+        self.machine.cpu[0].pc = exit_addr as u64;
 
         self.steps += 1;
         // Injected clock: the timer advances only here, never wall time.
         self.tick_clock(TIMER_CYCLES_PER_STEP);
+        // WFI with no IRQ pending parks the vCPU: resumable, not halted.
+        // (A pending IRQ is a spurious wake — the guest spins, honestly.)
+        if wfi_seen && self.machine.irq.pending == 0 {
+            return StepOutcome::WfiYield { addr: pc };
+        }
         StepOutcome::Continue
     }
 
     /// Run until halt or `max_steps`. Returns the halt reason (or
-    /// `StepLimitExceeded` when the budget runs out first).
+    /// `StepLimitExceeded` when the budget runs out first). A WFI yield
+    /// surfaces as `HaltReason::Wfi` WITHOUT poisoning `halted` — the
+    /// machine stays resumable.
     pub fn run_until_halt(&mut self, max_steps: u64) -> HaltReason {
         for _ in 0..max_steps {
             match self.step_vcpu() {
                 StepOutcome::Continue => {}
+                StepOutcome::WfiYield { addr } => return HaltReason::Wfi { addr },
                 StepOutcome::Halted(reason) => return reason,
             }
         }
@@ -502,15 +530,15 @@ impl Orchestrator {
         halt
     }
 
-    /// Compile one block with U3 and link it (cache by pc).
+    /// Compile one block with U3 (cache by pc). U3's module already carries
+    /// the `run` export (U3-G1) — no byte-splicing at link time.
     fn compile_cached(&mut self, pc: u64, block: &IrBlock) -> Result<wasmtime::Module, String> {
         if let Some(m) = self.block_cache.get(&pc) {
             return Ok(m.clone());
         }
         let wasm = u3_wasm_jit::compile(block);
-        let linked = link_run_export(&wasm.bytes);
         let module =
-            wasmtime::Module::new(&self.engine, &linked).map_err(|e| format!("module: {e}"))?;
+            wasmtime::Module::new(&self.engine, &wasm.bytes).map_err(|e| format!("module: {e}"))?;
         self.block_cache.insert(pc, module.clone());
         Ok(module)
     }
@@ -703,6 +731,12 @@ impl Orchestrator {
             }
             Some(HaltReason::ExitVm) => w.u8(5),
             Some(HaltReason::StepLimitExceeded) => w.u8(6),
+            // Tag 7 is additive: blobs written before Wave 4 never carry it,
+            // and tags 0-6 decode exactly as before.
+            Some(HaltReason::Wfi { addr }) => {
+                w.u8(7);
+                w.u64(*addr);
+            }
         }
         out.extend_from_slice(&w.buf);
         out
@@ -778,6 +812,9 @@ impl Orchestrator {
             }),
             5 => Some(HaltReason::ExitVm),
             6 => Some(HaltReason::StepLimitExceeded),
+            7 => Some(HaltReason::Wfi {
+                addr: r.u64().ok_or(RestoreError::BadFormat)?,
+            }),
             _ => return Err(RestoreError::BadFormat),
         };
         o.last_notified = vec![0; o.transport.queues.len()];
@@ -835,80 +872,189 @@ fn branch_target(ops: &[IrOp]) -> Option<u64> {
     None
 }
 
-/// The runtime's linking step: insert `export "run" func 0` into a COPY of
-/// U3's module bytes. U3's own output (cache key) is never mutated.
-/// WASM orders non-custom sections by increasing id, so the export section
-/// (id 7) is inserted BEFORE the code section (id 10), never appended.
-fn link_run_export(module_bytes: &[u8]) -> Vec<u8> {
-    // Build the export-section payload first.
-    let mut payload = Vec::new();
-    payload.push(1u8); // one export
-    payload.push(3u8); // name length
-    payload.extend_from_slice(b"run");
-    payload.push(0x00); // kind: func
-    payload.push(0x00); // func index 0
-    let mut section = Vec::with_capacity(payload.len() + 2);
-    section.push(7u8); // export section id
-    let mut sz = payload.len() as u32;
-    loop {
-        let b = (sz & 0x7F) as u8;
-        sz >>= 7;
-        if sz == 0 {
-            section.push(b);
-            break;
+/// Block exits for a lifted op sequence. A conditional branch declares both
+/// arms (U3 lowers the if/else from `Branch` + `FallThrough`); an explicit
+/// `Branch` op wins; otherwise the block falls through. U3's `CondBranch`
+/// traps loudly when no `FallThrough` is present, so the orchestrator always
+/// supplies one here.
+fn block_exits(pc: u64, ops: &[IrOp]) -> Vec<BlockExit> {
+    for op in ops {
+        if let IrOp::CondBranch { target, .. } = op {
+            return vec![
+                BlockExit::Branch(*target),
+                BlockExit::FallThrough(pc.wrapping_add(4)),
+            ];
         }
-        section.push(b | 0x80);
     }
-    section.extend_from_slice(&payload);
-    // Find the code section (id 10) and splice the export section before it.
-    let mut i = 8; // skip magic + version
-    let mut code_at = module_bytes.len(); // default: append (no code section)
-    while i < module_bytes.len() {
-        let id = module_bytes[i];
-        i += 1;
-        let (sec_len, n) = read_leb128(&module_bytes[i..]);
-        i += n;
-        if id == 10 {
-            code_at = i - 1 - n; // section start = id byte
-            break;
-        }
-        i += sec_len as usize;
+    match branch_target(ops) {
+        Some(t) => vec![BlockExit::Branch(t)],
+        None => vec![BlockExit::FallThrough(pc.wrapping_add(4))],
     }
-    let mut out = Vec::with_capacity(module_bytes.len() + section.len());
-    out.extend_from_slice(&module_bytes[..code_at]);
-    out.extend_from_slice(&section);
-    out.extend_from_slice(&module_bytes[code_at..]);
-    out
 }
 
-/// Read an unsigned LEB128 from the front of `bytes`; returns (value, bytes
-/// consumed). Malformed input saturates instead of panicking.
-fn read_leb128(bytes: &[u8]) -> (u64, usize) {
-    let mut v: u64 = 0;
-    let mut shift = 0u32;
-    for (n, &b) in bytes.iter().enumerate() {
-        if shift < 64 {
-            v |= ((b & 0x7F) as u64) << shift;
-        }
-        shift += 7;
-        if b & 0x80 == 0 {
-            return (v, n + 1);
-        }
-    }
-    (v, bytes.len())
+// ---------------------------------------------------------------------------
+// WASM host integration (Wave 4: U3-G1 module shape)
+// ---------------------------------------------------------------------------
+
+/// The host state a U3 module sees. Borrowed mutably from the orchestrator
+/// for exactly one block execution; dropped before the next step.
+struct WasmHost<'a> {
+    ram: &'a mut Vec<u8>,
+    console: &'a mut ConsoleState,
+    /// Set when the block calls the `wfi` import.
+    wfi_seen: bool,
 }
 
-/// Call the linked `run() -> i64`. The i64 is U3's exit address.
-fn call_run(engine: &wasmtime::Engine, module: &wasmtime::Module) -> Result<i64, String> {
-    let mut store = wasmtime::Store::new(engine, ());
-    let linker = wasmtime::Linker::new(engine);
-    let instance = linker
-        .instantiate(&mut store, module)
-        .map_err(|e| format!("instantiate: {e}"))?;
-    let func = instance
-        .get_typed_func::<(), i64>(&mut store, "run")
-        .map_err(|e| format!("export 'run': {e}"))?;
-    func.call(&mut store, ()).map_err(|e| format!("trap: {e}"))
+/// Translate a guest physical address to a RAM offset (M0: MMU disabled,
+/// identity-with-bounds-check). Free function so the WASM host closures can
+/// use it without borrowing the whole orchestrator.
+fn ram_offset_in(ram: &[u8], pa: u64, len: u64) -> Result<usize, MemFault> {
+    let off = pa
+        .checked_sub(RAM_BASE)
+        .ok_or(MemFault::TranslationFault { va: pa })?;
+    let end = off
+        .checked_add(len)
+        .ok_or(MemFault::TranslationFault { va: pa })?;
+    if end > ram.len() as u64 {
+        return Err(MemFault::TranslationFault { va: pa });
+    }
+    Ok(off as usize)
+}
+
+/// `env.mem_load(addr, size) -> value`. Console MMIO is dispatched to the
+/// console model; everything else goes through the RAM bounds check.
+/// Faults become WASM traps (surfaced as `HaltReason::WasmTrap`).
+fn host_mem_load(host: &mut WasmHost, addr: i64, size: i64) -> Result<i64, wasmtime::Error> {
+    let pa = addr as u64;
+    if (CONSOLE_BASE..CONSOLE_BASE + CONSOLE_SIZE).contains(&pa) {
+        if size != 1 {
+            return Err(wasmtime::Error::msg("mem_load: console MMIO is byte-only"));
+        }
+        if pa == CONSOLE_RX {
+            return Ok(host.console.read_rx() as i64);
+        }
+        // Defined MMIO region, non-RX offset: reads return 0 (PLATFORM.md).
+        return Ok(0);
+    }
+    if !matches!(size, 1 | 2 | 4 | 8) {
+        return Err(wasmtime::Error::msg("mem_load: size must be 1, 2, 4 or 8"));
+    }
+    let off = ram_offset_in(host.ram, pa, size as u64)
+        .map_err(|f| wasmtime::Error::msg(format!("mem_load fault: {f:?}")))?;
+    let mut v = 0u64;
+    for i in 0..size as usize {
+        v |= (host.ram[off + i] as u64) << (8 * i);
+    }
+    Ok(v as i64)
+}
+
+/// `env.mem_store(addr, size, value)`. Console MMIO is dispatched to the
+/// console model; everything else goes through the RAM bounds check.
+fn host_mem_store(
+    host: &mut WasmHost,
+    addr: i64,
+    size: i64,
+    val: i64,
+) -> Result<(), wasmtime::Error> {
+    let pa = addr as u64;
+    if (CONSOLE_BASE..CONSOLE_BASE + CONSOLE_SIZE).contains(&pa) {
+        if size != 1 {
+            return Err(wasmtime::Error::msg("mem_store: console MMIO is byte-only"));
+        }
+        if pa == CONSOLE_TX {
+            host.console.write_tx(val as u8);
+        }
+        // Writes to other console offsets are acknowledged, no effect.
+        return Ok(());
+    }
+    if !matches!(size, 1 | 2 | 4 | 8) {
+        return Err(wasmtime::Error::msg("mem_store: size must be 1, 2, 4 or 8"));
+    }
+    let off = ram_offset_in(host.ram, pa, size as u64)
+        .map_err(|f| wasmtime::Error::msg(format!("mem_store fault: {f:?}")))?;
+    for i in 0..size as usize {
+        host.ram[off + i] = (val as u64 >> (8 * i)) as u8;
+    }
+    Ok(())
+}
+
+impl Orchestrator {
+    /// Execute one compiled block: wire the U3-G1 imports (host memory /
+    /// console / WFI + the 31 register globals), call `run`, read the
+    /// registers back. Returns `(exit_addr, wfi_seen)`.
+    fn execute_block(&mut self, module: &wasmtime::Module) -> Result<(i64, bool), String> {
+        // Disjoint field borrows: regs, RAM, console, engine.
+        let regs: &mut [u64; 31] = &mut self.machine.cpu[0].regs;
+        let ram: &mut Vec<u8> = &mut self.machine.ram;
+        let console: &mut ConsoleState = &mut self.console;
+        let engine: &wasmtime::Engine = &self.engine;
+
+        let mut store = wasmtime::Store::new(
+            engine,
+            WasmHost {
+                ram,
+                console,
+                wfi_seen: false,
+            },
+        );
+        let mut linker: wasmtime::Linker<WasmHost> = wasmtime::Linker::new(engine);
+        linker
+            .func_wrap(
+                "env",
+                "mem_load",
+                |mut caller: wasmtime::Caller<'_, WasmHost>, addr: i64, size: i64| {
+                    host_mem_load(caller.data_mut(), addr, size)
+                },
+            )
+            .map_err(|e| format!("link mem_load: {e}"))?;
+        linker
+            .func_wrap(
+                "env",
+                "mem_store",
+                |mut caller: wasmtime::Caller<'_, WasmHost>, addr: i64, size: i64, val: i64| {
+                    host_mem_store(caller.data_mut(), addr, size, val)
+                },
+            )
+            .map_err(|e| format!("link mem_store: {e}"))?;
+        linker
+            .func_wrap(
+                "env",
+                "wfi",
+                |mut caller: wasmtime::Caller<'_, WasmHost>| {
+                    caller.data_mut().wfi_seen = true;
+                },
+            )
+            .map_err(|e| format!("link wfi: {e}"))?;
+        // Register file: checkpointed X0-X30 in, mutated X0-X30 out.
+        let mut globals = Vec::with_capacity(31);
+        for (i, reg) in regs.iter().enumerate() {
+            let g = wasmtime::Global::new(
+                &mut store,
+                wasmtime::GlobalType::new(wasmtime::ValType::I64, wasmtime::Mutability::Var),
+                wasmtime::Val::I64(*reg as i64),
+            )
+            .map_err(|e| format!("global r{i}: {e}"))?;
+            linker
+                .define(&mut store, "env", &format!("r{i}"), g)
+                .map_err(|e| format!("define r{i}: {e}"))?;
+            globals.push(g);
+        }
+
+        let instance = linker
+            .instantiate(&mut store, module)
+            .map_err(|e| format!("instantiate: {e}"))?;
+        let run = instance
+            .get_typed_func::<(), i64>(&mut store, "run")
+            .map_err(|e| format!("export 'run': {e}"))?;
+        let exit_addr = run.call(&mut store, ()).map_err(|e| format!("trap: {e}"))?;
+        for (i, g) in globals.iter().enumerate() {
+            if let wasmtime::Val::I64(v) = g.get(&mut store) {
+                regs[i] = v as u64;
+            }
+        }
+        let wfi_seen = store.data().wfi_seen;
+        Ok((exit_addr, wfi_seen))
+    }
 }
 
 /// Read `avail_event` from a used ring (EVENT_IDX layout): flags u16 @0,
@@ -937,8 +1083,11 @@ fn match_static_reason(bytes: &[u8]) -> Option<&'static str> {
         "LoadStore: unsupported encoding",
         "LoadStore: sub-word access width is not expressible in IrOp",
         "LoadStore: register-relative address is dynamic; IrOp::Load/Store carry static addresses only",
+        "LoadStore: register-relative access via SP is not expressible in IrOp",
         "Branch: only unconditional immediate B is lifted",
         "Branch: unsupported encoding",
+        "Branch: 32-bit CBZ/CBNZ width is not expressible in IrOp::CondBranch",
+        "Branch: 32-bit ORR width is not expressible in IrOp::OrrShift",
         "System: system and privileged semantics are not lifted",
         "Unknown: illegal or unrecognized instruction word",
     ];
@@ -1276,5 +1425,195 @@ mod tests {
         // Empty script: nothing fed, no panic.
         o.console.poll_input(&mut src);
         assert_eq!(o.console.read_rx(), 0);
+    }
+
+    // ---- Wave 4: host integration (U3-G1) ----
+
+    /// The real 4.1 guest's entry word. Wave 3 halted here with
+    /// `IllegalInstruction`; Wave 4 must execute past it.
+    const ADRP_X10: u32 = 0xB000_000A; // ADRP X10, #0x1000
+    const WFI: u32 = 0xD503_207F;
+
+    #[test]
+    fn wave4_adrp_executes_past_wave3_halt() {
+        let mut o = Orchestrator::new();
+        o.load_image(&minimal_image(0x4000_0000, &[ADRP_X10, WFI]))
+            .unwrap();
+        let reason = o.run_until_halt(10);
+        assert_eq!(reason, HaltReason::Wfi { addr: 0x4000_0004 });
+        // ADRP X10, #0x1000 @0x40000000 -> X10 = 0x40001000 (page math).
+        assert_eq!(o.machine.cpu[0].regs[10], 0x4000_1000);
+        assert_eq!(o.steps(), 2);
+    }
+
+    #[test]
+    fn wave4_registers_persist_across_blocks() {
+        let mut o = Orchestrator::new();
+        // MOVZ X1, #5; ADD X2, X1, #3; WFI.
+        o.load_image(&minimal_image(0x4000_0000, &[0xD28000A1, 0x91000C22, WFI]))
+            .unwrap();
+        let reason = o.run_until_halt(10);
+        assert_eq!(reason, HaltReason::Wfi { addr: 0x4000_0008 });
+        assert_eq!(o.machine.cpu[0].regs[1], 5);
+        assert_eq!(o.machine.cpu[0].regs[2], 8);
+        // Untouched registers stay zero — no cross-block leakage.
+        assert_eq!(o.machine.cpu[0].regs[3], 0);
+    }
+
+    /// LDRB W2, [X10]; CBZ X2, #8; STRB W2, [X11]; WFI — with X10 = RX,
+    /// X11 = TX. Empty RX reads 0, so CBZ is taken and the STRB is skipped.
+    #[test]
+    fn wave4_cbz_taken_skips_strb() {
+        let mut o = Orchestrator::new();
+        o.load_image(&minimal_image(
+            0x4000_0000,
+            &[0x39400142, 0xB4000042, 0x39000162, WFI],
+        ))
+        .unwrap();
+        o.machine.cpu[0].regs[10] = CONSOLE_RX;
+        o.machine.cpu[0].regs[11] = CONSOLE_TX;
+        let reason = o.run_until_halt(10);
+        assert_eq!(reason, HaltReason::Wfi { addr: 0x4000_000C });
+        assert_eq!(o.machine.cpu[0].regs[2], 0);
+        assert!(o.console.tx_bytes.is_empty());
+        assert_eq!(o.steps(), 3);
+    }
+
+    /// Same program, but RX holds `Z`: CBZ not taken, STRB echoes the byte.
+    #[test]
+    fn wave4_cbnz_path_runs_strb() {
+        let mut o = Orchestrator::new();
+        o.load_image(&minimal_image(
+            0x4000_0000,
+            &[0x39400142, 0xB4000042, 0x39000162, WFI],
+        ))
+        .unwrap();
+        o.machine.cpu[0].regs[10] = CONSOLE_RX;
+        o.machine.cpu[0].regs[11] = CONSOLE_TX;
+        o.console.feed_rx(b"Z");
+        let reason = o.run_until_halt(10);
+        assert_eq!(reason, HaltReason::Wfi { addr: 0x4000_000C });
+        assert_eq!(o.machine.cpu[0].regs[2], b'Z' as u64);
+        assert_eq!(o.console.tx_bytes, vec![b'Z']);
+        assert_eq!(o.steps(), 4);
+    }
+
+    #[test]
+    fn wave4_wfi_yield_is_resumable() {
+        let mut o = Orchestrator::new();
+        // WFI; MOVZ X1, #7.
+        o.load_image(&minimal_image(0x4000_0000, &[WFI, 0xD28000E1]))
+            .unwrap();
+        let reason = o.run_until_halt(10);
+        assert_eq!(reason, HaltReason::Wfi { addr: 0x4000_0000 });
+        // The machine is parked, NOT halted: halted() stays None ...
+        assert_eq!(o.halted(), None);
+        // ... and the next step resumes past the WFI.
+        assert_eq!(o.step_vcpu(), StepOutcome::Continue);
+        assert_eq!(o.machine.cpu[0].regs[1], 7);
+        assert_eq!(o.machine.cpu[0].pc, 0x4000_0008);
+    }
+
+    #[test]
+    fn wave4_wfi_does_not_busy_spin() {
+        let mut o = Orchestrator::new();
+        o.load_image(&minimal_image(0x4000_0000, &[WFI])).unwrap();
+        // One WFI step yields immediately — no spinning to the step budget.
+        let reason = o.run_until_halt(1_000_000);
+        assert_eq!(reason, HaltReason::Wfi { addr: 0x4000_0000 });
+        assert_eq!(o.steps(), 1);
+    }
+
+    #[test]
+    fn wave4_snapshot_wfi_tag_roundtrips() {
+        let mut o = Orchestrator::new();
+        o.halted = Some(HaltReason::Wfi { addr: 0x4000_0000 });
+        let blob = o.snapshot_full();
+        let r = Orchestrator::restore_full(&blob).unwrap();
+        assert_eq!(r.halted, o.halted);
+        assert_eq!(r.state_hash(), o.state_hash());
+    }
+
+    #[test]
+    fn wave4_match_static_reason_covers_new_traps() {
+        // New Wave-4 trap strings must survive a snapshot round-trip too.
+        for s in [
+            "LoadStore: register-relative access via SP is not expressible in IrOp",
+            "Branch: 32-bit CBZ/CBNZ width is not expressible in IrOp::CondBranch",
+            "Branch: 32-bit ORR width is not expressible in IrOp::OrrShift",
+        ] {
+            assert!(match_static_reason(s.as_bytes()).is_some());
+        }
+        // Old strings still map (snapshot compatibility).
+        assert_eq!(
+            match_static_reason(b"Branch: only unconditional immediate B is lifted"),
+            Some("Branch: only unconditional immediate B is lifted")
+        );
+        assert_eq!(match_static_reason(b"nope"), None);
+    }
+
+    #[test]
+    fn wave4_mem_fault_becomes_wasm_trap() {
+        let mut o = Orchestrator::new();
+        // LDRB W2, [X10] with X10 far outside RAM -> mem_load faults.
+        o.load_image(&minimal_image(0x4000_0000, &[0x39400142]))
+            .unwrap();
+        o.machine.cpu[0].regs[10] = 0xFFFF_FFFF_0000_0000;
+        let reason = o.run_until_halt(10);
+        assert!(matches!(reason, HaltReason::WasmTrap { .. }));
+        assert_eq!(o.halted(), Some(&reason));
+    }
+
+    #[test]
+    fn wave4_wfi_with_pending_irq_continues() {
+        let mut o = Orchestrator::new();
+        o.load_image(&minimal_image(0x4000_0000, &[WFI])).unwrap();
+        // Spurious wake: an already-pending IRQ means WFI returns at once.
+        // (Bit 5: a non-timer source — U5 owns and clears the timer bit 27
+        // on ticks where the timer is not asserting.)
+        o.machine.irq.pending = 1 << 5;
+        let outcome = o.step_vcpu();
+        assert_eq!(outcome, StepOutcome::Continue);
+        assert_eq!(o.machine.cpu[0].pc, 0x4000_0004);
+    }
+
+    #[test]
+    fn wave4_real_guest_past_adrp_halt() {
+        // The real 4.1 `pathn-sh` guest. Wave 3 halted at its entry word
+        // (ADRP); Wave 4 must execute past it and stop honestly at the
+        // first instruction class outside scope (BL -> link register).
+        let (image, _sbom) =
+            guest_image::image::build(&guest_image::image::GuestManifest::pathn_sh());
+        let mut o = Orchestrator::new();
+        o.load_image(&image).unwrap();
+        let reason = o.run_until_halt(100);
+        let cpu = &o.machine.cpu[0];
+        // Measured acceptance values (also printed for the Wave-4 report).
+        println!("halt: {reason:?}");
+        println!("pc: {:#x}", cpu.pc);
+        println!("steps: {}", o.steps());
+        println!("x10: {:#x}", cpu.regs[10]);
+        println!("x0: {:#x}", cpu.regs[0]);
+        println!("console: {:?}", o.console.tx_bytes);
+        // Entry ran: x10 = data base (one page above the load address).
+        assert_eq!(cpu.regs[10], 0x4000_1000);
+        // prompt ran: x0 = address of the "pathn-sh> " string.
+        assert_eq!(cpu.regs[0], 0x4000_1200);
+        // Five instructions executed (ADRP, ADD, B, ADRP, ADD), then BL.
+        // Measured: the BL sits at 0x4000004C — the prompt label follows
+        // the print_cstr/print_char/read_char subroutines, so the Wave-4
+        // plan's predicted 0x40000014 was wrong; this is the observed value.
+        assert_eq!(o.steps(), 5);
+        // The first BL is outside Wave-4 scope: honest halt, exact reason.
+        assert_eq!(
+            reason,
+            HaltReason::Unsupported {
+                addr: 0x4000_004C,
+                reason: "Branch: only unconditional immediate B is lifted",
+            }
+        );
+        assert_eq!(cpu.pc, 0x4000_004C);
+        // Nothing was printed yet: the BL to print_cstr never ran.
+        assert!(o.console.tx_bytes.is_empty());
     }
 }

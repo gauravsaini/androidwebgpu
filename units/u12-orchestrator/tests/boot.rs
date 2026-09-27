@@ -1,15 +1,18 @@
-//! Wave-3 G4: boot/integration tests for the U12 orchestrator.
+//! Wave-4 6.4: boot/integration tests for the U12 orchestrator.
 //!
-//! HONEST SCOPE (see lib.rs docs): the frozen U1/U2/U3 pipeline lifts only a
-//! subset of AArch64 (MOVZ, ADD imm/reg, B; everything else → typed Trap),
-//! and U3's `() -> i64` module shape cannot thread register state across
-//! calls. The real 4.1 guest (`pathn-sh`) uses ADRP/LDRB/CBZ/WFI, so it
-//! cannot boot to a shell prompt through the current pipeline — Wave-4 work.
+//! HONEST SCOPE (see lib.rs docs): the U1/U2/U3 pipeline lifts a growing
+//! AArch64 subset (Wave 4 added ADR/ADRP, LDRB/STRB, CBZ/CBNZ, shifted ORR,
+//! WFI; BL/RET/B.cond are still typed Traps), and U3's modules now thread
+//! register state across calls via imported `env` globals (U3-G1). The real
+//! 4.1 guest (`pathn-sh`) boots PAST its Wave-3 ADRP halt but still stops
+//! at its first BL — honestly reported, never faked.
 //!
 //! What these tests prove, for real:
 //! - `boot_real_image_halts_with_typed_reason`: the REAL 4.1 image boots
-//!   through the REAL pipeline and halts at the first unlifted instruction
-//!   with U2's exact trap string (no fake boot, no invented semantics).
+//!   through the REAL pipeline: entry ADRP/ADD execute, the guest runs 5
+//!   steps, then halts at its first BL with U2's exact unsupported-branch
+//!   string (the next driver decision — no fake boot, no invented BL
+//!   semantics).
 //! - `boot_pipeline_chains_blocks_through_wasmtime`: a real AArch64 program
 //!   (MOVZ/ADD/B) executes through decode→lift→compile→wasmtime with exit
 //!   addresses chaining blocks — the JIT path is genuinely live.
@@ -36,24 +39,31 @@ fn boot_real_image_halts_with_typed_reason() {
     let img = real_image();
     let mut o = Orchestrator::new();
     o.load_image(&img).unwrap();
-    // The guest's first instruction is ADRP X10, #0 (0xB000000A) — U1's
-    // decoder has no PC-relative-addressing class, so it is honestly
-    // reported as illegal rather than lifted. This is the exact Wave-4
-    // contract gap: the 4.1 guest cannot boot through the frozen U1/U2.
+    // The guest's first instruction is ADRP X10, #0 (0xB000000A) — lifted
+    // since Wave 4 (U1 PcRel class). The guest now executes entry:
+    //   ADRP X10 / ADD X10 / B prompt / ADRP X0 / ADD X0   (5 steps)
+    // then halts at its first BL (0x4000_004C) with U2's exact
+    // unsupported-branch string — BL/RET are out of Wave-4 scope.
     let first = u32::from_le_bytes(o.machine().ram[0..4].try_into().unwrap());
     assert_eq!(first, 0xB000000A, "guest's first word per the 4.1 build");
     let halt = o.run_until_halt(10_000);
     assert_eq!(
         halt,
-        HaltReason::IllegalInstruction {
-            addr: 0x4000_0000,
-            word: first,
+        HaltReason::Unsupported {
+            addr: 0x4000_004C,
+            reason: "Branch: only unconditional immediate B is lifted",
         },
         "the real pipeline must name the exact unlifted instruction"
     );
-    // Halted on the very first step: nothing was faked past it.
-    assert_eq!(o.steps(), 0);
-    assert_eq!(o.machine().cpu[0].pc, 0x4000_0000);
+    // Five real instructions executed past the Wave-3 halt.
+    assert_eq!(o.steps(), 5);
+    assert_eq!(o.machine().cpu[0].pc, 0x4000_004C);
+    // ADRP/ADD math, honestly executed through wasmtime:
+    // X10 = DATA_BASE = 0x4000_1000, X0 = DATA_BASE + 0x200 (the prompt).
+    assert_eq!(o.machine().cpu[0].regs[10], 0x4000_1000);
+    assert_eq!(o.machine().cpu[0].regs[0], 0x4000_1200);
+    // No console output yet: print_cstr sits behind the unlifted BL.
+    assert!(o.console().tx_bytes.is_empty());
 }
 
 #[test]
@@ -80,7 +90,7 @@ fn boot_pipeline_chains_blocks_through_wasmtime() {
 
     let halt = o.run_until_halt(100);
     // The branch at 0xC was TAKEN (via real wasmtime exit addresses):
-    // fallthrough would have halted at 0x10 with Unsupported (WFI).
+    // fallthrough would have reached the WFI at 0x10 and yielded.
     assert_eq!(
         halt,
         HaltReason::IllegalInstruction {
