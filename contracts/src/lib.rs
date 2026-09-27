@@ -6,7 +6,8 @@
 //! Changing any type here requires a contract version bump plus a `#swarm`
 //! announcement (see `docs/architecture/SWARM.md` swarm law 3).
 
+pub mod adapters;
 pub mod cpu;
 pub mod device;
 pub mod machine;
-pub mod adapters;
+pub mod wasm_abi;

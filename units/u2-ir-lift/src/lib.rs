@@ -113,7 +113,10 @@ fn lift_pc_rel(insn: &Instruction) -> Vec<IrOp> {
         // ADR: PC + offset.
         (insn.addr as i64).wrapping_add(offset) as u64
     };
-    vec![IrOp::Mov { dst: rd, imm: target }]
+    vec![IrOp::Mov {
+        dst: rd,
+        imm: target,
+    }]
 }
 
 /// System: only the WFI hint word lifts (Wave 4); everything else traps.
@@ -588,7 +591,13 @@ mod tests {
     fn wave4_adr_plain() {
         // ADR X0, #0 at 0x4000 -> X0 = 0x4000.
         let ops = lift(&insn(0x4000, 0x1000_0000, InsnKind::PcRel));
-        assert_eq!(ops, vec![IrOp::Mov { dst: 0, imm: 0x4000 }]);
+        assert_eq!(
+            ops,
+            vec![IrOp::Mov {
+                dst: 0,
+                imm: 0x4000
+            }]
+        );
     }
 
     #[test]
