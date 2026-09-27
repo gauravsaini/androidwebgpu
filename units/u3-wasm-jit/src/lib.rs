@@ -20,6 +20,11 @@
 //!   becomes a call to imported `env.wfi` (the host records it and yields).
 //! - `IrOp::Branch { target }` / `CondBranch` terminate the block:
 //!   `i64.const target; return`. Ops after them are dead by definition.
+//! - `IrOp::BranchDyn { reg }` (Wave 5, BL/RET scope) terminates the block
+//!   too: `global.get reg; return` — the returned i64 IS the next guest PC,
+//!   so no new imports are needed. The declared exit is
+//!   `BlockExit::Dynamic`; a `Dynamic` first exit with no `BranchDyn` op is
+//!   malformed and lowers to `unreachable`.
 //! - `Load` / `Store` (static) STILL lower to `unreachable`: the static forms
 //!   are not in Wave-4 scope — trapping loudly beats faking a memory access.
 //!   Same for `IrOp::Trap`, per LLD §3.
@@ -33,7 +38,11 @@
 
 use pathn_contracts::cpu::{BlockExit, IrBlock, IrOp, WasmModule};
 
-// WASM opcodes (MVP core).
+// WASM opcodes (MVP core). NOTE: i32 and i64 bitwise opcodes differ only in
+// the high nibble (0x7_ = i32, 0x8_ = i64) — 2026-09-27 fixed a latent bug
+// where the i32 forms (0x72/0x74/0x75/0x76) were used for i64 ops; wasmtime
+// rejected every OrrShift block with "expected i32, found i64". Caught only
+// when the real guest first executed ORR past the Wave-4 BL halt.
 const OP_UNREACHABLE: u8 = 0x00;
 const OP_IF: u8 = 0x04;
 const OP_ELSE: u8 = 0x05;
@@ -47,10 +56,10 @@ const OP_GLOBAL_GET: u8 = 0x23;
 const OP_GLOBAL_SET: u8 = 0x24;
 const OP_I64_CONST: u8 = 0x42;
 const OP_I64_EQZ: u8 = 0x50;
-const OP_I64_OR: u8 = 0x72;
-const OP_I64_SHL: u8 = 0x74;
-const OP_I64_SHR_S: u8 = 0x75;
-const OP_I64_SHR_U: u8 = 0x76;
+const OP_I64_OR: u8 = 0x84;
+const OP_I64_SHL: u8 = 0x86;
+const OP_I64_SHR_S: u8 = 0x87;
+const OP_I64_SHR_U: u8 = 0x88;
 const OP_I64_ADD: u8 = 0x7C;
 
 const VALTYPE_I64: u8 = 0x7E;
@@ -248,17 +257,36 @@ pub fn compile(block: &IrBlock) -> WasmModule {
                 branched = true;
                 break;
             }
+            // Wave 5 (BL/RET scope): indirect branch. `run`'s i64 result IS
+            // the next guest PC, so the register value is simply returned —
+            // no new imports needed. Register 31 reads as 0 (XZR) via
+            // reg_get; a 0 target then fetch-faults honestly on the host.
+            IrOp::BranchDyn { reg } => {
+                reg_get(&mut body, *reg);
+                body.push(OP_RETURN);
+                branched = true;
+                break;
+            }
         }
     }
 
     if !branched {
         // Exit epilogue: result = where control goes next.
-        let exit_addr: i64 = match block.exits.first() {
-            Some(BlockExit::FallThrough(a)) | Some(BlockExit::Branch(a)) => *a as i64,
-            Some(BlockExit::ExitVm) | None => EXIT_VM_SENTINEL,
-        };
-        body.push(OP_I64_CONST);
-        sleb(exit_addr, &mut body);
+        match block.exits.first() {
+            Some(BlockExit::FallThrough(a)) | Some(BlockExit::Branch(a)) => {
+                body.push(OP_I64_CONST);
+                sleb(*a as i64, &mut body);
+            }
+            // A dynamic exit with no BranchDyn op emitted is a malformed
+            // block (the orchestrator only declares Dynamic alongside
+            // BranchDyn, which always returns early): trap loudly rather
+            // than invent an address.
+            Some(BlockExit::Dynamic) => body.push(OP_UNREACHABLE),
+            Some(BlockExit::ExitVm) | None => {
+                body.push(OP_I64_CONST);
+                sleb(EXIT_VM_SENTINEL, &mut body);
+            }
+        }
     }
     body.push(OP_END);
 
@@ -511,6 +539,18 @@ mod tests {
 
     // ---- determinism ----
 
+    /// Validate the compiled module with wasmparser. Called by codegen tests
+    /// so an invalid opcode can never go latent again (2026-09-27: i32
+    /// opcodes were emitted for i64 OR/SHL/SHR and only failed at wasmtime
+    /// translation, two units downstream).
+    fn assert_valid(block: &IrBlock) -> Vec<u8> {
+        let m = compile(block);
+        wasmparser::Validator::new()
+            .validate_all(&m.bytes)
+            .expect("U3 emitted invalid WASM");
+        code_expr(&m.bytes)
+    }
+
     #[test]
     fn determin_compile_same_block_twice_byte_identical() {
         let a = compile(&sample_block());
@@ -566,6 +606,7 @@ mod tests {
                     target: 0x200,
                     when_zero: true,
                 },
+                IrOp::BranchDyn { reg: 30 },
                 IrOp::OrrShift {
                     dst: 8,
                     a: 9,
@@ -579,6 +620,173 @@ mod tests {
             exits: vec![BlockExit::Branch(0x200), BlockExit::ExitVm],
         };
         assert_eq!(compile(&block).bytes, compile(&block).bytes);
+    }
+
+    #[test]
+    fn wave5_every_opcode_validates_under_wasmparser() {
+        // One block per op kind (plus the Dynamic-exit malformed case):
+        // all must be structurally valid WASM, not just byte-plausible.
+        let cases: Vec<(Vec<IrOp>, Vec<BlockExit>)> = vec![
+            (
+                vec![IrOp::Add { dst: 0, a: 1, b: 2 }],
+                vec![BlockExit::FallThrough(0x4)],
+            ),
+            (
+                vec![IrOp::Mov { dst: 0, imm: 1 }],
+                vec![BlockExit::FallThrough(0x4)],
+            ),
+            (
+                vec![IrOp::Load {
+                    dst: 0,
+                    addr: 0x8000,
+                    size: 8,
+                }],
+                vec![BlockExit::FallThrough(0x4)],
+            ),
+            (
+                vec![IrOp::Store {
+                    src: 0,
+                    addr: 0x8000,
+                    size: 8,
+                }],
+                vec![BlockExit::FallThrough(0x4)],
+            ),
+            (
+                vec![IrOp::LoadDyn {
+                    dst: 0,
+                    base: 1,
+                    off: 8,
+                    size: 1,
+                }],
+                vec![BlockExit::FallThrough(0x4)],
+            ),
+            (
+                vec![IrOp::StoreDyn {
+                    src: 0,
+                    base: 1,
+                    off: 8,
+                    size: 1,
+                }],
+                vec![BlockExit::FallThrough(0x4)],
+            ),
+            (
+                vec![IrOp::Branch { target: 0x100 }],
+                vec![BlockExit::Branch(0x100)],
+            ),
+            (vec![IrOp::BranchDyn { reg: 30 }], vec![BlockExit::Dynamic]),
+            (
+                vec![IrOp::CondBranch {
+                    reg: 0,
+                    target: 0x100,
+                    when_zero: true,
+                }],
+                vec![BlockExit::Branch(0x100), BlockExit::FallThrough(0x4)],
+            ),
+            (
+                vec![IrOp::OrrShift {
+                    dst: 0,
+                    a: 1,
+                    b: 2,
+                    shift: 0,
+                    amount: 0,
+                }],
+                vec![BlockExit::FallThrough(0x4)],
+            ),
+            (
+                vec![IrOp::OrrShift {
+                    dst: 0,
+                    a: 1,
+                    b: 2,
+                    shift: 1,
+                    amount: 4,
+                }],
+                vec![BlockExit::FallThrough(0x4)],
+            ),
+            (
+                vec![IrOp::OrrShift {
+                    dst: 0,
+                    a: 1,
+                    b: 2,
+                    shift: 2,
+                    amount: 63,
+                }],
+                vec![BlockExit::FallThrough(0x4)],
+            ),
+            (vec![IrOp::Wfi], vec![BlockExit::FallThrough(0x4)]),
+            (vec![IrOp::Trap { reason: "x" }], vec![BlockExit::ExitVm]),
+            (vec![], vec![BlockExit::Dynamic]), // malformed -> unreachable, still valid
+            (vec![], vec![BlockExit::ExitVm]),
+        ];
+        for (ops, exits) in &cases {
+            let block = IrBlock {
+                entry_addr: 0x4000,
+                ops: ops.clone(),
+                exits: exits.clone(),
+            };
+            assert_valid(&block);
+        }
+    }
+
+    #[test]
+    fn wave5_codegen_branchdyn_returns_register_value() {
+        // RET X30: global.get 30; return; end — the host takes the i64
+        // result as the next guest PC.
+        let block = IrBlock {
+            entry_addr: 0x4000,
+            ops: vec![IrOp::BranchDyn { reg: 30 }],
+            exits: vec![BlockExit::Dynamic],
+        };
+        let expr = assert_valid(&block);
+        assert_eq!(expr, vec![0x23, 0x1E, 0x0F, 0x0B]);
+    }
+
+    #[test]
+    fn wave5_codegen_bl_link_then_branch() {
+        // BL as the lifter emits it: X30 = return addr, then static branch.
+        let block = IrBlock {
+            entry_addr: 0x4000_004C,
+            ops: vec![
+                IrOp::Mov {
+                    dst: 30,
+                    imm: 0x4000_0050,
+                },
+                IrOp::Branch {
+                    target: 0x4000_0008,
+                },
+            ],
+            exits: vec![BlockExit::Branch(0x4000_0008)],
+        };
+        let expr = assert_valid(&block);
+        // i64.const 0x40000050; global.set 30; i64.const 0x40000008; return; end
+        let ret = expr.iter().position(|&b| b == OP_RETURN).unwrap();
+        assert_eq!(last_const(&expr[..ret]), 0x4000_0008);
+        assert!(expr.windows(2).any(|w| w == [0x24, 0x1E])); // global.set 30
+        assert_eq!(&expr[ret..], &[OP_RETURN, OP_END]);
+    }
+
+    #[test]
+    fn wave5_codegen_branchdyn_xzr_source_is_zero() {
+        // RET XZR is nonsense but must not read a nonexistent global 31.
+        let block = IrBlock {
+            entry_addr: 0x4000,
+            ops: vec![IrOp::BranchDyn { reg: 31 }],
+            exits: vec![BlockExit::Dynamic],
+        };
+        let expr = assert_valid(&block);
+        assert_eq!(expr, vec![0x42, 0x00, 0x0F, 0x0B]); // i64.const 0; return; end
+    }
+
+    #[test]
+    fn wave5_codegen_dynamic_exit_without_branchdyn_traps() {
+        // Malformed: Dynamic exit declared but no BranchDyn op emitted.
+        // Loud trap, never an invented address.
+        let block = IrBlock {
+            entry_addr: 0x4000,
+            ops: vec![],
+            exits: vec![BlockExit::Dynamic],
+        };
+        let expr = assert_valid(&block);
+        assert_eq!(expr[0], OP_UNREACHABLE);
     }
 
     // ---- structural validity (Wave 4: U3-G1 module shape) ----
@@ -665,7 +873,7 @@ mod tests {
             ],
             exits: vec![],
         };
-        let expr = code_expr(&compile(&block).bytes);
+        let expr = assert_valid(&block);
         // i64.const 5; global.set 1
         assert!(expr.windows(4).any(|w| w == [0x42, 0x05, 0x24, 0x01]));
         // i64.const 7; global.set 2
@@ -698,7 +906,7 @@ mod tests {
             ],
             exits: vec![],
         };
-        let expr = code_expr(&compile(&block).bytes);
+        let expr = assert_valid(&block);
         // XZR source: i64.const 0 (0x42 0x00), never global.get 31.
         assert!(expr.windows(2).any(|w| w == [0x42, 0x00]));
         assert!(!expr.windows(2).any(|w| w == [0x23, 0x1F]));
@@ -722,7 +930,7 @@ mod tests {
             ],
             exits: vec![],
         };
-        let expr = code_expr(&compile(&block).bytes);
+        let expr = assert_valid(&block);
         // i64.const 5; local.set 0 ... local.get 0
         assert!(expr.windows(4).any(|w| w == [0x42, 0x05, 0x21, 0x00]));
         assert!(expr.windows(2).any(|w| w == [0x20, 0x00]));
@@ -740,7 +948,7 @@ mod tests {
             }],
             exits: vec![],
         };
-        let expr = code_expr(&compile(&block).bytes);
+        let expr = assert_valid(&block);
         // global.get 0; i64.const 0x100; i64.add; i64.const 1; call 0; global.set 2
         let seq: Vec<u8> = vec![
             0x23, 0x00, // global.get 0
@@ -765,7 +973,7 @@ mod tests {
             }],
             exits: vec![],
         };
-        let expr = code_expr(&compile(&block).bytes);
+        let expr = assert_valid(&block);
         // global.get 11; i64.const 0; i64.add; i64.const 1; i64.const 0; call 1
         let seq: Vec<u8> = vec![
             0x23, 0x0B, // global.get 11
@@ -789,7 +997,7 @@ mod tests {
             }],
             exits: vec![BlockExit::Branch(0x4010), BlockExit::FallThrough(0x4004)],
         };
-        let expr = code_expr(&compile(&block).bytes);
+        let expr = assert_valid(&block);
         // global.get 2; i64.eqz; if (result i64); i64.const 0x4010; else;
         // i64.const 0x4004; end; return; end
         let seq: Vec<u8> = vec![
@@ -817,7 +1025,7 @@ mod tests {
             }],
             exits: vec![BlockExit::Branch(0x4000), BlockExit::FallThrough(0x4004)],
         };
-        let expr = code_expr(&compile(&block).bytes);
+        let expr = assert_valid(&block);
         // CBNZ: eqz true (reg==0) -> fallthrough 0x4004; else -> target 0x4000.
         let seq: Vec<u8> = vec![
             0x23, 0x00, // global.get 0
@@ -842,7 +1050,7 @@ mod tests {
             }],
             exits: vec![BlockExit::Branch(0x4010)], // malformed: no fallthrough
         };
-        let expr = code_expr(&compile(&block).bytes);
+        let expr = assert_valid(&block);
         assert_eq!(expr[0], OP_UNREACHABLE);
     }
 
@@ -859,14 +1067,14 @@ mod tests {
             }],
             exits: vec![],
         };
-        let expr = code_expr(&compile(&block).bytes);
+        let expr = assert_valid(&block);
         // i64.const 0; global.get 1; i64.const 56; i64.shl; i64.or; global.set 2
         let seq: Vec<u8> = vec![
             0x42, 0x00, // i64.const 0 (XZR)
             0x23, 0x01, // global.get 1
             0x42, 0x38, // i64.const 56
-            0x74, // i64.shl
-            0x72, // i64.or
+            0x86, // i64.shl (0x86, not the i32 form 0x74)
+            0x84, // i64.or (0x84, not the i32 form 0x72)
             0x24, 0x02, // global.set 2
         ];
         assert!(expr.windows(seq.len()).any(|w| w == seq.as_slice()));
@@ -885,7 +1093,7 @@ mod tests {
             }],
             exits: vec![],
         };
-        let expr = code_expr(&compile(&block).bytes);
+        let expr = assert_valid(&block);
         assert_eq!(expr[0], OP_UNREACHABLE);
     }
 
@@ -896,7 +1104,7 @@ mod tests {
             ops: vec![IrOp::Wfi],
             exits: vec![BlockExit::FallThrough(0x4004)],
         };
-        let expr = code_expr(&compile(&block).bytes);
+        let expr = assert_valid(&block);
         // call 2 (wfi); i64.const 0x4004; end
         let seq: Vec<u8> = vec![
             0x10, 0x02, // call 2
@@ -924,7 +1132,7 @@ mod tests {
             ],
             exits: vec![],
         };
-        let expr = code_expr(&compile(&block).bytes);
+        let expr = assert_valid(&block);
         // Both static memory ops lower to unreachable; nothing is silently faked.
         assert_eq!(expr[0], OP_UNREACHABLE);
         assert_eq!(expr[1], OP_UNREACHABLE);
@@ -939,7 +1147,7 @@ mod tests {
             }],
             exits: vec![],
         };
-        let expr = code_expr(&compile(&block).bytes);
+        let expr = assert_valid(&block);
         assert_eq!(expr[0], OP_UNREACHABLE);
     }
 
@@ -953,7 +1161,7 @@ mod tests {
             ],
             exits: vec![BlockExit::ExitVm],
         };
-        let expr = code_expr(&compile(&block).bytes);
+        let expr = assert_valid(&block);
         // ... i64.const 0x5000; return; end — nothing after return.
         let ret = expr.iter().position(|&b| b == OP_RETURN).unwrap();
         assert_eq!(last_const(&expr[..ret]), 0x5000);
@@ -967,7 +1175,7 @@ mod tests {
             ops: vec![],
             exits: vec![BlockExit::FallThrough(0x4008)],
         };
-        let expr = code_expr(&compile(&block).bytes);
+        let expr = assert_valid(&block);
         assert_eq!(last_const(&expr), 0x4008);
     }
 
@@ -978,7 +1186,7 @@ mod tests {
             ops: vec![],
             exits: vec![BlockExit::ExitVm],
         };
-        let expr = code_expr(&compile(&block).bytes);
+        let expr = assert_valid(&block);
         assert_eq!(last_const(&expr), -1);
     }
 
@@ -989,7 +1197,7 @@ mod tests {
             ops: vec![], // no CondBranch; plain epilogue
             exits: vec![BlockExit::Branch(0x300), BlockExit::FallThrough(0x400)],
         };
-        let expr = code_expr(&compile(&block).bytes);
+        let expr = assert_valid(&block);
         assert_eq!(last_const(&expr), 0x300);
     }
 
@@ -1003,7 +1211,7 @@ mod tests {
             }],
             exits: vec![],
         };
-        let expr = code_expr(&compile(&block).bytes);
+        let expr = assert_valid(&block);
         // i64.const -1 is a single 0x7F byte in signed LEB128.
         assert!(expr.windows(2).any(|w| w == [0x42, 0x7F]));
         assert_eq!(last_const(&expr), -1);

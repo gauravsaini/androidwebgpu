@@ -1841,6 +1841,7 @@ name = "u3-wasm-jit"
 version = "0.1.0"
 dependencies = [
  "pathn-contracts",
+ "wasmparser 0.215.0",
 ]
 
 [[package]]

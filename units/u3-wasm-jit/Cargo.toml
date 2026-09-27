@@ -9,3 +9,9 @@ path = "src/lib.rs"
 
 [dependencies]
 pathn-contracts = { path = "../../contracts" }
+
+# Test-only: every compiled module is run through wasmparser validation so a
+# wrong opcode constant (e.g. the 2026-09-27 i32/i64 mixup) fails fast in U3
+# instead of surfacing as a wasmtime translation error two units downstream.
+[dev-dependencies]
+wasmparser = "0.215"
