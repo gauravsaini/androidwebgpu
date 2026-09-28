@@ -20,8 +20,13 @@ u7-gpu-device = { path = "../u7-gpu-device" }
 u8-gpu-host = { path = "../u8-gpu-host" }
 u11-snapshot = { path = "../u11-snapshot" }
 u13-adapters = { path = "../u13-adapters" }
-wasmtime = "24"
+u15-exec-wasmi = { path = "../u15-exec-wasmi" }
 sha2 = "0.10"
+
+# wasmtime cannot target wasm32 (Cranelift JIT needs native codegen), so the
+# native backend is cfg'd out there; wasm32 uses the wasmi backend (default).
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+u15-exec-wasmtime = { path = "../u15-exec-wasmtime" }
 
 [dev-dependencies]
 guest-image = { path = "../../guest-image" }

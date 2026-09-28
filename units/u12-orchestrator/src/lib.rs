@@ -8,8 +8,8 @@
 //! ## vCPU execution model (honest)
 //!
 //! One step: fetch word at `pc` → U1 decode → U2 lift → U3 compile → execute
-//! the WASM block with wasmtime (native; the browser will use its own engine
-//! in a later wave — U3 emits standard WASM so the boundary is clean).
+//! the WASM block through the injected [`BlockExecutor`] backend (wasmtime on
+//! native, wasmi on wasm32 — see `pathn_contracts::execution`).
 //!
 //! U3's module shape (contract `pathn_contracts::wasm_abi`, Wave-4 U3-G1):
 //! imports `env.mem_load` / `env.mem_store` / `env.wfi` plus 31 mutable `i64`
@@ -63,15 +63,21 @@
 //! console, clock, steps, and halt reason. Same image + same scripted inputs
 //! → identical hash, twice. No wall clock, no threads, no FP in the path.
 
-use std::collections::{HashMap, VecDeque};
+use std::collections::VecDeque;
 
 use pathn_contracts::adapters::{BlobStore, InputSource};
 use pathn_contracts::cpu::{
     BlockExit, DecodeResult, Instruction, IrBlock, IrOp, IrqState, MemFault, MmuState,
 };
 use pathn_contracts::device::{DevEvent, DevOut, GpuDevState, TransportState};
+use pathn_contracts::execution::{BlockExecutor, HostOps};
 use pathn_contracts::machine::{CpuState, MachineState};
 use sha2::{Digest, Sha256};
+
+#[cfg(target_arch = "wasm32")]
+use u15_exec_wasmi::WasmiExecutor;
+#[cfg(not(target_arch = "wasm32"))]
+use u15_exec_wasmtime::WasmtimeExecutor;
 
 // ---------------------------------------------------------------------------
 // Platform constants (mirrored from guest-image/PLATFORM.md)
@@ -232,10 +238,22 @@ pub struct Orchestrator {
     pub halted: Option<HaltReason>,
     /// Per-queue last-notified used index for EVENT_IDX decisions.
     last_notified: Vec<u16>,
-    engine: wasmtime::Engine,
-    /// pc → linked wasmtime Module. Keyed by pc; assumes immutable code —
-    /// call `invalidate_code_cache` after any RAM write to a code page.
-    block_cache: HashMap<u64, wasmtime::Module>,
+    /// The WASM execution backend (wasmtime on native, wasmi on wasm32).
+    /// Injected — see [`Orchestrator::with_executor`].
+    executor: Box<dyn BlockExecutor>,
+}
+
+/// Default backend for this target: wasmtime where a JIT is available,
+/// wasmi (interpreter) on wasm32 where wasmtime cannot compile.
+fn default_executor() -> Box<dyn BlockExecutor> {
+    #[cfg(target_arch = "wasm32")]
+    {
+        Box::new(WasmiExecutor::new())
+    }
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        Box::new(WasmtimeExecutor::new())
+    }
 }
 
 impl Orchestrator {
@@ -278,9 +296,16 @@ impl Orchestrator {
             steps: 0,
             halted: None,
             last_notified: Vec::new(),
-            engine: wasmtime::Engine::default(),
-            block_cache: HashMap::new(),
+            executor: default_executor(),
         }
+    }
+
+    /// Build with an explicit execution backend — the injection point for the
+    /// browser host and for backend-parity tests.
+    pub fn with_executor(executor: Box<dyn BlockExecutor>) -> Self {
+        let mut o = Self::new();
+        o.executor = executor;
+        o
     }
 
     /// Was the machine halted?
@@ -295,7 +320,7 @@ impl Orchestrator {
 
     /// Number of distinct blocks currently in the JIT cache.
     pub fn block_cache_len(&self) -> usize {
-        self.block_cache.len()
+        self.executor.cache_len()
     }
 
     /// Read-only view of the machine state (U11 snapshot input).
@@ -381,7 +406,7 @@ impl Orchestrator {
     }
 
     pub fn invalidate_code_cache(&mut self) {
-        self.block_cache.clear();
+        self.executor.invalidate();
     }
 
     // ---- memory path (M0: MMU disabled, physical addresses = guest addresses)
@@ -487,17 +512,15 @@ impl Orchestrator {
             exits,
         };
 
-        // Compile (U3) via the block cache, then link + execute.
-        let module = match self.compile_cached(pc, &block) {
-            Ok(m) => m,
-            Err(message) => {
-                let halt = HaltReason::WasmTrap { addr: pc, message };
-                self.halted = Some(halt.clone());
-                return StepOutcome::Halted(halt);
-            }
-        };
-        // Execute: registers and memory are threaded through host imports.
-        let (exit_addr, wfi_seen) = match self.execute_block(&module) {
+        // Compile (U3) and execute through the injected backend. Disjoint
+        // field borrows: the backend borrows `executor`, the host borrows
+        // regs / RAM / console.
+        let wasm = u3_wasm_jit::compile(&block);
+        let regs: &mut [u64; 31] = &mut self.machine.cpu[0].regs;
+        let ram: &mut Vec<u8> = &mut self.machine.ram;
+        let console: &mut ConsoleState = &mut self.console;
+        let mut host = WasmHost { ram, console };
+        let (exit_addr, wfi_seen) = match self.executor.run_block(&wasm, regs, &mut host) {
             Ok(pair) => pair,
             Err(message) => {
                 let halt = HaltReason::WasmTrap { addr: pc, message };
@@ -538,19 +561,6 @@ impl Orchestrator {
         let halt = HaltReason::StepLimitExceeded;
         self.halted = Some(halt.clone());
         halt
-    }
-
-    /// Compile one block with U3 (cache by pc). U3's module already carries
-    /// the `run` export (U3-G1) — no byte-splicing at link time.
-    fn compile_cached(&mut self, pc: u64, block: &IrBlock) -> Result<wasmtime::Module, String> {
-        if let Some(m) = self.block_cache.get(&pc) {
-            return Ok(m.clone());
-        }
-        let wasm = u3_wasm_jit::compile(block);
-        let module =
-            wasmtime::Module::new(&self.engine, &wasm.bytes).map_err(|e| format!("module: {e}"))?;
-        self.block_cache.insert(pc, module.clone());
-        Ok(module)
     }
 
     // ---- clock / timer (U5) ----
@@ -914,11 +924,11 @@ fn block_exits(pc: u64, ops: &[IrOp]) -> Vec<BlockExit> {
 
 /// The host state a U3 module sees. Borrowed mutably from the orchestrator
 /// for exactly one block execution; dropped before the next step.
+/// Implements [`HostOps`] — the execution backend forwards the U3 imports
+/// here. (The `wfi_seen` flag moved into the backends' tracking wrapper.)
 struct WasmHost<'a> {
     ram: &'a mut Vec<u8>,
     console: &'a mut ConsoleState,
-    /// Set when the block calls the `wfi` import.
-    wfi_seen: bool,
 }
 
 /// Translate a guest physical address to a RAM offset (M0: MMU disabled,
@@ -940,136 +950,58 @@ fn ram_offset_in(ram: &[u8], pa: u64, len: u64) -> Result<usize, MemFault> {
 /// `env.mem_load(addr, size) -> value`. Console MMIO is dispatched to the
 /// console model; everything else goes through the RAM bounds check.
 /// Faults become WASM traps (surfaced as `HaltReason::WasmTrap`).
-fn host_mem_load(host: &mut WasmHost, addr: i64, size: i64) -> Result<i64, wasmtime::Error> {
-    let pa = addr as u64;
-    if (CONSOLE_BASE..CONSOLE_BASE + CONSOLE_SIZE).contains(&pa) {
-        if size != 1 {
-            return Err(wasmtime::Error::msg("mem_load: console MMIO is byte-only"));
-        }
-        if pa == CONSOLE_RX {
-            return Ok(host.console.read_rx() as i64);
-        }
-        // Defined MMIO region, non-RX offset: reads return 0 (PLATFORM.md).
-        return Ok(0);
-    }
-    if !matches!(size, 1 | 2 | 4 | 8) {
-        return Err(wasmtime::Error::msg("mem_load: size must be 1, 2, 4 or 8"));
-    }
-    let off = ram_offset_in(host.ram, pa, size as u64)
-        .map_err(|f| wasmtime::Error::msg(format!("mem_load fault: {f:?}")))?;
-    let mut v = 0u64;
-    for i in 0..size as usize {
-        v |= (host.ram[off + i] as u64) << (8 * i);
-    }
-    Ok(v as i64)
-}
-
-/// `env.mem_store(addr, size, value)`. Console MMIO is dispatched to the
-/// console model; everything else goes through the RAM bounds check.
-fn host_mem_store(
-    host: &mut WasmHost,
-    addr: i64,
-    size: i64,
-    val: i64,
-) -> Result<(), wasmtime::Error> {
-    let pa = addr as u64;
-    if (CONSOLE_BASE..CONSOLE_BASE + CONSOLE_SIZE).contains(&pa) {
-        if size != 1 {
-            return Err(wasmtime::Error::msg("mem_store: console MMIO is byte-only"));
-        }
-        if pa == CONSOLE_TX {
-            host.console.write_tx(val as u8);
-        }
-        // Writes to other console offsets are acknowledged, no effect.
-        return Ok(());
-    }
-    if !matches!(size, 1 | 2 | 4 | 8) {
-        return Err(wasmtime::Error::msg("mem_store: size must be 1, 2, 4 or 8"));
-    }
-    let off = ram_offset_in(host.ram, pa, size as u64)
-        .map_err(|f| wasmtime::Error::msg(format!("mem_store fault: {f:?}")))?;
-    for i in 0..size as usize {
-        host.ram[off + i] = (val as u64 >> (8 * i)) as u8;
-    }
-    Ok(())
-}
-
-impl Orchestrator {
-    /// Execute one compiled block: wire the U3-G1 imports (host memory /
-    /// console / WFI + the 31 register globals), call `run`, read the
-    /// registers back. Returns `(exit_addr, wfi_seen)`.
-    fn execute_block(&mut self, module: &wasmtime::Module) -> Result<(i64, bool), String> {
-        // Disjoint field borrows: regs, RAM, console, engine.
-        let regs: &mut [u64; 31] = &mut self.machine.cpu[0].regs;
-        let ram: &mut Vec<u8> = &mut self.machine.ram;
-        let console: &mut ConsoleState = &mut self.console;
-        let engine: &wasmtime::Engine = &self.engine;
-
-        let mut store = wasmtime::Store::new(
-            engine,
-            WasmHost {
-                ram,
-                console,
-                wfi_seen: false,
-            },
-        );
-        let mut linker: wasmtime::Linker<WasmHost> = wasmtime::Linker::new(engine);
-        linker
-            .func_wrap(
-                "env",
-                "mem_load",
-                |mut caller: wasmtime::Caller<'_, WasmHost>, addr: i64, size: i64| {
-                    host_mem_load(caller.data_mut(), addr, size)
-                },
-            )
-            .map_err(|e| format!("link mem_load: {e}"))?;
-        linker
-            .func_wrap(
-                "env",
-                "mem_store",
-                |mut caller: wasmtime::Caller<'_, WasmHost>, addr: i64, size: i64, val: i64| {
-                    host_mem_store(caller.data_mut(), addr, size, val)
-                },
-            )
-            .map_err(|e| format!("link mem_store: {e}"))?;
-        linker
-            .func_wrap(
-                "env",
-                "wfi",
-                |mut caller: wasmtime::Caller<'_, WasmHost>| {
-                    caller.data_mut().wfi_seen = true;
-                },
-            )
-            .map_err(|e| format!("link wfi: {e}"))?;
-        // Register file: checkpointed X0-X30 in, mutated X0-X30 out.
-        let mut globals = Vec::with_capacity(31);
-        for (i, reg) in regs.iter().enumerate() {
-            let g = wasmtime::Global::new(
-                &mut store,
-                wasmtime::GlobalType::new(wasmtime::ValType::I64, wasmtime::Mutability::Var),
-                wasmtime::Val::I64(*reg as i64),
-            )
-            .map_err(|e| format!("global r{i}: {e}"))?;
-            linker
-                .define(&mut store, "env", &format!("r{i}"), g)
-                .map_err(|e| format!("define r{i}: {e}"))?;
-            globals.push(g);
-        }
-
-        let instance = linker
-            .instantiate(&mut store, module)
-            .map_err(|e| format!("instantiate: {e}"))?;
-        let run = instance
-            .get_typed_func::<(), i64>(&mut store, "run")
-            .map_err(|e| format!("export 'run': {e}"))?;
-        let exit_addr = run.call(&mut store, ()).map_err(|e| format!("trap: {e}"))?;
-        for (i, g) in globals.iter().enumerate() {
-            if let wasmtime::Val::I64(v) = g.get(&mut store) {
-                regs[i] = v as u64;
+impl HostOps for WasmHost<'_> {
+    fn mem_load(&mut self, addr: i64, size: i64) -> Result<i64, String> {
+        let pa = addr as u64;
+        if (CONSOLE_BASE..CONSOLE_BASE + CONSOLE_SIZE).contains(&pa) {
+            if size != 1 {
+                return Err("mem_load: console MMIO is byte-only".to_string());
             }
+            if pa == CONSOLE_RX {
+                return Ok(self.console.read_rx() as i64);
+            }
+            // Defined MMIO region, non-RX offset: reads return 0 (PLATFORM.md).
+            return Ok(0);
         }
-        let wfi_seen = store.data().wfi_seen;
-        Ok((exit_addr, wfi_seen))
+        if !matches!(size, 1 | 2 | 4 | 8) {
+            return Err("mem_load: size must be 1, 2, 4 or 8".to_string());
+        }
+        let off = ram_offset_in(self.ram, pa, size as u64)
+            .map_err(|f| format!("mem_load fault: {f:?}"))?;
+        let mut v = 0u64;
+        for i in 0..size as usize {
+            v |= (self.ram[off + i] as u64) << (8 * i);
+        }
+        Ok(v as i64)
+    }
+
+    /// `env.mem_store(addr, size, value)`. Console MMIO is dispatched to the
+    /// console model; everything else goes through the RAM bounds check.
+    fn mem_store(&mut self, addr: i64, size: i64, val: i64) -> Result<(), String> {
+        let pa = addr as u64;
+        if (CONSOLE_BASE..CONSOLE_BASE + CONSOLE_SIZE).contains(&pa) {
+            if size != 1 {
+                return Err("mem_store: console MMIO is byte-only".to_string());
+            }
+            if pa == CONSOLE_TX {
+                self.console.write_tx(val as u8);
+            }
+            // Writes to other console offsets are acknowledged, no effect.
+            return Ok(());
+        }
+        if !matches!(size, 1 | 2 | 4 | 8) {
+            return Err("mem_store: size must be 1, 2, 4 or 8".to_string());
+        }
+        let off = ram_offset_in(self.ram, pa, size as u64)
+            .map_err(|f| format!("mem_store fault: {f:?}"))?;
+        for i in 0..size as usize {
+            self.ram[off + i] = (val as u64 >> (8 * i)) as u8;
+        }
+        Ok(())
+    }
+
+    fn wfi(&mut self) {
+        // Notification only; the backend tracks invocation for `wfi_seen`.
     }
 }
 
