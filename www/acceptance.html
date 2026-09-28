@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>pathn-sh acceptance</title>
+</head>
+<body>
+<pre id="term"></pre>
+<pre id="results">PENDING</pre>
+<script type="module">
+// Headless acceptance: drives the REAL guest through the REAL DOM event
+// path (synthetic KeyboardEvents dispatched on window -> the same
+// keydown/keyup listeners index.html uses -> push_key -> guest), then
+// asserts the exact TX pins. No rAF: frames are pumped synchronously so
+// --dump-dom captures a deterministic result.
+
+import init, { PathnShell } from './pkg/web_host.js';
+
+const term = document.getElementById('term');
+const resultsEl = document.getElementById('results');
+const results = [];
+const check = (name, cond, detail) =>
+  results.push({ name, pass: !!cond, detail: detail || '' });
+
+function key(code, k) {
+  window.dispatchEvent(new KeyboardEvent('keydown', { code, key: k }));
+  window.dispatchEvent(new KeyboardEvent('keyup', { code, key: k }));
+}
+
+function typeText(text) {
+  for (const ch of text) {
+    if (ch === '\n') key('Enter', 'Enter');
+    else if (ch === ' ') key('Space', ' ');
+    else key('Key' + ch.toUpperCase(), ch);
+  }
+}
+
+let shell;
+try {
+  await init();
+  shell = new PathnShell();
+} catch (e) {
+  document.title = 'ACCEPT-FAIL boot: ' + e;
+  resultsEl.textContent = JSON.stringify([{ name: 'boot', pass: false, detail: String(e) }]);
+  throw e;
+}
+
+// Same listener wiring as the interactive page.
+window.addEventListener('keydown', (e) => shell.push_key(e.code, e.key, true));
+window.addEventListener('keyup', (e) => shell.push_key(e.code, e.key, false));
+
+term.textContent = shell.tx_text();
+check('boot-prompt', shell.tx_text() === 'pathn-sh> ', JSON.stringify(shell.tx_text()));
+check('boot-parked', shell.parked() === true, 'parked=' + shell.parked());
+
+// Pump frames synchronously until the guest parks with no new output.
+function settle() {
+  for (let i = 0; i < 30; i++) {
+    const out = shell.step_frame();
+    term.textContent += out;
+    if (out === '' && shell.parked()) break;
+  }
+}
+
+settle();
+typeText('help\n'); settle();
+check('help', term.textContent === 'pathn-sh> help\ncommands: echo <args> | help\npathn-sh> ',
+  JSON.stringify(term.textContent));
+
+typeText('echo hi\n'); settle();
+check('echo', term.textContent.endsWith('pathn-sh> echo hi\nhi\npathn-sh> '),
+  JSON.stringify(term.textContent.slice(-60)));
+
+typeText('bogus\n'); settle();
+check('unknown', term.textContent.endsWith('pathn-sh> bogus\nunknown cmd: bogus\npathn-sh> '),
+  JSON.stringify(term.textContent.slice(-60)));
+
+check('alive', shell.parked() === true, 'steps=' + shell.steps());
+
+resultsEl.textContent = JSON.stringify(results);
+document.title = results.every((r) => r.pass) ? 'ACCEPT-PASS' : 'ACCEPT-FAIL';
+</script>
+</body>
+</html>

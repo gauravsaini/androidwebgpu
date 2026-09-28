@@ -1,0 +1,22 @@
+[package]
+name = "web-host"
+version = "0.1.0"
+edition = "2021"
+description = "Path N browser host: wasm-bindgen seam between the DOM terminal and the real pathn-sh guest"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+name = "web_host"
+path = "src/lib.rs"
+
+[dependencies]
+pathn-contracts = { path = "../../contracts" }
+u12-orchestrator = { path = "../../units/u12-orchestrator" }
+u13-adapters = { path = "../../units/u13-adapters" }
+u15-exec-wasmi = { path = "../../units/u15-exec-wasmi" }
+guest-image = { path = "../../guest-image" }
+# Pinned exact: must match the installed wasm-bindgen-cli (0.2.129).
+wasm-bindgen = "=0.2.129"
+console_error_panic_hook = "0.1"
+
+[dev-dependencies]
