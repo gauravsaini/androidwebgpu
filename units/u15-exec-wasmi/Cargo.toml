@@ -1,0 +1,16 @@
+[package]
+name = "u15-exec-wasmi"
+version = "0.1.0"
+edition = "2021"
+description = "Path N U15: portable BlockExecutor backend (wasmi 2, pure-Rust interpreter; native + wasm32)."
+
+[lib]
+name = "u15_exec_wasmi"
+path = "src/lib.rs"
+
+[dependencies]
+pathn-contracts = { path = "../../contracts" }
+wasmi = "2"
+
+[dev-dependencies]
+u3-wasm-jit = { path = "../u3-wasm-jit" }

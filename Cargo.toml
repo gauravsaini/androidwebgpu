@@ -21,6 +21,9 @@ members = [
   "units/u8-gpu-host",
   "units/u13-adapters",
   "units/u12-orchestrator",
+  "units/u15-exec-wasmtime",
+  "units/u15-exec-wasmi",
+  "crates/web-host",
   "guest-image",
 ]
 

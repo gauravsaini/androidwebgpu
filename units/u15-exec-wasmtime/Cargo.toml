@@ -1,0 +1,13 @@
+[package]
+name = "u15-exec-wasmtime"
+version = "0.1.0"
+edition = "2021"
+description = "Path N U15: native BlockExecutor backend (wasmtime 24). Moved verbatim out of U12."
+
+[lib]
+name = "u15_exec_wasmtime"
+path = "src/lib.rs"
+
+[dependencies]
+pathn-contracts = { path = "../../contracts" }
+wasmtime = "24"

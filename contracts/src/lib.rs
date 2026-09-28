@@ -9,5 +9,6 @@
 pub mod adapters;
 pub mod cpu;
 pub mod device;
+pub mod execution;
 pub mod machine;
 pub mod wasm_abi;
