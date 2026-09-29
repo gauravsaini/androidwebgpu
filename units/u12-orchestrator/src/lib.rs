@@ -69,7 +69,7 @@ use pathn_contracts::adapters::{BlobStore, InputSource};
 use pathn_contracts::cpu::{
     BlockExit, DecodeResult, Instruction, IrBlock, IrOp, IrqState, MemFault, MmuState,
 };
-use pathn_contracts::device::{DevEvent, DevOut, GpuDevState, TransportState};
+use pathn_contracts::device::{DevEvent, DevOut, GpuCmd, GpuDevState, TransportState};
 use pathn_contracts::execution::{BlockExecutor, HostOps};
 use pathn_contracts::machine::{CpuState, MachineState};
 use sha2::{Digest, Sha256};
@@ -95,6 +95,20 @@ pub const CONSOLE_SIZE: u64 = 0x1000;
 pub const CONSOLE_TX: u64 = 0x0900_0000;
 /// LDRB here → next input byte, or 0 if none (PLATFORM.md).
 pub const CONSOLE_RX: u64 = 0x0900_0008;
+
+/// GPU command-stream MMIO base (Track A; PLATFORM.md §GPU port).
+/// The guest STRBs one virtio-gpu control-stream byte per write to
+/// [`GPU_DATA`], then STRBs [`GPU_SUBMIT`] to hand the accumulated buffer
+/// to the host. Byte-wide accesses only, mirroring the console port model.
+pub const GPU_BASE: u64 = 0x0A00_0000;
+/// GPU MMIO size: one page (PLATFORM.md).
+pub const GPU_SIZE: u64 = 0x1000;
+/// STRB a command-stream byte here → appended to the GPU port buffer.
+pub const GPU_DATA: u64 = 0x0A00_0000;
+/// STRB here → the buffered stream is submitted for decode (U7) + dispatch
+/// (U8). The write value is ignored; the buffer drains via
+/// [`Orchestrator::drain_gpu_submit`].
+pub const GPU_SUBMIT: u64 = 0x0A00_0008;
 
 /// Platform IRQ number the orchestrator raises for virtio-gpu completion.
 /// Not in the frozen contracts; a board device tree would fix this in M1+.
@@ -221,6 +235,76 @@ impl ConsoleState {
 }
 
 // ---------------------------------------------------------------------------
+// GPU command-stream port (Track A)
+// ---------------------------------------------------------------------------
+
+/// Host-side receive buffer for the guest's virtio-gpu control stream.
+///
+/// The guest speaks bytes: one STRB per stream byte to [`GPU_DATA`], one
+/// STRB to [`GPU_SUBMIT`] when the stream is complete. This struct is the
+/// byte pipe — decoding (U7) and dispatch (U8) happen in
+/// [`Orchestrator::drain_gpu_submit`], so the port itself stays as dumb as
+/// the console TX byte queue. Never silently drops: a submit with an empty
+/// buffer still sets the pending flag, and [`GpuPort::take_submit`] always
+/// clears both buffer and flag.
+#[derive(Debug, Default)]
+pub struct GpuPort {
+    stream: Vec<u8>,
+    submit_pending: bool,
+}
+
+impl GpuPort {
+    /// Empty port, no submit pending.
+    pub fn new() -> Self {
+        Self {
+            stream: Vec::new(),
+            submit_pending: false,
+        }
+    }
+
+    /// Append one stream byte (guest STRB to [`GPU_DATA`]).
+    pub fn push_byte(&mut self, b: u8) {
+        self.stream.push(b);
+    }
+
+    /// Mark the buffered stream submitted (guest STRB to [`GPU_SUBMIT`]).
+    pub fn submit(&mut self) {
+        self.submit_pending = true;
+    }
+
+    /// True when the guest signalled submit and the stream was not drained.
+    pub fn is_pending(&self) -> bool {
+        self.submit_pending
+    }
+    /// Bytes currently buffered (not yet submitted).
+    pub fn buffered_len(&self) -> usize {
+        self.stream.len()
+    }
+
+    /// Take the pending stream for decode. Returns `None` when no submit
+    /// is pending; always clears the pending flag and the buffer.
+    pub fn take_submit(&mut self) -> Option<Vec<u8>> {
+        if !self.submit_pending {
+            return None;
+        }
+        self.submit_pending = false;
+        Some(std::mem::take(&mut self.stream))
+    }
+}
+
+/// A guest-submitted virtio-gpu control stream, decoded into typed commands
+/// (U7) and ready for dispatch (U8). Returned by
+/// [`Orchestrator::drain_gpu_submit`].
+#[derive(Debug)]
+pub struct GpuSubmit {
+    /// Decoded [`GpuCmd`]s in stream order.
+    pub commands: Vec<GpuCmd>,
+    /// U7 decode error signals (config-change values) — never silently
+    /// dropped; the host adapter must surface them.
+    pub decode_errors: Vec<u64>,
+}
+
+// ---------------------------------------------------------------------------
 // Orchestrator
 // ---------------------------------------------------------------------------
 
@@ -232,6 +316,8 @@ pub struct Orchestrator {
     pub transport: TransportState,
     pub gpu: GpuDevState,
     pub console: ConsoleState,
+    /// Guest-to-host virtio-gpu command-stream port (Track A).
+    pub gpu_port: GpuPort,
     /// Injected cycle counter — the only "clock". Never wall time.
     pub clock_cycles: u64,
     pub steps: u64,
@@ -292,6 +378,7 @@ impl Orchestrator {
                 next_fence_id: 0,
             },
             console: ConsoleState::new(),
+            gpu_port: GpuPort::new(),
             clock_cycles: 0,
             steps: 0,
             halted: None,
@@ -366,6 +453,38 @@ impl Orchestrator {
     /// The GPU device state (U7).
     pub fn gpu(&self) -> &GpuDevState {
         &self.gpu
+    }
+
+    /// The guest-to-host GPU command-stream port (Track A).
+    pub fn gpu_port(&self) -> &GpuPort {
+        &self.gpu_port
+    }
+
+    /// Drain a submitted GPU stream: take the pending bytes from the port,
+    /// run U7 `step` over them (queue 0 notify), and return the decoded
+    /// commands. Returns `None` when no submit is pending. The port buffer
+    /// and pending flag are always cleared, even on decode error.
+    pub fn drain_gpu_submit(&mut self) -> Option<GpuSubmit> {
+        let bytes = self.gpu_port.take_submit()?;
+        let (next, outs) =
+            u7_gpu_device::step(&self.gpu, DevEvent::QueueNotify { queue_idx: 0 }, &bytes);
+        self.gpu = next;
+        let mut commands = Vec::new();
+        let mut decode_errors = Vec::new();
+        for out in outs {
+            match out {
+                DevOut::GpuCommands(cmds) => commands.extend(cmds),
+                DevOut::ConfigValue(v) => decode_errors.push(v),
+                // IRQ/ring/packet signals are not part of the byte-port
+                // submit path; the guest did not use the transport.
+                DevOut::UsedRingUpdate { .. } | DevOut::IrqAssert { .. } | DevOut::NetPacket(_) => {
+                }
+            }
+        }
+        Some(GpuSubmit {
+            commands,
+            decode_errors,
+        })
     }
 
     /// Load a PNIM guest image (PLATFORM.md §Image format) into RAM and set
@@ -514,12 +633,17 @@ impl Orchestrator {
 
         // Compile (U3) and execute through the injected backend. Disjoint
         // field borrows: the backend borrows `executor`, the host borrows
-        // regs / RAM / console.
+        // regs / RAM / console / GPU port.
         let wasm = u3_wasm_jit::compile(&block);
         let regs: &mut [u64; 31] = &mut self.machine.cpu[0].regs;
         let ram: &mut Vec<u8> = &mut self.machine.ram;
         let console: &mut ConsoleState = &mut self.console;
-        let mut host = WasmHost { ram, console };
+        let gpu_port: &mut GpuPort = &mut self.gpu_port;
+        let mut host = WasmHost {
+            ram,
+            console,
+            gpu_port,
+        };
         let (exit_addr, wfi_seen) = match self.executor.run_block(&wasm, regs, &mut host) {
             Ok(pair) => pair,
             Err(message) => {
@@ -929,6 +1053,7 @@ fn block_exits(pc: u64, ops: &[IrOp]) -> Vec<BlockExit> {
 struct WasmHost<'a> {
     ram: &'a mut Vec<u8>,
     console: &'a mut ConsoleState,
+    gpu_port: &'a mut GpuPort,
 }
 
 /// Translate a guest physical address to a RAM offset (M0: MMU disabled,
@@ -947,9 +1072,9 @@ fn ram_offset_in(ram: &[u8], pa: u64, len: u64) -> Result<usize, MemFault> {
     Ok(off as usize)
 }
 
-/// `env.mem_load(addr, size) -> value`. Console MMIO is dispatched to the
-/// console model; everything else goes through the RAM bounds check.
-/// Faults become WASM traps (surfaced as `HaltReason::WasmTrap`).
+/// `env.mem_load(addr, size) -> value`. Console and GPU MMIO are dispatched
+/// to their device models; everything else goes through the RAM bounds
+/// check. Faults become WASM traps (surfaced as `HaltReason::WasmTrap`).
 impl HostOps for WasmHost<'_> {
     fn mem_load(&mut self, addr: i64, size: i64) -> Result<i64, String> {
         let pa = addr as u64;
@@ -961,6 +1086,13 @@ impl HostOps for WasmHost<'_> {
                 return Ok(self.console.read_rx() as i64);
             }
             // Defined MMIO region, non-RX offset: reads return 0 (PLATFORM.md).
+            return Ok(0);
+        }
+        if (GPU_BASE..GPU_BASE + GPU_SIZE).contains(&pa) {
+            if size != 1 {
+                return Err("mem_load: GPU MMIO is byte-only".to_string());
+            }
+            // Defined MMIO region, no readable registers: reads return 0.
             return Ok(0);
         }
         if !matches!(size, 1 | 2 | 4 | 8) {
@@ -975,8 +1107,9 @@ impl HostOps for WasmHost<'_> {
         Ok(v as i64)
     }
 
-    /// `env.mem_store(addr, size, value)`. Console MMIO is dispatched to the
-    /// console model; everything else goes through the RAM bounds check.
+    /// `env.mem_store(addr, size, value)`. Console and GPU MMIO are
+    /// dispatched to their device models; everything else goes through the
+    /// RAM bounds check.
     fn mem_store(&mut self, addr: i64, size: i64, val: i64) -> Result<(), String> {
         let pa = addr as u64;
         if (CONSOLE_BASE..CONSOLE_BASE + CONSOLE_SIZE).contains(&pa) {
@@ -987,6 +1120,19 @@ impl HostOps for WasmHost<'_> {
                 self.console.write_tx(val as u8);
             }
             // Writes to other console offsets are acknowledged, no effect.
+            return Ok(());
+        }
+        if (GPU_BASE..GPU_BASE + GPU_SIZE).contains(&pa) {
+            if size != 1 {
+                return Err("mem_store: GPU MMIO is byte-only".to_string());
+            }
+            if pa == GPU_DATA {
+                self.gpu_port.push_byte(val as u8);
+            } else if pa == GPU_SUBMIT {
+                // Write value ignored; the signal is the submit itself.
+                self.gpu_port.submit();
+            }
+            // Writes to other GPU offsets are acknowledged, no effect.
             return Ok(());
         }
         if !matches!(size, 1 | 2 | 4 | 8) {

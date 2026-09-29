@@ -12,7 +12,7 @@ Every address here is mirrored by a constant in `src/platform.rs`, and
 - Guest load address = entry point: `0x4000_0000` (start of RAM)
 - Guest blob layout inside the image: `[code][zero pad to 0x1000][data]`
   - Code must fit below file offset `0x1000` (asserted at build time;
-    current guest is 508 bytes).
+    current guest is 800 bytes).
   - Data section loads at `0x4000_1000`. Offsets within it:
     - `0x000`: line buffer (256 bytes)
     - `0x100`: first-word buffer (256 bytes)
@@ -27,8 +27,21 @@ Every address here is mirrored by a constant in `src/platform.rs`, and
 - Base: `0x0900_0000`, size `0x1000` (one page)
 - `CONSOLE_TX = 0x0900_0000`: STRB a byte here → the host emits it on the console.
 - `CONSOLE_RX = 0x0900_0008`: LDRB here → next input byte, or `0` if none available.
-- Register protocol: byte-wide accesses (`LDRB`/`STRB`). The guest never
-  touches any other MMIO; there are no other devices.
+- Register protocol: byte-wide accesses (`LDRB`/`STRB`).
+
+## GPU command-stream MMIO (Track A; outside RAM — no overlap, asserted)
+
+- Base: `0x0A00_0000`, size `0x1000` (one page), clear of the console page.
+- `GPU_DATA = 0x0A00_0000`: STRB one virtio-gpu control-stream byte here →
+  the host appends it to the GPU port buffer.
+- `GPU_SUBMIT = 0x0A00_0008`: STRB here (value ignored) → the buffered
+  stream is submitted: the host decodes it (U7) and dispatches it (U8) to
+  the WebGPU canvas. The buffer drains; the guest may stream again.
+- Register protocol: byte-wide accesses (`STRB`), mirroring the console
+  model. Reads return 0 (no readable registers).
+- The `triangle` shell builtin streams a 104-byte `VIRTIO_GPU_CMD_SUBMIT_3D`
+  packet (viewport 640×480, red clear, one `DRAW_ARRAYS` triangle) through
+  this port.
 
 ## Entry contract (what 5.1 must establish before jumping to the entry point)
 
@@ -37,8 +50,9 @@ Every address here is mirrored by a constant in `src/platform.rs`, and
 - All general-purpose registers = 0, `pstate` = 0
 - MMU off (identity map not required — the guest uses physical addresses only)
 - Single vCPU; the guest executes `WFI` while idle waiting for input
-- No FPU/SIMD use, no exceptions expected, no device tree: the two MMIO
-  registers above are the entire device model.
+- No FPU/SIMD use, no exceptions expected, no device tree: the console
+  registers plus the GPU command-stream port above are the entire device
+  model.
 
 ## Image format (`build` output)
 

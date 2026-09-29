@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>pathn-sh GPU acceptance</title>
+<style>
+  /* No margins: the canvas sits at page (0,0) so --screenshot pixels map
+     1:1 to canvas pixels. */
+  html, body { margin: 0; padding: 0; background: #000; }
+</style>
+</head>
+<body>
+<canvas id="gpu-canvas" width="640" height="480" style="display:none"></canvas>
+<canvas id="shot" width="640" height="480"></canvas>
+<pre id="term" style="color:#0f0;background:#000"></pre>
+<pre id="results">PENDING</pre>
+<script type="module">
+// Headless GPU acceptance: drives the REAL pathn-sh guest through the REAL
+// DOM event path (synthetic KeyboardEvents -> push_key -> guest), types
+// `triangle`, drains the guest's real GPU MMIO stream (U12 -> U7 -> U8) and
+// renders it through the REAL WebGPU canvas adapter (U13 -> virtio_gpu_bridge
+// -> gles2wgpu -> browser WebGPU), then pixel-asserts the golden triangle via
+// a GPU->CPU readback of the real render target (headless --screenshot does
+// not composite WebGPU canvases; the readback is also blitted to a 2D canvas
+// so --screenshot shows the triangle visibly). No rAF: frames are pumped
+// synchronously so --dump-dom captures a deterministic result. No screenshot
+// means not done: run with --screenshot and eyeball the triangle too.
+
+import init, { PathnShell, GpuCanvas } from './pkg/web_host.js';
+
+const term = document.getElementById('term');
+const resultsEl = document.getElementById('results');
+const results = [];
+const check = (name, cond, detail) =>
+  results.push({ name, pass: !!cond, detail: detail || '' });
+
+function key(code, k) {
+  window.dispatchEvent(new KeyboardEvent('keydown', { code, key: k }));
+  window.dispatchEvent(new KeyboardEvent('keyup', { code, key: k }));
+}
+
+function typeText(text) {
+  for (const ch of text) {
+    if (ch === '\n') key('Enter', 'Enter');
+    else if (ch === ' ') key('Space', ' ');
+    else key('Key' + ch.toUpperCase(), ch);
+  }
+}
+
+function finish() {
+  const fails = results.filter(r => !r.pass);
+  document.title = fails.length === 0 ? 'ACCEPT-PASS gpu' : 'ACCEPT-FAIL gpu: ' + fails.map(f => f.name).join(',');
+  resultsEl.textContent = JSON.stringify(results);
+}
+
+let shell, gpu;
+try {
+  await init();
+  shell = new PathnShell();
+  gpu = await GpuCanvas.create('gpu-canvas');
+} catch (e) {
+  document.title = 'ACCEPT-FAIL boot: ' + e;
+  resultsEl.textContent = JSON.stringify([{ name: 'boot', pass: false, detail: String(e) }]);
+  throw e;
+}
+check('boot-prompt', shell.tx_text() === 'pathn-sh> ', JSON.stringify(shell.tx_text()));
+
+// Same listener wiring as the interactive page.
+window.addEventListener('keydown', (e) => shell.push_key(e.code, e.key, true));
+window.addEventListener('keyup', (e) => shell.push_key(e.code, e.key, false));
+
+// Pump frames synchronously until the guest parks with no new output.
+function settle() {
+  for (let i = 0; i < 30; i++) {
+    const out = shell.step_frame();
+    term.textContent += out;
+    if (out === '' && shell.parked()) break;
+  }
+}
+
+settle();
+check('boot-parked', shell.parked() === true, 'parked=' + shell.parked());
+
+// The real guest path: `triangle` -> 104 STRBs to the GPU MMIO port.
+typeText('triangle\n');
+settle();
+check('triangle-cmd',
+  term.textContent.includes('gpu: triangle submitted') && term.textContent.endsWith('pathn-sh> '),
+  JSON.stringify(term.textContent.slice(-80)));
+
+// Drain the guest's GPU submit queue and execute it through the real canvas
+// adapter. Exactly one typed command (Submit3D) is expected.
+//
+// NOTE: we use execute_pending (no present). Headless Chromium's Dawn loses
+// the WebGPU device on get_current_texture() ("A valid external Instance
+// reference no longer exists"), so the surface-present path cannot run
+// headless; the readback below is the ground-truth pixel path.
+let pumped = -1;
+try {
+  pumped = gpu.execute_pending(shell);
+} catch (e) {
+  check('gpu-pump', false, String(e));
+  finish();
+  throw e;
+}
+check('gpu-pump', pumped === 1, 'pumped=' + pumped);
+
+// Ground-truth pixel assertion: read back the bridge's 3D render target
+// (the exact texture the guest's Submit3D drew into) via a GPU->CPU copy.
+// Headless --screenshot does not composite WebGPU canvases and toDataURL
+// reads transparent black after present(), so neither can be trusted here.
+let rb;
+try {
+  rb = await gpu.readback();
+} catch (e) {
+  check('readback', false, String(e));
+  finish();
+  throw e;
+}
+check('readback', rb.length === 640 * 480 * 4, 'len=' + rb.length);
+const px = (x, y) => {
+  const o = (y * 640 + x) * 4;
+  return [rb[o], rb[o + 1], rb[o + 2], rb[o + 3]];
+};
+
+// Canvas center (320,240): inside the triangle under any vertical flip
+// (the triangle is centered on NDC y=0 at x=0). Expect solid white.
+const center = px(320, 240);
+check('px-center-white', center[0] > 200 && center[1] > 200 && center[2] > 200,
+  'center=' + center.join(','));
+
+// Corner (10,10): background, cleared to solid red by the guest's CLEAR.
+// Flip-invariant: the triangle never reaches a corner.
+const corner = px(10, 10);
+check('px-corner-red', corner[0] > 200 && corner[1] < 80 && corner[2] < 80,
+  'corner=' + corner.join(','));
+
+// Sanity: the frame is not a flat fill — sample a grid, require the
+// triangle's white AND the background red both present.
+let white = 0, red = 0;
+for (let y = 0; y < 480; y += 24) {
+  for (let x = 0; x < 640; x += 32) {
+    const p = px(x, y);
+    if (p[0] > 200 && p[1] > 200 && p[2] > 200) white++;
+    else if (p[0] > 200 && p[1] < 80 && p[2] < 80) red++;
+  }
+}
+check('px-two-colors', white > 0 && red > 0, `white=${white} red=${red}`);
+
+// Make the triangle VISIBLE for --screenshot: blit the readback pixels
+// into a plain 2D canvas (headless screenshots composite 2D canvases fine).
+const shot = document.getElementById('shot');
+const sctx = shot.getContext('2d');
+sctx.putImageData(new ImageData(new Uint8ClampedArray(rb), 640, 480), 0, 0);
+check('shot-blit', true, '2d canvas painted for --screenshot');
+
+finish();
+</script>
+</body>
+</html>

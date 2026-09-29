@@ -25,6 +25,18 @@ pub const CONSOLE_TX: u64 = CONSOLE_BASE;
 /// Receive register: LDRB here -> next input byte, or 0 if none available.
 pub const CONSOLE_RX: u64 = CONSOLE_BASE + 8;
 
+/// GPU command-stream MMIO page base (Track A). The guest STRBs one
+/// virtio-gpu control-stream byte per write to [`GPU_DATA`], then STRBs
+/// [`GPU_SUBMIT`] to hand the buffer to the host. Outside RAM and clear of
+/// the console page; byte-wide accesses only, mirroring the console model.
+pub const GPU_BASE: u64 = 0x0A00_0000;
+/// GPU MMIO region size (one 4 KiB page).
+pub const GPU_SIZE: u64 = 0x1000;
+/// Data register: STRB a command-stream byte here -> host appends it.
+pub const GPU_DATA: u64 = GPU_BASE;
+/// Submit register: STRB here -> the buffered stream is submitted.
+pub const GPU_SUBMIT: u64 = GPU_BASE + 8;
+
 /// Offset of the guest data section from the load address (one page).
 /// Code must fit below this; `image_guest_code_fits` enforces it.
 pub const DATA_OFFSET: u64 = 0x1000;
@@ -75,5 +87,26 @@ mod tests {
     fn image_platform_data_page_aligned() {
         assert_eq!(DATA_BASE & 0xFFF, 0);
         assert!(in_ram(DATA_BASE));
+    }
+
+    #[test]
+    fn image_platform_gpu_outside_ram_and_console() {
+        // GPU page is outside RAM …
+        assert!(!ranges_overlap(
+            GPU_BASE,
+            GPU_BASE + GPU_SIZE,
+            RAM_BASE,
+            RAM_BASE + RAM_SIZE
+        ));
+        // … and clear of the console page.
+        assert!(!ranges_overlap(
+            GPU_BASE,
+            GPU_BASE + GPU_SIZE,
+            CONSOLE_BASE,
+            CONSOLE_BASE + CONSOLE_SIZE
+        ));
+        assert_eq!(GPU_DATA, GPU_BASE);
+        assert_eq!(GPU_SUBMIT, GPU_BASE + 8);
+        assert_eq!(GPU_BASE & 0xFFF, 0);
     }
 }
