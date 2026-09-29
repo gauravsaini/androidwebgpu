@@ -29,7 +29,9 @@ pub const D_HELP: u64 = 0x210; // help text
 pub const D_UNK: u64 = 0x230; // "unknown cmd: \0"
 pub const D_NL: u64 = 0x240; // "\n\0"
 pub const D_LONG: u64 = 0x250; // "line too long\n\0"
-pub const DATA_LEN: usize = 0x260;
+pub const D_GPUCMD: u64 = 0x260; // 104-byte SUBMIT_3D stream (Track A)
+pub const D_GPUMSG: u64 = 0x2C8; // "gpu: triangle submitted\n\0"
+pub const DATA_LEN: usize = 0x2E1;
 
 /// Assembled guest: little-endian machine-code words + data-section bytes.
 pub struct ShellImage {
@@ -179,6 +181,53 @@ impl Asm {
     }
 }
 
+/// Build the 104-byte `VIRTIO_GPU_CMD_SUBMIT_3D` packet the `triangle`
+/// builtin streams to the GPU MMIO port (Track A).
+///
+/// Layout (all little-endian):
+/// - 24-byte ctrl hdr: type `0x0207`, flags 0, fence_id 0, ctx_id 42, pad 0
+/// - `size` u32 (= 72, the opcode-stream length), pad u32
+/// - opcode stream (mini records: opcode u32 + len u32 + payload):
+///   `VIEWPORT`(0x04, x=0 y=0 w=640 h=480) + `CLEAR`(0x01, color-buffer bit,
+///   solid red) + `DRAW_ARRAYS`(0x02, `GL_TRIANGLES`, first=0, count=3).
+///
+/// The adapter sets up shaders + the vertex buffer before the submit (the
+/// mini opcodes carry no shader state); the stream only clears and draws.
+pub fn triangle_submit_stream() -> Vec<u8> {
+    let mut v = Vec::with_capacity(104);
+    // ctrl hdr
+    v.extend_from_slice(&0x0207u32.to_le_bytes()); // VIRTIO_GPU_CMD_SUBMIT_3D
+    v.extend_from_slice(&0u32.to_le_bytes()); // flags
+    v.extend_from_slice(&0u64.to_le_bytes()); // fence_id
+    v.extend_from_slice(&42u32.to_le_bytes()); // ctx_id
+    v.extend_from_slice(&0u32.to_le_bytes()); // padding
+    v.extend_from_slice(&72u32.to_le_bytes()); // size: opcode-stream bytes
+    v.extend_from_slice(&0u32.to_le_bytes()); // padding
+                                              // VIEWPORT: opcode 0x04, len 16, x=0, y=0, w=640, h=480
+    v.extend_from_slice(&0x04u32.to_le_bytes());
+    v.extend_from_slice(&16u32.to_le_bytes());
+    v.extend_from_slice(&0i32.to_le_bytes());
+    v.extend_from_slice(&0i32.to_le_bytes());
+    v.extend_from_slice(&640u32.to_le_bytes());
+    v.extend_from_slice(&480u32.to_le_bytes());
+    // CLEAR: opcode 0x01, len 20, mask=GL_COLOR_BUFFER_BIT, rgba=(1,0,0,1)
+    v.extend_from_slice(&0x01u32.to_le_bytes());
+    v.extend_from_slice(&20u32.to_le_bytes());
+    v.extend_from_slice(&0x0000_4000u32.to_le_bytes());
+    v.extend_from_slice(&1.0f32.to_le_bytes());
+    v.extend_from_slice(&0.0f32.to_le_bytes());
+    v.extend_from_slice(&0.0f32.to_le_bytes());
+    v.extend_from_slice(&1.0f32.to_le_bytes());
+    // DRAW_ARRAYS: opcode 0x02, len 12, mode=GL_TRIANGLES, first=0, count=3
+    v.extend_from_slice(&0x02u32.to_le_bytes());
+    v.extend_from_slice(&12u32.to_le_bytes());
+    v.extend_from_slice(&0x0004u32.to_le_bytes());
+    v.extend_from_slice(&0u32.to_le_bytes());
+    v.extend_from_slice(&3u32.to_le_bytes());
+    debug_assert_eq!(v.len(), 104);
+    v
+}
+
 /// Build the data section: buffers (zeroed) + NUL-terminated strings.
 pub fn build_data() -> Vec<u8> {
     let mut d = vec![0u8; DATA_LEN];
@@ -191,6 +240,8 @@ pub fn build_data() -> Vec<u8> {
     put(D_UNK, b"unknown cmd: \0");
     put(D_NL, b"\n\0");
     put(D_LONG, b"line too long\n\0");
+    put(D_GPUCMD, &triangle_submit_stream());
+    put(D_GPUMSG, b"gpu: triangle submitted\n\0");
     d
 }
 
@@ -309,7 +360,7 @@ pub fn assemble_shell() -> ShellImage {
     // match "help"
     a.label("try_help");
     a.eq_count(14, 4, "m_help");
-    a.b("unknown");
+    a.b("try_triangle");
     a.label("m_help");
     a.emit(enc_ldrb(1, 10, D_WORD as u16));
     a.eq_byte(1, b'h', "h_e1");
@@ -325,7 +376,65 @@ pub fn assemble_shell() -> ShellImage {
     a.label("h_e3");
     a.emit(enc_ldrb(1, 10, (D_WORD + 3) as u16));
     a.eq_byte(1, b'p', "do_help");
+    a.b("try_triangle");
+    // match "triangle" (wordlen == 8)
+    a.label("try_triangle");
+    a.eq_count(14, 8, "m_tri");
     a.b("unknown");
+    a.label("m_tri");
+    a.emit(enc_ldrb(1, 10, D_WORD as u16));
+    a.eq_byte(1, b't', "t_r1");
+    a.b("unknown");
+    a.label("t_r1");
+    a.emit(enc_ldrb(1, 10, (D_WORD + 1) as u16));
+    a.eq_byte(1, b'r', "t_i2");
+    a.b("unknown");
+    a.label("t_i2");
+    a.emit(enc_ldrb(1, 10, (D_WORD + 2) as u16));
+    a.eq_byte(1, b'i', "t_a3");
+    a.b("unknown");
+    a.label("t_a3");
+    a.emit(enc_ldrb(1, 10, (D_WORD + 3) as u16));
+    a.eq_byte(1, b'a', "t_n4");
+    a.b("unknown");
+    a.label("t_n4");
+    a.emit(enc_ldrb(1, 10, (D_WORD + 4) as u16));
+    a.eq_byte(1, b'n', "t_g5");
+    a.b("unknown");
+    a.label("t_g5");
+    a.emit(enc_ldrb(1, 10, (D_WORD + 5) as u16));
+    a.eq_byte(1, b'g', "t_l6");
+    a.b("unknown");
+    a.label("t_l6");
+    a.emit(enc_ldrb(1, 10, (D_WORD + 6) as u16));
+    a.eq_byte(1, b'l', "t_e7");
+    a.b("unknown");
+    a.label("t_e7");
+    a.emit(enc_ldrb(1, 10, (D_WORD + 7) as u16));
+    a.eq_byte(1, b'e', "do_triangle");
+    a.b("unknown");
+    // triangle builtin: stream the 104-byte SUBMIT_3D packet at D_GPUCMD
+    // to the GPU MMIO port, one STRB per byte, then signal submit.
+    // Uses x17-x20 (the shell never touches x16-x29; x16 holds the saved
+    // return address). The count loop reuses the byte-equality trick
+    // (asm.rs docs): (count + 152) << 56 == 0 (mod 2^64) iff count == 104.
+    a.label("do_triangle");
+    a.adrp_data(17, D_GPUCMD); // x17 = stream src
+    a.emit(enc_movz(18, 0xA00, 1)); // x18 = GPU_DATA (0x0A00_0000)
+    a.emit(enc_movz(19, 0, 0)); // x19 = count = 0
+    a.label("tri_loop");
+    a.emit(enc_ldrb(20, 17, 0)); // w20 = [x17]
+    a.emit(enc_strb(20, 18, 0)); // GPU_DATA = w20
+    a.emit(enc_add_imm(17, 17, 1, false)); // x17++
+    a.emit(enc_add_imm(19, 19, 1, false)); // x19++
+    a.eq_count(19, 104, "tri_done"); // clobbers x1,x2 (scratch here)
+    a.b("tri_loop");
+    a.label("tri_done");
+    a.emit(enc_add_imm(18, 18, 8, false)); // x18 = GPU_SUBMIT
+    a.emit(enc_strb(31, 18, 0)); // submit (value ignored)
+    a.adrp_data(0, D_GPUMSG);
+    a.bl("print_cstr");
+    a.b("pl_ret");
     // unknown command
     a.label("unknown");
     a.adrp_data(0, D_UNK);
@@ -419,5 +528,53 @@ mod tests {
         let b = assemble_shell();
         assert_eq!(a.code, b.code);
         assert_eq!(a.data, b.data);
+    }
+
+    #[test]
+    fn image_guest_triangle_stream_exact() {
+        // 104 bytes: 24-byte ctrl hdr + size/pad + 72-byte opcode stream.
+        let s = triangle_submit_stream();
+        assert_eq!(s.len(), 104);
+        // ctrl hdr: type 0x0207, flags 0, fence 0, ctx 42, pad 0.
+        assert_eq!(&s[0..4], &0x0207u32.to_le_bytes());
+        assert_eq!(&s[4..8], &0u32.to_le_bytes());
+        assert_eq!(&s[8..16], &0u64.to_le_bytes());
+        assert_eq!(&s[16..20], &42u32.to_le_bytes());
+        assert_eq!(&s[20..24], &0u32.to_le_bytes());
+        // size = 72, pad = 0.
+        assert_eq!(&s[24..28], &72u32.to_le_bytes());
+        assert_eq!(&s[28..32], &0u32.to_le_bytes());
+        // VIEWPORT record: opcode 0x04, len 16, (0,0,640,480).
+        assert_eq!(&s[32..36], &0x04u32.to_le_bytes());
+        assert_eq!(&s[36..40], &16u32.to_le_bytes());
+        assert_eq!(&s[48..52], &640u32.to_le_bytes());
+        assert_eq!(&s[52..56], &480u32.to_le_bytes());
+        // CLEAR record: opcode 0x01, len 20, mask 0x4000, rgba (1,0,0,1).
+        assert_eq!(&s[56..60], &0x01u32.to_le_bytes());
+        assert_eq!(&s[60..64], &20u32.to_le_bytes());
+        assert_eq!(&s[64..68], &0x0000_4000u32.to_le_bytes());
+        assert_eq!(&s[68..72], &1.0f32.to_le_bytes());
+        assert_eq!(&s[80..84], &1.0f32.to_le_bytes());
+        // DRAW_ARRAYS record: opcode 0x02, len 12, GL_TRIANGLES, first 0,
+        // count 3.
+        assert_eq!(&s[84..88], &0x02u32.to_le_bytes());
+        assert_eq!(&s[88..92], &12u32.to_le_bytes());
+        assert_eq!(&s[92..96], &0x0004u32.to_le_bytes());
+        assert_eq!(&s[100..104], &3u32.to_le_bytes());
+    }
+
+    #[test]
+    fn image_guest_triangle_data_placed() {
+        let d = build_data();
+        assert_eq!(d.len(), DATA_LEN);
+        let s = triangle_submit_stream();
+        assert_eq!(
+            &d[D_GPUCMD as usize..D_GPUCMD as usize + s.len()],
+            s.as_slice()
+        );
+        let msg = b"gpu: triangle submitted\n\0";
+        assert_eq!(&d[D_GPUMSG as usize..D_GPUMSG as usize + msg.len()], msg);
+        // Stream sits clear of the message.
+        assert!(D_GPUCMD as usize + s.len() <= D_GPUMSG as usize);
     }
 }

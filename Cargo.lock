@@ -1845,7 +1845,15 @@ dependencies = [
 name = "u13-adapters"
 version = "0.1.0"
 dependencies = [
+ "gles2wgpu",
+ "js-sys",
  "pathn-contracts",
+ "u8-gpu-host",
+ "virtio_gpu_bridge",
+ "wasm-bindgen",
+ "wasm-bindgen-futures",
+ "web-sys",
+ "wgpu",
 ]
 
 [[package]]
@@ -2435,11 +2443,13 @@ version = "0.1.0"
 dependencies = [
  "console_error_panic_hook",
  "guest-image",
+ "js-sys",
  "pathn-contracts",
  "u12-orchestrator",
  "u13-adapters",
  "u15-exec-wasmi",
  "wasm-bindgen",
+ "wasm-bindgen-futures",
 ]
 
 [[package]]

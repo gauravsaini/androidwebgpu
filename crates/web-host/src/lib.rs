@@ -128,3 +128,85 @@ impl PathnShell {
         String::from_utf8_lossy(&self.orch.console().tx_bytes).into_owned()
     }
 }
+
+/// The browser-facing GPU adapter: owns the WebGPU canvas and drains the
+/// shell's GPU submit queue through it. wasm32-only — the U13 canvas module
+/// (real `virtio_gpu_bridge` → `gles2wgpu` → WebGPU) does not exist natively.
+#[cfg(target_arch = "wasm32")]
+#[wasm_bindgen]
+pub struct GpuCanvas {
+    inner: u13_adapters::webgpu_canvas::WebGpuCanvas,
+}
+
+#[cfg(target_arch = "wasm32")]
+#[wasm_bindgen]
+impl GpuCanvas {
+    /// Boot the bridge and bind it to `canvas_id`. Async because WebGPU
+    /// device acquisition awaits the browser. Fails loudly on a missing
+    /// canvas, missing WebGPU, or an incompatible canvas format — never
+    /// half-initialised.
+    pub async fn create(canvas_id: &str) -> Result<GpuCanvas, JsValue> {
+        let inner = u13_adapters::webgpu_canvas::WebGpuCanvas::new(canvas_id)
+            .await
+            .map_err(|e| JsValue::from_str(&e))?;
+        Ok(Self { inner })
+    }
+
+    /// Drain the shell's pending GPU submit (if any) and execute every
+    /// decoded command through U8 dispatch on the canvas bridge, WITHOUT
+    /// presenting. Returns the number of commands executed. Used to isolate
+    /// render vs present failures.
+    pub fn execute_pending(&mut self, shell: &mut PathnShell) -> Result<u32, JsValue> {
+        let sub = match shell.orch.drain_gpu_submit() {
+            Some(s) => s,
+            None => return Ok(0),
+        };
+        if !sub.decode_errors.is_empty() {
+            return Err(JsValue::from_str(&format!(
+                "GPU submit had U7 decode errors at offsets {:?}; \
+                 refusing to render a partial stream",
+                sub.decode_errors
+            )));
+        }
+        let n = sub.commands.len() as u32;
+        for cmd in &sub.commands {
+            self.inner
+                .execute_cmd(cmd)
+                .map_err(|e| JsValue::from_str(&e))?;
+        }
+        Ok(n)
+    }
+
+    /// Present the bridge's render target to the canvas surface.
+    ///
+    /// NOTE: headless Chromium's Dawn loses the device on
+    /// `get_current_texture()`; headless flows must use `execute_pending` +
+    /// `readback` instead and never call this.
+    pub fn present_canvas(&mut self) -> Result<(), JsValue> {
+        self.inner.present().map_err(|e| JsValue::from_str(&e))
+    }
+
+    /// Drain the shell's pending GPU submit (if any), execute every decoded
+    /// command through U8 dispatch on the canvas bridge, then present.
+    /// Returns the number of commands executed.
+    ///
+    /// U7 decode errors fail the call — they are surfaced, never silently
+    /// dropped (U12's `GpuSubmit` contract).
+    pub fn pump(&mut self, shell: &mut PathnShell) -> Result<u32, JsValue> {
+        let n = self.execute_pending(shell)?;
+        if n > 0 {
+            self.present_canvas()?;
+        }
+        Ok(n)
+    }
+
+    /// Read back the bridge's 3D render target as 640×480 RGBA8 bytes —
+    /// the ground-truth pixel assertion path (headless screenshots do not
+    /// composite WebGPU canvases).
+    pub async fn readback(&self) -> Result<js_sys::Uint8Array, JsValue> {
+        self.inner
+            .readback()
+            .await
+            .map_err(|e| JsValue::from_str(&e))
+    }
+}

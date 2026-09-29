@@ -42,6 +42,15 @@ use pathn_contracts::adapters::{
 };
 use std::cell::RefCell;
 use std::collections::{HashMap, VecDeque};
+
+/// Track A: the real WebGPU canvas adapter (wasm32-only).
+///
+/// This is the browser binding the module docs anticipate: it executes U8
+/// host actions against a real `<canvas>` through the real
+/// `virtio_gpu_bridge` → `gles2wgpu` → WebGPU stack. The portable mocks
+/// above are untouched; native builds compile this module out entirely.
+#[cfg(target_arch = "wasm32")]
+pub mod webgpu_canvas;
 use std::rc::Rc;
 
 // ---------------------------------------------------------------------------

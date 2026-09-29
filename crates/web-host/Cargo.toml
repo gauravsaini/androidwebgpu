@@ -17,6 +17,10 @@ u15-exec-wasmi = { path = "../../units/u15-exec-wasmi" }
 guest-image = { path = "../../guest-image" }
 # Pinned exact: must match the installed wasm-bindgen-cli (0.2.129).
 wasm-bindgen = "=0.2.129"
+# Needed by wasm-bindgen to expose async fns (GpuCanvas::create) as Promises.
+wasm-bindgen-futures = { workspace = true }
+# For GpuCanvas::readback's Uint8Array return type.
+js-sys = "0.3"
 console_error_panic_hook = "0.1"
 
 [dev-dependencies]
