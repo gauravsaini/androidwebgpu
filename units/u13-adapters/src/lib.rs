@@ -277,7 +277,9 @@ impl InputSource for ScriptedInput {
 // Byte-channel convention (console input path): a pressed
 // `NormalizedInput::Key { code: KeyCode(b), pressed: true }` with `b < 256`
 // carries the literal byte `b`. Host adapters (this one) produce these;
-// `poll_input` forwards them into the RX FIFO.
+// `poll_input` forwards them into the RX FIFO. One DOM key event fans out
+// to 1–4 byte events in UTF-8 order, so non-ASCII text survives the trip
+// byte-exact and re-assembles downstream.
 // ---------------------------------------------------------------------------
 
 /// One DOM key event, as a browser `keydown`/`keyup` listener delivers it:
@@ -319,28 +321,39 @@ impl KeyboardInput {
         });
     }
 
-    /// Translate one pressed event to a console byte. `None` means dropped
-    /// at the boundary: releases, multi-char keys (`"F1"`, `"Shift"`,
-    /// `"Dead"`, `"Unidentified"`), and non-ASCII input (MVP is ASCII-only).
-    fn event_to_byte(ev: &DomKeyEvent) -> Option<u8> {
+    /// Translate one pressed event to console bytes (UTF-8). Empty means
+    /// dropped at the boundary: releases, multi-char keys (`"F1"`,
+    /// `"Shift"`, `"Dead"`, `"Unidentified"`), and ASCII control
+    /// characters — those stay on the code-matched path
+    /// (Enter/Backspace/Tab/Escape above), never the raw `key` path.
+    ///
+    /// A single non-ASCII character (e.g. `"é"`) emits its 2–4 UTF-8 bytes
+    /// in order, one byte-carrying `Key` event each; the console is a byte
+    /// stream and the bytes re-assemble downstream (guest echo, TX drain,
+    /// DOM render).
+    fn event_to_bytes(ev: &DomKeyEvent) -> Vec<u8> {
         if !ev.pressed {
-            return None;
+            return Vec::new();
         }
         // Layout-independent specials, matched on physical `code`.
         match ev.code.as_str() {
-            "Enter" | "NumpadEnter" => return Some(b'\n'),
-            "Backspace" => return Some(0x7F), // DEL: standard terminal erase
-            "Tab" => return Some(b'\t'),
-            "Escape" => return Some(0x1B),
+            "Enter" | "NumpadEnter" => return vec![b'\n'],
+            "Backspace" => return vec![0x7F], // DEL: standard terminal erase
+            "Tab" => return vec![b'\t'],
+            "Escape" => return vec![0x1B],
             _ => {}
         }
-        // Printables: the browser already resolved shift/layout into `key`
-        // ("h" vs "H"), so the adapter never tracks modifiers.
-        let bytes = ev.key.as_bytes();
-        if bytes.len() == 1 && (0x20..=0x7E).contains(&bytes[0]) {
-            return Some(bytes[0]);
+        // UTF-8 text: the browser already resolved shift/layout into `key`
+        // ("h" vs "H", "é" on any layout), so the adapter never tracks
+        // modifiers. Exactly one Unicode scalar value -> its UTF-8 bytes.
+        let mut chars = ev.key.chars();
+        match (chars.next(), chars.next()) {
+            (Some(c), None) if !c.is_ascii_control() => {
+                let mut buf = [0u8; 4];
+                c.encode_utf8(&mut buf).as_bytes().to_vec()
+            }
+            _ => Vec::new(),
         }
-        None
     }
 }
 
@@ -348,7 +361,9 @@ impl InputSource for KeyboardInput {
     fn poll(&mut self) -> Vec<NormalizedInput> {
         let mut out = Vec::new();
         while let Some(ev) = self.queue.pop_front() {
-            if let Some(b) = Self::event_to_byte(&ev) {
+            // One key event -> 0..=4 byte-carrying Key events, in UTF-8
+            // byte order; the console RX is a byte stream.
+            for b in Self::event_to_bytes(&ev) {
                 out.push(NormalizedInput::Key {
                     code: KeyCode(b as u32),
                     pressed: true,
@@ -620,10 +635,56 @@ mod tests {
     }
 
     #[test]
-    fn keyboard_non_ascii_dropped_mvp_is_ascii_only() {
+    fn keyboard_utf8_two_byte_char_emits_utf8_bytes_in_order() {
+        // 'é' (U+00E9) is bytes C3 A9 in UTF-8; the adapter fans one key
+        // event out to two byte-carrying Key events, in byte order.
         let mut kb = KeyboardInput::new();
-        kb.push_event("KeyE", "\u{e9}", true); // 'é': 2-byte UTF-8
+        kb.push_event("Digit2", "é", true); // code is layout-dependent (AZERTY); `key` is what matters
+        assert_eq!(
+            kb.poll(),
+            vec![byte_key(0xC3), byte_key(0xA9)],
+            "é must arrive as its two UTF-8 bytes"
+        );
+    }
+
+    #[test]
+    fn keyboard_utf8_three_and_four_byte_chars() {
+        let mut kb = KeyboardInput::new();
+        kb.push_event("KeyE", "€", true); // U+20AC -> E2 82 AC
+        kb.push_event("KeyE", "😀", true); // U+1F600 -> F0 9F 98 80
+        assert_eq!(
+            kb.poll(),
+            vec![
+                byte_key(0xE2),
+                byte_key(0x82),
+                byte_key(0xAC),
+                byte_key(0xF0),
+                byte_key(0x9F),
+                byte_key(0x98),
+                byte_key(0x80),
+            ]
+        );
+    }
+
+    #[test]
+    fn keyboard_utf8_release_produces_no_bytes() {
+        let mut kb = KeyboardInput::new();
+        kb.push_event("Digit2", "é", true);
+        kb.push_event("Digit2", "é", false); // release: dropped
+        assert_eq!(kb.poll(), vec![byte_key(0xC3), byte_key(0xA9)]);
+    }
+
+    #[test]
+    fn keyboard_ascii_controls_dropped_unless_code_matched() {
+        // Raw ASCII controls via `key` stay dropped; the code-matched
+        // specials (Enter/Tab/Backspace/Escape) are the only way in.
+        let mut kb = KeyboardInput::new();
+        kb.push_event("KeyA", "\u{1}", true); // Ctrl-A as raw control char
+        kb.push_event("KeyA", "\u{7f}", true); // DEL as raw char
         assert_eq!(kb.poll(), Vec::new());
+        // ...while the code path still works.
+        kb.push_event("Enter", "Enter", true);
+        assert_eq!(kb.poll(), vec![byte_key(b'\n')]);
     }
 
     #[test]

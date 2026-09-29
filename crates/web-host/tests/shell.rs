@@ -24,6 +24,13 @@ fn type_text(sh: &mut PathnShell, text: &str) {
                 sh.push_key(&code, &key, true);
                 sh.push_key(&code, &key, false);
             }
+            // Non-ASCII: the DOM `code` is layout-dependent (here French
+            // AZERTY, where the é key reports Digit2); the adapter keys off
+            // `key`, so any non-special code exercises the UTF-8 path.
+            'é' => {
+                sh.push_key("Digit2", "é", true);
+                sh.push_key("Digit2", "é", false);
+            }
             _ => panic!("type_text: no DOM mapping for {ch:?}"),
         }
     }
@@ -82,6 +89,21 @@ fn shell_unknown_command_exact_tx() {
     assert_eq!(
         sh.tx_text(),
         "pathn-sh> bogus\nunknown cmd: bogus\npathn-sh> "
+    );
+}
+
+#[test]
+fn shell_utf8_input_round_trips_byte_exact() {
+    // End-to-end UTF-8: DOM key event ("é", 2 bytes C3 A9) -> adapter ->
+    // guest RX -> guest echo + unknown-cmd echo -> TX drain. The guest is
+    // byte-oriented, so the bytes must survive the whole trip untouched.
+    let mut sh = PathnShell::new().unwrap();
+    type_text(&mut sh, "é\n");
+    settle(&mut sh);
+    assert_eq!(
+        sh.tx_text(),
+        "pathn-sh> \u{e9}\nunknown cmd: \u{e9}\npathn-sh> ",
+        "UTF-8 bytes must round-trip byte-exact through the guest"
     );
 }
 

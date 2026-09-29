@@ -89,8 +89,9 @@ impl PathnShell {
     }
 
     /// Run the guest for up to one frame's worth of steps and return the
-    /// NEW console TX bytes since the last call (UTF-8 lossy; the guest is
-    /// ASCII-only by platform contract).
+    /// NEW console TX bytes since the last call (UTF-8 lossy for display;
+    /// input bytes are preserved end to end — the console path is UTF-8
+    /// clean, only the pathn-sh builtins stay ASCII).
     ///
     /// Stops early when the guest parks at WFI (nothing more to do until
     /// new input arrives) or halts for real.
