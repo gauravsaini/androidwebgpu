@@ -102,7 +102,9 @@ impl PathnShell {
 `console tx == b"pathn-sh> "` (byte-exact, from the Wave-5 measurement), else
 `Err(JsValue::from_str("BOOT FAILED: …"))`. TX drain: track `tx_len` over
 `console.tx_bytes()` (existing accessor — verify name at impl time), decode the
-new slice as UTF-8 lossy (guest is ASCII; lossy is a display choice, documented).
+new slice as UTF-8 lossy (lossy is a display choice, documented; the input
+path is UTF-8 clean — bytes are preserved end to end, only the pathn-sh
+builtins stay ASCII).
 
 `www/app.js` (no framework): `init()` → `new PathnShell()` → render TX into
 `<pre id="term">`; `keydown`/`keyup` listeners call `push_key(e.code, e.key,
