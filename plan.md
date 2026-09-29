@@ -83,6 +83,33 @@ independently shippable; each has measured done-criteria.
 - Branch: `feat/pathn-sideload` (from `64210e5`).
 - Done: mock-adb test green; conformance note committed.
 
+### Executor split (2026-09-30 ~03:45 AEST, Gaurav's call)
+
+Four tracks, two executors — split by capability, not convenience:
+
+- **Sandbox (Muse subagents)** — repo `~/workspace/androidwebgpu`, cargo present:
+  - Track A `feat/pathn-gpu-browser` — headline feature, needs close
+    supervision; Chromium golden tests run on the box over tailnet SSH.
+  - Track C `feat/pathn-platform` — pure Rust, fast local iteration.
+- **Box `agyx` swarm (gsai)** — repo `/mnt/sdb1/androidwebgpu-pathn`
+  (fresh rsync at `a1b6812`; rustup installing to `~/.cargo`):
+  - Track B `feat/pathn-guest-boot` — longest pole; research + artifact
+    downloads suit the box's disk/network; builds with box cargo.
+  - Track D `feat/pathn-sideload` — bounded independent build.
+
+Box rules for `agyx` agents (non-negotiable):
+
+- Do NOT touch `/mnt/sdb1/androidwebgpu` (separate older experiment) or
+  `/mnt/sdb1/pathn-sh-www` (live demo served on :8124).
+- NTFS: `chmod` unsupported — export `GIT_CONFIG_COUNT=1`,
+  `GIT_CONFIG_KEY_0=core.fileMode`, `GIT_CONFIG_VALUE_0=false` so the
+  executable-bit noise stays out of commits.
+- No GitHub push from the box (no credentials): finish with
+  `git bundle create /mnt/sdb1/<track>.bundle <branch>`; bundles are
+  rsynced back and pushed from the sandbox after gate verification.
+- Same swarm laws as section 4: conventional commits, contracts only,
+  evidence gates, honest ABANDON over fake green.
+
 ## 4. Swarm laws (binding, from `docs/architecture/SWARM.md`)
 
 1. **No cross-imports.** A unit imports only `contracts/` (+ its own).
