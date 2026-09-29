@@ -20,7 +20,12 @@
 pub mod asm;
 pub mod guest;
 pub mod image;
+pub mod kernel;
 pub mod platform;
 pub mod sha256;
 
 pub use image::{build, initial_cpu_state, parse_header, GuestManifest};
+pub use kernel::{
+    build_kernel_image, initial_kernel_cpu_state, parse_kernel_header, Arm64Header,
+    KernelHeaderError, KernelManifest, ARM64_HEADER_LEN, ARM64_KERNEL_MAGIC,
+};
