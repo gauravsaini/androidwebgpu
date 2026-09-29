@@ -1,0 +1,44 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>bench-pending</title>
+</head>
+<body>
+<pre id="term"></pre>
+<script type="module">
+// Track C platform benchmark (browser side). Measures with performance.now()
+// (wall clock when run WITHOUT --virtual-time-budget) and writes results
+// into document.title for --dump-dom extraction.
+import init, { PathnShell } from './pkg/web_host.js';
+
+const t0 = performance.now();
+await init();
+const t1 = performance.now();
+const shell = new PathnShell();
+const t2 = performance.now();
+// The constructor boots synchronously and asserts the prompt; confirm.
+let tx = shell.tx_text();
+const bootOk = tx === 'pathn-sh> ';
+const t3 = performance.now();
+// Input latency: push_key -> echoed byte visible in TX.
+const t4 = performance.now();
+shell.push_key('KeyH', 'h', true);
+shell.push_key('KeyH', 'h', false);
+let echoed = false;
+for (let i = 0; i < 50; i++) {
+  tx += shell.step_frame();
+  if (tx.includes('pathn-sh> h')) { echoed = true; break; }
+}
+const t5 = performance.now();
+document.title =
+  'BENCH wasm_load_compile_ms=' + (t1 - t0).toFixed(1) +
+  ' boot_construct_ms=' + (t2 - t1).toFixed(1) +
+  ' boot_to_prompt_ms=' + (t3 - t0).toFixed(1) +
+  ' boot_ok=' + bootOk +
+  ' steps=' + shell.steps() +
+  ' input_latency_ms=' + (t5 - t4).toFixed(1) +
+  ' echoed=' + echoed;
+</script>
+</body>
+</html>
