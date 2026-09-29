@@ -14,8 +14,14 @@
 //! Purity: deterministic, no I/O, no clock, no threads, no hidden state.
 //! Corrupt input yields typed errors, never panics.
 
+pub mod mock_adb;
+pub mod sideload;
+
 use apk_gpu_analyzer::{ApkGpuAnalyzer, BinaryXmlParser, EngineType};
 use pathn_contracts::machine::{ApkError, ApkMeta, EngineKind};
+
+pub use mock_adb::{AdbTargetFs, MockAdbServer};
+pub use sideload::{sideload_apk, AdbChannel, AdbMessage, InstallResult, SideloadError};
 
 /// Analyze raw APK bytes into the frozen [`ApkMeta`] contract.
 pub fn analyze(apk: &[u8]) -> Result<ApkMeta, ApkError> {

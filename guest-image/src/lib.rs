@@ -21,6 +21,8 @@ pub mod asm;
 pub mod guest;
 pub mod image;
 pub mod platform;
+pub mod rootfs;
 pub mod sha256;
 
 pub use image::{build, initial_cpu_state, parse_header, GuestManifest};
+pub use rootfs::{FileEntry, Rootfs, RootfsError};
