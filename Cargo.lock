@@ -1810,7 +1810,9 @@ name = "u10-analyzer"
 version = "0.1.0"
 dependencies = [
  "apk_gpu_analyzer",
+ "guest-image",
  "pathn-contracts",
+ "u13-adapters",
 ]
 
 [[package]]
