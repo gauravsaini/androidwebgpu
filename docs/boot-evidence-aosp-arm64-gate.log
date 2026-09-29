@@ -1,0 +1,36 @@
+=== Path N Track B Kernel Boot Execution Attempt Log ===
+Date: 2026-09-30
+Target Kernel: /mnt/sdb1/aosp/Image (Linux version 4.19.130-00651-g4da740c10dc0-ab6640132)
+Rootfs: /mnt/sdb1/aosp/static_initramfs.cpio.gz (minimal static aarch64 init)
+Harness: units/u12-orchestrator/tests/kernel_boot_attempt.rs
+
+[0.000000] Path N Orchestrator initialized. RAM: 128 MiB (0x40000000 - 0x48000000).
+[0.000000] Loading kernel image (24,089,088 bytes) at 0x40000000.
+[0.000000] Initializing CPU state: PC=0x40000000, SP=0x48000000, X0..X30=0x0, PSTATE=0x0.
+[0.000000] Beginning vCPU execution...
+
+Trace:
+step  0: pc=0x40000000 word=0x91005a4d (add  x13, x18, #0x16)
+         Decode: Ok(Instruction { addr: 0x40000000, word: 0x91005a4d, kind: DataProc })
+         Execute: Continue -> next pc=0x40000004
+step  1: pc=0x40000004 word=0x144effff (b    0x413c0000)
+         Decode: Ok(Instruction { addr: 0x40000004, word: 0x144effff, kind: Branch })
+         Execute: Continue -> next pc=0x413c0000 (kernel stext)
+step  2: pc=0x413c0000 word=0x94000008 (bl   0x413c0020)
+         Decode: Ok(Instruction { addr: 0x413c0000, word: 0x94000008, kind: Branch })
+         Execute: Continue -> next pc=0x413c0020 (preserve_boot_args)
+step  3: pc=0x413c0020 word=0xaa0003f5 (mov  x21, x0)
+         Decode: Ok(Instruction { addr: 0x413c0020, word: 0xaa0003f5, kind: DataProc })
+         Execute: Continue -> next pc=0x413c0024
+step  4: pc=0x413c0024 word=0xb0000820 (adrp x0, 0x42885000)
+         Decode: Ok(Instruction { addr: 0x413c0024, word: 0xb0000820, kind: PcRel })
+         Execute: Continue -> next pc=0x413c0028
+step  5: pc=0x413c0028 word=0x91000000 (add  x0, x0, #0x0)
+         Decode: Ok(Instruction { addr: 0x413c0028, word: 0x91000000, kind: DataProc })
+         Execute: Continue -> next pc=0x413c002c
+step  6: pc=0x413c002c word=0xa9000415 (stp  x21, x1, [x0])
+         Decode: Illegal { word: 0xa9000415 }
+         Execute: HALTED -> HaltReason::IllegalInstruction { addr: 0x413c002c, word: 0xa9000415 }
+
+FATAL: vCPU halted at instruction 6 due to unsupported opcode 0xa9000415 (STP - Store Pair).
+Gate outcome: ABANDON. Cannot reach init without full ARMv8 instruction set, MMU virtual memory translation, exception levels, GIC interrupt controller, and PL011 UART model.
