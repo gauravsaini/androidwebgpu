@@ -108,8 +108,15 @@ fn test_kernel_boot_measured_failure() {
     // step 7464: pc=0x40c03668 word=0xf100041f (cmp x0, #0x1)            -> OK
     // step 7465: pc=0x40c0366c word=0x5400004b (b.lt 0x40c03674)        -> OK (taken)
     // step 7466: pc=0x40c03674 word=0x580002a5 (ldr x5, [pc, #84])      -> OK (GB-12: static Load via mem_load)
-    // step 7467: pc=0x40c03678 word=0xd518a205 (msr mair_el1, x5)        -> HALT: Unsupported (system semantics not lifted)
-    assert!(trace.len() >= 7467);
+    // step 7467: pc=0x40c03678 word=0xd518a205 (msr mair_el1, x5)        -> OK (GB-13: persistent WriteSys)
+    // step 7468: pc=0x40c0367c word=0xd2a69ea0 (mov x0, #0x34f50000)     -> OK
+    // step 7469: pc=0x40c03680 word=0xf29b23a0 (movk x0, #0xd91d)        -> OK
+    // step 7470: pc=0x40c03684 word=0x5800026a (ldr x10, [pc, #76])      -> OK (GB-12: static Load via mem_load)
+    // step 7471: pc=0x40c03688 word=0xd0004769 (adrp x9, 0x414f1000)     -> OK
+    // step 7472: pc=0x40c0368c word=0xf9409d29 (ldr x9, [x9, #312])      -> OK
+    // step 7473: pc=0x40c03690 word=0xb340152a (bfxil x10, x9, #0, #6)   -> OK
+    // step 7474: pc=0x40c03694 word=0xd5380705 (mrs x5, id_aa64mmfr0_el1)-> HALT: Unsupported (system semantics not lifted)
+    assert!(trace.len() >= 7474);
     assert_eq!(trace[0].1, 0x4000_0000);
     assert_eq!(trace[0].2, 0x9100_5a4d); // ADD imm
     assert_eq!(trace[1].1, 0x4000_0004);
@@ -202,12 +209,26 @@ fn test_kernel_boot_measured_failure() {
     assert_eq!(trace[7466].1, 0x40c0_3674);
     assert_eq!(trace[7466].2, 0x5800_02a5); // LDR X5, [PC, #84] (GB-12: static Load via mem_load)
     assert_eq!(trace[7467].1, 0x40c0_3678);
-    assert_eq!(trace[7467].2, 0xd518_a205); // MSR MAIR_EL1, X5 (S3_0_C10_C2_0) -> HALT
+    assert_eq!(trace[7467].2, 0xd518_a205); // MSR MAIR_EL1, X5 (S3_0_C10_C2_0) -> OK (GB-13)
+    assert_eq!(trace[7468].1, 0x40c0_367c);
+    assert_eq!(trace[7468].2, 0xd2a6_9ea0); // MOV X0, #0x34f50000
+    assert_eq!(trace[7469].1, 0x40c0_3680);
+    assert_eq!(trace[7469].2, 0xf29b_23a0); // MOVK X0, #0xd91d
+    assert_eq!(trace[7470].1, 0x40c0_3684);
+    assert_eq!(trace[7470].2, 0x5800_026a); // LDR X10, [PC, #76] (GB-12: static Load via mem_load)
+    assert_eq!(trace[7471].1, 0x40c0_3688);
+    assert_eq!(trace[7471].2, 0xd000_4769); // ADRP X9, 0x414f1000
+    assert_eq!(trace[7472].1, 0x40c0_368c);
+    assert_eq!(trace[7472].2, 0xf940_9d29); // LDR X9, [X9, #312]
+    assert_eq!(trace[7473].1, 0x40c0_3690);
+    assert_eq!(trace[7473].2, 0xb340_152a); // BFXIL X10, X9, #0, #6
+    assert_eq!(trace[7474].1, 0x40c0_3694);
+    assert_eq!(trace[7474].2, 0xd538_0705); // MRS X5, ID_AA64MMFR0_EL1 (S3_0_C0_C7_0) -> HALT
 
-    // U1 rejects MSR MAIR_EL1 with the honest system-semantics trap.
+    // U1 rejects MRS ID_AA64MMFR0_EL1 with the honest system-semantics trap.
     // Pin the trapping address; the reason string is not pinned.
     match final_halt {
-        Some(HaltReason::Unsupported { addr, .. }) => assert_eq!(addr, 0x40c0_3678),
-        other => panic!("expected Unsupported at 0x40c03678, got {other:?}"),
+        Some(HaltReason::Unsupported { addr, .. }) => assert_eq!(addr, 0x40c0_3694),
+        other => panic!("expected Unsupported at 0x40c03694, got {other:?}"),
     }
 }

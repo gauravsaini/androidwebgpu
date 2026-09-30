@@ -32,6 +32,7 @@ pub struct SysRegs {
     pub sp_el0: u64,
     pub cpacr_el1: u64,
     pub mdscr_el1: u64,
+    pub mair_el1: u64,
 }
 
 impl Default for SysRegs {
@@ -53,6 +54,9 @@ impl Default for SysRegs {
             // Reset value is architecturally UNKNOWN; the kernel always
             // writes MDSCR_EL1 before reading it, so 0 is a safe default.
             mdscr_el1: 0,
+            // Reset value is architecturally UNKNOWN; the kernel always
+            // writes MAIR_EL1 before reading it, so 0 is a safe default.
+            mair_el1: 0,
         }
     }
 }
@@ -72,6 +76,7 @@ impl SysRegs {
             SysReg::SpEl0 => self.sp_el0,
             SysReg::CpacrEl1 => self.cpacr_el1,
             SysReg::MdscrEl1 => self.mdscr_el1,
+            SysReg::MairEl1 => self.mair_el1,
         }
     }
 
@@ -89,6 +94,7 @@ impl SysRegs {
             SysReg::SpEl0 => self.sp_el0 = val,
             SysReg::CpacrEl1 => self.cpacr_el1 = val,
             SysReg::MdscrEl1 => self.mdscr_el1 = val,
+            SysReg::MairEl1 => self.mair_el1 = val,
         }
     }
 
@@ -107,6 +113,7 @@ impl SysRegs {
             8 => Some(SysReg::SpEl0),
             9 => Some(SysReg::CpacrEl1),
             10 => Some(SysReg::MdscrEl1),
+            11 => Some(SysReg::MairEl1),
             _ => None,
         }
     }
@@ -151,7 +158,7 @@ pub const MAX_GUEST_RAM_BYTES: usize = 2 * 1024 * 1024 * 1024;
 pub struct Snapshot(pub Vec<u8>);
 
 /// Current snapshot format version. Bump on any format change.
-pub const SNAPSHOT_VERSION: u32 = 4;
+pub const SNAPSHOT_VERSION: u32 = 5;
 
 /// Snapshot restore failure. Data, not panic — corrupt input never crashes the host.
 #[derive(Debug, Clone, PartialEq, Eq)]

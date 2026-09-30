@@ -65,6 +65,12 @@ pub enum SysReg {
     /// CORRECTION 2026-09-30: the GB-10 brief assumed X0=0, but the box's
     /// aarch64 objdump decodes step 7458 (0xd2820000) as MOVZ X0, #0x1000.)
     MdscrEl1 = 10,
+    /// Added 2026-10-01 (Track GB-13): Memory Attribute Indirection
+    /// Register, EL1. The kernel programs MAIR_EL1 during early MMU setup
+    /// (MSR MAIR_EL1, X5). Field extraction on the measured halt word
+    /// 0xd518a205 gives S3_0_C10_C2_0, which is MAIR_EL1 (verified against
+    /// the ARM ARM; Rt = bits[4:0] = X5).
+    MairEl1 = 11,
 }
 
 /// Single IR operation (SSA-style). The lifter (U2) is the only producer.

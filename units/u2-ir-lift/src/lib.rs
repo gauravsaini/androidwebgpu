@@ -190,6 +190,10 @@ fn lift_system(word: u32) -> Vec<IrOp> {
             (3, 0, 1, 0, 2) => SysReg::CpacrEl1,
             // MDSCR_EL1 (GB-10): kernel zeroes debug control via MSR MDSCR_EL1
             (2, 0, 0, 2, 2) => SysReg::MdscrEl1,
+            // MAIR_EL1 (GB-13): kernel programs memory attributes via MSR MAIR_EL1
+            (3, 0, 10, 2, 0) => SysReg::MairEl1,
+            // MAIR_EL1 (GB-13): kernel programs memory attributes via MSR MAIR_EL1
+            (3, 0, 10, 2, 0) => SysReg::MairEl1,
             _ => return {
                 let val: u64 = match (op0, op1, crn, crm, op2) {
                     // CurrentEL: bits[3:2] = 0b01 (EL1) -> 0x4
@@ -244,6 +248,10 @@ fn lift_system(word: u32) -> Vec<IrOp> {
             (3, 0, 1, 0, 2) => SysReg::CpacrEl1,
             // MDSCR_EL1 (GB-10): kernel zeroes debug control via MSR MDSCR_EL1
             (2, 0, 0, 2, 2) => SysReg::MdscrEl1,
+            // MAIR_EL1 (GB-13): kernel programs memory attributes via MSR MAIR_EL1
+            (3, 0, 10, 2, 0) => SysReg::MairEl1,
+            // MAIR_EL1 (GB-13): kernel programs memory attributes via MSR MAIR_EL1
+            (3, 0, 10, 2, 0) => SysReg::MairEl1,
             // MSR DAIFSet, #imm (op2=6) / MSR DAIFClr, #imm (op2=7): real
             // read-modify-write of the persistent DAIF (GB-11). Upgrades
             // the GB-3 accepted no-ops to honest state.
@@ -1779,6 +1787,7 @@ mod tests {
             ((3, 4, 14, 1, 0), SysReg::CnthctlEl2),
             ((3, 0, 1, 0, 2), SysReg::CpacrEl1),
             ((2, 0, 0, 2, 2), SysReg::MdscrEl1),
+            ((3, 0, 10, 2, 0), SysReg::MairEl1),
         ];
         for ((op0, op1, crn, crm, op2), reg) in mrs_cases {
             let word = sys_word(op0, op1, crn, crm, op2, 7, true);
@@ -1801,6 +1810,7 @@ mod tests {
             ((3, 0, 4, 1, 0), SysReg::SpEl0),
             ((3, 0, 1, 0, 2), SysReg::CpacrEl1),
             ((2, 0, 0, 2, 2), SysReg::MdscrEl1),
+            ((3, 0, 10, 2, 0), SysReg::MairEl1),
         ];
         for ((op0, op1, crn, crm, op2), reg) in msr_cases {
             let word = sys_word(op0, op1, crn, crm, op2, 5, false);
@@ -1852,6 +1862,22 @@ mod tests {
         assert_eq!(
             lift(&insn(0x4000, 0xD530_0245, InsnKind::System)),
             vec![IrOp::ReadSys { dst: 5, reg: SysReg::MdscrEl1 }]
+        );
+    }
+
+    #[test]
+    fn gb13_mair_el1_msr_mrs_lift_to_persistent_ops() {
+        // Measured halt word: MSR MAIR_EL1, X5 (step 7467, pc 0x40c03678).
+        // Field extraction: (op0,op1,crn,crm,op2) = (3,0,10,2,0) = S3_0_C10_C2_0
+        // = MAIR_EL1; Rt = bits[4:0] = X5.
+        assert_eq!(
+            lift(&insn(0x4000, 0xD518_A205, InsnKind::System)),
+            vec![IrOp::WriteSys { src: 5, reg: SysReg::MairEl1 }]
+        );
+        // MRS MAIR_EL1, X5: same system encoding with bit 21 set.
+        assert_eq!(
+            lift(&insn(0x4000, 0xD538_A205, InsnKind::System)),
+            vec![IrOp::ReadSys { dst: 5, reg: SysReg::MairEl1 }]
         );
     }
 
