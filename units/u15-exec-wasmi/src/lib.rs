@@ -307,10 +307,12 @@ mod tests {
                 IrOp::WriteSys { src: 1, reg: SysReg::Daif },
                 IrOp::WriteSys { src: 1, reg: SysReg::CnthctlEl2 },
                 IrOp::WriteSys { src: 1, reg: SysReg::CpacrEl1 },
+                IrOp::WriteSys { src: 1, reg: SysReg::MdscrEl1 },
                 IrOp::ReadSys { dst: 2, reg: SysReg::SctlrEl1 },
                 IrOp::ReadSys { dst: 3, reg: SysReg::TpidrEl1 },
                 IrOp::ReadSys { dst: 4, reg: SysReg::CnthctlEl2 },
                 IrOp::ReadSys { dst: 6, reg: SysReg::CpacrEl1 },
+                IrOp::ReadSys { dst: 7, reg: SysReg::MdscrEl1 },
                 IrOp::Branch { target: 0x10 },
             ],
             vec![BlockExit::Branch(0x10)],
@@ -333,6 +335,9 @@ mod tests {
         // CPACR_EL1 (GB-9, host-call index 9) round-trips through the host.
         assert_eq!(regs[6], 0xdead);
         assert_eq!(host.sysregs.cpacr_el1, 0xdead);
+        // MDSCR_EL1 (GB-10, host-call index 10) round-trips through the host.
+        assert_eq!(regs[7], 0xdead);
+        assert_eq!(host.sysregs.mdscr_el1, 0xdead);
     }
 
     #[test]

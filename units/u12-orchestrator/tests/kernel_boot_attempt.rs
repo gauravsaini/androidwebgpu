@@ -99,9 +99,11 @@ fn test_kernel_boot_measured_failure() {
     // step 7455: pc=0x40c03644 word=0xd503379f (dsb ish)                  -> OK
     // step 7456: pc=0x40c03648 word=0xd2a00600 (movz x0, #0x30, lsl #16) -> OK (x0 = 0x300000)
     // step 7457: pc=0x40c0364c word=0xd5181040 (msr cpacr_el1, x0)       -> OK (GB-9: persistent)
-    // step 7458: pc=0x40c03650 word=0xd2820000 (movz x0, #0)              -> OK
-    // step 7459: pc=0x40c03654 word=0xd5100240 (msr mdscr_el1, x0)        -> HALT: Unsupported (system)
-    assert!(trace.len() >= 7459);
+    // step 7458: pc=0x40c03650 word=0xd2820000 (movz x0, #0x1000)         -> OK (x0 = 0x1000)
+    // step 7459: pc=0x40c03654 word=0xd5100240 (msr mdscr_el1, x0)       -> OK (GB-10: persistent, stores 0x1000)
+    // step 7460: pc=0x40c03658 word=0xd5033fdf (isb)                     -> OK
+    // step 7461: pc=0x40c0365c word=0xd50348ff (msr daifclr, #0x8)       -> HALT: Unsupported (system)
+    assert!(trace.len() >= 7461);
     assert_eq!(trace[0].1, 0x4000_0000);
     assert_eq!(trace[0].2, 0x9100_5a4d); // ADD imm
     assert_eq!(trace[1].1, 0x4000_0004);
@@ -176,14 +178,18 @@ fn test_kernel_boot_measured_failure() {
     assert_eq!(trace[7457].1, 0x40c0_364c);
     assert_eq!(trace[7457].2, 0xd518_1040); // MSR CPACR_EL1, x0 (S3_0_C1_C0_2, GB-9)
     assert_eq!(trace[7458].1, 0x40c0_3650);
-    assert_eq!(trace[7458].2, 0xd282_0000); // MOVZ x0, #0
+    assert_eq!(trace[7458].2, 0xd282_0000); // MOVZ x0, #0x1000
     assert_eq!(trace[7459].1, 0x40c0_3654);
-    assert_eq!(trace[7459].2, 0xd510_0240); // MSR MDSCR_EL1, x0 (S2_0_C0_C2_2) -> HALT
+    assert_eq!(trace[7459].2, 0xd510_0240); // MSR MDSCR_EL1, x0 (S2_0_C0_C2_2, GB-10: persistent)
+    assert_eq!(trace[7460].1, 0x40c0_3658);
+    assert_eq!(trace[7460].2, 0xd503_3fdf); // ISB
+    assert_eq!(trace[7461].1, 0x40c0_365c);
+    assert_eq!(trace[7461].2, 0xd503_48ff); // MSR DAIFClr, #0x8 -> HALT
 
     assert_eq!(
         final_halt,
         Some(HaltReason::Unsupported {
-            addr: 0x40c0_3654,
+            addr: 0x40c0_365c,
             reason: "System: system and privileged semantics are not lifted",
         })
     );

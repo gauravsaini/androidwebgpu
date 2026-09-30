@@ -178,6 +178,8 @@ fn lift_system(word: u32) -> Vec<IrOp> {
             (3, 4, 1, 0, 0) => SysReg::SctlrEl2,
             // CPACR_EL1 (GB-9): kernel enables FP/ASIMD via MSR CPACR_EL1
             (3, 0, 1, 0, 2) => SysReg::CpacrEl1,
+            // MDSCR_EL1 (GB-10): kernel zeroes debug control via MSR MDSCR_EL1
+            (2, 0, 0, 2, 2) => SysReg::MdscrEl1,
             _ => return {
                 let val: u64 = match (op0, op1, crn, crm, op2) {
                     // CurrentEL: bits[3:2] = 0b01 (EL1) -> 0x4
@@ -230,6 +232,8 @@ fn lift_system(word: u32) -> Vec<IrOp> {
             (3, 0, 4, 1, 0) => SysReg::SpEl0,
             // CPACR_EL1 (GB-9): kernel enables FP/ASIMD via MSR CPACR_EL1
             (3, 0, 1, 0, 2) => SysReg::CpacrEl1,
+            // MDSCR_EL1 (GB-10): kernel zeroes debug control via MSR MDSCR_EL1
+            (2, 0, 0, 2, 2) => SysReg::MdscrEl1,
             _ => return {
                 match (op0, op1, crn, crm, op2) {
                     // NZCV: GB-2 live flag path (flags, not a stored register)
@@ -1752,6 +1756,7 @@ mod tests {
             ((3, 4, 1, 0, 0), SysReg::SctlrEl2),
             ((3, 4, 14, 1, 0), SysReg::CnthctlEl2),
             ((3, 0, 1, 0, 2), SysReg::CpacrEl1),
+            ((2, 0, 0, 2, 2), SysReg::MdscrEl1),
         ];
         for ((op0, op1, crn, crm, op2), reg) in mrs_cases {
             let word = sys_word(op0, op1, crn, crm, op2, 7, true);
@@ -1773,6 +1778,7 @@ mod tests {
             ((3, 0, 12, 0, 0), SysReg::VbarEl1),
             ((3, 0, 4, 1, 0), SysReg::SpEl0),
             ((3, 0, 1, 0, 2), SysReg::CpacrEl1),
+            ((2, 0, 0, 2, 2), SysReg::MdscrEl1),
         ];
         for ((op0, op1, crn, crm, op2), reg) in msr_cases {
             let word = sys_word(op0, op1, crn, crm, op2, 5, false);
@@ -1810,6 +1816,20 @@ mod tests {
         assert_eq!(
             lift(&insn(0x4000, 0xD538_1045, InsnKind::System)),
             vec![IrOp::ReadSys { dst: 5, reg: SysReg::CpacrEl1 }]
+        );
+    }
+
+    #[test]
+    fn gb10_mdscr_el1_msr_mrs_lift_to_persistent_ops() {
+        // Measured halt word: MSR MDSCR_EL1, X0 (step 7459, pc 0x40c03654).
+        assert_eq!(
+            lift(&insn(0x4000, 0xD510_0240, InsnKind::System)),
+            vec![IrOp::WriteSys { src: 0, reg: SysReg::MdscrEl1 }]
+        );
+        // MRS MDSCR_EL1, X5: same system encoding with bit 21 set.
+        assert_eq!(
+            lift(&insn(0x4000, 0xD530_0245, InsnKind::System)),
+            vec![IrOp::ReadSys { dst: 5, reg: SysReg::MdscrEl1 }]
         );
     }
 

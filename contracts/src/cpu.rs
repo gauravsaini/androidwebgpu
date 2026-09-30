@@ -59,6 +59,12 @@ pub enum SysReg {
     /// but field extraction gives S3_0_C1_C0_2, which is CPACR_EL1
     /// (TCR_EL1 is S3_0_C2_C0_2 = 0xd5182040).
     CpacrEl1 = 9,
+    /// Added 2026-09-30 (Track GB-10): Monitor Debug System Control
+    /// Register, EL1. The kernel writes MDSCR_EL1 during early CPU setup
+    /// (MSR MDSCR_EL1, X0 with X0=0x1000 from the preceding MOVZ X0, #0x1000;
+    /// CORRECTION 2026-09-30: the GB-10 brief assumed X0=0, but the box's
+    /// aarch64 objdump decodes step 7458 (0xd2820000) as MOVZ X0, #0x1000.)
+    MdscrEl1 = 10,
 }
 
 /// Single IR operation (SSA-style). The lifter (U2) is the only producer.
