@@ -204,7 +204,8 @@ fn lift_system(word: u32) -> Vec<IrOp> {
                     (3, 3, 4, 2, 0) => 0,
                     // ID_AA64PFR0_EL1: EL0/EL1 AArch64 supported
                     (3, 0, 0, 4, 0) => 0x11,
-                    // ID_AA64MMFR1_EL1
+                    // ID_AA64MMFR2_EL1 (GB-16: was mislabeled ID_AA64MMFR1_EL1;
+                    // (3,0,0,7,1) is the real ID_AA64MMFR1_EL1 -- see below)
                     (3, 0, 0, 7, 2) => 0,
                     // ID_AA64DFR0_EL1
                     (3, 0, 0, 5, 0) => 0,
@@ -220,6 +221,18 @@ fn lift_system(word: u32) -> Vec<IrOp> {
                     // steps 7462-7465), so 0 takes the honest conservative
                     // fallback path.
                     (3, 0, 0, 7, 0) => 0,
+                    // ID_AA64MMFR1_EL1 (GB-16): measured halt at step 7480
+                    // (pc 0x40c036ac, word 0xd5380729 = MRS X9,
+                    // S3_0_C0_C7_1 -- (op0,op1,crn,crm,op2) = (3,0,0,7,1)
+                    // extracted by hand from the word and confirmed by
+                    // aarch64-linux-gnu-objdump; not trusted from the
+                    // first reading). Value 0 = no memory-model features
+                    // advertised, matching the sibling ID_AA64MMFR0_EL1 /
+                    // ID_AA64DFR0_EL1 / ID_AA64MMFR2_EL1 reads. The kernel
+                    // only feature-probes this register (MRS -> AND #0xF
+                    // -> CBZ), so 0 takes the honest conservative
+                    // fallback path.
+                    (3, 0, 0, 7, 1) => 0,
                     _ => return trap(R_SYSTEM),
                 };
                 vec![IrOp::Mov { dst: rt, imm: val }]
@@ -1903,6 +1916,20 @@ mod tests {
         assert_eq!(
             lift(&insn(0x40c0_3694, 0xD538_0705, InsnKind::System)),
             vec![IrOp::Mov { dst: 5, imm: 0 }]
+        );
+    }
+
+    #[test]
+    fn gb16_id_aa64mmfr1_el1_mrs_lifts_to_mov() {
+        // Measured halt word: MRS X9, ID_AA64MMFR1_EL1 (step 7480,
+        // pc 0x40c036ac). Field extraction: (op0,op1,crn,crm,op2) =
+        // (3,0,0,7,1) = S3_0_C0_C7_1 = ID_AA64MMFR1_EL1; Rt = X9.
+        // objdump-confirmed on the box. Value 0 = no memory-model
+        // features advertised (matches the sibling ID_AA64MMFR0_EL1 /
+        // ID_AA64DFR0_EL1 reads).
+        assert_eq!(
+            lift(&insn(0x40c0_36ac, 0xD538_0729, InsnKind::System)),
+            vec![IrOp::Mov { dst: 9, imm: 0 }]
         );
     }
 

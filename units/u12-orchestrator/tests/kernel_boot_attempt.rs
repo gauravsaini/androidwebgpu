@@ -121,8 +121,11 @@ fn test_kernel_boot_measured_failure() {
     // step 7477: pc=0x40c036a0 word=0xeb0600bf (cmp x5, x6)              -> OK
     // step 7478: pc=0x40c036a4 word=0x9a8580c5 (csel x5, x6, x5, hi)     -> OK (GB-15: HI false -> x5 = 0)
     // step 7479: pc=0x40c036a8 word=0xb36008aa (bfi x10, x5, #32, #3)    -> OK
-    // step 7480: pc=0x40c036ac word=0xd5380729 (mrs x9, id_aa64mmfr1_el1)-> HALT: Unsupported (ID_AA64MMFR1_EL1 not recognized)
-    assert!(trace.len() >= 7480);
+    // step 7480: pc=0x40c036ac word=0xd5380729 (mrs x9, id_aa64mmfr1_el1)-> OK (GB-16: recognized -> 0)
+    // step 7481: pc=0x40c036b0 word=0x92400d29 (and x9, x9, #0xf)        -> OK
+    // step 7482: pc=0x40c036b4 word=0xb4000049 (cbz x9, 0x40c036bc)      -> OK (taken: x9 = 0)
+    // step 7483: pc=0x40c036bc word=0xd518204a (msr tcr_el1, x10)       -> HALT: Unsupported (TCR_EL1 not persistent yet)
+    assert!(trace.len() >= 7483);
     assert_eq!(trace[0].1, 0x4000_0000);
     assert_eq!(trace[0].2, 0x9100_5a4d); // ADD imm
     assert_eq!(trace[1].1, 0x4000_0004);
@@ -241,15 +244,21 @@ fn test_kernel_boot_measured_failure() {
     assert_eq!(trace[7479].1, 0x40c0_36a8);
     assert_eq!(trace[7479].2, 0xb360_08aa); // BFI X10, X5, #32, #3 -> OK
     assert_eq!(trace[7480].1, 0x40c0_36ac);
-    assert_eq!(trace[7480].2, 0xd538_0729); // MRS X9, ID_AA64MMFR1_EL1 -> HALT
+    assert_eq!(trace[7480].2, 0xd538_0729); // MRS X9, ID_AA64MMFR1_EL1 -> OK (GB-16)
+    assert_eq!(trace[7481].1, 0x40c0_36b0);
+    assert_eq!(trace[7481].2, 0x9240_0d29); // AND X9, X9, #0xF -> OK
+    assert_eq!(trace[7482].1, 0x40c0_36b4);
+    assert_eq!(trace[7482].2, 0xb400_0049); // CBZ X9, 0x40c036bc -> OK (taken)
+    assert_eq!(trace[7483].1, 0x40c0_36bc);
+    assert_eq!(trace[7483].2, 0xd518_204a); // MSR TCR_EL1, X10 -> HALT
 
-    // MRS ID_AA64MMFR1_EL1 is not recognized yet: honest Unsupported trap.
-    // Pin the exact halt: step, pc, word, and reason (GB-16 brief).
+    // The real TCR_EL1 (S3_0_C2_C0_2) is not persistent yet: honest
+    // Unsupported trap. Pin the exact halt: step, pc, word, reason.
     match final_halt {
         Some(HaltReason::Unsupported { addr, reason }) => {
-            assert_eq!(addr, 0x40c0_36ac);
+            assert_eq!(addr, 0x40c0_36bc);
             assert_eq!(reason, "System: system and privileged semantics are not lifted");
         }
-        other => panic!("expected Unsupported at 0x40c036ac, got {other:?}"),
+        other => panic!("expected Unsupported at 0x40c036bc, got {other:?}"),
     }
 }
