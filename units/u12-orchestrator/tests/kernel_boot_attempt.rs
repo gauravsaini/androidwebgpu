@@ -68,8 +68,10 @@ fn test_kernel_boot_measured_failure() {
     // step 3: pc=0x413c0020 word=0xaa0003f5 (mov x21, x0)          -> OK
     // step 4: pc=0x413c0024 word=0xb0000820 (adrp x0, ...)         -> OK
     // step 5: pc=0x413c0028 word=0x91000000 (add x0, x0, #0)      -> OK
-    // step 6: pc=0x413c002c word=0xa9000415 (stp x21, x1, [x0])   -> HALT: IllegalInstruction
-    assert!(trace.len() >= 6);
+    // step 6: pc=0x413c002c word=0xa9000415 (stp x21, x1, [x0])   -> OK (GB-1)
+    // step 7: pc=0x413c0030 word=0xa9010c02 (stp x2, x3, [x0, #16]) -> OK (GB-1)
+    // step 8: pc=0x413c0034 word=0xd5033fbf (dmb sy)               -> HALT: IllegalInstruction (GB-3 next)
+    assert!(trace.len() >= 8);
     assert_eq!(trace[0].1, 0x4000_0000);
     assert_eq!(trace[0].2, 0x9100_5a4d); // ADD imm
     assert_eq!(trace[1].1, 0x4000_0004);
@@ -81,12 +83,16 @@ fn test_kernel_boot_measured_failure() {
     assert_eq!(trace[5].1, 0x413c_0028);
     assert_eq!(trace[6].1, 0x413c_002c);
     assert_eq!(trace[6].2, 0xa900_0415); // STP x21, x1, [x0]
+    assert_eq!(trace[7].1, 0x413c_0030);
+    assert_eq!(trace[7].2, 0xa901_0c02); // STP x2, x3, [x0, #16]
+    assert_eq!(trace[8].1, 0x413c_0034);
+    assert_eq!(trace[8].2, 0xd503_3fbf); // DMB sy
 
     assert_eq!(
         final_halt,
         Some(HaltReason::IllegalInstruction {
-            addr: 0x413c_002c,
-            word: 0xa900_0415,
+            addr: 0x413c_0034,
+            word: 0xd503_3fbf,
         })
     );
 }

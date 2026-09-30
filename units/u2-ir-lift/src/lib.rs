@@ -71,8 +71,6 @@ const R_ADD_SHIFT: &str =
     "DataProc: shifted or extended ADD register operand is not expressible in IrOp";
 const R_LS_UNSUPPORTED: &str = "LoadStore: unsupported encoding";
 const R_LS_SUBWORD: &str = "LoadStore: sub-word access width is not expressible in IrOp";
-const R_LS_DYNAMIC: &str =
-    "LoadStore: register-relative address is dynamic; IrOp::Load/Store carry static addresses only";
 const R_BR_UNSUPPORTED: &str = "Branch: only B/BL/RET/CBZ/CBNZ are lifted";
 const R_CBZ32: &str = "Branch: 32-bit CBZ/CBNZ width is not expressible in IrOp::CondBranch";
 const R_ORR32: &str = "DataProc: 32-bit ORR width is not expressible in IrOp::OrrShift";
@@ -213,65 +211,244 @@ fn lift_data_proc(word: u32) -> Vec<IrOp> {
     trap(R_DP_UNSUPPORTED)
 }
 
-/// Loads/stores: LDR (literal) keeps its static form; LDRB/STRB
-/// (register-relative, unsigned offset) lift to dynamic ops (Wave 4, U2-G1).
+/// Loads/stores (GB-1 scope):
+/// - LDR (literal) keeps its static Load form; LDRSW (literal) adds sign extension.
+/// - STP/LDP pairs (all variants: 32-bit, 64-bit, LDPSW, offset, pre/post-indexed, non-temporal)
+///   lower to StoreDyn/LoadDyn sequences.
+/// - LDR/STR (immediate unsigned offset, pre/post-indexed, register-offset)
+///   lower to LoadDyn/StoreDyn.
+/// - LDRSW variants load 4 bytes and sign-extend to 64-bit via OrrShift.
 fn lift_load_store(insn: &Instruction) -> Vec<IrOp> {
     let word = insn.word;
-    // LDR (literal): sf 00 011000 imm19 Rt  (bits 31:24 = 0x18 / 0x58).
+
+    // 1. LDR / LDRSW (literal): sf 00 011000 imm19 Rt (bits 31:24 = 0x18 / 0x58 / 0x98).
     // Address = PC + sign_extend(imm19 << 2): fully static.
     let top = (word >> 24) & 0xFF;
-    if top == 0x18 || top == 0x58 {
+    if top == 0x18 || top == 0x58 || top == 0x98 {
         let size: u8 = if top == 0x58 { 8 } else { 4 };
         let imm19 = (word >> 5) & 0x7FFFF;
         let offset = (((imm19 as i32) << 13) >> 13) as i64 * 4;
         let addr = (insn.addr as i64).wrapping_add(offset) as u64;
         let rt = (word & 0x1F) as u8;
+        if top == 0x98 {
+            // LDRSW (literal): load 4 bytes and sign-extend to 64 bits.
+            return vec![
+                IrOp::Load {
+                    dst: SCRATCH,
+                    addr,
+                    size: 4,
+                },
+                IrOp::OrrShift {
+                    dst: SCRATCH,
+                    a: 31,
+                    b: SCRATCH,
+                    shift: 0,
+                    amount: 32,
+                },
+                IrOp::OrrShift {
+                    dst: rt,
+                    a: 31,
+                    b: SCRATCH,
+                    shift: 2,
+                    amount: 32,
+                },
+            ];
+        }
         return vec![IrOp::Load {
             dst: rt,
             addr,
             size,
         }];
     }
-    // LD/ST (immediate, unsigned offset): size 11 111001 L imm12 Rn Rt
-    // (bits 29:24 = 0x39; bit 22 L: 1 = load, 0 = store).
+
+    // 2. Load/store pair (STP, LDP, LDPSW, STNP, LDNP):
+    // bits[29:25] == 0b10100 (pins V=0, integer registers).
+    if (word >> 25) & 0x1F == 0b10100 {
+        let opc = (word >> 30) & 0x3;
+        let idx_mode = (word >> 23) & 0x3;
+        let is_load = (word >> 22) & 1 == 1;
+        let imm7 = ((word >> 15) & 0x7F) as i32;
+        let rt2 = ((word >> 10) & 0x1F) as u8;
+        let rn = ((word >> 5) & 0x1F) as u8;
+        let rt = (word & 0x1F) as u8;
+
+        if rn == 31 {
+            return trap(R_LS_SP);
+        }
+
+        let simm7 = ((imm7 << 25) >> 25) as i64;
+        let (size, scale, is_signed) = match opc {
+            0b00 => (4u8, 4i64, false),           // 32-bit pair
+            0b01 if is_load => (4u8, 4i64, true), // LDPSW
+            0b10 => (8u8, 8i64, false),           // 64-bit pair
+            _ => return trap(R_LS_UNSUPPORTED),
+        };
+        let offset = simm7 * scale;
+
+        let (base_off, writeback) = match idx_mode {
+            0b00 => (offset, false), // Non-temporal (STNP/LDNP)
+            0b01 => (0, true),       // Post-index
+            0b10 => (offset, false), // Signed offset
+            0b11 => (offset, true),  // Pre-index
+            _ => unreachable!(),
+        };
+
+        let mut ops = Vec::new();
+        if is_load {
+            if is_signed {
+                // LDPSW: load signed words into 64-bit registers
+                ops.push(IrOp::LoadDyn { dst: SCRATCH, base: rn, off: base_off as u64, size: 4 });
+                ops.push(IrOp::OrrShift { dst: SCRATCH, a: 31, b: SCRATCH, shift: 0, amount: 32 });
+                ops.push(IrOp::OrrShift { dst: rt, a: 31, b: SCRATCH, shift: 2, amount: 32 });
+
+                ops.push(IrOp::LoadDyn { dst: SCRATCH, base: rn, off: (base_off + 4) as u64, size: 4 });
+                ops.push(IrOp::OrrShift { dst: SCRATCH, a: 31, b: SCRATCH, shift: 0, amount: 32 });
+                ops.push(IrOp::OrrShift { dst: rt2, a: 31, b: SCRATCH, shift: 2, amount: 32 });
+            } else {
+                ops.push(IrOp::LoadDyn { dst: rt, base: rn, off: base_off as u64, size });
+                ops.push(IrOp::LoadDyn { dst: rt2, base: rn, off: (base_off + size as i64) as u64, size });
+            }
+        } else {
+            ops.push(IrOp::StoreDyn { src: rt, base: rn, off: base_off as u64, size });
+            ops.push(IrOp::StoreDyn { src: rt2, base: rn, off: (base_off + size as i64) as u64, size });
+        }
+
+        if writeback && offset != 0 {
+            ops.push(IrOp::Mov { dst: SCRATCH, imm: offset as u64 });
+            ops.push(IrOp::Add { dst: rn, a: rn, b: SCRATCH });
+        }
+        return ops;
+    }
+
+    // 3. Load/store register (immediate, unsigned offset):
+    // size 11 111001 opc imm12 Rn Rt (bits 29:24 = 0x39).
     if (word >> 24) & 0x3F == 0x39 {
         let size_bits = (word >> 30) & 0x3;
-        let is_load = (word >> 22) & 1 == 1;
+        let opc = (word >> 22) & 0x3;
         let imm12 = (word >> 10) & 0xFFF;
         let rn = ((word >> 5) & 0x1F) as u8;
         let rt = (word & 0x1F) as u8;
-        // Wave 4 (U2-G1): byte forms lift to dynamic ops. The unsigned
-        // offset is byte-scaled (x1), so off = imm12 directly.
-        if size_bits == 0 {
-            if rn == 31 {
-                // SP-relative: the Wave-4 register file has no SP.
-                return trap(R_LS_SP);
-            }
-            let off = imm12 as u64;
-            if is_load {
-                return vec![IrOp::LoadDyn {
-                    dst: rt,
-                    base: rn,
-                    off,
-                    size: 1,
-                }];
-            }
-            return vec![IrOp::StoreDyn {
-                src: rt,
-                base: rn,
-                off,
-                size: 1,
-            }];
+
+        if rn == 31 {
+            return trap(R_LS_SP);
         }
-        // Halfword is still sub-word; word/doubleword keep the old traps.
+
+        // Halfword is still sub-word and kept as trap per existing tests.
         if size_bits == 1 {
             return trap(R_LS_SUBWORD);
         }
-        // AArch64: for these forms Rn = 31 is SP, and any other Rn is a
-        // general register — either way the base is a dynamic value the
-        // static lifter cannot know, so the effective address is dynamic.
-        return trap(R_LS_DYNAMIC);
+
+        let size: u8 = 1 << size_bits;
+        let off = (imm12 as u64) << size_bits;
+
+        if opc == 0b00 {
+            return vec![IrOp::StoreDyn { src: rt, base: rn, off, size }];
+        } else if opc == 0b01 {
+            return vec![IrOp::LoadDyn { dst: rt, base: rn, off, size }];
+        } else if opc == 0b10 && size_bits == 2 {
+            // LDRSW (unsigned offset)
+            return vec![
+                IrOp::LoadDyn { dst: SCRATCH, base: rn, off, size: 4 },
+                IrOp::OrrShift { dst: SCRATCH, a: 31, b: SCRATCH, shift: 0, amount: 32 },
+                IrOp::OrrShift { dst: rt, a: 31, b: SCRATCH, shift: 2, amount: 32 },
+            ];
+        }
+        return trap(R_LS_UNSUPPORTED);
     }
+
+    // 4. Load/store register (immediate pre/post-indexed):
+    // size 111 V 00 opc 0 imm9 type Rn Rt with bits[29:24] == 0b111000, bit 21 == 0.
+    if (word >> 24) & 0x3F == 0b111000 && (word >> 21) & 1 == 0 {
+        let idx_type = (word >> 10) & 0x3;
+        if idx_type == 0b01 || idx_type == 0b11 {
+            let size_bits = (word >> 30) & 0x3;
+            let opc = (word >> 22) & 0x3;
+            let imm9 = ((word >> 12) & 0x1FF) as i32;
+            let simm9 = ((imm9 << 23) >> 23) as i64;
+            let rn = ((word >> 5) & 0x1F) as u8;
+            let rt = (word & 0x1F) as u8;
+
+            if rn == 31 {
+                return trap(R_LS_SP);
+            }
+
+            if size_bits == 1 {
+                return trap(R_LS_SUBWORD);
+            }
+
+            let size: u8 = 1 << size_bits;
+            let base_off = if idx_type == 0b01 { 0i64 } else { simm9 };
+
+            let mut ops = Vec::new();
+            if opc == 0b00 {
+                ops.push(IrOp::StoreDyn { src: rt, base: rn, off: base_off as u64, size });
+            } else if opc == 0b01 {
+                ops.push(IrOp::LoadDyn { dst: rt, base: rn, off: base_off as u64, size });
+            } else if opc == 0b10 && size_bits == 2 {
+                // LDRSW (pre/post-indexed)
+                ops.push(IrOp::LoadDyn { dst: SCRATCH, base: rn, off: base_off as u64, size: 4 });
+                ops.push(IrOp::OrrShift { dst: SCRATCH, a: 31, b: SCRATCH, shift: 0, amount: 32 });
+                ops.push(IrOp::OrrShift { dst: rt, a: 31, b: SCRATCH, shift: 2, amount: 32 });
+            } else {
+                return trap(R_LS_UNSUPPORTED);
+            }
+
+            if simm9 != 0 {
+                ops.push(IrOp::Mov { dst: SCRATCH, imm: simm9 as u64 });
+                ops.push(IrOp::Add { dst: rn, a: rn, b: SCRATCH });
+            }
+            return ops;
+        }
+    }
+
+    // 5. Load/store register (register offset):
+    // size 111 V 00 opc 1 Rm option S 10 Rn Rt
+    if (word >> 24) & 0x3F == 0b111000 && (word >> 21) & 1 == 1 {
+        let size_bits = (word >> 30) & 0x3;
+        let opc = (word >> 22) & 0x3;
+        let rm = ((word >> 16) & 0x1F) as u8;
+        let option = (word >> 13) & 0x7;
+        let s = (word >> 12) & 1;
+        let rn = ((word >> 5) & 0x1F) as u8;
+        let rt = (word & 0x1F) as u8;
+
+        if rn == 31 {
+            return trap(R_LS_SP);
+        }
+
+        if size_bits == 1 {
+            return trap(R_LS_SUBWORD);
+        }
+
+        // option 011 = 64-bit register offset (LSL #0 or LSL #size_bits)
+        if option == 0b011 {
+            let size: u8 = 1 << size_bits;
+            let shift_amt: u8 = if s == 1 { size_bits as u8 } else { 0 };
+
+            let mut ops = Vec::new();
+            if shift_amt > 0 {
+                ops.push(IrOp::OrrShift { dst: SCRATCH, a: 31, b: rm, shift: 0, amount: shift_amt });
+                ops.push(IrOp::Add { dst: SCRATCH, a: rn, b: SCRATCH });
+            } else {
+                ops.push(IrOp::Add { dst: SCRATCH, a: rn, b: rm });
+            }
+
+            if opc == 0b00 {
+                ops.push(IrOp::StoreDyn { src: rt, base: SCRATCH, off: 0, size });
+            } else if opc == 0b01 {
+                ops.push(IrOp::LoadDyn { dst: rt, base: SCRATCH, off: 0, size });
+            } else if opc == 0b10 && size_bits == 2 {
+                // LDRSW (reg offset)
+                ops.push(IrOp::LoadDyn { dst: SCRATCH, base: SCRATCH, off: 0, size: 4 });
+                ops.push(IrOp::OrrShift { dst: SCRATCH, a: 31, b: SCRATCH, shift: 0, amount: 32 });
+                ops.push(IrOp::OrrShift { dst: rt, a: 31, b: SCRATCH, shift: 2, amount: 32 });
+            } else {
+                return trap(R_LS_UNSUPPORTED);
+            }
+            return ops;
+        }
+    }
+
     trap(R_LS_UNSUPPORTED)
 }
 
@@ -434,26 +611,191 @@ mod tests {
     }
 
     #[test]
-    fn golden_str_register_base_traps_dynamic() {
-        // STR X5, [X6, #0x20]: base is dynamic, so no honest static Store exists.
+    fn golden_str_register_base_lifts_dynamic() {
+        // STR X5, [X6, #0x20]
         let ops = lift(&insn(0x4000, 0xF900_10C5, InsnKind::LoadStore));
         assert_eq!(
             ops,
-            vec![IrOp::Trap {
-                reason: R_LS_DYNAMIC
+            vec![IrOp::StoreDyn {
+                src: 5,
+                base: 6,
+                off: 0x20,
+                size: 8
             }]
         );
     }
 
     #[test]
-    fn golden_ldr_register_base_traps_dynamic() {
-        // LDR X0, [X1, #8]: same dynamic-address honesty rule as STR.
+    fn golden_ldr_register_base_lifts_dynamic() {
+        // LDR X0, [X1, #8]
         let ops = lift(&insn(0x4000, 0xF940_0420, InsnKind::LoadStore));
         assert_eq!(
             ops,
-            vec![IrOp::Trap {
-                reason: R_LS_DYNAMIC
+            vec![IrOp::LoadDyn {
+                dst: 0,
+                base: 1,
+                off: 8,
+                size: 8
             }]
+        );
+    }
+
+    // ---- GB-1: STP/LDP pairs, indexed LDR/STR, LDRSW ----
+
+    #[test]
+    fn gb1_stp_x21_x1_x0_kernel_step6() {
+        // Kernel instruction 6: stp x21, x1, [x0]
+        let ops = lift(&insn(0x413C_002C, 0xA900_0415, InsnKind::LoadStore));
+        assert_eq!(
+            ops,
+            vec![
+                IrOp::StoreDyn { src: 21, base: 0, off: 0, size: 8 },
+                IrOp::StoreDyn { src: 1, base: 0, off: 8, size: 8 },
+            ]
+        );
+    }
+
+    #[test]
+    fn gb1_stp_x2_x3_offset_kernel_step7() {
+        // Kernel instruction 7: stp x2, x3, [x0, #16]
+        let ops = lift(&insn(0x413C_0030, 0xA901_0C02, InsnKind::LoadStore));
+        assert_eq!(
+            ops,
+            vec![
+                IrOp::StoreDyn { src: 2, base: 0, off: 16, size: 8 },
+                IrOp::StoreDyn { src: 3, base: 0, off: 24, size: 8 },
+            ]
+        );
+    }
+
+    #[test]
+    fn gb1_stp_pre_and_post_indexed() {
+        // Pre-indexed: stp x2, x3, [x0, #16]!
+        let ops_pre = lift(&insn(0x4000, 0xA981_0C02, InsnKind::LoadStore));
+        assert_eq!(
+            ops_pre,
+            vec![
+                IrOp::StoreDyn { src: 2, base: 0, off: 16, size: 8 },
+                IrOp::StoreDyn { src: 3, base: 0, off: 24, size: 8 },
+                IrOp::Mov { dst: SCRATCH, imm: 16 },
+                IrOp::Add { dst: 0, a: 0, b: SCRATCH },
+            ]
+        );
+
+        // Post-indexed: stp x2, x3, [x0], #16
+        let ops_post = lift(&insn(0x4000, 0xA881_0C02, InsnKind::LoadStore));
+        assert_eq!(
+            ops_post,
+            vec![
+                IrOp::StoreDyn { src: 2, base: 0, off: 0, size: 8 },
+                IrOp::StoreDyn { src: 3, base: 0, off: 8, size: 8 },
+                IrOp::Mov { dst: SCRATCH, imm: 16 },
+                IrOp::Add { dst: 0, a: 0, b: SCRATCH },
+            ]
+        );
+    }
+
+    #[test]
+    fn gb1_ldp_64_and_32() {
+        // 64-bit: ldp x2, x3, [x0, #16]
+        let ops_64 = lift(&insn(0x4000, 0xA941_0C02, InsnKind::LoadStore));
+        assert_eq!(
+            ops_64,
+            vec![
+                IrOp::LoadDyn { dst: 2, base: 0, off: 16, size: 8 },
+                IrOp::LoadDyn { dst: 3, base: 0, off: 24, size: 8 },
+            ]
+        );
+
+        // 32-bit: ldp w2, w3, [x0, #8]
+        let ops_32 = lift(&insn(0x4000, 0x2941_0C02, InsnKind::LoadStore));
+        assert_eq!(
+            ops_32,
+            vec![
+                IrOp::LoadDyn { dst: 2, base: 0, off: 8, size: 4 },
+                IrOp::LoadDyn { dst: 3, base: 0, off: 12, size: 4 },
+            ]
+        );
+    }
+
+    #[test]
+    fn gb1_ldpsw_sign_extends() {
+        // ldpsw x2, x3, [x0, #8]
+        let ops = lift(&insn(0x4000, 0x6941_0C02, InsnKind::LoadStore));
+        assert_eq!(
+            ops,
+            vec![
+                IrOp::LoadDyn { dst: SCRATCH, base: 0, off: 8, size: 4 },
+                IrOp::OrrShift { dst: SCRATCH, a: 31, b: SCRATCH, shift: 0, amount: 32 },
+                IrOp::OrrShift { dst: 2, a: 31, b: SCRATCH, shift: 2, amount: 32 },
+                IrOp::LoadDyn { dst: SCRATCH, base: 0, off: 12, size: 4 },
+                IrOp::OrrShift { dst: SCRATCH, a: 31, b: SCRATCH, shift: 0, amount: 32 },
+                IrOp::OrrShift { dst: 3, a: 31, b: SCRATCH, shift: 2, amount: 32 },
+            ]
+        );
+    }
+
+    #[test]
+    fn gb1_ldr_pre_and_post_indexed() {
+        // Pre-indexed: ldr x0, [x1, #8]!
+        let ops_pre = lift(&insn(0x4000, 0xF840_8C20, InsnKind::LoadStore));
+        assert_eq!(
+            ops_pre,
+            vec![
+                IrOp::LoadDyn { dst: 0, base: 1, off: 8, size: 8 },
+                IrOp::Mov { dst: SCRATCH, imm: 8 },
+                IrOp::Add { dst: 1, a: 1, b: SCRATCH },
+            ]
+        );
+
+        // Post-indexed: ldr x0, [x1], #8
+        let ops_post = lift(&insn(0x4000, 0xF840_8420, InsnKind::LoadStore));
+        assert_eq!(
+            ops_post,
+            vec![
+                IrOp::LoadDyn { dst: 0, base: 1, off: 0, size: 8 },
+                IrOp::Mov { dst: SCRATCH, imm: 8 },
+                IrOp::Add { dst: 1, a: 1, b: SCRATCH },
+            ]
+        );
+    }
+
+    #[test]
+    fn gb1_ldrsw_variants() {
+        // ldrsw x0, [x1, #4] (unsigned offset)
+        let ops_off = lift(&insn(0x4000, 0xB980_0420, InsnKind::LoadStore));
+        assert_eq!(
+            ops_off,
+            vec![
+                IrOp::LoadDyn { dst: SCRATCH, base: 1, off: 4, size: 4 },
+                IrOp::OrrShift { dst: SCRATCH, a: 31, b: SCRATCH, shift: 0, amount: 32 },
+                IrOp::OrrShift { dst: 0, a: 31, b: SCRATCH, shift: 2, amount: 32 },
+            ]
+        );
+
+        // ldrsw x0, [pc, #8] (literal at 0x4000 -> addr 0x4008)
+        let ops_lit = lift(&insn(0x4000, 0x9800_0040, InsnKind::LoadStore));
+        assert_eq!(
+            ops_lit,
+            vec![
+                IrOp::Load { dst: SCRATCH, addr: 0x4008, size: 4 },
+                IrOp::OrrShift { dst: SCRATCH, a: 31, b: SCRATCH, shift: 0, amount: 32 },
+                IrOp::OrrShift { dst: 0, a: 31, b: SCRATCH, shift: 2, amount: 32 },
+            ]
+        );
+    }
+
+    #[test]
+    fn gb1_ldr_reg_offset() {
+        // ldr x0, [x1, x2, lsl #3]
+        let ops = lift(&insn(0x4000, 0xF862_7820, InsnKind::LoadStore));
+        assert_eq!(
+            ops,
+            vec![
+                IrOp::OrrShift { dst: SCRATCH, a: 31, b: 2, shift: 0, amount: 3 },
+                IrOp::Add { dst: SCRATCH, a: 1, b: SCRATCH },
+                IrOp::LoadDyn { dst: 0, base: SCRATCH, off: 0, size: 8 },
+            ]
         );
     }
 

@@ -42,8 +42,8 @@ fn classify(word: u32) -> Option<InsnKind> {
     match (word >> 25) & 0xF {
         0b1000 | 0b1001 => decode_dp_imm(word),
         0b1010 | 0b1011 => decode_branch_sys(word),
-        0b0100 | 0b0101 => decode_dp_reg(word),
-        0b1100 | 0b1101 => decode_ldst(word),
+        0b0101 | 0b1101 => decode_dp_reg(word),
+        0b0100 | 0b1100 => decode_ldst(word),
         // 0b000x..0b001x: unallocated; 0b011x/0b111x: SIMD/FP/SVE (out of scope)
         _ => None,
     }
@@ -115,19 +115,82 @@ fn decode_dp_reg(word: u32) -> Option<InsnKind> {
     }
 }
 
-/// Loads/stores. Only LDR/STR (immediate, unsigned offset):
-/// size V 11100 opc imm12 Rn Rt with bits[29:24] == 0b111001, which pins V=0
-/// (integer registers; V=1 would be SIMD). Verified: 0xB9000020 = STR W0,[X1],
-/// 0xF9400020 = LDR X0,[X1], 0xB8000020 = STUR (→ Illegal, unscaled form).
+/// Loads/stores (GB-1 scope):
+/// - Load/store pair: STP, LDP, LDPSW, STNP, LDNP
+/// - Load/store literal: LDR (32/64-bit), LDRSW
+/// - Load/store register (immediate, unsigned offset): LDR, STR, LDRSW
+/// - Load/store register (immediate pre/post-indexed): LDR, STR, LDRSW
+/// - Load/store register (register offset): LDR, STR, LDRSW
 fn decode_ldst(word: u32) -> Option<InsnKind> {
-    if (word >> 24) & 0x3F != 0b111001 {
-        return None;
+    // 1. Load/store pair (STP, LDP, LDPSW, STNP, LDNP):
+    // opc 101 V 0 index L imm7 Rt2 Rn Rt
+    // with bits[29:25] == 0b10100 (which pins V=0, integer registers).
+    if (word >> 25) & 0x1F == 0b10100 {
+        let opc = (word >> 30) & 0x3;
+        let is_load = (word >> 22) & 1 == 1;
+        return match opc {
+            0b00 => Some(InsnKind::LoadStore),            // 32-bit STP / LDP
+            0b01 if is_load => Some(InsnKind::LoadStore), // LDPSW
+            0b10 => Some(InsnKind::LoadStore),            // 64-bit STP / LDP
+            _ => None,                                   // 01 with store or 11: unallocated
+        };
     }
-    match (word >> 22) & 0x3 {
-        0b00 => Some(InsnKind::LoadStore), // STR (immediate, unsigned offset)
-        0b01 => Some(InsnKind::LoadStore), // LDR (immediate, unsigned offset)
-        _ => None,                         // opc 10/11: unallocated
+
+    // 2. Load/store literal:
+    // opc 011 V 00 imm19 Rt with bits[29:24] == 0b011000 (V=0).
+    if (word >> 24) & 0x3F == 0b011000 {
+        let opc = (word >> 30) & 0x3;
+        return match opc {
+            0b00 | 0b01 | 0b10 => Some(InsnKind::LoadStore), // 32-bit LDR, 64-bit LDR, LDRSW
+            _ => None,                                       // 11 = PRFM (out of scope)
+        };
     }
+
+    // 3. Load/store register (immediate, unsigned offset):
+    // size 111 V 01 opc imm12 Rn Rt with bits[29:24] == 0b111001 (V=0).
+    if (word >> 24) & 0x3F == 0b111001 {
+        let size_bits = (word >> 30) & 0x3;
+        let opc = (word >> 22) & 0x3;
+        return match opc {
+            0b00 => Some(InsnKind::LoadStore),                   // STR (B, H, W, X)
+            0b01 => Some(InsnKind::LoadStore),                   // LDR (B, H, W, X)
+            0b10 if size_bits == 2 => Some(InsnKind::LoadStore), // LDRSW
+            _ => None,
+        };
+    }
+
+    // 4. Load/store register (immediate pre/post-indexed):
+    // size 111 V 00 opc 0 imm9 type Rn Rt
+    // with bits[29:24] == 0b111000, bit 21 == 0, and type in {0b01 (post), 0b11 (pre)}.
+    // (type == 0b00 is unscaled LDUR/STUR, kept out of scope per existing tests).
+    if (word >> 24) & 0x3F == 0b111000 && (word >> 21) & 1 == 0 {
+        let idx_type = (word >> 10) & 0x3;
+        if idx_type == 0b01 || idx_type == 0b11 {
+            let size_bits = (word >> 30) & 0x3;
+            let opc = (word >> 22) & 0x3;
+            return match opc {
+                0b00 => Some(InsnKind::LoadStore),                   // STR
+                0b01 => Some(InsnKind::LoadStore),                   // LDR
+                0b10 if size_bits == 2 => Some(InsnKind::LoadStore), // LDRSW
+                _ => None,
+            };
+        }
+    }
+
+    // 5. Load/store register (register offset):
+    // size 111 V 00 opc 1 Rm option S 10 Rn Rt
+    if (word >> 24) & 0x3F == 0b111000 && (word >> 21) & 1 == 1 {
+        let size_bits = (word >> 30) & 0x3;
+        let opc = (word >> 22) & 0x3;
+        return match opc {
+            0b00 => Some(InsnKind::LoadStore),                   // STR
+            0b01 => Some(InsnKind::LoadStore),                   // LDR
+            0b10 if size_bits == 2 => Some(InsnKind::LoadStore), // LDRSW
+            _ => None,
+        };
+    }
+
+    None
 }
 
 /// Branches + system instructions.
@@ -330,6 +393,67 @@ mod tests {
     #[test]
     fn simd_str_is_illegal() {
         assert_illegal(0x3D00_0020); // V=1: SIMD, out of scope
+    }
+
+    // ---- GB-1: STP/LDP pair, indexed LDR/STR, literal, LDRSW ----
+
+    #[test]
+    fn gb1_stp_x21_x1_x0_is_loadstore() {
+        // Kernel instruction 6: stp x21, x1, [x0]
+        assert_eq!(ok_kind(0xA900_0415), InsnKind::LoadStore);
+    }
+
+    #[test]
+    fn gb1_stp_offset_and_indexed_are_loadstore() {
+        assert_eq!(ok_kind(0xA901_0C02), InsnKind::LoadStore); // stp x2, x3, [x0, #16]
+        assert_eq!(ok_kind(0xA881_0C02), InsnKind::LoadStore); // stp x2, x3, [x0], #16 (post-index)
+        assert_eq!(ok_kind(0xA981_0C02), InsnKind::LoadStore); // stp x2, x3, [x0, #16]! (pre-index)
+    }
+
+    #[test]
+    fn gb1_ldp_variants_are_loadstore() {
+        assert_eq!(ok_kind(0xA940_0415), InsnKind::LoadStore); // ldp x21, x1, [x0]
+        assert_eq!(ok_kind(0xA8C1_0C02), InsnKind::LoadStore); // ldp x2, x3, [x0], #16 (post-index)
+        assert_eq!(ok_kind(0xA9C1_0C02), InsnKind::LoadStore); // ldp x2, x3, [x0, #16]! (pre-index)
+        assert_eq!(ok_kind(0x2900_0C02), InsnKind::LoadStore); // stp w2, w3, [x0] (32-bit)
+        assert_eq!(ok_kind(0x2940_0C02), InsnKind::LoadStore); // ldp w2, w3, [x0] (32-bit)
+        assert_eq!(ok_kind(0x6940_0C02), InsnKind::LoadStore); // ldpsw x2, x3, [x0]
+    }
+
+    #[test]
+    fn gb1_stnp_ldnp_are_loadstore() {
+        assert_eq!(ok_kind(0xA800_0440), InsnKind::LoadStore); // stnp x0, x1, [x2]
+        assert_eq!(ok_kind(0xA840_0440), InsnKind::LoadStore); // ldnp x0, x1, [x2]
+    }
+
+    #[test]
+    fn gb1_ldr_literal_variants_are_loadstore() {
+        assert_eq!(ok_kind(0x18FF_FFE3), InsnKind::LoadStore); // ldr w3, [pc, #-4]
+        assert_eq!(ok_kind(0x5800_0040), InsnKind::LoadStore); // ldr x0, [pc, #8]
+        assert_eq!(ok_kind(0x9800_0020), InsnKind::LoadStore); // ldrsw x0, label
+    }
+
+    #[test]
+    fn gb1_indexed_ldr_str_are_loadstore() {
+        assert_eq!(ok_kind(0xF840_8C20), InsnKind::LoadStore); // ldr x0, [x1, #8]! (pre-index)
+        assert_eq!(ok_kind(0xF840_8420), InsnKind::LoadStore); // ldr x0, [x1], #8 (post-index)
+        assert_eq!(ok_kind(0xF800_8C20), InsnKind::LoadStore); // str x0, [x1, #8]! (pre-index)
+        assert_eq!(ok_kind(0xF800_8420), InsnKind::LoadStore); // str x0, [x1], #8 (post-index)
+        assert_eq!(ok_kind(0xB840_4C20), InsnKind::LoadStore); // ldr w0, [x1, #4]! (pre-index)
+        assert_eq!(ok_kind(0xB840_4420), InsnKind::LoadStore); // ldr w0, [x1], #4 (post-index)
+    }
+
+    #[test]
+    fn gb1_ldrsw_variants_are_loadstore() {
+        assert_eq!(ok_kind(0xB980_0420), InsnKind::LoadStore); // ldrsw x0, [x1, #4] (unsigned offset)
+        assert_eq!(ok_kind(0xB880_4C20), InsnKind::LoadStore); // ldrsw x0, [x1, #4]! (pre-index)
+        assert_eq!(ok_kind(0xB880_4420), InsnKind::LoadStore); // ldrsw x0, [x1], #4 (post-index)
+    }
+
+    #[test]
+    fn gb1_reg_offset_are_loadstore() {
+        assert_eq!(ok_kind(0xF862_6820), InsnKind::LoadStore); // ldr x0, [x1, x2]
+        assert_eq!(ok_kind(0xF822_6820), InsnKind::LoadStore); // str x0, [x1, x2]
     }
 
     // ---- branches ----
