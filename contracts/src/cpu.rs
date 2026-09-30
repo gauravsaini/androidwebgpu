@@ -10,6 +10,10 @@ pub enum InsnKind {
     LoadStore,
     Branch,
     System,
+    /// Added 2026-09-30 (Phase-2 spike): SVC (supervisor call, immediate).
+    /// bits[31:21] == 0b11010100000. Lifts to an honest unimplemented trap
+    /// until the exception model lands; never silently executed.
+    Svc,
     /// Added 2026-09-27 (Wave 4 amendment U1-G1): PC-relative address
     /// computation (ADR/ADRP). A distinct class because the lifter needs the
     /// instruction address to compute the target; DataProc semantics never do.

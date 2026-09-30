@@ -10,6 +10,8 @@
 //! - loads/stores: LDR/STR (immediate, unsigned offset), integer registers
 //! - branches: B, BL, CBZ, CBNZ, RET
 //! - system: HINT (NOP = HINT #0)
+//! - supervisor call: SVC (immediate) — recognized; U2 lifts it to an honest
+//!   unimplemented trap (Phase-2 spike, no exception model yet)
 //!
 //! Every other encoding → `DecodeResult::Illegal`, honestly. Illegal words are
 //! data, never panics. Unallocated/reserved variants of *supported* mnemonics
@@ -302,6 +304,12 @@ fn decode_branch_sys(word: u32) -> Option<InsnKind> {
     // the Rn field, so any RET <Xn> matches; BR (0xD61F…) / BLR (0xD63F…) do not.
     if word & 0xFFFF_FC1F == 0xD65F_0000 {
         return Some(InsnKind::Branch);
+    }
+    // SVC (immediate): 11010100 000 imm16 00001. bits[31:21] == 0b11010100000.
+    // Phase-2 spike: recognized so a future SVC halt is instantly
+    // identifiable in traces; U2 lifts it to an honest unimplemented trap.
+    if (word >> 21) & 0x7FF == 0b11010100000 {
+        return Some(InsnKind::Svc);
     }
     // System instructions: bits[31:22] == 0b1101_0101_00 (0x354).
     // Covers barriers (DMB, DSB, ISB), HINTs (NOP, WFI), MSR, MRS, SYS ops (DC, IC, TLBI).
@@ -700,6 +708,18 @@ mod tests {
     #[test]
     fn blr_is_illegal() {
         assert_illegal(0xD63F_0000); // BLR: out of scope
+    }
+
+    // ---- supervisor call (Phase-2 spike) ----
+
+    #[test]
+    fn svc_imm_is_svc() {
+        assert_eq!(ok_kind(0xD400_0001), InsnKind::Svc); // SVC #0
+    }
+
+    #[test]
+    fn svc_with_imm16_is_svc() {
+        assert_eq!(ok_kind(0xD403_4561), InsnKind::Svc); // SVC #0x1a2, bits[31:21] match
     }
 
     // ---- system ----

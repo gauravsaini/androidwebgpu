@@ -80,6 +80,9 @@ const R_CBZ32: &str = "Branch: 32-bit CBZ/CBNZ width is not expressible in IrOp:
 const R_ORR32: &str = "DataProc: 32-bit ORR width is not expressible in IrOp::OrrShift";
 const R_LS_SP: &str =
     "LoadStore: SP-relative address is not expressible (no SP in the Wave-4 register file)";
+/// Phase-2 spike (2026-09-30): SVC recognized by U1 but the exception model
+/// does not exist yet. Public so the orchestrator can map it to the distinct HaltReason::Svc instead of generic Unsupported.
+pub const R_SVC_UNIMPL: &str = "Svc: exception model not yet implemented";
 
 fn trap(reason: &'static str) -> Vec<IrOp> {
     vec![IrOp::Trap { reason }]
@@ -97,6 +100,7 @@ pub fn lift(insn: &Instruction) -> Vec<IrOp> {
         InsnKind::Branch => lift_branch(insn),
         InsnKind::PcRel => lift_pc_rel(insn),
         InsnKind::System => lift_system(insn.word),
+        InsnKind::Svc => trap(R_SVC_UNIMPL),
         InsnKind::Unknown => trap(R_UNKNOWN),
     }
 }
@@ -1183,6 +1187,13 @@ mod tests {
     fn trap_unknown_kind_names_kind() {
         let ops = lift(&insn(0x4000, 0xFFFF_FFFF, InsnKind::Unknown));
         assert_eq!(ops, vec![IrOp::Trap { reason: R_UNKNOWN }]);
+    }
+
+    #[test]
+    fn trap_svc_kind_is_honest_unimplemented() {
+        let ops = lift(&insn(0x4000, 0xD400_0001, InsnKind::Svc));
+        assert_eq!(ops, vec![IrOp::Trap { reason: R_SVC_UNIMPL }]);
+        assert!(matches!(&ops[0], IrOp::Trap { reason } if reason.contains("Svc")));
     }
 
     #[test]

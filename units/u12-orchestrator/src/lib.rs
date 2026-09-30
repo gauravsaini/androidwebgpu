@@ -160,6 +160,11 @@ pub enum HaltReason {
     Wfi {
         addr: u64,
     },
+    /// SVC executed but the exception model does not exist yet (Phase-2
+    /// spike, 2026-09-30). Distinct from Unsupported so a future SVC halt is
+    /// instantly recognizable in traces. Snapshot tag 8 is reserved for it
+    /// (additive - tags 0-7 decode exactly as before).
+    Svc { addr: u64 },
 }
 
 /// Image load failure — data, not panic.
@@ -868,7 +873,13 @@ impl Orchestrator {
         // Trap check BEFORE compiling: U2's trap strings are the exact,
         // honest reason. Compiling a trap would only produce `unreachable`.
         if let Some(reason) = first_trap_reason(&ops) {
-            let halt = HaltReason::Unsupported { addr: pc, reason };
+            // Phase-2 spike: SVC gets its own halt variant so a future SVC
+            // halt is instantly recognizable in traces vs generic Unsupported.
+            let halt = if reason == u2_ir_lift::R_SVC_UNIMPL {
+                HaltReason::Svc { addr: pc }
+            } else {
+                HaltReason::Unsupported { addr: pc, reason }
+            };
             self.halted = Some(halt.clone());
             return StepOutcome::Halted(halt);
         }
@@ -1132,6 +1143,12 @@ impl Orchestrator {
                 w.u8(7);
                 w.u64(*addr);
             }
+            // Tag 8 is additive: blobs written before the Phase-2 spike
+            // never carry it, and tags 0-7 decode exactly as before.
+            Some(HaltReason::Svc { addr }) => {
+                w.u8(8);
+                w.u64(*addr);
+            }
         }
         out.extend_from_slice(&w.buf);
         out
@@ -1208,6 +1225,9 @@ impl Orchestrator {
             5 => Some(HaltReason::ExitVm),
             6 => Some(HaltReason::StepLimitExceeded),
             7 => Some(HaltReason::Wfi {
+                addr: r.u64().ok_or(RestoreError::BadFormat)?,
+            }),
+            8 => Some(HaltReason::Svc {
                 addr: r.u64().ok_or(RestoreError::BadFormat)?,
             }),
             _ => return Err(RestoreError::BadFormat),
