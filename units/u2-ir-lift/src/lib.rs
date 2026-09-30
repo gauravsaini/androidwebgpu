@@ -121,11 +121,89 @@ fn lift_pc_rel(insn: &Instruction) -> Vec<IrOp> {
     }]
 }
 
-/// System: only the WFI hint word lifts (Wave 4); everything else traps.
+/// System: WFI, barriers (DMB, DSB, ISB), HINTs (NOP, YIELD), system register
+/// access (MSR, MRS), and system operations (DC, IC, TLBI).
 fn lift_system(word: u32) -> Vec<IrOp> {
     // WFI is HINT #3 with CRm:op2 = 00100:01111: exact word match, no aliases.
     if word == 0xD503_207F {
         return vec![IrOp::Wfi];
+    }
+    // HINTs (including NOP = HINT #0): bits[31:12] == 0xD5032, Rt == 0x1F.
+    // NOP and hints are honest NOPs on single-vCPU.
+    if word >> 12 == 0xD5032 && word & 0x1F == 0x1F {
+        return vec![];
+    }
+    // Barriers (DMB, DSB, ISB): bits[31:12] == 0xD5033, Rt == 0x1F.
+    // On single-vCPU, memory and instruction barriers are honest NOPs.
+    if word >> 12 == 0xD5033 && word & 0x1F == 0x1F {
+        return vec![];
+    }
+    // System operations (e.g. DC CIVAC, DC IVAC, DC CVAC, IC IALLU, TLBI):
+    // op0 == 1 (SYS). On single-vCPU emulator, cache and TLB maintenance are NOPs.
+    if (word >> 22) & 0x3FF == 0x354 && ((word >> 21) & 1) == 0 && ((word >> 19) & 0x3) == 1 {
+        return vec![];
+    }
+    // MRS Xt, <sysreg>: bit 21 == 1.
+    if (word >> 22) & 0x3FF == 0x354 && ((word >> 21) & 1) == 1 {
+        let op0 = (word >> 19) & 0x3;
+        let op1 = (word >> 16) & 0x7;
+        let crn = (word >> 12) & 0xF;
+        let crm = (word >> 8) & 0xF;
+        let op2 = (word >> 5) & 0x7;
+        let rt = (word & 0x1F) as u8;
+
+        let val: u64 = match (op0, op1, crn, crm, op2) {
+            // CurrentEL: bits[3:2] = 0b01 (EL1) -> 0x4
+            (3, 0, 4, 2, 2) => 0x4,
+            // CTR_EL0: Cache Type Register (64B D-cache, 64B I-cache)
+            (3, 3, 0, 0, 1) => 0x8444_c004,
+            // DAIF: all masked (0x3c0) per Linux ARM64 boot protocol
+            (3, 3, 4, 2, 1) => 0x3c0,
+            // NZCV: flags (initial 0)
+            (3, 3, 4, 2, 0) => 0,
+            // TPIDR_EL1: thread ID register (initial 0)
+            (3, 0, 13, 0, 4) => 0,
+            // ID_AA64PFR0_EL1: EL0/EL1 AArch64 supported
+            (3, 0, 0, 4, 0) => 0x11,
+            // ID_AA64MMFR1_EL1
+            (3, 0, 0, 7, 2) => 0,
+            // ID_AA64DFR0_EL1
+            (3, 0, 0, 5, 0) => 0,
+            // CNTHCTL_EL2
+            (3, 4, 14, 1, 0) => 0,
+            // SCTLR_EL1, SCTLR_EL2
+            (3, 0, 1, 0, 0) | (3, 4, 1, 0, 0) => 0,
+            _ => return trap(R_SYSTEM),
+        };
+        return vec![IrOp::Mov { dst: rt, imm: val }];
+    }
+    // MSR <sysreg>, Xt or MSR <pstatefield>, #imm: bit 21 == 0.
+    if (word >> 22) & 0x3FF == 0x354 && ((word >> 21) & 1) == 0 {
+        let op0 = (word >> 19) & 0x3;
+        let op1 = (word >> 16) & 0x7;
+        let crn = (word >> 12) & 0xF;
+        let crm = (word >> 8) & 0xF;
+        let op2 = (word >> 5) & 0x7;
+
+        let supported = match (op0, op1, crn, crm, op2) {
+            // SPSel, DAIFSet, DAIFClr
+            (0, 0, 4, 1, 5) | (0, 3, 4, 2, 6) | (0, 3, 4, 2, 7) => true,
+            // DAIF, NZCV, TPIDR_EL1
+            (3, 3, 4, 2, 1) | (3, 3, 4, 2, 0) | (3, 0, 13, 0, 4) => true,
+            // SCTLR_EL1, SCTLR_EL2, HCR_EL2, CNTHCTL_EL2, CNTVOFF_EL2, VBAR_EL1, SP_EL0
+            (3, 0, 1, 0, 0)
+            | (3, 4, 1, 0, 0)
+            | (3, 4, 1, 1, 0)
+            | (3, 4, 14, 1, 0)
+            | (3, 4, 14, 0, 3)
+            | (3, 0, 12, 0, 0)
+            | (3, 0, 4, 1, 0) => true,
+            _ => false,
+        };
+        if supported {
+            return vec![];
+        }
+        return trap(R_SYSTEM);
     }
     trap(R_SYSTEM)
 }
@@ -1175,9 +1253,68 @@ mod tests {
     }
 
     #[test]
-    fn wave4_other_system_still_traps() {
-        // NOP (HINT #0) is not WFI: still a trap.
-        let ops = lift(&insn(0x4000, 0xD503_201F, InsnKind::System));
+    fn gb3_nop_and_barriers_lift_to_empty() {
+        // NOP (HINT #0)
+        assert_eq!(lift(&insn(0x4000, 0xD503_201F, InsnKind::System)), vec![]);
+        // DMB sy
+        assert_eq!(lift(&insn(0x4000, 0xD503_3FBF, InsnKind::System)), vec![]);
+        // DMB ish
+        assert_eq!(lift(&insn(0x4000, 0xD503_3BBF, InsnKind::System)), vec![]);
+        // DSB sy
+        assert_eq!(lift(&insn(0x4000, 0xD503_3F9F, InsnKind::System)), vec![]);
+        // DSB ishst
+        assert_eq!(lift(&insn(0x4000, 0xD503_3A9F, InsnKind::System)), vec![]);
+        // ISB
+        assert_eq!(lift(&insn(0x4000, 0xD503_3FDF, InsnKind::System)), vec![]);
+    }
+
+    #[test]
+    fn gb3_mrs_sysregs_lift_to_mov() {
+        // CurrentEL -> 4 (EL1)
+        assert_eq!(
+            lift(&insn(0x4000, 0xD538_4240, InsnKind::System)),
+            vec![IrOp::Mov { dst: 0, imm: 4 }]
+        );
+        // CTR_EL0 -> 0x8444_c004
+        assert_eq!(
+            lift(&insn(0x4000, 0xD53B_0023, InsnKind::System)),
+            vec![IrOp::Mov { dst: 3, imm: 0x8444_C004 }]
+        );
+        // DAIF -> 0x3c0
+        assert_eq!(
+            lift(&insn(0x4000, 0xD53B_4220, InsnKind::System)),
+            vec![IrOp::Mov { dst: 0, imm: 0x3C0 }]
+        );
+        // NZCV -> 0
+        assert_eq!(
+            lift(&insn(0x4000, 0xD53B_4200, InsnKind::System)),
+            vec![IrOp::Mov { dst: 0, imm: 0 }]
+        );
+        // TPIDR_EL1 -> 0
+        assert_eq!(
+            lift(&insn(0x4000, 0xD538_D080, InsnKind::System)),
+            vec![IrOp::Mov { dst: 0, imm: 0 }]
+        );
+    }
+
+    #[test]
+    fn gb3_msr_and_cache_ops_lift_to_empty() {
+        // MSR DAIF, X0
+        assert_eq!(lift(&insn(0x4000, 0xD51B_4220, InsnKind::System)), vec![]);
+        // MSR NZCV, X0
+        assert_eq!(lift(&insn(0x4000, 0xD51B_4200, InsnKind::System)), vec![]);
+        // MSR TPIDR_EL1, X0
+        assert_eq!(lift(&insn(0x4000, 0xD518_D080, InsnKind::System)), vec![]);
+        // MSR SPSel, #1
+        assert_eq!(lift(&insn(0x4000, 0xD500_41BF, InsnKind::System)), vec![]);
+        // DC CIVAC, X1
+        assert_eq!(lift(&insn(0x4000, 0xD50B_7E21, InsnKind::System)), vec![]);
+    }
+
+    #[test]
+    fn gb3_unsupported_system_traps() {
+        // Non-system instruction passed as System
+        let ops = lift(&insn(0x4000, 0x0000_0000, InsnKind::System));
         assert_eq!(ops, vec![IrOp::Trap { reason: R_SYSTEM }]);
     }
 }

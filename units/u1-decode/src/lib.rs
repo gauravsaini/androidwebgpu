@@ -191,6 +191,24 @@ fn decode_ldst(word: u32) -> Option<InsnKind> {
     None
 }
 
+/// Load/store register pair: STP, LDP.
+/// opc(2) 101 V(1) 0 mode(2) L(1) imm7(7) Rt2(5) Rn(5) Rt(5).
+/// bits[29:25] == 0b10100 pins V=0 (integer registers; V=1 is SIMD).
+fn decode_ldst_pair(word: u32) -> Option<InsnKind> {
+    if (word >> 25) & 0x1F != 0b10100 {
+        return None;
+    }
+    let mode = (word >> 23) & 0x3;
+    if mode == 0 {
+        return None; // 00 is unallocated
+    }
+    let opc = (word >> 30) & 0x3;
+    if opc == 0b11 {
+        return None; // 11 is unallocated
+    }
+    Some(InsnKind::LoadStore)
+}
+
 /// Branches + system instructions.
 fn decode_branch_sys(word: u32) -> Option<InsnKind> {
     // B / BL: 000101 / 100101 imm26.
@@ -221,9 +239,9 @@ fn decode_branch_sys(word: u32) -> Option<InsnKind> {
     if word & 0xFFFF_FC1F == 0xD65F_0000 {
         return Some(InsnKind::Branch);
     }
-    // HINT: bits[31:12] == 0xD5032, Rt == 11111, CRm:op2 free (the hint number).
-    // NOP (0xD503201F) is HINT #0.
-    if word >> 12 == 0xD5032 && word & 0x1F == 0x1F {
+    // System instructions: bits[31:22] == 0b1101_0101_00 (0x354).
+    // Covers barriers (DMB, DSB, ISB), HINTs (NOP, WFI), MSR, MRS, SYS ops (DC, IC, TLBI).
+    if (word >> 22) & 0x3FF == 0x354 {
         return Some(InsnKind::System);
     }
     None
@@ -536,6 +554,77 @@ mod tests {
     }
 
     // ---- GB-2: branches + flags golden words ----
+
+
+    #[test]
+    fn dmb_sy_is_system() {
+        assert_eq!(ok_kind(0xD503_3FBF), InsnKind::System); // DMB sy
+    }
+
+    #[test]
+    fn dmb_ish_is_system() {
+        assert_eq!(ok_kind(0xD503_3BBF), InsnKind::System); // DMB ish
+    }
+
+    #[test]
+    fn dsb_sy_is_system() {
+        assert_eq!(ok_kind(0xD503_3F9F), InsnKind::System); // DSB sy
+    }
+
+    #[test]
+    fn dsb_ishst_is_system() {
+        assert_eq!(ok_kind(0xD503_3A9F), InsnKind::System); // DSB ishst
+    }
+
+    #[test]
+    fn isb_is_system() {
+        assert_eq!(ok_kind(0xD503_3FDF), InsnKind::System); // ISB
+    }
+
+    #[test]
+    fn mrs_currentel_is_system() {
+        assert_eq!(ok_kind(0xD538_4240), InsnKind::System); // MRS X0, CurrentEL
+    }
+
+    #[test]
+    fn mrs_daif_is_system() {
+        assert_eq!(ok_kind(0xD53B_4220), InsnKind::System); // MRS X0, DAIF
+    }
+
+    #[test]
+    fn msr_daif_is_system() {
+        assert_eq!(ok_kind(0xD51B_4220), InsnKind::System); // MSR DAIF, X0
+    }
+
+    #[test]
+    fn mrs_nzcv_is_system() {
+        assert_eq!(ok_kind(0xD53B_4200), InsnKind::System); // MRS X0, NZCV
+    }
+
+    #[test]
+    fn msr_nzcv_is_system() {
+        assert_eq!(ok_kind(0xD51B_4200), InsnKind::System); // MSR NZCV, X0
+    }
+
+    #[test]
+    fn mrs_tpidr_el1_is_system() {
+        assert_eq!(ok_kind(0xD538_D080), InsnKind::System); // MRS X0, TPIDR_EL1
+    }
+
+    #[test]
+    fn msr_tpidr_el1_is_system() {
+        assert_eq!(ok_kind(0xD518_D080), InsnKind::System); // MSR TPIDR_EL1, X0
+    }
+
+    #[test]
+    fn mrs_ctr_el0_is_system() {
+        assert_eq!(ok_kind(0xD53B_0023), InsnKind::System); // MRS X3, CTR_EL0
+    }
+
+    #[test]
+    fn msr_spsel_is_system() {
+        assert_eq!(ok_kind(0xD500_41BF), InsnKind::System); // MSR SPSel, #1
+    }
 
     #[test]
     fn b_cond_all_14_conditions_are_branch() {
