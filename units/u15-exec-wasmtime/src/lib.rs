@@ -108,6 +108,38 @@ impl BlockExecutor for WasmtimeExecutor {
                 },
             )
             .map_err(|e| format!("link wfi: {e}"))?;
+        linker
+            .func_wrap(
+                "env",
+                "sysreg_load",
+                |mut caller: wasmtime::Caller<'_, TrackingHost>, reg: i64, _pad: i64| {
+                    let idx = u8::try_from(reg).map_err(|_| {
+                        wasmtime::Error::msg(format!("sysreg_load: bad index {reg}"))
+                    })?;
+                    caller
+                        .data_mut()
+                        .ops
+                        .sysreg_load(idx)
+                        .map_err(wasmtime::Error::msg)
+                },
+            )
+            .map_err(|e| format!("link sysreg_load: {e}"))?;
+        linker
+            .func_wrap(
+                "env",
+                "sysreg_store",
+                |mut caller: wasmtime::Caller<'_, TrackingHost>, reg: i64, val: i64| {
+                    let idx = u8::try_from(reg).map_err(|_| {
+                        wasmtime::Error::msg(format!("sysreg_store: bad index {reg}"))
+                    })?;
+                    caller
+                        .data_mut()
+                        .ops
+                        .sysreg_store(idx, val)
+                        .map_err(wasmtime::Error::msg)
+                },
+            )
+            .map_err(|e| format!("link sysreg_store: {e}"))?;
         // Register file: checkpointed X0-X30 in, mutated X0-X30 out.
         let mut globals = Vec::with_capacity(31);
         for (i, reg) in regs.iter().enumerate() {

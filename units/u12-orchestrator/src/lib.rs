@@ -71,7 +71,7 @@ use pathn_contracts::cpu::{
 };
 use pathn_contracts::device::{DevEvent, DevOut, GpuCmd, GpuDevState, TransportState};
 use pathn_contracts::execution::{BlockExecutor, HostOps};
-use pathn_contracts::machine::{CpuState, MachineState};
+use pathn_contracts::machine::{CpuState, MachineState, SysRegs};
 use sha2::{Digest, Sha256};
 
 pub mod arm64;
@@ -359,6 +359,7 @@ impl Orchestrator {
                     sp: 0x4800_0000,
                     pc: 0x4000_0000,
                     pstate: 0,
+                    sysregs: SysRegs::default(),
                 }],
                 mmu: MmuState {
                     ttbr0: 0,
@@ -897,14 +898,17 @@ impl Orchestrator {
         // field borrows: the backend borrows `executor`, the host borrows
         // regs / RAM / console / GPU port.
         let wasm = u3_wasm_jit::compile(&block);
-        let regs: &mut [u64; 31] = &mut self.machine.cpu[0].regs;
+        let cpu: &mut CpuState = &mut self.machine.cpu[0];
+        let regs: &mut [u64; 31] = &mut cpu.regs;
         let ram: &mut Vec<u8> = &mut self.machine.ram;
         let console: &mut ConsoleState = &mut self.console;
         let gpu_port: &mut GpuPort = &mut self.gpu_port;
+        let sysregs: &mut SysRegs = &mut cpu.sysregs;
         let mut host = WasmHost {
             ram,
             console,
             gpu_port,
+            sysregs,
         };
         let (exit_addr, wfi_seen) = match self.executor.run_block(&wasm, regs, &mut host) {
             Ok(pair) => pair,
@@ -1325,6 +1329,7 @@ struct WasmHost<'a> {
     ram: &'a mut Vec<u8>,
     console: &'a mut ConsoleState,
     gpu_port: &'a mut GpuPort,
+    sysregs: &'a mut SysRegs,
 }
 
 /// Translate a guest physical address to a RAM offset (M0: MMU disabled,
@@ -1419,6 +1424,19 @@ impl HostOps for WasmHost<'_> {
 
     fn wfi(&mut self) {
         // Notification only; the backend tracks invocation for `wfi_seen`.
+    }
+
+    fn sysreg_load(&mut self, reg: u8) -> Result<i64, String> {
+        let sel = SysRegs::from_index(reg)
+            .ok_or_else(|| format!("sysreg_load: bad index"))?;
+        Ok(self.sysregs.load(sel) as i64)
+    }
+
+    fn sysreg_store(&mut self, reg: u8, val: i64) -> Result<(), String> {
+        let sel = SysRegs::from_index(reg)
+            .ok_or_else(|| format!("sysreg_store: bad index"))?;
+        self.sysregs.store(sel, val as u64);
+        Ok(())
     }
 }
 

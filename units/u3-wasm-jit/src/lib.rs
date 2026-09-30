@@ -73,8 +73,10 @@ const VALTYPE_I64: u8 = 0x7E;
 const FUNC_MEM_LOAD: u32 = 0;
 const FUNC_MEM_STORE: u32 = 1;
 const FUNC_WFI: u32 = 2;
+const FUNC_SYSREG_LOAD: u32 = 3;
+const FUNC_SYSREG_STORE: u32 = 4;
 /// Index of `run` (3 imported functions precede it).
-const FUNC_RUN: u32 = 3;
+const FUNC_RUN: u32 = 5;
 
 /// Architectural register 31 (XZR): sources are const 0, dests are dropped.
 const XZR: u8 = 31;
@@ -91,26 +93,30 @@ pub fn compile(block: &IrBlock) -> WasmModule {
     out.extend_from_slice(b"\0asm");
     out.extend_from_slice(&[0x01, 0x00, 0x00, 0x00]);
 
-    // Type section (id 1): four types.
+    // Type section (id 1): five types.
     //   0: () -> (i64)            — run
     //   1: (i64, i64) -> (i64)    — mem_load
     //   2: (i64, i64, i64) -> ()  — mem_store
     //   3: () -> ()               — wfi
+    //   4: (i64, i64) -> ()       — sysreg_store
     let mut ty = Vec::new();
-    uleb(4, &mut ty);
+    uleb(5, &mut ty);
     func_type(&[], &[VALTYPE_I64], &mut ty);
     func_type(&[VALTYPE_I64, VALTYPE_I64], &[VALTYPE_I64], &mut ty);
     func_type(&[VALTYPE_I64, VALTYPE_I64, VALTYPE_I64], &[], &mut ty);
     func_type(&[], &[], &mut ty);
+    func_type(&[VALTYPE_I64, VALTYPE_I64], &[], &mut ty);
     section(1, &ty, &mut out);
 
     // Import section (id 2): env.mem_load, env.mem_store, env.wfi,
     // then env.r0 .. env.r30 as mutable i64 globals. ORDER IS CONTRACT.
     let mut im = Vec::new();
-    uleb(3 + 31, &mut im);
+    uleb(5 + 31, &mut im);
     import_func("mem_load", 1, &mut im);
     import_func("mem_store", 2, &mut im);
     import_func("wfi", 3, &mut im);
+    import_func("sysreg_load", 1, &mut im);
+    import_func("sysreg_store", 4, &mut im);
     for i in 0..31u8 {
         import_global(&format!("r{i}"), &mut im);
     }
@@ -586,6 +592,25 @@ pub fn compile(block: &IrBlock) -> WasmModule {
                 // Falls through to the exit epilogue; the host records the
                 // WFI and the orchestrator yields the vCPU after return.
             }
+            // GB-sysreg2: persistent system-register access via host calls.
+            // sysreg_load(reg, _) -> val; sysreg_store(reg, val).
+            // XZR dest drops (reg_set(31) = drop); XZR src reads 0.
+            IrOp::ReadSys { dst, reg } => {
+                body.push(OP_I64_CONST);
+                sleb(*reg as u8 as i64, &mut body);
+                body.push(OP_I64_CONST);
+                sleb(0, &mut body);
+                body.push(OP_CALL);
+                uleb(u64::from(FUNC_SYSREG_LOAD), &mut body);
+                reg_set(&mut body, *dst);
+            }
+            IrOp::WriteSys { src, reg } => {
+                body.push(OP_I64_CONST);
+                sleb(*reg as u8 as i64, &mut body);
+                reg_get(&mut body, *src);
+                body.push(OP_CALL);
+                uleb(u64::from(FUNC_SYSREG_STORE), &mut body);
+            }
             IrOp::Branch { target } => {
                 body.push(OP_I64_CONST);
                 sleb(*target as i64, &mut body);
@@ -740,6 +765,7 @@ fn section(id: u8, payload: &[u8], out: &mut Vec<u8>) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use pathn_contracts::cpu::SysReg;
 
     fn sample_block() -> IrBlock {
         IrBlock {
@@ -1356,14 +1382,72 @@ mod tests {
     }
 
     #[test]
+    fn gbsysreg2_sysreg_emit_uses_host_call_indices() {
+        let block = IrBlock {
+            entry_addr: 0,
+            ops: vec![
+                IrOp::ReadSys { dst: 2, reg: SysReg::SctlrEl1 },
+                IrOp::WriteSys { src: 3, reg: SysReg::TpidrEl1 },
+                IrOp::Branch { target: 0x8 },
+            ],
+            exits: vec![BlockExit::Branch(0x8)],
+        };
+        let expr = assert_valid(&block);
+        // Walk the body; at each call record pending i64.consts and the
+        // last global.get (register source).
+        let mut pos = 0;
+        let mut calls: Vec<String> = Vec::new();
+        let mut consts: Vec<i64> = Vec::new();
+        let mut last_get: Option<u64> = None;
+        while pos < expr.len() {
+            let op = expr[pos];
+            pos += 1;
+            match op {
+                OP_I64_CONST => {
+                    let v = read_sleb(&expr, &mut pos);
+                    consts.push(v);
+                }
+                OP_GLOBAL_GET => {
+                    last_get = Some(read_uleb(&expr, &mut pos));
+                }
+                OP_CALL => {
+                    let f = read_uleb(&expr, &mut pos);
+                    calls.push(format!("call {f} consts={consts:?} get={last_get:?}"));
+                    consts.clear();
+                    last_get = None;
+                }
+                OP_GLOBAL_SET | OP_DROP | OP_I64_ADD => {
+                    if op != OP_I64_ADD {
+                        consts.clear();
+                        last_get = None;
+                    }
+                }
+                _ => {}
+            }
+        }
+        // ReadSys SctlrEl1 (SysReg index 2): const 2, const 0, call 3.
+        assert!(
+            calls.iter().any(|c| c == "call 3 consts=[2, 0] get=None"),
+            "read calls: {calls:?}"
+        );
+        // WriteSys TpidrEl1 (SysReg index 1) from x3: const 1, get g3, call 4.
+        assert!(
+            calls.iter().any(|c| c == "call 4 consts=[1] get=Some(3)"),
+            "write calls: {calls:?}"
+        );
+    }
+
+    #[test]
     fn wave4_structural_imports_match_contract_order() {
         let im = imports(&compile(&sample_block()).bytes);
-        // 3 funcs + 31 register globals, in contract declaration order.
-        assert_eq!(im.len(), 34);
+        // 5 funcs + 31 register globals, in contract declaration order.
+        assert_eq!(im.len(), 36);
         assert_eq!(im[0], ("env".to_string(), "mem_load".to_string(), 0x00, 1));
         assert_eq!(im[1], ("env".to_string(), "mem_store".to_string(), 0x00, 2));
         assert_eq!(im[2], ("env".to_string(), "wfi".to_string(), 0x00, 3));
-        for (i, entry) in im[3..].iter().enumerate() {
+        assert_eq!(im[3], ("env".to_string(), "sysreg_load".to_string(), 0x00, 1));
+        assert_eq!(im[4], ("env".to_string(), "sysreg_store".to_string(), 0x00, 4));
+        for (i, entry) in im[5..].iter().enumerate() {
             assert_eq!(
                 entry,
                 &(
@@ -1377,7 +1461,7 @@ mod tests {
     }
 
     #[test]
-    fn wave4_structural_run_export_is_func_3() {
+    fn wave4_structural_run_export_is_func_5() {
         let module = compile(&sample_block());
         let secs = sections(&module.bytes);
         let ex = secs.iter().find(|(id, _)| *id == 7).unwrap().1;
@@ -1388,7 +1472,7 @@ mod tests {
         pos += 3;
         assert_eq!(ex[pos], 0x00); // kind: func
         pos += 1;
-        assert_eq!(read_uleb(ex, &mut pos), 3); // func index 3
+        assert_eq!(read_uleb(ex, &mut pos), 5); // func index 5 (5 imports precede run)
     }
 
     #[test]

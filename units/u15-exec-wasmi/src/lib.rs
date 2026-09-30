@@ -126,6 +126,36 @@ impl BlockExecutor for WasmiExecutor {
                 Ok(())
             })
             .map_err(|e| format!("link wfi: {e}"))?;
+        linker
+            .func_wrap(
+                "env",
+                "sysreg_load",
+                |mut caller: Caller<'_, TrackingHost>, reg: i64, _pad: i64| {
+                    let idx = u8::try_from(reg)
+                        .map_err(|_| Error::host(HostMsg(format!("sysreg_load: bad index"))))?;
+                    caller
+                        .data_mut()
+                        .ops
+                        .sysreg_load(idx)
+                        .map_err(|e| Error::host(HostMsg(e)))
+                },
+            )
+            .map_err(|e| format!("link sysreg_load: {e}"))?;
+        linker
+            .func_wrap(
+                "env",
+                "sysreg_store",
+                |mut caller: Caller<'_, TrackingHost>, reg: i64, val: i64| {
+                    let idx = u8::try_from(reg)
+                        .map_err(|_| Error::host(HostMsg(format!("sysreg_store: bad index"))))?;
+                    caller
+                        .data_mut()
+                        .ops
+                        .sysreg_store(idx, val)
+                        .map_err(|e| Error::host(HostMsg(e)))
+                },
+            )
+            .map_err(|e| format!("link sysreg_store: {e}"))?;
         // Register file: checkpointed X0-X30 in, mutated X0-X30 out.
         let mut globals = Vec::with_capacity(31);
         for (i, reg) in regs.iter().enumerate() {
@@ -166,13 +196,15 @@ impl BlockExecutor for WasmiExecutor {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use pathn_contracts::cpu::{BlockExit, IrBlock, IrOp};
+    use pathn_contracts::cpu::{BlockExit, IrBlock, IrOp, SysReg};
+    use pathn_contracts::machine::SysRegs;
 
     /// Minimal host: a flat RAM with bounds checking. Panics are fine —
     /// these tests never trigger unexpected calls by construction.
     struct RamHost {
         ram: Vec<u8>,
         wfi_calls: u32,
+        sysregs: SysRegs,
     }
 
     impl RamHost {
@@ -180,6 +212,7 @@ mod tests {
             Self {
                 ram: vec![0; size],
                 wfi_calls: 0,
+                sysregs: SysRegs::default(),
             }
         }
     }
@@ -212,6 +245,19 @@ mod tests {
 
         fn wfi(&mut self) {
             self.wfi_calls += 1;
+        }
+
+        fn sysreg_load(&mut self, reg: u8) -> Result<i64, String> {
+            let sel = SysRegs::from_index(reg)
+                .ok_or_else(|| format!("sysreg_load: bad index {reg}"))?;
+            Ok(self.sysregs.load(sel) as i64)
+        }
+
+        fn sysreg_store(&mut self, reg: u8, val: i64) -> Result<(), String> {
+            let sel = SysRegs::from_index(reg)
+                .ok_or_else(|| format!("sysreg_store: bad index {reg}"))?;
+            self.sysregs.store(sel, val as u64);
+            Ok(())
         }
     }
 
@@ -247,6 +293,41 @@ mod tests {
         assert_eq!(exit2, 0x100);
         assert!(!wfi2);
         assert_eq!(exe.cache_len(), 1);
+    }
+
+    #[test]
+    fn backend_sysreg_roundtrip() {
+        // MSR then MRS across SCTLR_EL1, TPIDR_EL1, DAIF, CNTHCTL_EL2.
+        let wasm = compile(
+            vec![
+                IrOp::ReadSys { dst: 5, reg: SysReg::Daif },
+                IrOp::Mov { dst: 1, imm: 0xdead },
+                IrOp::WriteSys { src: 1, reg: SysReg::SctlrEl1 },
+                IrOp::WriteSys { src: 1, reg: SysReg::TpidrEl1 },
+                IrOp::WriteSys { src: 1, reg: SysReg::Daif },
+                IrOp::WriteSys { src: 1, reg: SysReg::CnthctlEl2 },
+                IrOp::ReadSys { dst: 2, reg: SysReg::SctlrEl1 },
+                IrOp::ReadSys { dst: 3, reg: SysReg::TpidrEl1 },
+                IrOp::ReadSys { dst: 4, reg: SysReg::CnthctlEl2 },
+                IrOp::Branch { target: 0x10 },
+            ],
+            vec![BlockExit::Branch(0x10)],
+        );
+        let mut exe = WasmiExecutor::new();
+        let mut regs = [0u64; 31];
+        let mut host = RamHost::new(0x1000);
+        let (exit, _) = exe.run_block(&wasm, &mut regs, &mut host).unwrap();
+        assert_eq!(exit, 0x10);
+        // DAIF default (Linux ARM64 boot protocol) read before the store.
+        assert_eq!(regs[5], 0x3c0);
+        // Stored values round-trip through the host.
+        assert_eq!(regs[2], 0xdead);
+        assert_eq!(regs[3], 0xdead);
+        assert_eq!(regs[4], 0xdead);
+        assert_eq!(host.sysregs.sctlr_el1, 0xdead);
+        assert_eq!(host.sysregs.tpidr_el1, 0xdead);
+        assert_eq!(host.sysregs.daif, 0xdead);
+        assert_eq!(host.sysregs.cnthctl_el2, 0xdead);
     }
 
     #[test]

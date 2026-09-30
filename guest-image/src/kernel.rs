@@ -8,7 +8,7 @@ use crate::platform::{
     in_ram, HEADER_LEN, IMAGE_MAGIC, IMAGE_VERSION, RAM_BASE, STACK_TOP,
 };
 use crate::sha256::{hex, sha256};
-use pathn_contracts::machine::CpuState;
+use pathn_contracts::machine::{CpuState, SysRegs};
 use serde::Serialize;
 
 /// 64-bit ARM Linux kernel Image header magic: "ARM\x64" (LE u32 0x644d5241).
@@ -222,6 +222,7 @@ pub fn initial_kernel_cpu_state(manifest: &KernelManifest) -> CpuState {
         sp: STACK_TOP,
         pc: manifest.load_addr,
         pstate: 0,
+        sysregs: SysRegs::default(),
     }
 }
 

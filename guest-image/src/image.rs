@@ -11,7 +11,7 @@ use crate::platform::{
     STACK_TOP,
 };
 use crate::sha256::{hex, sha256};
-use pathn_contracts::machine::CpuState;
+use pathn_contracts::machine::{CpuState, SysRegs};
 use serde::Serialize;
 
 /// Build manifest: the only input to [`build`].
@@ -160,6 +160,7 @@ pub fn initial_cpu_state(manifest: &GuestManifest) -> CpuState {
         sp: STACK_TOP,
         pc: manifest.load_addr,
         pstate: 0,
+        sysregs: SysRegs::default(),
     }
 }
 

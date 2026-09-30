@@ -17,6 +17,12 @@ pub trait HostOps {
     /// Notification only; backends track invocation themselves for the
     /// `wfi_seen` return value.
     fn wfi(&mut self);
+    // Read persistent system-register state (GB-sysreg2). reg is the
+    // SysReg discriminant (contracts cpu SysReg as u8). Unknown indices
+    // are a contract violation and become WASM traps.
+    fn sysreg_load(&mut self, reg: u8) -> Result<i64, String>;
+    // Write persistent system-register state (GB-sysreg2).
+    fn sysreg_store(&mut self, reg: u8, val: i64) -> Result<(), String>;
 }
 
 /// Executes one U3 block: checkpoint the 31 registers in, call the `run`

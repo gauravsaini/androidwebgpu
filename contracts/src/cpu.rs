@@ -36,6 +36,24 @@ pub enum DecodeResult {
     Illegal { word: u32 },
 }
 
+/// System-register selector for IrOp::ReadSys / IrOp::WriteSys.
+/// Added 2026-09-30 (Track GB-sysreg2): the writable system registers whose
+/// MSR writes GB-3 accepted without state. Discriminants are the host-call
+/// index, part of the U3 import contract: do not reorder.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[repr(u8)]
+pub enum SysReg {
+    Daif = 0,
+    TpidrEl1 = 1,
+    SctlrEl1 = 2,
+    SctlrEl2 = 3,
+    HcrEl2 = 4,
+    CnthctlEl2 = 5,
+    CntvoffEl2 = 6,
+    VbarEl1 = 7,
+    SpEl0 = 8,
+}
+
 /// Single IR operation (SSA-style). The lifter (U2) is the only producer.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum IrOp {
@@ -190,6 +208,12 @@ pub enum IrOp {
         hw: u8,
         is_32: bool,
     },
+    /// Added 2026-09-30 (Track GB-sysreg2): read persistent system-register
+    /// state into dst. Register 31 as dst drops the value (XZR semantics).
+    ReadSys { dst: u8, reg: SysReg },
+    /// Added 2026-09-30 (Track GB-sysreg2): write regs[src] into persistent
+    /// system-register state. Register 31 as src reads as 0.
+    WriteSys { src: u8, reg: SysReg },
     /// Added 2026-09-27 (Wave 4 amendment U2-G1): wait-for-interrupt marker.
     /// The execution backend yields the vCPU until an IRQ is pending;
     /// resumable, never an error and never a silent nop.

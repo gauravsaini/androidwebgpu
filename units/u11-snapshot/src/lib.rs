@@ -3,11 +3,11 @@
 //! PURE: deterministic encode/decode. No I/O, no wall-clock, no threads,
 //! no hidden state. A corrupt blob is data ([`SnapshotError`]), never a panic.
 //!
-//! Wire format v1 (all integers little-endian):
+//! Wire format v2 (all integers little-endian):
 //! ```text
-//! u32 version            == SNAPSHOT_VERSION (1)
+//! u32 version            == SNAPSHOT_VERSION (2)
 //! u32 cpu_count
-//! cpu_count × { 31×u64 regs, u64 sp, u64 pc, u64 pstate }   (272 bytes each)
+//! cpu_count × { 31×u64 regs, u64 sp, u64 pc, u64 pstate, 9×u64 sysregs }   (344 bytes each)
 //! u64 ttbr0, u64 ttbr1, u64 tcr, u64 sctlr
 //! u32 irq_enabled, u64 irq_pending, u64 timer_count, u64 timer_compare
 //! u64 ram_len, ram_len bytes
@@ -21,11 +21,11 @@
 use pathn_contracts::cpu::{IrqState, MmuState};
 use pathn_contracts::machine::{
     CpuState, DeviceKind, DeviceState, MachineState, Snapshot, SnapshotError, MAX_GUEST_RAM_BYTES,
-    SNAPSHOT_VERSION,
+    SNAPSHOT_VERSION, SysRegs,
 };
 
-/// Encoded size of one [`CpuState`]: 31 regs + sp + pc + pstate, all u64LE.
-const CPU_ENCODED_BYTES: usize = 34 * 8;
+/// Encoded size of one [`CpuState`]: 31 regs + sp + pc + pstate + 9 sysregs, all u64LE.
+const CPU_ENCODED_BYTES: usize = 43 * 8;
 /// Minimum encoded size of one [`DeviceState`]: u8 tag + u64 blob length.
 const DEVICE_MIN_BYTES: usize = 1 + 8;
 
@@ -82,6 +82,15 @@ impl Writer {
         self.u64(c.sp);
         self.u64(c.pc);
         self.u64(c.pstate);
+        self.u64(c.sysregs.daif);
+        self.u64(c.sysregs.tpidr_el1);
+        self.u64(c.sysregs.sctlr_el1);
+        self.u64(c.sysregs.sctlr_el2);
+        self.u64(c.sysregs.hcr_el2);
+        self.u64(c.sysregs.cnthctl_el2);
+        self.u64(c.sysregs.cntvoff_el2);
+        self.u64(c.sysregs.vbar_el1);
+        self.u64(c.sysregs.sp_el0);
     }
 
     fn mmu(&mut self, m: &MmuState) {
@@ -185,6 +194,17 @@ impl<'a> Reader<'a> {
             sp: self.u64()?,
             pc: self.u64()?,
             pstate: self.u64()?,
+            sysregs: SysRegs {
+                daif: self.u64()?,
+                tpidr_el1: self.u64()?,
+                sctlr_el1: self.u64()?,
+                sctlr_el2: self.u64()?,
+                hcr_el2: self.u64()?,
+                cnthctl_el2: self.u64()?,
+                cntvoff_el2: self.u64()?,
+                vbar_el1: self.u64()?,
+                sp_el0: self.u64()?,
+            },
         })
     }
 }
@@ -282,6 +302,17 @@ mod tests {
             sp: seed.wrapping_add(0x1000),
             pc: 0x4000 + seed,
             pstate: seed & 0xF,
+            sysregs: SysRegs {
+                daif: seed.wrapping_add(1),
+                tpidr_el1: seed.wrapping_add(2),
+                sctlr_el1: seed.wrapping_add(3),
+                sctlr_el2: seed.wrapping_add(4),
+                hcr_el2: seed.wrapping_add(5),
+                cnthctl_el2: seed.wrapping_add(6),
+                cntvoff_el2: seed.wrapping_add(7),
+                vbar_el1: seed.wrapping_add(8),
+                sp_el0: seed.wrapping_add(9),
+            },
         }
     }
 
@@ -375,6 +406,17 @@ mod tests {
                 sp: u64::MAX,
                 pc: u64::MAX,
                 pstate: u64::MAX,
+                sysregs: SysRegs {
+                    daif: u64::MAX,
+                    tpidr_el1: u64::MAX,
+                    sctlr_el1: u64::MAX,
+                    sctlr_el2: u64::MAX,
+                    hcr_el2: u64::MAX,
+                    cnthctl_el2: u64::MAX,
+                    cntvoff_el2: u64::MAX,
+                    vbar_el1: u64::MAX,
+                    sp_el0: u64::MAX,
+                },
             }],
             mmu: MmuState {
                 ttbr0: u64::MAX,
@@ -410,7 +452,7 @@ mod tests {
     // --- corruption matrix: every hostile shape maps to an exact variant ---
 
     /// Byte offset of the ram_len u64 for a state with `cpus` vCPUs:
-    /// version(4) + cpu_count(4) + cpus*272 + mmu(32) + irq(28).
+    /// version(4) + cpu_count(4) + cpus*344 + mmu(32) + irq(28).
     fn ram_len_offset(cpus: usize) -> usize {
         4 + 4 + cpus * CPU_ENCODED_BYTES + 4 * 8 + (4 + 3 * 8)
     }
@@ -433,10 +475,10 @@ mod tests {
     fn corrupt_wrong_version_is_version_mismatch() {
         let s = machine(1, 1, 16, vec![]);
         let mut b = snapshot(&s).0;
-        b[0..4].copy_from_slice(&2u32.to_le_bytes());
+        b[0..4].copy_from_slice(&1u32.to_le_bytes());
         assert_eq!(
             restore(&b),
-            Err(SnapshotError::VersionMismatch { found: 2 })
+            Err(SnapshotError::VersionMismatch { found: 1 })
         );
     }
 

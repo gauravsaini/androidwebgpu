@@ -2,7 +2,7 @@
 //!
 //! Covers U11 (snapshot), U12 (orchestrator state threading), U10 (APK pipeline).
 
-use crate::cpu::{IrqState, MmuState};
+use crate::cpu::{IrqState, MmuState, SysReg};
 
 /// Explicit per-vCPU register state.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -11,6 +11,91 @@ pub struct CpuState {
     pub sp: u64,
     pub pc: u64,
     pub pstate: u64,
+    pub sysregs: SysRegs,
+}
+
+/// Persistent system-register state (Track GB-sysreg2).
+/// The writable system registers whose MSR writes GB-3 accepted without
+/// state, now with real architectural values. ID registers stay modeled
+/// constants in the lifter; NZCV stays in pstate (GB-2 live flag path).
+/// Defaults match GB-3 MRS table values.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SysRegs {
+    pub daif: u64,
+    pub tpidr_el1: u64,
+    pub sctlr_el1: u64,
+    pub sctlr_el2: u64,
+    pub hcr_el2: u64,
+    pub cnthctl_el2: u64,
+    pub cntvoff_el2: u64,
+    pub vbar_el1: u64,
+    pub sp_el0: u64,
+}
+
+impl Default for SysRegs {
+    fn default() -> Self {
+        Self {
+            // Linux ARM64 boot protocol: all interrupts masked at entry.
+            daif: 0x3c0,
+            tpidr_el1: 0,
+            sctlr_el1: 0,
+            sctlr_el2: 0,
+            hcr_el2: 0,
+            cnthctl_el2: 0,
+            cntvoff_el2: 0,
+            vbar_el1: 0,
+            sp_el0: 0,
+        }
+    }
+}
+
+impl SysRegs {
+    /// Read one persistent register by selector.
+    pub fn load(&self, reg: SysReg) -> u64 {
+        match reg {
+            SysReg::Daif => self.daif,
+            SysReg::TpidrEl1 => self.tpidr_el1,
+            SysReg::SctlrEl1 => self.sctlr_el1,
+            SysReg::SctlrEl2 => self.sctlr_el2,
+            SysReg::HcrEl2 => self.hcr_el2,
+            SysReg::CnthctlEl2 => self.cnthctl_el2,
+            SysReg::CntvoffEl2 => self.cntvoff_el2,
+            SysReg::VbarEl1 => self.vbar_el1,
+            SysReg::SpEl0 => self.sp_el0,
+        }
+    }
+
+    /// Write one persistent register by selector.
+    pub fn store(&mut self, reg: SysReg, val: u64) {
+        match reg {
+            SysReg::Daif => self.daif = val,
+            SysReg::TpidrEl1 => self.tpidr_el1 = val,
+            SysReg::SctlrEl1 => self.sctlr_el1 = val,
+            SysReg::SctlrEl2 => self.sctlr_el2 = val,
+            SysReg::HcrEl2 => self.hcr_el2 = val,
+            SysReg::CnthctlEl2 => self.cnthctl_el2 = val,
+            SysReg::CntvoffEl2 => self.cntvoff_el2 = val,
+            SysReg::VbarEl1 => self.vbar_el1 = val,
+            SysReg::SpEl0 => self.sp_el0 = val,
+        }
+    }
+
+    /// Selector from the u8 host-call index. Out-of-range indices are a
+    /// contract violation: the lifter only emits valid discriminants.
+    pub fn from_index(idx: u8) -> Option<SysReg> {
+        match idx {
+            0 => Some(SysReg::Daif),
+            1 => Some(SysReg::TpidrEl1),
+            2 => Some(SysReg::SctlrEl1),
+            3 => Some(SysReg::SctlrEl2),
+            4 => Some(SysReg::HcrEl2),
+            5 => Some(SysReg::CnthctlEl2),
+            6 => Some(SysReg::CntvoffEl2),
+            7 => Some(SysReg::VbarEl1),
+            8 => Some(SysReg::SpEl0),
+            _ => None,
+        }
+    }
 }
 
 /// Which device a [`DeviceState`] blob belongs to.
@@ -52,7 +137,7 @@ pub const MAX_GUEST_RAM_BYTES: usize = 2 * 1024 * 1024 * 1024;
 pub struct Snapshot(pub Vec<u8>);
 
 /// Current snapshot format version. Bump on any format change.
-pub const SNAPSHOT_VERSION: u32 = 1;
+pub const SNAPSHOT_VERSION: u32 = 2;
 
 /// Snapshot restore failure. Data, not panic — corrupt input never crashes the host.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -99,6 +184,7 @@ mod tests {
                 sp: 0,
                 pc: 0x4000,
                 pstate: 0,
+                sysregs: SysRegs::default(),
             }],
             mmu: MmuState {
                 ttbr0: 0x1000,

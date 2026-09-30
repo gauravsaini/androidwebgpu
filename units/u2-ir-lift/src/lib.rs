@@ -54,7 +54,7 @@
 //! instructions) — lifts to `IrOp::Trap { reason }` naming exactly what is
 //! unsupported. A trap is data, never a silent nop and never a panic.
 
-use pathn_contracts::cpu::{decode_bitmasks, InsnKind, Instruction, IrOp};
+use pathn_contracts::cpu::{decode_bitmasks, InsnKind, Instruction, IrOp, SysReg};
 
 /// Private scratch register index used to materialize immediates.
 /// See module docs. Outside the architectural `0..=31` range.
@@ -160,30 +160,38 @@ fn lift_system(word: u32) -> Vec<IrOp> {
         let op2 = (word >> 5) & 0x7;
         let rt = (word & 0x1F) as u8;
 
-        let val: u64 = match (op0, op1, crn, crm, op2) {
-            // CurrentEL: bits[3:2] = 0b01 (EL1) -> 0x4
-            (3, 0, 4, 2, 2) => 0x4,
-            // CTR_EL0: Cache Type Register (64B D-cache, 64B I-cache)
-            (3, 3, 0, 0, 1) => 0x8444_c004,
-            // DAIF: all masked (0x3c0) per Linux ARM64 boot protocol
-            (3, 3, 4, 2, 1) => 0x3c0,
-            // NZCV: flags (initial 0)
-            (3, 3, 4, 2, 0) => 0,
-            // TPIDR_EL1: thread ID register (initial 0)
-            (3, 0, 13, 0, 4) => 0,
-            // ID_AA64PFR0_EL1: EL0/EL1 AArch64 supported
-            (3, 0, 0, 4, 0) => 0x11,
-            // ID_AA64MMFR1_EL1
-            (3, 0, 0, 7, 2) => 0,
-            // ID_AA64DFR0_EL1
-            (3, 0, 0, 5, 0) => 0,
+        // Persistent system registers: real state, read from the machine
+        // (GB-sysreg2). These replaced GB-3 accepted-but-stateless values.
+        let persistent = match (op0, op1, crn, crm, op2) {
+            // DAIF: default all-masked (0x3c0) per Linux ARM64 boot protocol
+            (3, 3, 4, 2, 1) => SysReg::Daif,
+            // TPIDR_EL1: thread ID register
+            (3, 0, 13, 0, 4) => SysReg::TpidrEl1,
             // CNTHCTL_EL2
-            (3, 4, 14, 1, 0) => 0,
+            (3, 4, 14, 1, 0) => SysReg::CnthctlEl2,
             // SCTLR_EL1, SCTLR_EL2
-            (3, 0, 1, 0, 0) | (3, 4, 1, 0, 0) => 0,
-            _ => return trap(R_SYSTEM),
+            (3, 0, 1, 0, 0) => SysReg::SctlrEl1,
+            (3, 4, 1, 0, 0) => SysReg::SctlrEl2,
+            _ => return {
+                let val: u64 = match (op0, op1, crn, crm, op2) {
+                    // CurrentEL: bits[3:2] = 0b01 (EL1) -> 0x4
+                    (3, 0, 4, 2, 2) => 0x4,
+                    // CTR_EL0: Cache Type Register (64B D-cache, 64B I-cache)
+                    (3, 3, 0, 0, 1) => 0x8444_c004,
+                    // NZCV: stays in GB-2 live pstate flag path
+                    (3, 3, 4, 2, 0) => 0,
+                    // ID_AA64PFR0_EL1: EL0/EL1 AArch64 supported
+                    (3, 0, 0, 4, 0) => 0x11,
+                    // ID_AA64MMFR1_EL1
+                    (3, 0, 0, 7, 2) => 0,
+                    // ID_AA64DFR0_EL1
+                    (3, 0, 0, 5, 0) => 0,
+                    _ => return trap(R_SYSTEM),
+                };
+                vec![IrOp::Mov { dst: rt, imm: val }]
+            },
         };
-        return vec![IrOp::Mov { dst: rt, imm: val }];
+        return vec![IrOp::ReadSys { dst: rt, reg: persistent }];
     }
     // MSR <sysreg>, Xt or MSR <pstatefield>, #imm: bit 21 == 0.
     if (word >> 22) & 0x3FF == 0x354 && ((word >> 21) & 1) == 0 {
@@ -192,26 +200,39 @@ fn lift_system(word: u32) -> Vec<IrOp> {
         let crn = (word >> 12) & 0xF;
         let crm = (word >> 8) & 0xF;
         let op2 = (word >> 5) & 0x7;
+        let rt = (word & 0x1F) as u8;
 
-        let supported = match (op0, op1, crn, crm, op2) {
-            // SPSel, DAIFSet, DAIFClr
-            (0, 0, 4, 1, 5) | (0, 3, 4, 2, 6) | (0, 3, 4, 2, 7) => true,
-            // DAIF, NZCV, TPIDR_EL1
-            (3, 3, 4, 2, 1) | (3, 3, 4, 2, 0) | (3, 0, 13, 0, 4) => true,
-            // SCTLR_EL1, SCTLR_EL2, HCR_EL2, CNTHCTL_EL2, CNTVOFF_EL2, VBAR_EL1, SP_EL0
-            (3, 0, 1, 0, 0)
-            | (3, 4, 1, 0, 0)
-            | (3, 4, 1, 1, 0)
-            | (3, 4, 14, 1, 0)
-            | (3, 4, 14, 0, 3)
-            | (3, 0, 12, 0, 0)
-            | (3, 0, 4, 1, 0) => true,
-            _ => false,
+        // Persistent system registers: MSR now stores real state
+        // (GB-sysreg2). These replaced GB-3 accepted-but-stateless no-ops.
+        let persistent = match (op0, op1, crn, crm, op2) {
+            // DAIF
+            (3, 3, 4, 2, 1) => SysReg::Daif,
+            // TPIDR_EL1
+            (3, 0, 13, 0, 4) => SysReg::TpidrEl1,
+            // SCTLR_EL1, SCTLR_EL2
+            (3, 0, 1, 0, 0) => SysReg::SctlrEl1,
+            (3, 4, 1, 0, 0) => SysReg::SctlrEl2,
+            // HCR_EL2
+            (3, 4, 1, 1, 0) => SysReg::HcrEl2,
+            // CNTHCTL_EL2
+            (3, 4, 14, 1, 0) => SysReg::CnthctlEl2,
+            // CNTVOFF_EL2
+            (3, 4, 14, 0, 3) => SysReg::CntvoffEl2,
+            // VBAR_EL1
+            (3, 0, 12, 0, 0) => SysReg::VbarEl1,
+            // SP_EL0
+            (3, 0, 4, 1, 0) => SysReg::SpEl0,
+            _ => return {
+                match (op0, op1, crn, crm, op2) {
+                    // NZCV: GB-2 live flag path (flags, not a stored register)
+                    (3, 3, 4, 2, 0) => vec![],
+                    // SPSel, DAIFSet, DAIFClr: accepted no-ops (GB-3)
+                    (0, 0, 4, 1, 5) | (0, 3, 4, 2, 6) | (0, 3, 4, 2, 7) => vec![],
+                    _ => return trap(R_SYSTEM),
+                }
+            },
         };
-        if supported {
-            return vec![];
-        }
-        return trap(R_SYSTEM);
+        return vec![IrOp::WriteSys { src: rt, reg: persistent }];
     }
     trap(R_SYSTEM)
 }
@@ -1582,31 +1603,97 @@ mod tests {
             lift(&insn(0x4000, 0xD53B_0023, InsnKind::System)),
             vec![IrOp::Mov { dst: 3, imm: 0x8444_C004 }]
         );
-        // DAIF -> 0x3c0
+        // DAIF -> persistent (GB-sysreg2)
         assert_eq!(
             lift(&insn(0x4000, 0xD53B_4220, InsnKind::System)),
-            vec![IrOp::Mov { dst: 0, imm: 0x3C0 }]
+            vec![IrOp::ReadSys { dst: 0, reg: SysReg::Daif }]
         );
-        // NZCV -> 0
+        // NZCV -> 0 (stays in GB-2 live pstate flag path)
         assert_eq!(
             lift(&insn(0x4000, 0xD53B_4200, InsnKind::System)),
             vec![IrOp::Mov { dst: 0, imm: 0 }]
         );
-        // TPIDR_EL1 -> 0
+        // TPIDR_EL1 -> persistent (GB-sysreg2)
         assert_eq!(
             lift(&insn(0x4000, 0xD538_D080, InsnKind::System)),
+            vec![IrOp::ReadSys { dst: 0, reg: SysReg::TpidrEl1 }]
+        );
+    }
+
+    // Build an MRS (mrs=true) or MSR (mrs=false) system-register word.
+    fn sys_word(op0: u32, op1: u32, crn: u32, crm: u32, op2: u32, rt: u32, mrs: bool) -> u32 {
+        (0x354 << 22) | ((mrs as u32) << 21) | (op0 << 19) | (op1 << 16)
+            | (crn << 12) | (crm << 8) | (op2 << 5) | rt
+    }
+
+    #[test]
+    fn gbsysreg2_mrs_msr_lift_to_persistent_ops() {
+        // Every persistent MRS lifts to ReadSys with the right selector.
+        let mrs_cases = [
+            ((3, 3, 4, 2, 1), SysReg::Daif),
+            ((3, 0, 13, 0, 4), SysReg::TpidrEl1),
+            ((3, 0, 1, 0, 0), SysReg::SctlrEl1),
+            ((3, 4, 1, 0, 0), SysReg::SctlrEl2),
+            ((3, 4, 14, 1, 0), SysReg::CnthctlEl2),
+        ];
+        for ((op0, op1, crn, crm, op2), reg) in mrs_cases {
+            let word = sys_word(op0, op1, crn, crm, op2, 7, true);
+            assert_eq!(
+                lift(&insn(0x4000, word, InsnKind::System)),
+                vec![IrOp::ReadSys { dst: 7, reg }],
+                "mrs {op0} {op1} {crn} {crm} {op2}"
+            );
+        }
+        // Every persistent MSR lifts to WriteSys with src = Rt.
+        let msr_cases = [
+            ((3, 3, 4, 2, 1), SysReg::Daif),
+            ((3, 0, 13, 0, 4), SysReg::TpidrEl1),
+            ((3, 0, 1, 0, 0), SysReg::SctlrEl1),
+            ((3, 4, 1, 0, 0), SysReg::SctlrEl2),
+            ((3, 4, 1, 1, 0), SysReg::HcrEl2),
+            ((3, 4, 14, 1, 0), SysReg::CnthctlEl2),
+            ((3, 4, 14, 0, 3), SysReg::CntvoffEl2),
+            ((3, 0, 12, 0, 0), SysReg::VbarEl1),
+            ((3, 0, 4, 1, 0), SysReg::SpEl0),
+        ];
+        for ((op0, op1, crn, crm, op2), reg) in msr_cases {
+            let word = sys_word(op0, op1, crn, crm, op2, 5, false);
+            assert_eq!(
+                lift(&insn(0x4000, word, InsnKind::System)),
+                vec![IrOp::WriteSys { src: 5, reg }],
+                "msr {op0} {op1} {crn} {crm} {op2}"
+            );
+        }
+        // Carve-outs keep GB-3 behavior: NZCV/MSR no-op, DAIFSet/DAIFClr
+        // accepted no-ops, ID constants still Mov.
+        let w = sys_word(3, 3, 4, 2, 0, 5, false);
+        assert_eq!(lift(&insn(0x4000, w, InsnKind::System)), vec![]);
+        let w = sys_word(3, 3, 4, 2, 0, 0, true);
+        assert_eq!(
+            lift(&insn(0x4000, w, InsnKind::System)),
             vec![IrOp::Mov { dst: 0, imm: 0 }]
+        );
+        let w = sys_word(3, 0, 0, 4, 0, 2, true);
+        assert_eq!(
+            lift(&insn(0x4000, w, InsnKind::System)),
+            vec![IrOp::Mov { dst: 2, imm: 0x11 }]
         );
     }
 
     #[test]
     fn gb3_msr_and_cache_ops_lift_to_empty() {
-        // MSR DAIF, X0
-        assert_eq!(lift(&insn(0x4000, 0xD51B_4220, InsnKind::System)), vec![]);
-        // MSR NZCV, X0
+        // MSR DAIF, X0 -> persistent store (GB-sysreg2)
+        assert_eq!(
+            lift(&insn(0x4000, 0xD51B_4220, InsnKind::System)),
+            vec![IrOp::WriteSys { src: 0, reg: SysReg::Daif }]
+        );
+        // MSR NZCV, X0 -> still accepted no-op (GB-2 live flag path)
         assert_eq!(lift(&insn(0x4000, 0xD51B_4200, InsnKind::System)), vec![]);
-        // MSR TPIDR_EL1, X0
-        assert_eq!(lift(&insn(0x4000, 0xD518_D080, InsnKind::System)), vec![]);
+        // MSR TPIDR_EL1, X0 -> persistent store (GB-sysreg2)
+        assert_eq!(
+            lift(&insn(0x4000, 0xD518_D080, InsnKind::System)),
+            vec![IrOp::WriteSys { src: 0, reg: SysReg::TpidrEl1 }]
+        );
         // MSR SPSel, #1
         assert_eq!(lift(&insn(0x4000, 0xD500_41BF, InsnKind::System)), vec![]);
         // DC CIVAC, X1
