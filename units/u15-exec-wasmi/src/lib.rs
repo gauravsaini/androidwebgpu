@@ -341,6 +341,27 @@ mod tests {
     }
 
     #[test]
+    fn backend_daif_rmw() {
+        // GB-11: MSR DAIFClr, #0x8 (measured step 7461) clears D from the
+        // persistent DAIF (default 0x3c0 -> 0x1c0); a following op with
+        // set=0x80, clr=0x340 then yields (0x1c0 | 0x80) & !0x340 = 0x80.
+        let wasm = compile(
+            vec![
+                IrOp::DaifRmw { set: 0, clr: 0x200 },
+                IrOp::DaifRmw { set: 0x80, clr: 0x340 },
+                IrOp::Branch { target: 0x10 },
+            ],
+            vec![BlockExit::Branch(0x10)],
+        );
+        let mut exe = WasmiExecutor::new();
+        let mut regs = [0u64; 31];
+        let mut host = RamHost::new(0x1000);
+        let (exit, _) = exe.run_block(&wasm, &mut regs, &mut host).unwrap();
+        assert_eq!(exit, 0x10);
+        assert_eq!(host.sysregs.daif, 0x80);
+    }
+
+    #[test]
     fn backend_traps_loudly() {
         let wasm = compile(vec![IrOp::Trap { reason: "boom" }], vec![BlockExit::ExitVm]);
         let mut exe = WasmiExecutor::new();

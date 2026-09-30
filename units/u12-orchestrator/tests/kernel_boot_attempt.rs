@@ -102,8 +102,13 @@ fn test_kernel_boot_measured_failure() {
     // step 7458: pc=0x40c03650 word=0xd2820000 (movz x0, #0x1000)         -> OK (x0 = 0x1000)
     // step 7459: pc=0x40c03654 word=0xd5100240 (msr mdscr_el1, x0)       -> OK (GB-10: persistent, stores 0x1000)
     // step 7460: pc=0x40c03658 word=0xd5033fdf (isb)                     -> OK
-    // step 7461: pc=0x40c0365c word=0xd50348ff (msr daifclr, #0x8)       -> HALT: Unsupported (system)
-    assert!(trace.len() >= 7461);
+    // step 7461: pc=0x40c0365c word=0xd50348ff (msr daifclr, #0x8)       -> OK (GB-11: persistent RMW, daif 0x3c0 -> 0x1c0)
+    // step 7462: pc=0x40c03660 word=0xd5380500 (mrs x0, id_aa64dfr0_el1) -> OK (recognized -> 0)
+    // step 7463: pc=0x40c03664 word=0x93482c00 (sbfx x0, x0, #8, #4)     -> OK
+    // step 7464: pc=0x40c03668 word=0xf100041f (cmp x0, #0x1)            -> OK
+    // step 7465: pc=0x40c0366c word=0x5400004b (b.lt 0x40c03674)        -> OK (taken)
+    // step 7466: pc=0x40c03674 word=0x580002a5 (ldr x5, [pc, #84])      -> HALT: WasmTrap (static Load -> unreachable)
+    assert!(trace.len() >= 7466);
     assert_eq!(trace[0].1, 0x4000_0000);
     assert_eq!(trace[0].2, 0x9100_5a4d); // ADD imm
     assert_eq!(trace[1].1, 0x4000_0004);
@@ -184,13 +189,24 @@ fn test_kernel_boot_measured_failure() {
     assert_eq!(trace[7460].1, 0x40c0_3658);
     assert_eq!(trace[7460].2, 0xd503_3fdf); // ISB
     assert_eq!(trace[7461].1, 0x40c0_365c);
-    assert_eq!(trace[7461].2, 0xd503_48ff); // MSR DAIFClr, #0x8 -> HALT
+    assert_eq!(trace[7461].2, 0xd503_48ff); // MSR DAIFClr, #0x8 (GB-11: persistent RMW)
+    assert_eq!(trace[7462].1, 0x40c0_3660);
+    assert_eq!(trace[7462].2, 0xd538_0500); // MRS X0, ID_AA64DFR0_EL1
+    assert_eq!(trace[7463].1, 0x40c0_3664);
+    assert_eq!(trace[7463].2, 0x9348_2c00); // SBFX X0, X0, #8, #4
+    assert_eq!(trace[7464].1, 0x40c0_3668);
+    assert_eq!(trace[7464].2, 0xf100_041f); // CMP X0, #0x1
+    assert_eq!(trace[7465].1, 0x40c0_366c);
+    assert_eq!(trace[7465].2, 0x5400_004b); // B.LT 0x40c03674 (taken)
+    assert_eq!(trace[7466].1, 0x40c0_3674);
+    assert_eq!(trace[7466].2, 0x5800_02a5); // LDR X5, [PC, #84] -> HALT
 
-    assert_eq!(
-        final_halt,
-        Some(HaltReason::Unsupported {
-            addr: 0x40c0_365c,
-            reason: "System: system and privileged semantics are not lifted",
-        })
-    );
+    // The static LDR literal lowers to unreachable (U3 has no host-call
+    // path for IrOp::Load yet -- GB-12). The halt is therefore a WasmTrap,
+    // not an Unsupported. Pin the trapping address; the wasmi backtrace
+    // text is codegen-specific and not pinned.
+    match final_halt {
+        Some(HaltReason::WasmTrap { addr, .. }) => assert_eq!(addr, 0x40c0_3674),
+        other => panic!("expected WasmTrap at 0x40c03674, got {other:?}"),
+    }
 }

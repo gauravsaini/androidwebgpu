@@ -227,6 +227,14 @@ pub enum IrOp {
     /// Added 2026-09-30 (Track GB-sysreg2): write regs[src] into persistent
     /// system-register state. Register 31 as src reads as 0.
     WriteSys { src: u8, reg: SysReg },
+    /// Added 2026-09-30 (Track GB-11): atomic read-modify-write of the
+    /// persistent DAIF. `daif = (daif | set) & !clr`. Backs MSR DAIFSet /
+    /// MSR DAIFClr, #imm. Masks are DAIF-positioned: imm bit n targets
+    /// PSTATE bit n+6 (bit3=D, bit2=A, bit1=I, bit0=F -- verified against
+    /// Linux's `msr daifclr, #2` == local_irq_enable, and the measured
+    /// 0xd50348ff = daifclr #0x8 clearing D after the kernel programs
+    /// MDSCR_EL1).
+    DaifRmw { set: u64, clr: u64 },
     /// Added 2026-09-30 (Track GB-7): count leading zeros.
     /// `dst = clz(regs[src])`: number of zero bits above the highest set bit
     /// of the 64-bit value; 64 when `src` is 0. 64-bit form only; the 32-bit

@@ -68,6 +68,16 @@ const R_MOVZ_HW: &str = "DataProc: MOVZ hw field > 1 with sf = 0 is unallocated"
 const R_ADD32_IMM: &str = "DataProc: 32-bit ADD immediate width is not expressible in IrOp::Add";
 const R_SUB32_IMM: &str = "DataProc: 32-bit SUB immediate width is not expressible in IrOp::Sub";
 const R_SUB32_REG: &str = "DataProc: 32-bit SUB register width is not expressible in IrOp::Sub";
+
+/// DAIFSet/DAIFClr immediate -> DAIF-positioned mask (GB-11).
+/// Per the ARM ARM, MSR DAIFSet/DAIFClr, #imm sets/clears PSTATE.{D,A,I,F}
+/// from imm bits {3,2,1,0}; PSTATE D/A/I/F are bits 9/8/7/6. Verified:
+/// Linux `msr daifclr, #2` unmasks IRQ (imm bit1 -> I), and the measured
+/// 0xd50348ff (daifclr #0x8) clears D (imm bit3) on the kernel's
+/// debug-exception unmask path after it programs MDSCR_EL1.
+fn daif_imm_mask(imm: u32) -> u64 {
+    ((imm & 0xF) as u64) << 6
+}
 const R_SUB_SHIFT: &str =
     "DataProc: shifted SUB register operand is not expressible in IrOp";
 const R_CLZ32: &str = "DataProc: 32-bit CLZ width is not expressible in IrOp::Clz";
@@ -234,12 +244,24 @@ fn lift_system(word: u32) -> Vec<IrOp> {
             (3, 0, 1, 0, 2) => SysReg::CpacrEl1,
             // MDSCR_EL1 (GB-10): kernel zeroes debug control via MSR MDSCR_EL1
             (2, 0, 0, 2, 2) => SysReg::MdscrEl1,
+            // MSR DAIFSet, #imm (op2=6) / MSR DAIFClr, #imm (op2=7): real
+            // read-modify-write of the persistent DAIF (GB-11). Upgrades
+            // the GB-3 accepted no-ops to honest state.
+            (0, 3, 4, imm, 6) => {
+                let set = daif_imm_mask(imm);
+                return vec![IrOp::DaifRmw { set, clr: 0 }];
+            }
+            (0, 3, 4, imm, 7) => {
+                let clr = daif_imm_mask(imm);
+                return vec![IrOp::DaifRmw { set: 0, clr }];
+            }
             _ => return {
                 match (op0, op1, crn, crm, op2) {
                     // NZCV: GB-2 live flag path (flags, not a stored register)
                     (3, 3, 4, 2, 0) => vec![],
-                    // SPSel, DAIFSet, DAIFClr: accepted no-ops (GB-3)
-                    (0, 0, 4, 1, 5) | (0, 3, 4, 2, 6) | (0, 3, 4, 2, 7) => vec![],
+                    // SPSel: accepted no-op (GB-3). DAIFSet/DAIFClr are real
+                    // read-modify-write ops now (GB-11); see the arms above.
+                    (0, 0, 4, 1, 5) => vec![],
                     _ => return trap(R_SYSTEM),
                 }
             },
@@ -1788,8 +1810,8 @@ mod tests {
                 "msr {op0} {op1} {crn} {crm} {op2}"
             );
         }
-        // Carve-outs keep GB-3 behavior: NZCV/MSR no-op, DAIFSet/DAIFClr
-        // accepted no-ops, ID constants still Mov.
+        // Carve-outs keep GB-3 behavior: NZCV/MSR no-op, ID constants
+        // still Mov. (DAIFSet/DAIFClr graduated to real RMW ops in GB-11.)
         let w = sys_word(3, 3, 4, 2, 0, 5, false);
         assert_eq!(lift(&insn(0x4000, w, InsnKind::System)), vec![]);
         let w = sys_word(3, 3, 4, 2, 0, 0, true);
@@ -1830,6 +1852,36 @@ mod tests {
         assert_eq!(
             lift(&insn(0x4000, 0xD530_0245, InsnKind::System)),
             vec![IrOp::ReadSys { dst: 5, reg: SysReg::MdscrEl1 }]
+        );
+    }
+
+    #[test]
+    fn gb11_daifclr_daifset_lift_to_rmw() {
+        // Measured halt word: MSR DAIFClr, #0x8 (step 7461, pc 0x40c0365c).
+        // imm=0x8 -> bit3 -> PSTATE.D (bit 9): clears the debug mask.
+        let w = sys_word(0, 3, 4, 8, 7, 31, false);
+        assert_eq!(w, 0xD503_48FF);
+        assert_eq!(
+            lift(&insn(0x4000, w, InsnKind::System)),
+            vec![IrOp::DaifRmw { set: 0, clr: 0x200 }]
+        );
+        // MSR DAIFSet, #0x2 (Linux local_irq_disable shape): imm bit1 -> I.
+        let w = sys_word(0, 3, 4, 2, 6, 31, false);
+        assert_eq!(
+            lift(&insn(0x4000, w, InsnKind::System)),
+            vec![IrOp::DaifRmw { set: 0x80, clr: 0 }]
+        );
+        // MSR DAIFClr, #0x2 (Linux local_irq_enable shape): clears I.
+        let w = sys_word(0, 3, 4, 2, 7, 31, false);
+        assert_eq!(
+            lift(&insn(0x4000, w, InsnKind::System)),
+            vec![IrOp::DaifRmw { set: 0, clr: 0x80 }]
+        );
+        // MSR DAIFSet, #0xF: all four masks (D/A/I/F -> bits 9/8/7/6).
+        let w = sys_word(0, 3, 4, 0xF, 6, 31, false);
+        assert_eq!(
+            lift(&insn(0x4000, w, InsnKind::System)),
+            vec![IrOp::DaifRmw { set: 0x3C0, clr: 0 }]
         );
     }
 

@@ -628,6 +628,35 @@ pub fn compile(block: &IrBlock) -> WasmModule {
                 body.push(OP_CALL);
                 uleb(u64::from(FUNC_SYSREG_STORE), &mut body);
             }
+            // GB-11: DAIF read-modify-write through the existing sysreg host
+            // calls. Stack discipline: the load leaves the value on top, the
+            // OR/AND immediates fold in, and SCRATCH holds the result while
+            // the (reg, val) pair for sysreg_store is pushed in order.
+            // SysReg::Daif is host-call index 0 (contracts pins the order).
+            IrOp::DaifRmw { set, clr } => {
+                body.push(OP_I64_CONST);
+                sleb(0, &mut body);
+                body.push(OP_I64_CONST);
+                sleb(0, &mut body);
+                body.push(OP_CALL);
+                uleb(u64::from(FUNC_SYSREG_LOAD), &mut body);
+                if *set != 0 {
+                    body.push(OP_I64_CONST);
+                    sleb(*set as i64, &mut body);
+                    body.push(OP_I64_OR);
+                }
+                if *clr != 0 {
+                    body.push(OP_I64_CONST);
+                    sleb(!*clr as i64, &mut body);
+                    body.push(OP_I64_AND);
+                }
+                reg_set(&mut body, SCRATCH);
+                body.push(OP_I64_CONST);
+                sleb(0, &mut body);
+                reg_get(&mut body, SCRATCH);
+                body.push(OP_CALL);
+                uleb(u64::from(FUNC_SYSREG_STORE), &mut body);
+            }
             IrOp::Branch { target } => {
                 body.push(OP_I64_CONST);
                 sleb(*target as i64, &mut body);
@@ -1471,6 +1500,53 @@ mod tests {
         assert!(
             calls.iter().any(|c| c == "call 4 consts=[1] get=Some(3)"),
             "write calls: {calls:?}"
+        );
+    }
+
+    #[test]
+    fn gb11_daif_rmw_uses_sysreg_host_calls() {
+        // DaifRmw lowers to load(DAIF) -> or/and immediates -> store(DAIF).
+        // call 3 = sysreg_load, call 4 = sysreg_store (contract order).
+        let block = IrBlock {
+            entry_addr: 0,
+            ops: vec![
+                IrOp::DaifRmw { set: 0, clr: 0x200 },
+                IrOp::DaifRmw { set: 0x80, clr: 0 },
+                IrOp::Branch { target: 0x8 },
+            ],
+            exits: vec![BlockExit::Branch(0x8)],
+        };
+        let expr = assert_valid(&block);
+        let mut pos = 0;
+        let mut calls: Vec<String> = Vec::new();
+        let mut consts: Vec<i64> = Vec::new();
+        while pos < expr.len() {
+            let op = expr[pos];
+            pos += 1;
+            match op {
+                OP_I64_CONST => consts.push(read_sleb(&expr, &mut pos)),
+                OP_CALL => {
+                    let f = read_uleb(&expr, &mut pos);
+                    calls.push(format!("call {f} consts={consts:?}"));
+                    consts.clear();
+                }
+                _ => {}
+            }
+        }
+        // Load DAIF (index 0): const 0, const 0, call 3.
+        assert!(
+            calls.iter().any(|c| c == "call 3 consts=[0, 0]"),
+            "load calls: {calls:?}"
+        );
+        // clr=0x200 -> and with !0x200 = -513; then const 0 (reg), call 4.
+        assert!(
+            calls.iter().any(|c| c == "call 4 consts=[-513, 0]"),
+            "clr-store calls: {calls:?}"
+        );
+        // set=0x80 -> or with 128; then const 0 (reg), call 4.
+        assert!(
+            calls.iter().any(|c| c == "call 4 consts=[128, 0]"),
+            "set-store calls: {calls:?}"
         );
     }
 
