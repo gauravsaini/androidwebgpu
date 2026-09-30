@@ -56,11 +56,14 @@ const OP_GLOBAL_GET: u8 = 0x23;
 const OP_GLOBAL_SET: u8 = 0x24;
 const OP_I64_CONST: u8 = 0x42;
 const OP_I64_EQZ: u8 = 0x50;
+const OP_I64_ADD: u8 = 0x7C;
+const OP_I64_AND: u8 = 0x83;
 const OP_I64_OR: u8 = 0x84;
+const OP_I64_XOR: u8 = 0x85;
 const OP_I64_SHL: u8 = 0x86;
 const OP_I64_SHR_S: u8 = 0x87;
 const OP_I64_SHR_U: u8 = 0x88;
-const OP_I64_ADD: u8 = 0x7C;
+const OP_I64_ROTR: u8 = 0x8A;
 
 const VALTYPE_I64: u8 = 0x7E;
 
@@ -242,6 +245,332 @@ pub fn compile(block: &IrBlock) -> WasmModule {
                 sleb(*amount as i64, &mut body);
                 body.push(shift_op);
                 body.push(OP_I64_OR);
+                reg_set(&mut body, *dst);
+            }
+            IrOp::AndShift {
+                dst,
+                a,
+                b,
+                shift,
+                amount,
+                invert,
+                is_32,
+            } => {
+                let shift_op = match shift {
+                    0 => OP_I64_SHL,
+                    1 => OP_I64_SHR_U,
+                    2 => OP_I64_SHR_S,
+                    3 => OP_I64_ROTR,
+                    _ => {
+                        body.push(OP_UNREACHABLE);
+                        continue;
+                    }
+                };
+                reg_get(&mut body, *a);
+                reg_get(&mut body, *b);
+                if *amount > 0 {
+                    body.push(OP_I64_CONST);
+                    sleb(*amount as i64, &mut body);
+                    body.push(shift_op);
+                }
+                if *invert {
+                    body.push(OP_I64_CONST);
+                    sleb(-1, &mut body);
+                    body.push(OP_I64_XOR);
+                }
+                body.push(OP_I64_AND);
+                if *is_32 {
+                    body.push(OP_I64_CONST);
+                    sleb(0xFFFF_FFFF, &mut body);
+                    body.push(OP_I64_AND);
+                }
+                reg_set(&mut body, *dst);
+            }
+            IrOp::OrShift {
+                dst,
+                a,
+                b,
+                shift,
+                amount,
+                invert,
+                is_32,
+            } => {
+                let shift_op = match shift {
+                    0 => OP_I64_SHL,
+                    1 => OP_I64_SHR_U,
+                    2 => OP_I64_SHR_S,
+                    3 => OP_I64_ROTR,
+                    _ => {
+                        body.push(OP_UNREACHABLE);
+                        continue;
+                    }
+                };
+                reg_get(&mut body, *a);
+                reg_get(&mut body, *b);
+                if *amount > 0 {
+                    body.push(OP_I64_CONST);
+                    sleb(*amount as i64, &mut body);
+                    body.push(shift_op);
+                }
+                if *invert {
+                    body.push(OP_I64_CONST);
+                    sleb(-1, &mut body);
+                    body.push(OP_I64_XOR);
+                }
+                body.push(OP_I64_OR);
+                if *is_32 {
+                    body.push(OP_I64_CONST);
+                    sleb(0xFFFF_FFFF, &mut body);
+                    body.push(OP_I64_AND);
+                }
+                reg_set(&mut body, *dst);
+            }
+            IrOp::EorShift {
+                dst,
+                a,
+                b,
+                shift,
+                amount,
+                invert,
+                is_32,
+            } => {
+                let shift_op = match shift {
+                    0 => OP_I64_SHL,
+                    1 => OP_I64_SHR_U,
+                    2 => OP_I64_SHR_S,
+                    3 => OP_I64_ROTR,
+                    _ => {
+                        body.push(OP_UNREACHABLE);
+                        continue;
+                    }
+                };
+                reg_get(&mut body, *a);
+                reg_get(&mut body, *b);
+                if *amount > 0 {
+                    body.push(OP_I64_CONST);
+                    sleb(*amount as i64, &mut body);
+                    body.push(shift_op);
+                }
+                if *invert {
+                    body.push(OP_I64_CONST);
+                    sleb(-1, &mut body);
+                    body.push(OP_I64_XOR);
+                }
+                body.push(OP_I64_XOR);
+                if *is_32 {
+                    body.push(OP_I64_CONST);
+                    sleb(0xFFFF_FFFF, &mut body);
+                    body.push(OP_I64_AND);
+                }
+                reg_set(&mut body, *dst);
+            }
+            IrOp::Bitfield {
+                dst,
+                src,
+                opc,
+                immr,
+                imms,
+                is_32,
+            } => {
+                let datasize: u64 = if *is_32 { 32 } else { 64 };
+                let r = (*immr as u64) & (datasize - 1);
+                let s = (*imms as u64) & (datasize - 1);
+                let d = (s.wrapping_sub(r)) & (datasize - 1);
+                let mask = if datasize == 64 { !0u64 } else { 0xFFFF_FFFF };
+
+                let welem = if s == datasize - 1 {
+                    mask
+                } else {
+                    (1u64 << (s + 1)) - 1
+                };
+                let wmask = if r == 0 {
+                    welem
+                } else {
+                    ((welem >> r) | (welem << (datasize - r))) & mask
+                };
+                let tmask = if d == datasize - 1 {
+                    mask
+                } else {
+                    (1u64 << (d + 1)) - 1
+                };
+
+                match opc {
+                    2 => {
+                        // UBFM
+                        reg_get(&mut body, *src);
+                        if *is_32 {
+                            body.push(OP_I64_CONST);
+                            sleb(0xFFFF_FFFF, &mut body);
+                            body.push(OP_I64_AND);
+                        }
+                        if r > 0 {
+                            if *is_32 {
+                                reg_set(&mut body, SCRATCH);
+                                reg_get(&mut body, SCRATCH);
+                                body.push(OP_I64_CONST);
+                                sleb(r as i64, &mut body);
+                                body.push(OP_I64_SHR_U);
+                                reg_get(&mut body, SCRATCH);
+                                body.push(OP_I64_CONST);
+                                sleb((32 - r) as i64, &mut body);
+                                body.push(OP_I64_SHL);
+                                body.push(OP_I64_OR);
+                            } else {
+                                body.push(OP_I64_CONST);
+                                sleb(r as i64, &mut body);
+                                body.push(OP_I64_ROTR);
+                            }
+                        }
+                        let eff_mask = wmask & tmask;
+                        body.push(OP_I64_CONST);
+                        sleb(eff_mask as i64, &mut body);
+                        body.push(OP_I64_AND);
+                        reg_set(&mut body, *dst);
+                    }
+                    1 => {
+                        // BFM: (dst & ~wmask) | (bot & wmask)
+                        reg_get(&mut body, *dst);
+                        let dst_keep_mask = if *is_32 { (!wmask) & 0xFFFF_FFFF } else { !wmask };
+                        body.push(OP_I64_CONST);
+                        sleb(dst_keep_mask as i64, &mut body);
+                        body.push(OP_I64_AND);
+
+                        reg_get(&mut body, *src);
+                        if *is_32 {
+                            body.push(OP_I64_CONST);
+                            sleb(0xFFFF_FFFF, &mut body);
+                            body.push(OP_I64_AND);
+                        }
+                        if r > 0 {
+                            if *is_32 {
+                                reg_set(&mut body, SCRATCH);
+                                reg_get(&mut body, SCRATCH);
+                                body.push(OP_I64_CONST);
+                                sleb(r as i64, &mut body);
+                                body.push(OP_I64_SHR_U);
+                                reg_get(&mut body, SCRATCH);
+                                body.push(OP_I64_CONST);
+                                sleb((32 - r) as i64, &mut body);
+                                body.push(OP_I64_SHL);
+                                body.push(OP_I64_OR);
+                            } else {
+                                body.push(OP_I64_CONST);
+                                sleb(r as i64, &mut body);
+                                body.push(OP_I64_ROTR);
+                            }
+                        }
+                        body.push(OP_I64_CONST);
+                        sleb(wmask as i64, &mut body);
+                        body.push(OP_I64_AND);
+
+                        body.push(OP_I64_OR);
+                        reg_set(&mut body, *dst);
+                    }
+                    0 => {
+                        // SBFM: extract bits [d:0] and sign-extend from bit d
+                        reg_get(&mut body, *src);
+                        if *is_32 {
+                            body.push(OP_I64_CONST);
+                            sleb(0xFFFF_FFFF, &mut body);
+                            body.push(OP_I64_AND);
+                        }
+                        if r > 0 {
+                            if *is_32 {
+                                reg_set(&mut body, SCRATCH);
+                                reg_get(&mut body, SCRATCH);
+                                body.push(OP_I64_CONST);
+                                sleb(r as i64, &mut body);
+                                body.push(OP_I64_SHR_U);
+                                reg_get(&mut body, SCRATCH);
+                                body.push(OP_I64_CONST);
+                                sleb((32 - r) as i64, &mut body);
+                                body.push(OP_I64_SHL);
+                                body.push(OP_I64_OR);
+                            } else {
+                                body.push(OP_I64_CONST);
+                                sleb(r as i64, &mut body);
+                                body.push(OP_I64_ROTR);
+                            }
+                        }
+                        let eff_mask = wmask & tmask;
+                        body.push(OP_I64_CONST);
+                        sleb(eff_mask as i64, &mut body);
+                        body.push(OP_I64_AND);
+                        // Sign-extend from bit d
+                        let shift_amount = 63 - d;
+                        if shift_amount > 0 {
+                            body.push(OP_I64_CONST);
+                            sleb(shift_amount as i64, &mut body);
+                            body.push(OP_I64_SHL);
+                            body.push(OP_I64_CONST);
+                            sleb(shift_amount as i64, &mut body);
+                            body.push(OP_I64_SHR_S);
+                        }
+                        if *is_32 {
+                            body.push(OP_I64_CONST);
+                            sleb(0xFFFF_FFFF, &mut body);
+                            body.push(OP_I64_AND);
+                        }
+                        reg_set(&mut body, *dst);
+                    }
+                    _ => {
+                        body.push(OP_UNREACHABLE);
+                    }
+                }
+            }
+            IrOp::ShiftVar {
+                dst,
+                a,
+                b,
+                shift,
+                is_32,
+            } => {
+                reg_get(&mut body, *a);
+                if *is_32 {
+                    body.push(OP_I64_CONST);
+                    sleb(0xFFFF_FFFF, &mut body);
+                    body.push(OP_I64_AND);
+                }
+                reg_get(&mut body, *b);
+                body.push(OP_I64_CONST);
+                sleb(if *is_32 { 31 } else { 63 }, &mut body);
+                body.push(OP_I64_AND);
+                let op = match shift {
+                    0 => OP_I64_SHL,   // 00 = LSLV
+                    1 => OP_I64_SHR_U, // 01 = LSRV
+                    2 => OP_I64_SHR_S, // 10 = ASRV
+                    3 => OP_I64_ROTR,  // 11 = RORV
+                    _ => OP_UNREACHABLE,
+                };
+                body.push(op);
+                if *is_32 {
+                    body.push(OP_I64_CONST);
+                    sleb(0xFFFF_FFFF, &mut body);
+                    body.push(OP_I64_AND);
+                }
+                reg_set(&mut body, *dst);
+            }
+            IrOp::Movk {
+                dst,
+                imm,
+                hw,
+                is_32,
+            } => {
+                let shift = (*hw as u64) * 16;
+                let mask = 0xFFFF_u64 << shift;
+                let insert_val = (*imm as u64) << shift;
+                reg_get(&mut body, *dst);
+                body.push(OP_I64_CONST);
+                sleb((!mask) as i64, &mut body);
+                body.push(OP_I64_AND);
+                body.push(OP_I64_CONST);
+                sleb(insert_val as i64, &mut body);
+                body.push(OP_I64_OR);
+                if *is_32 {
+                    body.push(OP_I64_CONST);
+                    sleb(0xFFFF_FFFF, &mut body);
+                    body.push(OP_I64_AND);
+                }
                 reg_set(&mut body, *dst);
             }
             IrOp::Wfi => {
@@ -712,6 +1041,125 @@ mod tests {
                 }],
                 vec![BlockExit::FallThrough(0x4)],
             ),
+            (
+                vec![IrOp::AndShift {
+                    dst: 0,
+                    a: 1,
+                    b: 2,
+                    shift: 0,
+                    amount: 0,
+                    invert: false,
+                    is_32: false,
+                }],
+                vec![BlockExit::FallThrough(0x4)],
+            ),
+            (
+                vec![IrOp::AndShift {
+                    dst: 0,
+                    a: 1,
+                    b: 2,
+                    shift: 1,
+                    amount: 8,
+                    invert: true,
+                    is_32: true,
+                }],
+                vec![BlockExit::FallThrough(0x4)],
+            ),
+            (
+                vec![IrOp::OrShift {
+                    dst: 0,
+                    a: 1,
+                    b: 2,
+                    shift: 0,
+                    amount: 0,
+                    invert: true,
+                    is_32: false,
+                }],
+                vec![BlockExit::FallThrough(0x4)],
+            ),
+            (
+                vec![IrOp::EorShift {
+                    dst: 0,
+                    a: 1,
+                    b: 2,
+                    shift: 2,
+                    amount: 16,
+                    invert: false,
+                    is_32: false,
+                }],
+                vec![BlockExit::FallThrough(0x4)],
+            ),
+            (
+                vec![IrOp::Bitfield {
+                    dst: 0,
+                    src: 1,
+                    opc: 2, // UBFM
+                    immr: 16,
+                    imms: 19,
+                    is_32: false,
+                }],
+                vec![BlockExit::FallThrough(0x4)],
+            ),
+            (
+                vec![IrOp::Bitfield {
+                    dst: 0,
+                    src: 1,
+                    opc: 0, // SBFM
+                    immr: 0,
+                    imms: 3,
+                    is_32: true,
+                }],
+                vec![BlockExit::FallThrough(0x4)],
+            ),
+            (
+                vec![IrOp::Bitfield {
+                    dst: 0,
+                    src: 1,
+                    opc: 1, // BFM
+                    immr: 8,
+                    imms: 15,
+                    is_32: false,
+                }],
+                vec![BlockExit::FallThrough(0x4)],
+            ),
+            (
+                vec![IrOp::ShiftVar {
+                    dst: 0,
+                    a: 1,
+                    b: 2,
+                    shift: 0, // LSLV
+                    is_32: false,
+                }],
+                vec![BlockExit::FallThrough(0x4)],
+            ),
+            (
+                vec![IrOp::ShiftVar {
+                    dst: 0,
+                    a: 1,
+                    b: 2,
+                    shift: 1, // LSRV
+                    is_32: true,
+                }],
+                vec![BlockExit::FallThrough(0x4)],
+            ),
+            (
+                vec![IrOp::Movk {
+                    dst: 0,
+                    imm: 0x1234,
+                    hw: 1,
+                    is_32: false,
+                }],
+                vec![BlockExit::FallThrough(0x4)],
+            ),
+            (
+                vec![IrOp::Movk {
+                    dst: 0,
+                    imm: 0x5678,
+                    hw: 0,
+                    is_32: true,
+                }],
+                vec![BlockExit::FallThrough(0x4)],
+            ),
             (vec![IrOp::Wfi], vec![BlockExit::FallThrough(0x4)]),
             (vec![IrOp::Trap { reason: "x" }], vec![BlockExit::ExitVm]),
             (vec![], vec![BlockExit::Dynamic]), // malformed -> unreachable, still valid
@@ -787,6 +1235,92 @@ mod tests {
         };
         let expr = assert_valid(&block);
         assert_eq!(expr[0], OP_UNREACHABLE);
+    }
+
+    #[test]
+    fn wave5_codegen_andshift_bic() {
+        let block = IrBlock {
+            entry_addr: 0x4000,
+            ops: vec![IrOp::AndShift {
+                dst: 1,
+                a: 2,
+                b: 3,
+                shift: 0,
+                amount: 0,
+                invert: true,
+                is_32: false,
+            }],
+            exits: vec![BlockExit::FallThrough(0x4004)],
+        };
+        let expr = assert_valid(&block);
+        // global.get 2; global.get 3; i64.const -1; i64.xor; i64.and; global.set 1
+        let seq = vec![
+            0x23, 0x02, // global.get 2
+            0x23, 0x03, // global.get 3
+            0x42, 0x7F, // i64.const -1
+            OP_I64_XOR, // 0x85
+            OP_I64_AND, // 0x83
+            0x24, 0x01, // global.set 1
+        ];
+        assert!(expr.windows(seq.len()).any(|w| w == seq.as_slice()));
+    }
+
+    #[test]
+    fn wave5_codegen_shiftvar_lslv() {
+        let block = IrBlock {
+            entry_addr: 0x4000,
+            ops: vec![IrOp::ShiftVar {
+                dst: 8,
+                a: 9,
+                b: 10,
+                shift: 0,
+                is_32: false,
+            }],
+            exits: vec![BlockExit::FallThrough(0x4004)],
+        };
+        let expr = assert_valid(&block);
+        let seq = vec![
+            0x23, 0x09, // global.get 9
+            0x23, 0x0A, // global.get 10
+            0x42, 0x3F, // i64.const 63
+            OP_I64_AND, // 0x83
+            OP_I64_SHL, // 0x86
+            0x24, 0x08, // global.set 8
+        ];
+        assert!(expr.windows(seq.len()).any(|w| w == seq.as_slice()));
+    }
+
+    #[test]
+    fn wave5_codegen_movk_and_bitfield() {
+        let block = IrBlock {
+            entry_addr: 0x4000,
+            ops: vec![
+                IrOp::Movk {
+                    dst: 5,
+                    imm: 0x1234,
+                    hw: 1,
+                    is_32: false,
+                },
+                IrOp::Bitfield {
+                    dst: 6,
+                    src: 7,
+                    opc: 2, // UBFM
+                    immr: 2,
+                    imms: 5,
+                    is_32: true,
+                },
+                IrOp::Bitfield {
+                    dst: 8,
+                    src: 9,
+                    opc: 0, // SBFM
+                    immr: 0,
+                    imms: 7,
+                    is_32: false,
+                },
+            ],
+            exits: vec![BlockExit::FallThrough(0x400C)],
+        };
+        assert_valid(&block);
     }
 
     // ---- structural validity (Wave 4: U3-G1 module shape) ----

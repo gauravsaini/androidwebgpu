@@ -17,6 +17,7 @@
 //! Illegal: this unit claims only what LLD §U1 lists, never fake-decodes.
 
 use pathn_contracts::cpu::{DecodeResult, InsnKind, Instruction};
+pub use pathn_contracts::cpu::decode_bitmasks;
 
 /// Decode one 32-bit AArch64 instruction word.
 ///
@@ -37,13 +38,14 @@ pub fn decode(word: u32) -> DecodeResult {
 /// 0x91004420 (ADD imm) → 1000, 0xD2800000 (MOVZ) → 1001,
 /// 0x14000000 (B) / 0xD503201F (NOP) → 1010, 0xD65F03C0 (RET) → 1011,
 /// 0x8B020020 (ADD reg) / 0xAA020020 (ORR reg) → 0101,
+/// 0x9AC32042 (LSLV) → 1101,
 /// 0xB9000020 (STR) / 0xF9400020 (LDR) → 1100.
 fn classify(word: u32) -> Option<InsnKind> {
     match (word >> 25) & 0xF {
         0b1000 | 0b1001 => decode_dp_imm(word),
         0b1010 | 0b1011 => decode_branch_sys(word),
-        0b0100 | 0b0101 => decode_dp_reg(word),
-        0b1100 | 0b1101 => decode_ldst(word),
+        0b0101 | 0b1101 => decode_dp_reg(word),
+        0b0100 | 0b1100 => decode_ldst(word),
         // 0b000x..0b001x: unallocated; 0b011x/0b111x: SIMD/FP/SVE (out of scope)
         _ => None,
     }
@@ -62,24 +64,58 @@ fn decode_dp_imm(word: u32) -> Option<InsnKind> {
                 None // ADDS/SUBS: out of scope, honestly illegal
             }
         }
+        // Logical (immediate): sf opc 100100 N immr imms Rn Rd.
+        0b1001000 | 0b1001001 => {
+            let sf = (word >> 31) & 1 == 1;
+            let n = ((word >> 22) & 1) as u8;
+            let immr = ((word >> 16) & 0x3F) as u8;
+            let imms = ((word >> 10) & 0x3F) as u8;
+            if decode_bitmasks(n, imms, immr, sf).is_some() {
+                Some(InsnKind::DataProc)
+            } else {
+                None
+            }
+        }
         // Move wide (immediate): sf opc 100101 hw imm16 Rd.
         0b1001010 | 0b1001011 => {
             let sf = (word >> 31) & 1;
             let hw = (word >> 21) & 0x3;
-            if sf == 0 && hw == 0b11 {
-                return None; // 32-bit LSL#48 is unallocated
+            if sf == 0 && hw > 1 {
+                return None; // 32-bit hw > 1 is unallocated
             }
             match (word >> 29) & 0x3 {
                 0b00 => Some(InsnKind::DataProc), // MOVN
                 0b10 => Some(InsnKind::DataProc), // MOVZ
-                _ => None,                        // 01 unallocated; 11 = MOVK, out of scope
+                0b11 => Some(InsnKind::DataProc), // MOVK (Track GB-4)
+                _ => None,                        // 01 unallocated
             }
+        }
+        // Bitfield (immediate): sf opc 100110 N immr imms Rn Rd.
+        0b1001100 | 0b1001101 => {
+            let sf = (word >> 31) & 1;
+            let opc = (word >> 29) & 0x3;
+            let n = (word >> 22) & 1;
+            if opc == 0b11 {
+                return None; // opc=11 unallocated
+            }
+            if sf == 0 {
+                if n != 0 {
+                    return None;
+                }
+                let immr = (word >> 16) & 0x3F;
+                let imms = (word >> 10) & 0x3F;
+                if (immr & 0x20) != 0 || (imms & 0x20) != 0 {
+                    return None;
+                }
+            } else if n != 1 {
+                return None;
+            }
+            Some(InsnKind::DataProc)
         }
         // PC-relative addressing (ADR/ADRP): bits[28:24]=0b10000 — Wave 4 (U1-G1).
         // bits[23:22] are immhi[18:17] (either value); the class is exclusive
         // to PC-rel within data-processing-immediate (0x44+ = add/sub-imm…).
         0b1000000..=0b1000011 => Some(InsnKind::PcRel),
-        // Logical-imm, bitfield, extract: out of scope.
         _ => None,
     }
 }
@@ -100,15 +136,29 @@ fn decode_dp_reg(word: u32) -> Option<InsnKind> {
         }
         // Logical (shifted register): sf opc 01010 shift N Rm imm6 Rn Rd.
         0b01010 => {
-            let opc = (word >> 29) & 0x3;
             let sf = (word >> 31) & 1;
+            let opc = (word >> 29) & 0x3;
             let n = (word >> 21) & 1;
-            let shift = (word >> 22) & 0x3;
-            // sf==0 && N==1 is unallocated; shift==0b11 is reserved.
-            let encoding_valid = (sf == 1 || n == 0) && shift < 0b11;
-            match opc {
-                0b01 | 0b10 if encoding_valid => Some(InsnKind::DataProc), // ORR / EOR
-                _ => None, // AND/ANDS or invalid N/shift: out of scope
+            let imm6 = (word >> 10) & 0x3F;
+            if sf == 0 && (imm6 & 0x20) != 0 {
+                return None; // 32-bit shift >= 32 is unallocated
+            }
+            // 32-bit ORR with N=1 is reserved/unallocated per contract
+            if sf == 0 && opc == 0b01 && n == 1 {
+                return None;
+            }
+            Some(InsnKind::DataProc) // AND, BIC, ORR, EOR, EON, ANDS, BICS
+        }
+        // Data-processing (2 source): sf 0 0 11010 110 Rm 0010 op2 Rn Rd
+        0b11010 => {
+            let bit29 = (word >> 29) & 1;
+            let bit21 = (word >> 21) & 1;
+            let opcode2 = (word >> 10) & 0x3F;
+            if bit29 == 0 && bit21 == 0 && ((opcode2 >> 2) == 0b0010) {
+                // ASRV (00), LSRV (01), LSLV (10), RORV (11)
+                Some(InsnKind::DataProc)
+            } else {
+                None
             }
         }
         _ => None,
@@ -229,18 +279,115 @@ mod tests {
     }
 
     #[test]
-    fn movk_is_illegal_out_of_scope() {
-        assert_illegal(0xF2A2_4680); // real MOVK, but LLD lists only MOVZ/MOVN
+    fn movk_is_dataproc() {
+        assert_eq!(ok_kind(0xF2A2_4680), InsnKind::DataProc); // MOVK X0, #0x1234, LSL #16
+        assert_eq!(ok_kind(0x7280_0000), InsnKind::DataProc); // MOVK W0, #0, LSL #0
     }
 
     #[test]
     fn movz_32bit_hw3_unallocated_is_illegal() {
         assert_illegal(0x52E2_4680); // sf=0, hw=0b11 is unallocated
+        assert_illegal(0x72E2_4680); // sf=0, hw=0b11 MOVK is unallocated
     }
 
     #[test]
-    fn orr_imm_logical_is_illegal() {
-        assert_illegal(0x3200_03E0); // logical-imm: out of scope
+    fn orr_imm_logical_is_dataproc() {
+        assert_eq!(ok_kind(0x3200_03E0), InsnKind::DataProc); // ORR W0, W31, #1
+        assert_eq!(ok_kind(0xB240_04C6), InsnKind::DataProc); // ORR X6, X6, #0x3 (from kernel)
+    }
+
+    #[test]
+    fn and_imm_logical_is_dataproc() {
+        assert_eq!(ok_kind(0x9240_52F7), InsnKind::DataProc); // AND X23, X23, #0x1fffff (kernel stext+0c)
+        assert_eq!(ok_kind(0x1200_03E0), InsnKind::DataProc); // AND W0, W31, #1
+        assert_eq!(ok_kind(0x7200_03E0), InsnKind::DataProc); // ANDS W0, W31, #1
+        assert_eq!(ok_kind(0xF200_03E0), InsnKind::DataProc); // ANDS X0, X31, #1
+    }
+
+    #[test]
+    fn eor_imm_logical_is_dataproc() {
+        assert_eq!(ok_kind(0x5200_03E0), InsnKind::DataProc); // EOR W0, W31, #1
+        assert_eq!(ok_kind(0xD200_03E0), InsnKind::DataProc); // EOR X0, X31, #1
+    }
+
+    #[test]
+    fn bitfield_ubfm_is_dataproc() {
+        assert_eq!(ok_kind(0xD350_4C63), InsnKind::DataProc); // UBFX X3, X3, #16, #4 (kernel 0x40004d68)
+        assert_eq!(ok_kind(0xD367_FC65), InsnKind::DataProc); // UBFX (kernel 0x413c00b8)
+        assert_eq!(ok_kind(0x5300_1C20), InsnKind::DataProc); // UBFX W0, W1, #0, #8 (UXTB)
+        assert_eq!(ok_kind(0xD340_7C20), InsnKind::DataProc); // LSR X0, X1, #0
+        assert_eq!(ok_kind(0x5304_7C20), InsnKind::DataProc); // LSL W0, W1, #4
+    }
+
+    #[test]
+    fn bitfield_sbfm_is_dataproc() {
+        assert_eq!(ok_kind(0x9340_7C20), InsnKind::DataProc); // ASR X0, X1, #0
+        assert_eq!(ok_kind(0x1300_1C20), InsnKind::DataProc); // SXTB W0, W1
+        assert_eq!(ok_kind(0x9340_1C20), InsnKind::DataProc); // SBFX X0, X1, #0, #4
+    }
+
+    #[test]
+    fn bitfield_bfm_is_dataproc() {
+        assert_eq!(ok_kind(0x3300_1C20), InsnKind::DataProc); // BFXIL W0, W1, #0, #8
+        assert_eq!(ok_kind(0xB340_1C20), InsnKind::DataProc); // BFI X0, X1, #0, #8
+    }
+
+    #[test]
+    fn shifted_reg_logical_all_ops_are_dataproc() {
+        assert_eq!(ok_kind(0x8A02_0020), InsnKind::DataProc); // AND X0, X1, X2
+        assert_eq!(ok_kind(0x8A22_0020), InsnKind::DataProc); // BIC X0, X1, X2
+        assert_eq!(ok_kind(0x8A23_0021), InsnKind::DataProc); // BIC X1, X1, X3 (kernel 0x40004d78)
+        assert_eq!(ok_kind(0xAA22_0020), InsnKind::DataProc); // ORN X0, X1, X2
+        assert_eq!(ok_kind(0xCA02_0020), InsnKind::DataProc); // EOR X0, X1, X2
+        assert_eq!(ok_kind(0xCA22_0020), InsnKind::DataProc); // EON X0, X1, X2
+        assert_eq!(ok_kind(0xEA02_0020), InsnKind::DataProc); // ANDS X0, X1, X2
+        assert_eq!(ok_kind(0xEA03_003F), InsnKind::DataProc); // TST X1, X3 = ANDS XZR, X1, X3 (kernel 0x40004d78)
+        assert_eq!(ok_kind(0xEA22_0020), InsnKind::DataProc); // BICS X0, X1, X2
+        // 32-bit forms
+        assert_eq!(ok_kind(0x0A02_0020), InsnKind::DataProc); // AND W0, W1, W2
+        assert_eq!(ok_kind(0x0A22_0020), InsnKind::DataProc); // BIC W0, W1, W2
+    }
+
+    #[test]
+    fn dp_2source_shifts_are_dataproc() {
+        assert_eq!(ok_kind(0x9AC3_2042), InsnKind::DataProc); // LSL X2, X2, X3 (kernel 0x40004d70)
+        assert_eq!(ok_kind(0x9AC3_2442), InsnKind::DataProc); // LSR X2, X2, X3
+        assert_eq!(ok_kind(0x9AC3_2842), InsnKind::DataProc); // ASR X2, X2, X3
+        assert_eq!(ok_kind(0x9AC3_2C42), InsnKind::DataProc); // ROR X2, X2, X3
+        // 32-bit forms
+        assert_eq!(ok_kind(0x1AC3_2042), InsnKind::DataProc); // LSL W2, W2, W3
+    }
+
+    #[test]
+    fn decode_bitmasks_table_cases() {
+        // 1. Kernel mask: AND X23, X23, #0x1fffff (N=1, imms=20, immr=0, sf=true)
+        assert_eq!(decode_bitmasks(1, 20, 0, true), Some(0x0000_0000_001F_FFFF));
+
+        // 2. Alternating bits 0x5555_5555_5555_5555 (len=1, esize=2, S=0, R=0)
+        assert_eq!(decode_bitmasks(0, 0b111100, 0, true), Some(0x5555_5555_5555_5555));
+        // Alternating bits inverted (R=1) -> 0xAAAA_AAAA_AAAA_AAAA
+        assert_eq!(decode_bitmasks(0, 0b111100, 1, true), Some(0xAAAA_AAAA_AAAA_AAAA));
+
+        // 3. Alternating pairs 0x3333_3333_3333_3333 (len=2, esize=4, S=1, R=0)
+        assert_eq!(decode_bitmasks(0, 0b111001, 0, true), Some(0x3333_3333_3333_3333));
+        // Inverted pairs (R=2) -> 0xCCCC_CCCC_CCCC_CCCC
+        assert_eq!(decode_bitmasks(0, 0b111001, 2, true), Some(0xCCCC_CCCC_CCCC_CCCC));
+
+        // 4. Alternating nibbles 0x0F0F_0F0F_0F0F_0F0F (len=3, esize=8, S=3, R=0)
+        assert_eq!(decode_bitmasks(0, 0b110011, 0, true), Some(0x0F0F_0F0F_0F0F_0F0F));
+        assert_eq!(decode_bitmasks(0, 0b110011, 4, true), Some(0xF0F0_F0F0_F0F0_F0F0));
+
+        // 5. Alternating bytes 0x00FF_00FF_00FF_00FF (len=4, esize=16, S=7, R=0)
+        assert_eq!(decode_bitmasks(0, 0b100111, 0, true), Some(0x00FF_00FF_00FF_00FF));
+        assert_eq!(decode_bitmasks(0, 0b100111, 8, true), Some(0xFF00_FF00_FF00_FF00));
+
+        // 6. Halfwords 0x0000_FFFF_0000_FFFF (len=5, esize=32, S=15, R=0)
+        assert_eq!(decode_bitmasks(0, 0b001111, 0, true), Some(0x0000_FFFF_0000_FFFF));
+
+        // 7. 32-bit forms (must be masked to 32 bits, and N=1 is illegal)
+        assert_eq!(decode_bitmasks(0, 0b011110, 0, false), Some(0x7FFF_FFFF));
+        assert_eq!(decode_bitmasks(1, 20, 0, false), None); // N=1 with sf=0 is unallocated
+        assert_eq!(decode_bitmasks(0, 0b111111, 0, true), None); // all-ones is reserved
     }
 
     // ---- PC-relative (Wave 4: U1-G1) ----
@@ -291,8 +438,8 @@ mod tests {
     }
 
     #[test]
-    fn and_reg_is_illegal() {
-        assert_illegal(0x8A02_0020); // AND: out of scope
+    fn and_reg_is_dataproc() {
+        assert_eq!(ok_kind(0x8A02_0020), InsnKind::DataProc); // AND: Track GB-4
     }
 
     #[test]

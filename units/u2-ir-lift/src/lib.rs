@@ -54,7 +54,7 @@
 //! instructions) — lifts to `IrOp::Trap { reason }` naming exactly what is
 //! unsupported. A trap is data, never a silent nop and never a panic.
 
-use pathn_contracts::cpu::{InsnKind, Instruction, IrOp};
+use pathn_contracts::cpu::{decode_bitmasks, InsnKind, Instruction, IrOp};
 
 /// Private scratch register index used to materialize immediates.
 /// See module docs. Outside the architectural `0..=31` range.
@@ -132,8 +132,9 @@ fn lift_system(word: u32) -> Vec<IrOp> {
     trap(R_SYSTEM)
 }
 
-/// Data-processing: MOVZ, ADD (immediate), ADD (shifted register, LSL #0),
-/// ORR (shifted register, 64-bit — Wave 4).
+/// Data-processing: MOVZ/MOVN/MOVK, ADD (immediate), ADD (shifted register, LSL #0),
+/// Logical (immediate / shifted register), Bitfield (SBFM/BFM/UBFM),
+/// Variable shifts (ASRV/LSRV/LSLV/RORV).
 fn lift_data_proc(word: u32) -> Vec<IrOp> {
     // MOVZ: sf 10 100101 hw imm16 Rd  (bits 30:23 = 0xA5)
     if (word >> 23) & 0xFF == 0xA5 {
@@ -148,6 +149,35 @@ fn lift_data_proc(word: u32) -> Vec<IrOp> {
         // exactly imm16 << (hw * 16) with upper bits zero.
         let imm = (imm16 as u64) << (hw * 16);
         return vec![IrOp::Mov { dst: rd, imm }];
+    }
+    // MOVN: sf 00 100101 hw imm16 Rd  (bits 30:23 = 0x25)
+    if (word >> 23) & 0xFF == 0x25 {
+        let sf = word >> 31;
+        let hw = (word >> 21) & 0x3;
+        if sf == 0 && hw > 1 {
+            return trap(R_MOVZ_HW);
+        }
+        let imm16 = (word >> 5) & 0xFFFF;
+        let rd = (word & 0x1F) as u8;
+        let val = (imm16 as u64) << (hw * 16);
+        let imm = if sf == 1 { !val } else { (!val) & 0xFFFF_FFFF };
+        return vec![IrOp::Mov { dst: rd, imm }];
+    }
+    // MOVK: sf 11 100101 hw imm16 Rd  (bits 30:23 = 0xE5) — Track GB-4
+    if (word >> 23) & 0xFF == 0xE5 {
+        let sf = word >> 31;
+        let hw = ((word >> 21) & 0x3) as u8;
+        if sf == 0 && hw > 1 {
+            return trap(R_MOVZ_HW);
+        }
+        let imm16 = ((word >> 5) & 0xFFFF) as u16;
+        let rd = (word & 0x1F) as u8;
+        return vec![IrOp::Movk {
+            dst: rd,
+            imm: imm16,
+            hw,
+            is_32: sf == 0,
+        }];
     }
     // ADD (immediate): sf 0 0 10001 sh imm12 Rn Rd  (bits 30:24 = 0x11;
     // bit 29 = 0 excludes ADDS, bit 30 = 0 excludes SUB(S)).
@@ -168,6 +198,77 @@ fn lift_data_proc(word: u32) -> Vec<IrOp> {
                 b: SCRATCH,
             },
         ];
+    }
+    // Logical (immediate): sf opc 100100 N immr imms Rn Rd  (bits 28:23 = 0x24) — Track GB-4
+    if (word >> 23) & 0x3F == 0x24 {
+        let sf = (word >> 31) & 1 == 1;
+        let opc = (word >> 29) & 0x3;
+        let n = ((word >> 22) & 1) as u8;
+        let immr = ((word >> 16) & 0x3F) as u8;
+        let imms = ((word >> 10) & 0x3F) as u8;
+        let rn = ((word >> 5) & 0x1F) as u8;
+        let rd = (word & 0x1F) as u8;
+        if let Some(imm) = decode_bitmasks(n, imms, immr, sf) {
+            let is_32 = !sf;
+            return match opc {
+                0b00 | 0b11 => vec![
+                    IrOp::Mov { dst: SCRATCH, imm },
+                    IrOp::AndShift {
+                        dst: rd,
+                        a: rn,
+                        b: SCRATCH,
+                        shift: 0,
+                        amount: 0,
+                        invert: false,
+                        is_32,
+                    },
+                ],
+                0b01 => vec![
+                    IrOp::Mov { dst: SCRATCH, imm },
+                    IrOp::OrShift {
+                        dst: rd,
+                        a: rn,
+                        b: SCRATCH,
+                        shift: 0,
+                        amount: 0,
+                        invert: false,
+                        is_32,
+                    },
+                ],
+                0b10 => vec![
+                    IrOp::Mov { dst: SCRATCH, imm },
+                    IrOp::EorShift {
+                        dst: rd,
+                        a: rn,
+                        b: SCRATCH,
+                        shift: 0,
+                        amount: 0,
+                        invert: false,
+                        is_32,
+                    },
+                ],
+                _ => trap(R_DP_UNSUPPORTED),
+            };
+        }
+    }
+    // Bitfield (immediate): sf opc 100110 N immr imms Rn Rd  (bits 28:23 = 0x26) — Track GB-4
+    if (word >> 23) & 0x3F == 0x26 {
+        let sf = (word >> 31) & 1;
+        let opc = ((word >> 29) & 0x3) as u8;
+        let immr = ((word >> 16) & 0x3F) as u8;
+        let imms = ((word >> 10) & 0x3F) as u8;
+        let rn = ((word >> 5) & 0x1F) as u8;
+        let rd = (word & 0x1F) as u8;
+        if opc < 3 {
+            return vec![IrOp::Bitfield {
+                dst: rd,
+                src: rn,
+                opc,
+                immr,
+                imms,
+                is_32: sf == 0,
+            }];
+        }
     }
     // ADD (shifted register): sf 0 01011 00 0 Rm imm6 Rn Rd, LSL #0 only
     // (bits 31:24 = 0x0B/0x8B; S = 1 would be ADDS and never matches).
@@ -190,25 +291,81 @@ fn lift_data_proc(word: u32) -> Vec<IrOp> {
             b: rm,
         }];
     }
-    // ORR (shifted register): sf opc 01010 shift N Rm imm6 Rn Rd, opc = 01
-    // (bits 31:24 = 0xAA for 64-bit, 0x2A for 32-bit). Wave 4 (U2-G1).
-    let top8 = (word >> 24) & 0xFF;
-    if top8 == 0xAA || top8 == 0x2A {
-        if top8 == 0x2A {
-            return trap(R_ORR32);
-        }
+    // Logical (shifted register): sf opc 01010 shift N Rm imm6 Rn Rd  (bits 28:24 = 0x0A) — Track GB-4
+    if (word >> 24) & 0x1F == 0x0A {
+        let sf = (word >> 31) & 1;
+        let opc = (word >> 29) & 0x3;
         let shift = ((word >> 22) & 0x3) as u8;
+        let n = (word >> 21) & 1 == 1;
         let rm = ((word >> 16) & 0x1F) as u8;
         let amount = ((word >> 10) & 0x3F) as u8;
         let rn = ((word >> 5) & 0x1F) as u8;
         let rd = (word & 0x1F) as u8;
-        return vec![IrOp::OrrShift {
-            dst: rd,
-            a: rn,
-            b: rm,
-            shift,
-            amount,
-        }];
+        let is_32 = sf == 0;
+        return match opc {
+            0b00 | 0b11 => vec![IrOp::AndShift {
+                dst: rd,
+                a: rn,
+                b: rm,
+                shift,
+                amount,
+                invert: n,
+                is_32,
+            }],
+            0b01 => {
+                if is_32 {
+                    return trap(R_ORR32);
+                }
+                if !n {
+                    // Exact backward compatibility with existing tests
+                    vec![IrOp::OrrShift {
+                        dst: rd,
+                        a: rn,
+                        b: rm,
+                        shift,
+                        amount,
+                    }]
+                } else {
+                    vec![IrOp::OrShift {
+                        dst: rd,
+                        a: rn,
+                        b: rm,
+                        shift,
+                        amount,
+                        invert: n,
+                        is_32: false,
+                    }]
+                }
+            }
+            0b10 => vec![IrOp::EorShift {
+                dst: rd,
+                a: rn,
+                b: rm,
+                shift,
+                amount,
+                invert: n,
+                is_32,
+            }],
+            _ => trap(R_DP_UNSUPPORTED),
+        };
+    }
+    // Data-processing (2 source): sf 0 0 11010 110 Rm 0010 op2 Rn Rd  (bits 28:21 = 0xD6) — Track GB-4
+    if ((word >> 21) & 0xFF == 0xD6) && ((word >> 29) & 1 == 0) {
+        let opcode2 = (word >> 10) & 0x3F;
+        if (opcode2 >> 2) == 0b0010 {
+            let sf = (word >> 31) & 1;
+            let rm = ((word >> 16) & 0x1F) as u8;
+            let rn = ((word >> 5) & 0x1F) as u8;
+            let rd = (word & 0x1F) as u8;
+            let shift = (opcode2 & 0x3) as u8;
+            return vec![IrOp::ShiftVar {
+                dst: rd,
+                a: rn,
+                b: rm,
+                shift,
+                is_32: sf == 0,
+            }];
+        }
     }
     trap(R_DP_UNSUPPORTED)
 }
@@ -837,5 +994,136 @@ mod tests {
         // NOP (HINT #0) is not WFI: still a trap.
         let ops = lift(&insn(0x4000, 0xD503_201F, InsnKind::System));
         assert_eq!(ops, vec![IrOp::Trap { reason: R_SYSTEM }]);
+    }
+
+    // ---- Track GB-4 unit tests ----
+
+    #[test]
+    fn gb4_movk_lifts() {
+        // MOVK X0, #0x1234, LSL #16 (sf=1, hw=1, imm=0x1234, rd=0)
+        let word = 0xF2A2_4680;
+        let ops = lift(&insn(0x4000, word, InsnKind::DataProc));
+        assert_eq!(
+            ops,
+            vec![IrOp::Movk {
+                dst: 0,
+                imm: 0x1234,
+                hw: 1,
+                is_32: false,
+            }]
+        );
+
+        // MOVK W1, #0x5678, LSL #0 (sf=0, hw=0, imm=0x5678, rd=1)
+        let word32 = 0x728A_CF01;
+        let ops32 = lift(&insn(0x4000, word32, InsnKind::DataProc));
+        assert_eq!(
+            ops32,
+            vec![IrOp::Movk {
+                dst: 1,
+                imm: 0x5678,
+                hw: 0,
+                is_32: true,
+            }]
+        );
+    }
+
+    #[test]
+    fn gb4_and_imm_lifts() {
+        // AND X23, X23, #0x1fffff (kernel stext+0c: 0x924052f7)
+        let word = 0x9240_52F7;
+        let ops = lift(&insn(0x4000, word, InsnKind::DataProc));
+        assert_eq!(
+            ops,
+            vec![
+                IrOp::Mov {
+                    dst: SCRATCH,
+                    imm: 0x0000_0000_001F_FFFF,
+                },
+                IrOp::AndShift {
+                    dst: 23,
+                    a: 23,
+                    b: SCRATCH,
+                    shift: 0,
+                    amount: 0,
+                    invert: false,
+                    is_32: false,
+                },
+            ]
+        );
+    }
+
+    #[test]
+    fn gb4_bitfield_ubfm_lifts() {
+        // UBFX X3, X3, #16, #4 (kernel 0x40004d68: 0xd3504c63)
+        // sf=1, opc=2, immr=16, imms=19, rn=3, rd=3
+        let word = 0xD350_4C63;
+        let ops = lift(&insn(0x4000, word, InsnKind::DataProc));
+        assert_eq!(
+            ops,
+            vec![IrOp::Bitfield {
+                dst: 3,
+                src: 3,
+                opc: 2,
+                immr: 16,
+                imms: 19,
+                is_32: false,
+            }]
+        );
+    }
+
+    #[test]
+    fn gb4_bitfield_sbfm_lifts() {
+        // SBFX X0, X1, #0, #4 (sf=1, opc=0, immr=0, imms=3, rn=1, rd=0)
+        let word = 0x9340_0C20;
+        let ops = lift(&insn(0x4000, word, InsnKind::DataProc));
+        assert_eq!(
+            ops,
+            vec![IrOp::Bitfield {
+                dst: 0,
+                src: 1,
+                opc: 0,
+                immr: 0,
+                imms: 3,
+                is_32: false,
+            }]
+        );
+    }
+
+    #[test]
+    fn gb4_logical_shifted_reg_bic_lifts() {
+        // BIC X1, X1, X3 (kernel 0x40004d78: 0x8a230021)
+        // sf=1, opc=0, n=1, shift=0, amount=0, rm=3, rn=1, rd=1
+        let word = 0x8A23_0021;
+        let ops = lift(&insn(0x4000, word, InsnKind::DataProc));
+        assert_eq!(
+            ops,
+            vec![IrOp::AndShift {
+                dst: 1,
+                a: 1,
+                b: 3,
+                shift: 0,
+                amount: 0,
+                invert: true,
+                is_32: false,
+            }]
+        );
+    }
+
+    #[test]
+    fn gb4_dp_2source_lslv_lifts() {
+        // LSL X2, X2, X3 (kernel 0x40004d70: 0x9ac32042)
+        // sf=1, rm=3, rn=2, rd=2, shift=0 (LSLV: 00=LSL, 01=LSR, 10=ASR, 11=ROR)
+        let word = 0x9AC3_2042;
+        let ops = lift(&insn(0x4000, word, InsnKind::DataProc));
+        assert_eq!(
+            ops,
+            vec![IrOp::ShiftVar {
+                dst: 2,
+                a: 2,
+                b: 3,
+                shift: 0,
+                is_32: false,
+            }]
+        );
     }
 }
