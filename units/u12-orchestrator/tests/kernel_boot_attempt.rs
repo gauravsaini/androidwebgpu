@@ -107,8 +107,9 @@ fn test_kernel_boot_measured_failure() {
     // step 7463: pc=0x40c03664 word=0x93482c00 (sbfx x0, x0, #8, #4)     -> OK
     // step 7464: pc=0x40c03668 word=0xf100041f (cmp x0, #0x1)            -> OK
     // step 7465: pc=0x40c0366c word=0x5400004b (b.lt 0x40c03674)        -> OK (taken)
-    // step 7466: pc=0x40c03674 word=0x580002a5 (ldr x5, [pc, #84])      -> HALT: WasmTrap (static Load -> unreachable)
-    assert!(trace.len() >= 7466);
+    // step 7466: pc=0x40c03674 word=0x580002a5 (ldr x5, [pc, #84])      -> OK (GB-12: static Load via mem_load)
+    // step 7467: pc=0x40c03678 word=0xd518a205 (msr mair_el1, x5)        -> HALT: Unsupported (system semantics not lifted)
+    assert!(trace.len() >= 7467);
     assert_eq!(trace[0].1, 0x4000_0000);
     assert_eq!(trace[0].2, 0x9100_5a4d); // ADD imm
     assert_eq!(trace[1].1, 0x4000_0004);
@@ -199,14 +200,14 @@ fn test_kernel_boot_measured_failure() {
     assert_eq!(trace[7465].1, 0x40c0_366c);
     assert_eq!(trace[7465].2, 0x5400_004b); // B.LT 0x40c03674 (taken)
     assert_eq!(trace[7466].1, 0x40c0_3674);
-    assert_eq!(trace[7466].2, 0x5800_02a5); // LDR X5, [PC, #84] -> HALT
+    assert_eq!(trace[7466].2, 0x5800_02a5); // LDR X5, [PC, #84] (GB-12: static Load via mem_load)
+    assert_eq!(trace[7467].1, 0x40c0_3678);
+    assert_eq!(trace[7467].2, 0xd518_a205); // MSR MAIR_EL1, X5 (S3_0_C10_C2_0) -> HALT
 
-    // The static LDR literal lowers to unreachable (U3 has no host-call
-    // path for IrOp::Load yet -- GB-12). The halt is therefore a WasmTrap,
-    // not an Unsupported. Pin the trapping address; the wasmi backtrace
-    // text is codegen-specific and not pinned.
+    // U1 rejects MSR MAIR_EL1 with the honest system-semantics trap.
+    // Pin the trapping address; the reason string is not pinned.
     match final_halt {
-        Some(HaltReason::WasmTrap { addr, .. }) => assert_eq!(addr, 0x40c0_3674),
-        other => panic!("expected WasmTrap at 0x40c03674, got {other:?}"),
+        Some(HaltReason::Unsupported { addr, .. }) => assert_eq!(addr, 0x40c0_3678),
+        other => panic!("expected Unsupported at 0x40c03678, got {other:?}"),
     }
 }

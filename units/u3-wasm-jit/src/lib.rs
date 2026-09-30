@@ -25,9 +25,10 @@
 //!   so no new imports are needed. The declared exit is
 //!   `BlockExit::Dynamic`; a `Dynamic` first exit with no `BranchDyn` op is
 //!   malformed and lowers to `unreachable`.
-//! - `Load` / `Store` (static) STILL lower to `unreachable`: the static forms
-//!   are not in Wave-4 scope — trapping loudly beats faking a memory access.
-//!   Same for `IrOp::Trap`, per LLD §3.
+//! - `Load` / `Store` (static, GB-12) lower to `env.mem_load` /
+//!   `env.mem_store` with an `i64.const` address: same host-call contract as
+//!   the dynamic forms, with the address known at lift time.
+//!   `IrOp::Trap` still lowers to `unreachable`, per LLD §3.
 //! - `Trap { reason }`: the reason string is a host-side diagnostic and is
 //!   deliberately NOT encoded — encoding it would break byte-determinism
 //!   across builds. The trap itself is always emitted.
@@ -180,8 +181,29 @@ pub fn compile(block: &IrBlock) -> WasmModule {
                 sleb(*imm as i64, &mut body);
                 reg_set(&mut body, *dst);
             }
-            // No static guest memory in this module: trap loudly, never fake.
-            IrOp::Load { .. } | IrOp::Store { .. } | IrOp::Trap { .. } => {
+            // GB-12: static guest memory goes through the host's mem_load /
+            // mem_store with a constant address — same host-call contract as
+            // the dynamic forms, with the address known at lift time.
+            IrOp::Load { dst, addr, size } => {
+                body.push(OP_I64_CONST);
+                sleb(*addr as i64, &mut body);
+                body.push(OP_I64_CONST);
+                sleb(*size as i64, &mut body);
+                body.push(OP_CALL);
+                uleb(u64::from(FUNC_MEM_LOAD), &mut body);
+                reg_set(&mut body, *dst);
+            }
+            IrOp::Store { src, addr, size } => {
+                body.push(OP_I64_CONST);
+                sleb(*addr as i64, &mut body);
+                body.push(OP_I64_CONST);
+                sleb(*size as i64, &mut body);
+                reg_get(&mut body, *src);
+                body.push(OP_CALL);
+                uleb(u64::from(FUNC_MEM_STORE), &mut body);
+            }
+            // IrOp::Trap stays unreachable: a deliberate halt, never faked.
+            IrOp::Trap { .. } => {
                 body.push(OP_UNREACHABLE);
             }
             IrOp::LoadDyn {
@@ -1912,27 +1934,53 @@ mod tests {
     }
 
     #[test]
-    fn wave4_codegen_static_load_store_still_trap() {
+    fn gb12_codegen_static_load_calls_mem_load() {
+        // Mirrors the measured GB-11 halt: LDR X5, [PC, #84] at 0x40c03674
+        // (word 0x580002a5) lifts to Load { dst: 5, addr: 0x40c036c8, size: 8 }.
         let block = IrBlock {
-            entry_addr: 0,
-            ops: vec![
-                IrOp::Load {
-                    dst: 1,
-                    addr: 0x8000,
-                    size: 8,
-                },
-                IrOp::Store {
-                    src: 1,
-                    addr: 0x8000,
-                    size: 8,
-                },
-            ],
+            entry_addr: 0x40c03674,
+            ops: vec![IrOp::Load {
+                dst: 5,
+                addr: 0x40c036c8,
+                size: 8,
+            }],
             exits: vec![],
         };
         let expr = assert_valid(&block);
-        // Both static memory ops lower to unreachable; nothing is silently faked.
-        assert_eq!(expr[0], OP_UNREACHABLE);
-        assert_eq!(expr[1], OP_UNREACHABLE);
+        // i64.const 0x40c036c8; i64.const 8; call 0 (mem_load); global.set 5
+        let seq: Vec<u8> = vec![
+            0x42, 0xC8, 0xED, 0x80, 0x86, 0x04, // i64.const 0x40c036c8 (sleb)
+            0x42, 0x08, // i64.const 8
+            0x10, 0x00, // call 0 (mem_load)
+            0x24, 0x05, // global.set 5
+        ];
+        // The empty-exits epilogue appends unreachable by design
+        // (malformed-block rule); the lowered op sequence above is the real pin.
+        assert!(expr.windows(seq.len()).any(|w| w == seq.as_slice()));
+    }
+
+    #[test]
+    fn gb12_codegen_static_store_calls_mem_store() {
+        let block = IrBlock {
+            entry_addr: 0,
+            ops: vec![IrOp::Store {
+                src: 1,
+                addr: 0x9000,
+                size: 8,
+            }],
+            exits: vec![],
+        };
+        let expr = assert_valid(&block);
+        // i64.const 0x9000; i64.const 8; global.get 1; call 1 (mem_store)
+        let seq: Vec<u8> = vec![
+            0x42, 0x80, 0xA0, 0x02, // i64.const 0x9000 (sleb)
+            0x42, 0x08, // i64.const 8
+            0x23, 0x01, // global.get 1
+            0x10, 0x01, // call 1 (mem_store)
+        ];
+        // The empty-exits epilogue appends unreachable by design
+        // (malformed-block rule); the lowered op sequence above is the real pin.
+        assert!(expr.windows(seq.len()).any(|w| w == seq.as_slice()));
     }
 
     #[test]
