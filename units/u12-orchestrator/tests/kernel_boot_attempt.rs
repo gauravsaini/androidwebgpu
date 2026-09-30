@@ -97,9 +97,11 @@ fn test_kernel_boot_measured_failure() {
     // step 7453: pc=0x413c0018 word=0x97e10d8a (bl 0x40c03640)            -> OK
     // step 7454: pc=0x40c03640 word=0xd508871f (dc cvac, xzr)              -> OK
     // step 7455: pc=0x40c03644 word=0xd503379f (dsb ish)                  -> OK
-    // step 7456: pc=0x40c03648 word=0xd2a00600 (movz x0, #0x30)           -> OK
-    // step 7457: pc=0x40c0364c word=0xd5181040 (msr tcr_el1, x0)          -> HALT: Unsupported (system)
-    assert!(trace.len() >= 7457);
+    // step 7456: pc=0x40c03648 word=0xd2a00600 (movz x0, #0x30, lsl #16) -> OK (x0 = 0x300000)
+    // step 7457: pc=0x40c0364c word=0xd5181040 (msr cpacr_el1, x0)       -> OK (GB-9: persistent)
+    // step 7458: pc=0x40c03650 word=0xd2820000 (movz x0, #0)              -> OK
+    // step 7459: pc=0x40c03654 word=0xd5100240 (msr mdscr_el1, x0)        -> HALT: Unsupported (system)
+    assert!(trace.len() >= 7459);
     assert_eq!(trace[0].1, 0x4000_0000);
     assert_eq!(trace[0].2, 0x9100_5a4d); // ADD imm
     assert_eq!(trace[1].1, 0x4000_0004);
@@ -170,14 +172,18 @@ fn test_kernel_boot_measured_failure() {
     assert_eq!(trace[7455].1, 0x40c0_3644);
     assert_eq!(trace[7455].2, 0xd503_379f); // DSB ISH
     assert_eq!(trace[7456].1, 0x40c0_3648);
-    assert_eq!(trace[7456].2, 0xd2a0_0600); // MOVZ x0, #0x30
+    assert_eq!(trace[7456].2, 0xd2a0_0600); // MOVZ x0, #0x30, lsl #16
     assert_eq!(trace[7457].1, 0x40c0_364c);
-    assert_eq!(trace[7457].2, 0xd518_1040); // MSR TCR_EL1, x0 (S3_0_C1_C0_2)
+    assert_eq!(trace[7457].2, 0xd518_1040); // MSR CPACR_EL1, x0 (S3_0_C1_C0_2, GB-9)
+    assert_eq!(trace[7458].1, 0x40c0_3650);
+    assert_eq!(trace[7458].2, 0xd282_0000); // MOVZ x0, #0
+    assert_eq!(trace[7459].1, 0x40c0_3654);
+    assert_eq!(trace[7459].2, 0xd510_0240); // MSR MDSCR_EL1, x0 (S2_0_C0_C2_2) -> HALT
 
     assert_eq!(
         final_halt,
         Some(HaltReason::Unsupported {
-            addr: 0x40c0_364c,
+            addr: 0x40c0_3654,
             reason: "System: system and privileged semantics are not lifted",
         })
     );

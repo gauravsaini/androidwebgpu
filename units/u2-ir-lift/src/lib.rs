@@ -176,6 +176,8 @@ fn lift_system(word: u32) -> Vec<IrOp> {
             // SCTLR_EL1, SCTLR_EL2
             (3, 0, 1, 0, 0) => SysReg::SctlrEl1,
             (3, 4, 1, 0, 0) => SysReg::SctlrEl2,
+            // CPACR_EL1 (GB-9): kernel enables FP/ASIMD via MSR CPACR_EL1
+            (3, 0, 1, 0, 2) => SysReg::CpacrEl1,
             _ => return {
                 let val: u64 = match (op0, op1, crn, crm, op2) {
                     // CurrentEL: bits[3:2] = 0b01 (EL1) -> 0x4
@@ -226,6 +228,8 @@ fn lift_system(word: u32) -> Vec<IrOp> {
             (3, 0, 12, 0, 0) => SysReg::VbarEl1,
             // SP_EL0
             (3, 0, 4, 1, 0) => SysReg::SpEl0,
+            // CPACR_EL1 (GB-9): kernel enables FP/ASIMD via MSR CPACR_EL1
+            (3, 0, 1, 0, 2) => SysReg::CpacrEl1,
             _ => return {
                 match (op0, op1, crn, crm, op2) {
                     // NZCV: GB-2 live flag path (flags, not a stored register)
@@ -1309,7 +1313,9 @@ mod tests {
 
     #[test]
     fn trap_system_kind_names_kind() {
-        let ops = lift(&insn(0x4000, 0xD538_1040, InsnKind::System));
+        // 0xD538_1040 was MRS CPACR_EL1 before GB-9 made it persistent;
+        // use S3_0_C1_C0_3 (no such register) as the unrecognized example.
+        let ops = lift(&insn(0x4000, 0xD538_1060, InsnKind::System));
         assert_eq!(ops, vec![IrOp::Trap { reason: R_SYSTEM }]);
         assert!(matches!(&ops[0], IrOp::Trap { reason } if reason.contains("System")));
     }
@@ -1745,6 +1751,7 @@ mod tests {
             ((3, 0, 1, 0, 0), SysReg::SctlrEl1),
             ((3, 4, 1, 0, 0), SysReg::SctlrEl2),
             ((3, 4, 14, 1, 0), SysReg::CnthctlEl2),
+            ((3, 0, 1, 0, 2), SysReg::CpacrEl1),
         ];
         for ((op0, op1, crn, crm, op2), reg) in mrs_cases {
             let word = sys_word(op0, op1, crn, crm, op2, 7, true);
@@ -1765,6 +1772,7 @@ mod tests {
             ((3, 4, 14, 0, 3), SysReg::CntvoffEl2),
             ((3, 0, 12, 0, 0), SysReg::VbarEl1),
             ((3, 0, 4, 1, 0), SysReg::SpEl0),
+            ((3, 0, 1, 0, 2), SysReg::CpacrEl1),
         ];
         for ((op0, op1, crn, crm, op2), reg) in msr_cases {
             let word = sys_word(op0, op1, crn, crm, op2, 5, false);
@@ -1787,6 +1795,21 @@ mod tests {
         assert_eq!(
             lift(&insn(0x4000, w, InsnKind::System)),
             vec![IrOp::Mov { dst: 2, imm: 0x11 }]
+        );
+    }
+
+    #[test]
+    fn gb9_cpacr_el1_msr_mrs_lift_to_persistent_ops() {
+        // Measured halt word: MSR CPACR_EL1, X0 (step 7457, pc 0x40c0364c).
+        // (GB-8 mislabeled this TCR_EL1; S3_0_C1_C0_2 is CPACR_EL1.)
+        assert_eq!(
+            lift(&insn(0x4000, 0xD518_1040, InsnKind::System)),
+            vec![IrOp::WriteSys { src: 0, reg: SysReg::CpacrEl1 }]
+        );
+        // MRS CPACR_EL1, X5: same system encoding with bit 21 set.
+        assert_eq!(
+            lift(&insn(0x4000, 0xD538_1045, InsnKind::System)),
+            vec![IrOp::ReadSys { dst: 5, reg: SysReg::CpacrEl1 }]
         );
     }
 

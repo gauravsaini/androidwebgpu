@@ -52,6 +52,13 @@ pub enum SysReg {
     CntvoffEl2 = 6,
     VbarEl1 = 7,
     SpEl0 = 8,
+    /// Added 2026-09-30 (Track GB-9): Architectural Feature Access Control
+    /// Register, EL1. The kernel writes CPACR_EL1 with FPEN=0b11 to enable
+    /// FP/ASIMD during early CPU setup (MSR CPACR_EL1, X0).
+    /// CORRECTION 2026-09-30: GB-8 labeled word 0xd5181040 as MSR TCR_EL1,
+    /// but field extraction gives S3_0_C1_C0_2, which is CPACR_EL1
+    /// (TCR_EL1 is S3_0_C2_C0_2 = 0xd5182040).
+    CpacrEl1 = 9,
 }
 
 /// Single IR operation (SSA-style). The lifter (U2) is the only producer.
