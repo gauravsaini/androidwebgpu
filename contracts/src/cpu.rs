@@ -112,6 +112,75 @@ pub enum IrOp {
         shift: u8,
         amount: u8,
     },
+    /// Added 2026-09-30 (Track GB-4): AND with shifted register, optional invert (BIC), 32- or 64-bit.
+    /// `dst = regs[a] & (invert ? ~shift(regs[b]) : shift(regs[b]))`.
+    /// `shift ∈ {0=LSL, 1=LSR, 2=ASR, 3=ROR}`.
+    /// When `is_32 = true`, operation is 32-bit and upper 32 bits of `dst` are zeroed.
+    AndShift {
+        dst: u8,
+        a: u8,
+        b: u8,
+        shift: u8,
+        amount: u8,
+        invert: bool,
+        is_32: bool,
+    },
+    /// Added 2026-09-30 (Track GB-4): OR with shifted register, optional invert (ORN), 32- or 64-bit.
+    /// `dst = regs[a] | (invert ? ~shift(regs[b]) : shift(regs[b]))`.
+    /// `shift ∈ {0=LSL, 1=LSR, 2=ASR, 3=ROR}`.
+    /// When `is_32 = true`, operation is 32-bit and upper 32 bits of `dst` are zeroed.
+    OrShift {
+        dst: u8,
+        a: u8,
+        b: u8,
+        shift: u8,
+        amount: u8,
+        invert: bool,
+        is_32: bool,
+    },
+    /// Added 2026-09-30 (Track GB-4): EOR with shifted register, optional invert (EON), 32- or 64-bit.
+    /// `dst = regs[a] ^ (invert ? ~shift(regs[b]) : shift(regs[b]))`.
+    /// `shift ∈ {0=LSL, 1=LSR, 2=ASR, 3=ROR}`.
+    /// When `is_32 = true`, operation is 32-bit and upper 32 bits of `dst` are zeroed.
+    EorShift {
+        dst: u8,
+        a: u8,
+        b: u8,
+        shift: u8,
+        amount: u8,
+        invert: bool,
+        is_32: bool,
+    },
+    /// Added 2026-09-30 (Track GB-4): Bitfield operation (SBFM=0, BFM=1, UBFM=2).
+    /// Pure deterministic bitfield extract, insert, or shift.
+    /// When `is_32 = true`, operation is 32-bit and upper 32 bits of `dst` are zeroed.
+    Bitfield {
+        dst: u8,
+        src: u8,
+        opc: u8,
+        immr: u8,
+        imms: u8,
+        is_32: bool,
+    },
+    /// Added 2026-09-30 (Track GB-4): Variable shift by register value.
+    /// `shift ∈ {0=ASRV, 1=LSRV, 2=LSLV, 3=RORV}`.
+    /// When `is_32 = true`, shift amount is modulo 32 and upper 32 bits are zeroed.
+    ShiftVar {
+        dst: u8,
+        a: u8,
+        b: u8,
+        shift: u8,
+        is_32: bool,
+    },
+    /// Added 2026-09-30 (Track GB-4): Move wide with keep (MOVK).
+    /// Replaces 16-bit halfword at `hw * 16` of `regs[dst]` with `imm`.
+    /// When `is_32 = true`, upper 32 bits of `dst` are zeroed.
+    Movk {
+        dst: u8,
+        imm: u16,
+        hw: u8,
+        is_32: bool,
+    },
     /// Added 2026-09-27 (Wave 4 amendment U2-G1): wait-for-interrupt marker.
     /// The execution backend yields the vCPU until an IRQ is pending;
     /// resumable, never an error and never a silent nop.
@@ -186,6 +255,61 @@ pub struct IrqState {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Irq {
     pub num: u32,
+}
+
+/// Decode AArch64 bitmask immediate per ARM ARM pseudocode for `DecodeBitMasks`.
+///
+/// Returns the decoded 64-bit mask, or `None` if the encoding is reserved/unallocated.
+pub fn decode_bitmasks(n: u8, imms: u8, immr: u8, sf: bool) -> Option<u64> {
+    let val = ((n as u32 & 1) << 6) | ((!imms as u32) & 0x3F);
+    let mut len_bit: i32 = -1;
+    for bit in (0..=6).rev() {
+        if (val >> bit) & 1 == 1 {
+            len_bit = bit as i32;
+            break;
+        }
+    }
+    if len_bit < 1 {
+        return None;
+    }
+    let esize = 1u64 << len_bit;
+    if !sf && n != 0 {
+        return None;
+    }
+    if !sf && esize == 64 {
+        return None;
+    }
+    let levels = (1u32 << len_bit) - 1;
+    if (imms as u32 & levels) == levels {
+        return None;
+    }
+    let s = (imms as u32 & levels) as usize;
+    let r = (immr as u32 & levels) as usize;
+    let ones = if esize == 64 && s == 63 {
+        !0u64
+    } else {
+        (1u64 << (s + 1)) - 1
+    };
+    let welem = if r == 0 {
+        ones
+    } else {
+        ((ones >> r) | (ones << (esize - r as u64)))
+            & if esize == 64 {
+                !0u64
+            } else {
+                (1u64 << esize) - 1
+            }
+    };
+    let mut mask64 = 0u64;
+    let mut i = 0;
+    while i < 64 {
+        mask64 |= welem << i;
+        i += esize;
+    }
+    if !sf {
+        mask64 &= 0xFFFF_FFFF;
+    }
+    Some(mask64)
 }
 
 #[cfg(test)]

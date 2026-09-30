@@ -76,8 +76,11 @@ fn test_kernel_boot_measured_failure() {
     // step 11: pc=0x40004d5c word=0x8b000021 (add x1, x1, x0)      -> OK
     // step 12: pc=0x40004d60 word=0xd53b0023 (mrs x3, ctr_el0)     -> OK
     // step 13: pc=0x40004d64 word=0xd503201f (nop)                  -> OK
-    // step 14: pc=0x40004d68 word=0xd3504c63 (ubfx x3, x3, #16, #4) -> HALT: IllegalInstruction
-    assert!(trace.len() >= 14);
+    // step 14: pc=0x40004d68 word=0xd3504c63 (ubfx x3, x3, #16, #4) -> OK
+    // step 15: pc=0x40004d6c word=0xd2800082 (movz x2, #4)          -> OK
+    // step 16: pc=0x40004d70 word=0x9ac32042 (lsl x2, x2, x3)       -> OK
+    // step 17: pc=0x40004d74 word=0xd1000443 (sub x3, x2, #1)       -> HALT: Unsupported
+    assert!(trace.len() >= 17);
     assert_eq!(trace[0].1, 0x4000_0000);
     assert_eq!(trace[0].2, 0x9100_5a4d); // ADD imm
     assert_eq!(trace[1].1, 0x4000_0004);
@@ -104,13 +107,19 @@ fn test_kernel_boot_measured_failure() {
     assert_eq!(trace[13].1, 0x4000_4d64);
     assert_eq!(trace[13].2, 0xd503_201f); // NOP
     assert_eq!(trace[14].1, 0x4000_4d68);
-    assert_eq!(trace[14].2, 0xd350_4c63); // UBFX
+    assert_eq!(trace[14].2, 0xd350_4c63); // UBFX x3, x3, #16, #4
+    assert_eq!(trace[15].1, 0x4000_4d6c);
+    assert_eq!(trace[15].2, 0xd280_0082); // MOVZ x2, #4
+    assert_eq!(trace[16].1, 0x4000_4d70);
+    assert_eq!(trace[16].2, 0x9ac3_2042); // LSL x2, x2, x3
+    assert_eq!(trace[17].1, 0x4000_4d74);
+    assert_eq!(trace[17].2, 0xd100_0443); // SUB x3, x2, #1
 
     assert_eq!(
         final_halt,
-        Some(HaltReason::IllegalInstruction {
-            addr: 0x4000_4d68,
-            word: 0xd350_4c63,
+        Some(HaltReason::Unsupported {
+            addr: 0x4000_4d74,
+            reason: "DataProc: unsupported encoding",
         })
     );
 }
