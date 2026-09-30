@@ -70,6 +70,7 @@ const R_SUB32_IMM: &str = "DataProc: 32-bit SUB immediate width is not expressib
 const R_SUB32_REG: &str = "DataProc: 32-bit SUB register width is not expressible in IrOp::Sub";
 const R_SUB_SHIFT: &str =
     "DataProc: shifted SUB register operand is not expressible in IrOp";
+const R_CLZ32: &str = "DataProc: 32-bit CLZ width is not expressible in IrOp::Clz";
 const R_ADD32_REG: &str = "DataProc: 32-bit ADD register width is not expressible in IrOp::Add";
 const R_ADD_SHIFT: &str =
     "DataProc: shifted or extended ADD register operand is not expressible in IrOp";
@@ -238,6 +239,7 @@ fn lift_system(word: u32) -> Vec<IrOp> {
 }
 
 /// Data-processing: MOVZ/MOVN/MOVK, ADD/SUB (immediate), ADD/SUB (shifted register, LSL #0),
+/// CLZ (1-source, 64-bit),
 /// Logical (immediate / shifted register), Bitfield (SBFM/BFM/UBFM),
 /// Variable shifts (ASRV/LSRV/LSLV/RORV).
 fn lift_data_proc(word: u32) -> Vec<IrOp> {
@@ -435,6 +437,23 @@ fn lift_data_proc(word: u32) -> Vec<IrOp> {
             a: rn,
             b: rm,
         }];
+    }
+    // CLZ (1 source): sf 1 S 11010 110 00000 000100 Rn Rd, S = 0
+    // (bits 31:24 = 0xDA/0x5A) — Track GB-7. 64-bit only; the 32-bit form
+    // traps: upper-bit zeroing is not expressible in IrOp::Clz.
+    if top == 0xDA || top == 0x5A {
+        if (word >> 21) & 0x7 != 0b110
+            || (word >> 16) & 0x1F != 0
+            || (word >> 10) & 0x3F != 0b000100
+        {
+            return trap(R_DP_UNSUPPORTED);
+        }
+        if word >> 31 == 0 {
+            return trap(R_CLZ32);
+        }
+        let rn = ((word >> 5) & 0x1F) as u8;
+        let rd = (word & 0x1F) as u8;
+        return vec![IrOp::Clz { dst: rd, src: rn }];
     }
     // Logical (shifted register): sf opc 01010 shift N Rm imm6 Rn Rd  (bits 28:24 = 0x0A) — Track GB-4
     if (word >> 24) & 0x1F == 0x0A {
@@ -943,6 +962,27 @@ mod tests {
                 reason: R_SUB32_REG
             }]
         );
+    }
+
+    #[test]
+    fn golden_clz() {
+        // CLZ X5, X5 (real kernel step 5201 word: 0xdac010a5)
+        let ops = lift(&insn(0x413c_0088, 0xdac0_10a5, InsnKind::DataProc));
+        assert_eq!(ops, vec![IrOp::Clz { dst: 5, src: 5 },]);
+    }
+
+    #[test]
+    fn trap_clz_32bit() {
+        // CLZ W5, W5: 32-bit width not expressible
+        let ops = lift(&insn(0x4000, 0x5ac0_10a5, InsnKind::DataProc));
+        assert_eq!(ops, vec![IrOp::Trap { reason: R_CLZ32 }]);
+    }
+
+    #[test]
+    fn trap_clz_sibling_stays_unsupported() {
+        // RBIT X5, X5 (1-source sibling, out of scope) -> honest trap
+        let ops = lift(&insn(0x4000, 0xdac0_00a5, InsnKind::DataProc));
+        assert_eq!(ops, vec![IrOp::Trap { reason: R_DP_UNSUPPORTED }]);
     }
 
     #[test]

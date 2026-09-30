@@ -6,7 +6,8 @@
 //! Supported subset (exactly LLD §U1, nothing more):
 //! - data-processing immediate: ADD/SUB (immediate, S=0), MOVZ, MOVN
 //! - data-processing register: ADD/SUB (shifted register, S=0),
-//!   ORR/EOR (shifted register)
+//!   ORR/EOR (shifted register), CLZ (1-source, 64-bit; 32-bit recognized,
+//!   trapped in U2)
 //! - loads/stores: LDR/STR (immediate, unsigned offset), integer registers
 //! - branches: B, BL, CBZ, CBNZ, RET
 //! - system: HINT (NOP = HINT #0)
@@ -163,14 +164,27 @@ fn decode_dp_reg(word: u32) -> Option<InsnKind> {
                 None
             }
         }
-        // Data-processing (2 source): sf 0 0 11010 110 Rm 0010 op2 Rn Rd (GB-4).
-        // LSLV / LSRV / ASRV / RORV.
+        // Data-processing (2 source): sf 0 S 11010 110 Rm 0010 op2 Rn Rd (GB-4).
+        // LSLV / LSRV / ASRV / RORV. bit30 == 0 is what separates this class
+        // from data-processing (1 source); pinning it keeps CLZ (bit30 == 1)
+        // from ever being misread here.
+        // Data-processing (1 source): sf 1 S 11010 110 00000 opcode Rn Rd (GB-7).
+        // CLZ only (opcode == 0b000100, S == 0); RBIT/REV*/CLS stay Illegal.
+        // The 32-bit form (sf == 0) is recognized and trapped in U2.
         0b11010 => {
+            let bit30 = (word >> 30) & 1;
             let bit29 = (word >> 29) & 1;
             let bit21 = (word >> 21) & 1;
             let opcode2 = (word >> 10) & 0x3F;
-            if bit29 == 0 && bit21 == 0 && ((opcode2 >> 2) == 0b0010) {
+            if bit30 == 0 && bit29 == 0 && bit21 == 0 && ((opcode2 >> 2) == 0b0010) {
                 Some(InsnKind::DataProc)
+            } else if bit30 == 1
+                && bit29 == 0
+                && ((word >> 21) & 0x7) == 0b110
+                && ((word >> 16) & 0x1F) == 0
+                && opcode2 == 0b000100
+            {
+                Some(InsnKind::DataProc) // CLZ
             } else {
                 None
             }

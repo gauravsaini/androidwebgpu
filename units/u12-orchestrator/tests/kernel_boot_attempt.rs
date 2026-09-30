@@ -87,8 +87,12 @@ fn test_kernel_boot_measured_failure() {
     // step 72: pc=0x40004d9c word=0xd5087620 (dc cache maintenance) -> cache-clean loop entry
     // steps 73..~5199: cache-clean loop (dc; add x0, x0, x2; cmp x0, x1; b.lt) runs to completion
     // step 5200: pc=0x413c0084 word=0xf0ffc205                     -> OK
-    // step 5201: pc=0x413c0088 word=0xdac010a5 (clz x5, x5)         -> HALT: IllegalInstruction
-    assert!(trace.len() >= 5201);
+    // step 5201: pc=0x413c0088 word=0xdac010a5 (clz x5, x5)         -> OK (GB-7)
+    // step 5202: pc=0x413c008c word=0xf10064bf (cmp x5, #0x19)       -> OK
+    // step 5203: pc=0x413c0090 word=0x540001ea (b.gt 0x413c00cc)    -> OK (taken)
+    // steps 5204..5216: adrp/ldr/mov/add/movz/ubfiz/subs/eor sequence -> OK
+    // step 5217: pc=0x413c0100 word=0x9b0d7d4a (madd x10,x10,x13,xzr) -> HALT: IllegalInstruction
+    assert!(trace.len() >= 5217);
     assert_eq!(trace[0].1, 0x4000_0000);
     assert_eq!(trace[0].2, 0x9100_5a4d); // ADD imm
     assert_eq!(trace[1].1, 0x4000_0004);
@@ -133,13 +137,29 @@ fn test_kernel_boot_measured_failure() {
     assert_eq!(trace[5200].1, 0x413c_0084);
     assert_eq!(trace[5200].2, 0xf0ff_c205);
     assert_eq!(trace[5201].1, 0x413c_0088);
-    assert_eq!(trace[5201].2, 0xdac0_10a5); // CLZ x5, x5 (1-source data-processing)
+    assert_eq!(trace[5201].2, 0xdac0_10a5); // CLZ x5, x5 (1-source, GB-7)
+    assert_eq!(trace[5202].1, 0x413c_008c);
+    assert_eq!(trace[5202].2, 0xf100_64bf); // CMP x5, #0x19
+    assert_eq!(trace[5203].1, 0x413c_0090);
+    assert_eq!(trace[5203].2, 0x5400_01ea); // B.GT 0x413c00cc (taken)
+    assert_eq!(trace[5204].1, 0x413c_00cc);
+    assert_eq!(trace[5204].2, 0xb000_0984); // ADRP x4, ...
+    assert_eq!(trace[5213].1, 0x413c_00f0);
+    assert_eq!(trace[5213].2, 0xaa04_03ea); // MOV x10, x4
+    assert_eq!(trace[5214].1, 0x413c_00f4);
+    assert_eq!(trace[5214].2, 0xd100_054a); // SUBS x10, x10, #1
+    assert_eq!(trace[5215].1, 0x413c_00f8);
+    assert_eq!(trace[5215].2, 0x8a0a_016b); // EOR x11, x11, x10
+    assert_eq!(trace[5216].1, 0x413c_00fc);
+    assert_eq!(trace[5216].2, 0xaa04_03ea); // MOV x10, x4
+    assert_eq!(trace[5217].1, 0x413c_0100);
+    assert_eq!(trace[5217].2, 0x9b0d_7d4a); // MADD x10, x10, x13, xzr (3-source)
 
     assert_eq!(
         final_halt,
         Some(HaltReason::IllegalInstruction {
-            addr: 0x413c_0088,
-            word: 0xdac0_10a5,
+            addr: 0x413c_0100,
+            word: 0x9b0d_7d4a,
         })
     );
 }

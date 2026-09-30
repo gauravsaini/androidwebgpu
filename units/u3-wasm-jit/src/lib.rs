@@ -58,6 +58,7 @@ const OP_I64_CONST: u8 = 0x42;
 const OP_I64_EQZ: u8 = 0x50;
 const OP_I64_ADD: u8 = 0x7C;
 const OP_I64_SUB: u8 = 0x7D;
+const OP_I64_CLZ: u8 = 0x79;
 const OP_I64_AND: u8 = 0x83;
 const OP_I64_OR: u8 = 0x84;
 const OP_I64_XOR: u8 = 0x85;
@@ -156,6 +157,11 @@ pub fn compile(block: &IrBlock) -> WasmModule {
                 reg_get(&mut body, *a);
                 reg_get(&mut body, *b);
                 body.push(OP_I64_SUB);
+                reg_set(&mut body, *dst);
+            }
+            IrOp::Clz { dst, src } => {
+                reg_get(&mut body, *src);
+                body.push(OP_I64_CLZ);
                 reg_set(&mut body, *dst);
             }
             IrOp::Mov { dst, imm } => {
@@ -938,6 +944,7 @@ mod tests {
             ops: vec![
                 IrOp::Add { dst: 0, a: 1, b: 2 },
                 IrOp::Sub { dst: 0, a: 1, b: 2 },
+                IrOp::Clz { dst: 0, src: 1 },
                 IrOp::Mov {
                     dst: 3,
                     imm: u64::MAX,
@@ -996,6 +1003,10 @@ mod tests {
             ),
             (
                 vec![IrOp::Sub { dst: 0, a: 1, b: 2 }],
+                vec![BlockExit::FallThrough(0x4)],
+            ),
+            (
+                vec![IrOp::Clz { dst: 0, src: 1 }],
                 vec![BlockExit::FallThrough(0x4)],
             ),
             (
@@ -1534,6 +1545,20 @@ mod tests {
         assert!(expr
             .windows(7)
             .any(|w| w == [0x23, 0x01, 0x23, 0x02, 0x7D, 0x24, 0x03]));
+    }
+
+    #[test]
+    fn gb7_codegen_clz_uses_globals() {
+        let block = IrBlock {
+            entry_addr: 0,
+            ops: vec![IrOp::Clz { dst: 5, src: 5 }],
+            exits: vec![],
+        };
+        let expr = assert_valid(&block);
+        // global.get 5; i64.clz; global.set 5
+        assert!(expr
+            .windows(5)
+            .any(|w| w == [0x23, 0x05, 0x79, 0x24, 0x05]));
     }
 
     #[test]
