@@ -74,6 +74,9 @@ use pathn_contracts::execution::{BlockExecutor, HostOps};
 use pathn_contracts::machine::{CpuState, MachineState};
 use sha2::{Digest, Sha256};
 
+pub mod arm64;
+use arm64::*;
+
 #[cfg(target_arch = "wasm32")]
 use u15_exec_wasmi::WasmiExecutor;
 #[cfg(not(target_arch = "wasm32"))]
@@ -577,6 +580,307 @@ impl Orchestrator {
         }
     }
 
+    fn read_ram_u64(&self, pa: u64) -> Result<u64, HaltReason> {
+        let off = self.ram_offset(pa, 8).map_err(|_| HaltReason::FetchFault { addr: pa })?;
+        Ok(u64::from_le_bytes(self.machine.ram[off..off + 8].try_into().unwrap()))
+    }
+
+    fn read_ram_u32(&self, pa: u64) -> Result<u32, HaltReason> {
+        let off = self.ram_offset(pa, 4).map_err(|_| HaltReason::FetchFault { addr: pa })?;
+        Ok(u32::from_le_bytes(self.machine.ram[off..off + 4].try_into().unwrap()))
+    }
+
+    fn write_ram_u64(&mut self, pa: u64, val: u64) -> Result<(), HaltReason> {
+        let off = self.ram_offset(pa, 8).map_err(|_| HaltReason::FetchFault { addr: pa })?;
+        self.machine.ram[off..off + 8].copy_from_slice(&val.to_le_bytes());
+        Ok(())
+    }
+
+    fn write_ram_u32(&mut self, pa: u64, val: u32) -> Result<(), HaltReason> {
+        let off = self.ram_offset(pa, 4).map_err(|_| HaltReason::FetchFault { addr: pa })?;
+        self.machine.ram[off..off + 4].copy_from_slice(&val.to_le_bytes());
+        Ok(())
+    }
+
+    /// Direct vCPU execution for branches + flags (Track GB-2), STP/LDP, and barriers.
+    ///
+    /// Pure state transition on machine.cpu[0] and machine.ram.
+    /// Returns `Some(Ok(()))` when the instruction was handled,
+    /// `Some(Err(reason))` when execution produced a fault,
+    /// or `None` if the instruction should fall through to the WASM lifter.
+    pub fn execute_arm64(&mut self, insn: &Instruction) -> Option<Result<(), HaltReason>> {
+        let word = insn.word;
+        let pc = insn.addr;
+
+        // 1. B.cond: 0101010 0 imm19 0 cond
+        if (word >> 24) == 0x54 && (word & 0x10) == 0 {
+            let cond = (word & 0xF) as u8;
+            if cond < 15 {
+                let imm19 = ((word >> 5) & 0x7FFFF) as i32;
+                let offset = (((imm19 << 13) >> 13) as i64) * 4;
+                let target = (pc as i64).wrapping_add(offset) as u64;
+                let taken = condition_holds(cond, self.machine.cpu[0].pstate);
+                self.machine.cpu[0].pc = if taken { target } else { pc.wrapping_add(4) };
+                return Some(Ok(()));
+            }
+        }
+
+        // 2. TBZ / TBNZ: b5 011011 op b40 imm14 Rt
+        if (word >> 25) & 0x3F == 0b011011 {
+            let b5 = (word >> 31) & 1;
+            let op = (word >> 24) & 1; // 0 = TBZ, 1 = TBNZ
+            let b40 = (word >> 19) & 0x1F;
+            let bit_pos = (b5 << 5) | b40;
+            let imm14 = ((word >> 5) & 0x3FFF) as i32;
+            let offset = (((imm14 << 18) >> 18) as i64) * 4;
+            let target = (pc as i64).wrapping_add(offset) as u64;
+            let rt = (word & 0x1F) as usize;
+            let val = if rt == 31 { 0 } else { self.machine.cpu[0].regs[rt] };
+            let bit = (val >> bit_pos) & 1;
+            let taken = if op == 0 { bit == 0 } else { bit != 0 };
+            self.machine.cpu[0].pc = if taken { target } else { pc.wrapping_add(4) };
+            return Some(Ok(()));
+        }
+
+        // 3. Add/subtract (immediate) with S=1: ADDS / SUBS / CMP / CMN
+        // sf op S 10001 sh imm12 Rn Rd
+        if (word >> 24) & 0x1F == 0x11 {
+            let s = (word >> 29) & 1;
+            if s == 1 {
+                let sf = (word >> 31) & 1;
+                let op = (word >> 30) & 1; // 0 = ADD, 1 = SUB
+                let sh = (word >> 22) & 1;
+                let imm12 = (word >> 10) & 0xFFF;
+                let rn = ((word >> 5) & 0x1F) as usize;
+                let rd = (word & 0x1F) as usize;
+                let imm = (imm12 as u64) << (if sh == 1 { 12 } else { 0 });
+                let rn_val = if rn == 31 { self.machine.cpu[0].sp } else { self.machine.cpu[0].regs[rn] };
+                if sf == 1 {
+                    let nzcv = if op == 0 {
+                        let res = rn_val.wrapping_add(imm);
+                        if rd != 31 { self.machine.cpu[0].regs[rd] = res; }
+                        nzcv_add64(rn_val, imm)
+                    } else {
+                        let res = rn_val.wrapping_sub(imm);
+                        if rd != 31 { self.machine.cpu[0].regs[rd] = res; }
+                        nzcv_sub64(rn_val, imm)
+                    };
+                    self.machine.cpu[0].pstate = (self.machine.cpu[0].pstate & !FLAGS_NZCV_MASK) | nzcv;
+                } else {
+                    let a32 = rn_val as u32;
+                    let b32 = imm as u32;
+                    let nzcv = if op == 0 {
+                        let res = a32.wrapping_add(b32);
+                        if rd != 31 { self.machine.cpu[0].regs[rd] = res as u64; }
+                        nzcv_add32(a32, b32)
+                    } else {
+                        let res = a32.wrapping_sub(b32);
+                        if rd != 31 { self.machine.cpu[0].regs[rd] = res as u64; }
+                        nzcv_sub32(a32, b32)
+                    };
+                    self.machine.cpu[0].pstate = (self.machine.cpu[0].pstate & !FLAGS_NZCV_MASK) | nzcv;
+                }
+                self.machine.cpu[0].pc = pc.wrapping_add(4);
+                return Some(Ok(()));
+            }
+        }
+
+        // 4. Add/subtract (shifted register) with S=1: ADDS / SUBS / CMP / CMN
+        // sf op S 01011 shift 0 Rm imm6 Rn Rd
+        if (word >> 24) & 0x1F == 0x0B {
+            let s = (word >> 29) & 1;
+            let is_shifted = ((word >> 21) & 1) == 0;
+            let shift = ((word >> 22) & 0x3) as u8;
+            if s == 1 && is_shifted && shift < 3 {
+                let sf = (word >> 31) & 1;
+                let op = (word >> 30) & 1; // 0 = ADD, 1 = SUB
+                let rm = ((word >> 16) & 0x1F) as usize;
+                let imm6 = ((word >> 10) & 0x3F) as u8;
+                let rn = ((word >> 5) & 0x1F) as usize;
+                let rd = (word & 0x1F) as usize;
+                let rn_val = if rn == 31 { self.machine.cpu[0].sp } else { self.machine.cpu[0].regs[rn] };
+                let rm_val = if rm == 31 { 0 } else { self.machine.cpu[0].regs[rm] };
+                if sf == 1 {
+                    let operand2 = eval_shift64(rm_val, shift, imm6);
+                    let nzcv = if op == 0 {
+                        let res = rn_val.wrapping_add(operand2);
+                        if rd != 31 { self.machine.cpu[0].regs[rd] = res; }
+                        nzcv_add64(rn_val, operand2)
+                    } else {
+                        let res = rn_val.wrapping_sub(operand2);
+                        if rd != 31 { self.machine.cpu[0].regs[rd] = res; }
+                        nzcv_sub64(rn_val, operand2)
+                    };
+                    self.machine.cpu[0].pstate = (self.machine.cpu[0].pstate & !FLAGS_NZCV_MASK) | nzcv;
+                } else {
+                    let a32 = rn_val as u32;
+                    let b32 = eval_shift32(rm_val as u32, shift, imm6 & 0x1F);
+                    let nzcv = if op == 0 {
+                        let res = a32.wrapping_add(b32);
+                        if rd != 31 { self.machine.cpu[0].regs[rd] = res as u64; }
+                        nzcv_add32(a32, b32)
+                    } else {
+                        let res = a32.wrapping_sub(b32);
+                        if rd != 31 { self.machine.cpu[0].regs[rd] = res as u64; }
+                        nzcv_sub32(a32, b32)
+                    };
+                    self.machine.cpu[0].pstate = (self.machine.cpu[0].pstate & !FLAGS_NZCV_MASK) | nzcv;
+                }
+                self.machine.cpu[0].pc = pc.wrapping_add(4);
+                return Some(Ok(()));
+            }
+        }
+
+        // 5. Logical (shifted register): ANDS / TST (opc=11) and BIC (opc=00, N=1)
+        // sf opc 01010 shift N Rm imm6 Rn Rd
+        if (word >> 24) & 0x1F == 0x0A {
+            let opc = (word >> 29) & 0x3;
+            let shift = ((word >> 22) & 0x3) as u8;
+            let n = (word >> 21) & 1;
+            let sf = (word >> 31) & 1;
+            let rm = ((word >> 16) & 0x1F) as usize;
+            let imm6 = ((word >> 10) & 0x3F) as u8;
+            let rn = ((word >> 5) & 0x1F) as usize;
+            let rd = (word & 0x1F) as usize;
+
+            if opc == 0b11 && shift < 3 {
+                // ANDS (TST when rd=31) or BICS
+                let rn_val = if rn == 31 { 0 } else { self.machine.cpu[0].regs[rn] };
+                let rm_val = if rm == 31 { 0 } else { self.machine.cpu[0].regs[rm] };
+                if sf == 1 {
+                    let mut op2 = eval_shift64(rm_val, shift, imm6);
+                    if n == 1 { op2 = !op2; }
+                    let res = rn_val & op2;
+                    if rd != 31 { self.machine.cpu[0].regs[rd] = res; }
+                    let nzcv = nzcv_and64(res);
+                    self.machine.cpu[0].pstate = (self.machine.cpu[0].pstate & !FLAGS_NZCV_MASK) | nzcv;
+                } else {
+                    let mut op2 = eval_shift32(rm_val as u32, shift, imm6 & 0x1F);
+                    if n == 1 { op2 = !op2; }
+                    let res = (rn_val as u32) & op2;
+                    if rd != 31 { self.machine.cpu[0].regs[rd] = res as u64; }
+                    let nzcv = nzcv_and32(res);
+                    self.machine.cpu[0].pstate = (self.machine.cpu[0].pstate & !FLAGS_NZCV_MASK) | nzcv;
+                }
+                self.machine.cpu[0].pc = pc.wrapping_add(4);
+                return Some(Ok(()));
+            }
+            if opc == 0b00 && n == 1 && shift < 3 {
+                // BIC: Rd = Rn & ~shifted(Rm)
+                let rn_val = if rn == 31 { 0 } else { self.machine.cpu[0].regs[rn] };
+                let rm_val = if rm == 31 { 0 } else { self.machine.cpu[0].regs[rm] };
+                if sf == 1 {
+                    let op2 = !eval_shift64(rm_val, shift, imm6);
+                    let res = rn_val & op2;
+                    if rd != 31 { self.machine.cpu[0].regs[rd] = res; }
+                } else {
+                    let op2 = !eval_shift32(rm_val as u32, shift, imm6 & 0x1F);
+                    let res = (rn_val as u32) & op2;
+                    if rd != 31 { self.machine.cpu[0].regs[rd] = res as u64; }
+                }
+                self.machine.cpu[0].pc = pc.wrapping_add(4);
+                return Some(Ok(()));
+            }
+        }
+
+        // 6. Logical (immediate): ANDS / TST
+        // sf 11 100100 N immr imms Rn Rd
+        if ((word >> 23) & 0x3F == 0b100100) && ((word >> 29) & 0x3 == 0b11) {
+            let sf = ((word >> 31) & 1) as u8;
+            let n = ((word >> 22) & 1) as u8;
+            let immr = ((word >> 16) & 0x3F) as u8;
+            let imms = ((word >> 10) & 0x3F) as u8;
+            let rn = ((word >> 5) & 0x1F) as usize;
+            let rd = (word & 0x1F) as usize;
+            if let Some(mask) = decode_logical_immediate(sf, n, immr, imms) {
+                let rn_val = if rn == 31 { 0 } else { self.machine.cpu[0].regs[rn] };
+                if sf == 1 {
+                    let res = rn_val & mask;
+                    if rd != 31 { self.machine.cpu[0].regs[rd] = res; }
+                    let nzcv = nzcv_and64(res);
+                    self.machine.cpu[0].pstate = (self.machine.cpu[0].pstate & !FLAGS_NZCV_MASK) | nzcv;
+                } else {
+                    let res = (rn_val as u32) & (mask as u32);
+                    if rd != 31 { self.machine.cpu[0].regs[rd] = res as u64; }
+                    let nzcv = nzcv_and32(res);
+                    self.machine.cpu[0].pstate = (self.machine.cpu[0].pstate & !FLAGS_NZCV_MASK) | nzcv;
+                }
+                self.machine.cpu[0].pc = pc.wrapping_add(4);
+                return Some(Ok(()));
+            }
+        }
+
+        // 7. Load/store pair (STP / LDP)
+        // opc 101 V mode L imm7 Rt2 Rn Rt
+        // bits[29:25] == 0b10100, V == 0 (bit 26 == 0)
+        if ((word >> 25) & 0x1F == 0b10100) && ((word >> 26) & 1 == 0) {
+            let opc = (word >> 30) & 0x3;
+            let mode = (word >> 23) & 0x3; // 01 = post-index, 10 = signed offset, 11 = pre-index
+            let is_load = (word >> 22) & 1 == 1;
+            let imm7 = ((word >> 15) & 0x7F) as i32;
+            let rt2 = ((word >> 10) & 0x1F) as usize;
+            let rn = ((word >> 5) & 0x1F) as usize;
+            let rt = (word & 0x1F) as usize;
+
+            let scale: i64 = if opc == 2 { 8 } else if opc == 0 { 4 } else { return None; };
+            let signed_imm7 = ((imm7 << 25) >> 25) as i64;
+            let offset = signed_imm7 * scale;
+
+            let base = if rn == 31 { self.machine.cpu[0].sp } else { self.machine.cpu[0].regs[rn] };
+            let addr = match mode {
+                0b10 => base.wrapping_add(offset as u64),        // signed offset
+                0b11 => base.wrapping_add(offset as u64),        // pre-index
+                0b01 => base,                                    // post-index
+                _ => return None,
+            };
+
+            if is_load {
+                if opc == 2 {
+                    let val1 = match self.read_ram_u64(addr) { Ok(v) => v, Err(e) => return Some(Err(e)) };
+                    let val2 = match self.read_ram_u64(addr.wrapping_add(8)) { Ok(v) => v, Err(e) => return Some(Err(e)) };
+                    if rt != 31 { self.machine.cpu[0].regs[rt] = val1; }
+                    if rt2 != 31 { self.machine.cpu[0].regs[rt2] = val2; }
+                } else {
+                    let val1 = match self.read_ram_u32(addr) { Ok(v) => v, Err(e) => return Some(Err(e)) } as u64;
+                    let val2 = match self.read_ram_u32(addr.wrapping_add(4)) { Ok(v) => v, Err(e) => return Some(Err(e)) } as u64;
+                    if rt != 31 { self.machine.cpu[0].regs[rt] = val1; }
+                    if rt2 != 31 { self.machine.cpu[0].regs[rt2] = val2; }
+                }
+            } else {
+                if opc == 2 {
+                    let val1 = if rt == 31 { 0 } else { self.machine.cpu[0].regs[rt] };
+                    let val2 = if rt2 == 31 { 0 } else { self.machine.cpu[0].regs[rt2] };
+                    if let Err(e) = self.write_ram_u64(addr, val1) { return Some(Err(e)); }
+                    if let Err(e) = self.write_ram_u64(addr.wrapping_add(8), val2) { return Some(Err(e)); }
+                } else {
+                    let val1 = if rt == 31 { 0 } else { self.machine.cpu[0].regs[rt] as u32 };
+                    let val2 = if rt2 == 31 { 0 } else { self.machine.cpu[0].regs[rt2] as u32 };
+                    if let Err(e) = self.write_ram_u32(addr, val1) { return Some(Err(e)); }
+                    if let Err(e) = self.write_ram_u32(addr.wrapping_add(4), val2) { return Some(Err(e)); }
+                }
+            }
+
+            match mode {
+                0b11 | 0b01 => {
+                    let wb = base.wrapping_add(offset as u64);
+                    if rn == 31 { self.machine.cpu[0].sp = wb; } else { self.machine.cpu[0].regs[rn] = wb; }
+                }
+                _ => {}
+            }
+
+            self.machine.cpu[0].pc = pc.wrapping_add(4);
+            return Some(Ok(()));
+        }
+
+        // 8. Barriers: DMB / DSB / ISB (bits[31:12] == 0xD5033, Rt == 0x1F)
+        if (word >> 12 == 0xD5033) && (word & 0x1F == 0x1F) {
+            self.machine.cpu[0].pc = pc.wrapping_add(4);
+            return Some(Ok(()));
+        }
+
+        None
+    }
+
     // ---- vCPU ----
 
     /// One vCPU step: fetch → U1 decode → U2 lift → U3 compile → wasmtime.
@@ -610,6 +914,21 @@ impl Orchestrator {
             word,
             kind,
         };
+
+        // Direct execution for GB-2 branches/flags, STP/LDP, and barriers.
+        if let Some(res) = self.execute_arm64(&insn) {
+            match res {
+                Ok(()) => {
+                    self.steps += 1;
+                    self.tick_clock(TIMER_CYCLES_PER_STEP);
+                    return StepOutcome::Continue;
+                }
+                Err(reason) => {
+                    self.halted = Some(reason.clone());
+                    return StepOutcome::Halted(reason);
+                }
+            }
+        }
 
         // Lift (U2).
         let ops = u2_ir_lift::lift(&insn);
@@ -1733,5 +2052,125 @@ mod tests {
         assert_eq!(cpu.regs[0], 0x0);
         // The prompt was actually printed through the console MMIO.
         assert_eq!(o.console.tx_bytes, b"pathn-sh> ");
+    }
+
+    // ---- GB-2: branches + flags vCPU golden-word tests ----
+
+    #[test]
+    fn gb2_cmp_and_b_cond_eq_ne() {
+        // Test CMP (immediate) setting Z flag and B.EQ / B.NE branch execution.
+        // Sequence:
+        // 0x4000_0000: CMP X0, #5   (0xF100141F)
+        // 0x4000_0004: B.EQ +8      (0x54000040) -> branches to 0x4000_000C
+        // 0x4000_0008: MOVZ X1, #1  (0xD2800021) -> skipped
+        // 0x4000_000C: MOVZ X2, #2  (0xD2800042)
+        // 0x4000_0010: WFI          (0xD503207F)
+        let words = [
+            0xF100_141F, // CMP X0, #5
+            0x5400_0040, // B.EQ +8
+            0xD280_0021, // MOVZ X1, #1
+            0xD280_0042, // MOVZ X2, #2
+            0xD503_207F, // WFI
+        ];
+        let mut o = Orchestrator::new();
+        o.load_image(&minimal_image(0x4000_0000, &words)).unwrap();
+        o.machine_mut().cpu[0].regs[0] = 5; // X0 = 5 -> 5 - 5 == 0 -> Z=1
+
+        let halt = o.run_until_halt(100);
+        assert_eq!(halt, HaltReason::Wfi { addr: 0x4000_0010 });
+        assert_eq!(o.machine.cpu[0].regs[1], 0); // skipped!
+        assert_eq!(o.machine.cpu[0].regs[2], 2); // executed!
+        assert_eq!(o.machine.cpu[0].pstate & FLAG_Z, FLAG_Z);
+    }
+
+    #[test]
+    fn gb2_cmp_and_b_cond_not_taken() {
+        // Same sequence, but X0 = 6 -> CMP X0, #5 sets Z=0, so B.EQ is not taken.
+        let words = [
+            0xF100_141F, // CMP X0, #5
+            0x5400_0040, // B.EQ +8
+            0xD280_0021, // MOVZ X1, #1
+            0xD280_0042, // MOVZ X2, #2
+            0xD503_207F, // WFI
+        ];
+        let mut o = Orchestrator::new();
+        o.load_image(&minimal_image(0x4000_0000, &words)).unwrap();
+        o.machine_mut().cpu[0].regs[0] = 6; // X0 = 6 -> Z=0
+
+        let halt = o.run_until_halt(100);
+        assert_eq!(halt, HaltReason::Wfi { addr: 0x4000_0010 });
+        assert_eq!(o.machine.cpu[0].regs[1], 1); // executed!
+        assert_eq!(o.machine.cpu[0].regs[2], 2); // executed!
+        assert_eq!(o.machine.cpu[0].pstate & FLAG_Z, 0);
+    }
+
+    #[test]
+    fn gb2_tbz_and_tbnz_execution() {
+        // Test TBZ (test bit zero) and TBNZ (test bit nonzero)
+        // 0x4000_0000: TBZ X0, #2, +8  (0x36100040) -> bit 2 of 1 is 0 -> TAKEN to 0x4000_0008
+        // 0x4000_0004: MOVZ X1, #99    (0xD2800C61) -> skipped
+        // 0x4000_0008: TBNZ X0, #0, +8 (0x37000040) -> bit 0 of 1 is 1 -> TAKEN to 0x4000_0010
+        // 0x4000_000C: MOVZ X2, #99    (0xD2800C62) -> skipped
+        // 0x4000_0010: WFI             (0xD503207F)
+        let words = [
+            0x3610_0040, // TBZ W0, #2, +8
+            0xD280_0C61, // MOVZ X1, #99
+            0x3700_0040, // TBNZ W0, #0, +8
+            0xD280_0C62, // MOVZ X2, #99
+            0xD503_207F, // WFI
+        ];
+        let mut o = Orchestrator::new();
+        o.load_image(&minimal_image(0x4000_0000, &words)).unwrap();
+        o.machine_mut().cpu[0].regs[0] = 1; // bit 0 = 1, bit 2 = 0
+
+        let halt = o.run_until_halt(100);
+        assert_eq!(halt, HaltReason::Wfi { addr: 0x4000_0010 });
+        assert_eq!(o.machine.cpu[0].regs[1], 0); // skipped
+        assert_eq!(o.machine.cpu[0].regs[2], 0); // skipped
+    }
+
+    #[test]
+    fn gb2_cmn_and_tst_execution() {
+        // CMN X0, #5: ADDS XZR, X0, #5
+        // TST X0, X1: ANDS XZR, X0, X1
+        let words = [
+            0xB100_141F, // CMN W0, #5 (ADDS WZR, W0, #5)
+            0x5400_0040, // B.EQ +8
+            0xD280_0021, // MOVZ X1, #1 (skipped if Z=1)
+            0xEA02_001F, // TST X0, X2 (ANDS XZR, X0, X2)
+            0x5400_0041, // B.NE +8
+            0xD280_0063, // MOVZ X3, #3 (skipped if Z=0)
+            0xD503_207F, // WFI
+        ];
+        let mut o = Orchestrator::new();
+        o.load_image(&minimal_image(0x4000_0000, &words)).unwrap();
+        o.machine_mut().cpu[0].regs[0] = (-5i64) as u64; // (-5) + 5 == 0 -> Z=1
+        o.machine_mut().cpu[0].regs[2] = 0xFF;           // (-5) & 0xFF != 0 -> Z=0
+
+        let halt = o.run_until_halt(100);
+        assert_eq!(halt, HaltReason::Wfi { addr: 0x4000_0018 });
+        assert_eq!(o.machine.cpu[0].regs[1], 0); // skipped by B.EQ
+        assert_eq!(o.machine.cpu[0].regs[3], 0); // skipped by B.NE
+    }
+
+    #[test]
+    fn gb2_stp_and_ldp_pair_roundtrip() {
+        // STP X10, X11, [X0]
+        // LDP X20, X21, [X0]
+        let words = [
+            0xA900_2C0A, // STP X10, X11, [X0]
+            0xA940_5414, // LDP X20, X21, [X0]
+            0xD503_207F, // WFI
+        ];
+        let mut o = Orchestrator::new();
+        o.load_image(&minimal_image(0x4000_0000, &words)).unwrap();
+        o.machine_mut().cpu[0].regs[0] = 0x4000_1000;
+        o.machine_mut().cpu[0].regs[10] = 0x1122_3344_5566_7788;
+        o.machine_mut().cpu[0].regs[11] = 0x99AA_BBCC_DDEE_FF00;
+
+        let halt = o.run_until_halt(100);
+        assert_eq!(halt, HaltReason::Wfi { addr: 0x4000_0008 });
+        assert_eq!(o.machine.cpu[0].regs[20], 0x1122_3344_5566_7788);
+        assert_eq!(o.machine.cpu[0].regs[21], 0x99AA_BBCC_DDEE_FF00);
     }
 }
