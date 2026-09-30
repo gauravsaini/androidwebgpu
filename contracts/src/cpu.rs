@@ -71,6 +71,14 @@ pub enum SysReg {
     /// 0xd518a205 gives S3_0_C10_C2_0, which is MAIR_EL1 (verified against
     /// the ARM ARM; Rt = bits[4:0] = X5).
     MairEl1 = 11,
+    /// Added 2026-10-01 (Track GB-17): Translation Control Register, EL1.
+    /// The kernel programs TCR_EL1 during early MMU setup
+    /// (MSR TCR_EL1, X10). Field extraction on the measured halt word
+    /// 0xd518204a gives (op0,op1,crn,crm,op2) = (3,0,2,0,2) = S3_0_C2_C0_2,
+    /// which is TCR_EL1 (verified against the ARM ARM; Rt = bits[4:0] = X10).
+    /// This is the real TCR_EL1 that GB-8 mislabeled: word 0xd5181040 was
+    /// S3_0_C1_C0_2 = CPACR_EL1, not TCR_EL1.
+    TcrEl1 = 12,
 }
 
 /// Single IR operation (SSA-style). The lifter (U2) is the only producer.

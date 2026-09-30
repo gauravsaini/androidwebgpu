@@ -250,15 +250,55 @@ fn test_kernel_boot_measured_failure() {
     assert_eq!(trace[7482].1, 0x40c0_36b4);
     assert_eq!(trace[7482].2, 0xb400_0049); // CBZ X9, 0x40c036bc -> OK (taken)
     assert_eq!(trace[7483].1, 0x40c0_36bc);
-    assert_eq!(trace[7483].2, 0xd518_204a); // MSR TCR_EL1, X10 -> HALT
+    assert_eq!(trace[7483].2, 0xd518_204a); // MSR TCR_EL1, X10 -> OK (GB-17: persistent)
+    assert_eq!(trace[7484].1, 0x40c0_36c0);
+    assert_eq!(trace[7484].2, 0xd65f_03c0); // RET X30 -> OK
+    assert_eq!(trace[7485].1, 0x413c_001c);
+    assert_eq!(trace[7485].2, 0x17e1_0cd6); // B 0x40c03374 -> OK
+    assert_eq!(trace[7486].1, 0x40c0_3374);
+    assert_eq!(trace[7486].2, 0xaa00_03f3); // MOV X19, X0 -> OK
+    assert_eq!(trace[7487].1, 0x40c0_3378);
+    assert_eq!(trace[7487].2, 0xd538_1014); // MRS X20, SCTLR_EL1 -> OK (persistent)
+    assert_eq!(trace[7488].1, 0x40c0_337c);
+    assert_eq!(trace[7488].2, 0x97ff_ffb0); // BL 0x40c0323c -> OK
+    assert_eq!(trace[7489].1, 0x40c0_323c);
+    assert_eq!(trace[7489].2, 0xd538_0701); // MRS X1, ID_AA64MMFR0_EL1 -> OK (GB-14: recognized -> 0)
+    assert_eq!(trace[7490].1, 0x40c0_3240);
+    assert_eq!(trace[7490].2, 0xd35c_7c22); // UBFX X2, X1, #28, #4 -> OK
+    assert_eq!(trace[7491].1, 0x40c0_3244);
+    assert_eq!(trace[7491].2, 0xf100_005f); // CMP X2, #0 -> OK
+    assert_eq!(trace[7492].1, 0x40c0_3248);
+    assert_eq!(trace[7492].2, 0x5400_02a1); // B.NE 0x40c0329c -> OK (not taken)
+    assert_eq!(trace[7493].1, 0x40c0_324c);
+    assert_eq!(trace[7493].2, 0xd280_0002); // MOV X2, #0 -> OK
+    assert_eq!(trace[7494].1, 0x40c0_3250);
+    assert_eq!(trace[7494].2, 0xb000_4fe1); // ADRP X1, 0x41600000 -> OK
+    assert_eq!(trace[7495].1, 0x40c0_3254);
+    assert_eq!(trace[7495].2, 0x9120_2021); // ADD X1, X1, #0x808 -> OK
+    assert_eq!(trace[7496].1, 0x40c0_3258);
+    assert_eq!(trace[7496].2, 0xf900_0022); // STR X2, [X1] -> OK
+    assert_eq!(trace[7497].1, 0x40c0_325c);
+    assert_eq!(trace[7497].2, 0xd503_3fbf); // DMB SY -> OK
+    assert_eq!(trace[7498].1, 0x40c0_3260);
+    assert_eq!(trace[7498].2, 0xd508_7621); // DC IVAC, X1 -> OK (cache op: nop)
+    assert_eq!(trace[7499].1, 0x40c0_3264);
+    assert_eq!(trace[7499].2, 0xd000_5301); // ADRP X1, 0x41665000 -> OK
+    assert_eq!(trace[7500].1, 0x40c0_3268);
+    assert_eq!(trace[7500].2, 0xf000_5322); // ADRP X2, 0x4166a000 -> OK
+    assert_eq!(trace[7501].1, 0x40c0_326c);
+    assert_eq!(trace[7501].2, 0xaa01_03e3); // MOV X3, X1 -> OK
+    assert_eq!(trace[7502].1, 0x40c0_3270);
+    assert_eq!(trace[7502].2, 0xaa02_03e4); // MOV X4, X2 -> OK
+    assert_eq!(trace[7503].1, 0x40c0_3274);
+    assert_eq!(trace[7503].2, 0xd518_2003); // MSR TTBR0_EL1, X3 -> HALT
 
-    // The real TCR_EL1 (S3_0_C2_C0_2) is not persistent yet: honest
-    // Unsupported trap. Pin the exact halt: step, pc, word, reason.
+    // TTBR0_EL1 (S3_0_C2_C0_0, translation table base) is not persistent
+    // yet: honest Unsupported trap. Pin the exact halt: step, pc, word, reason.
     match final_halt {
         Some(HaltReason::Unsupported { addr, reason }) => {
-            assert_eq!(addr, 0x40c0_36bc);
+            assert_eq!(addr, 0x40c0_3274);
             assert_eq!(reason, "System: system and privileged semantics are not lifted");
         }
-        other => panic!("expected Unsupported at 0x40c036bc, got {other:?}"),
+        other => panic!("expected Unsupported at 0x40c03274, got {other:?}"),
     }
 }
