@@ -1,0 +1,8 @@
+[package]
+name = "u16-pl011-uart"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+name = "u16_pl011_uart"
+path = "src/lib.rs"
