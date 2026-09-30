@@ -115,8 +115,12 @@ fn test_kernel_boot_measured_failure() {
     // step 7471: pc=0x40c03688 word=0xd0004769 (adrp x9, 0x414f1000)     -> OK
     // step 7472: pc=0x40c0368c word=0xf9409d29 (ldr x9, [x9, #312])      -> OK
     // step 7473: pc=0x40c03690 word=0xb340152a (bfxil x10, x9, #0, #6)   -> OK
-    // step 7474: pc=0x40c03694 word=0xd5380705 (mrs x5, id_aa64mmfr0_el1)-> HALT: Unsupported (system semantics not lifted)
-    assert!(trace.len() >= 7474);
+    // step 7474: pc=0x40c03694 word=0xd5380705 (mrs x5, id_aa64mmfr0_el1)-> OK (GB-14: recognized -> 0)
+    // step 7475: pc=0x40c03698 word=0xd34008a5 (ubfx x5, x5, #0, #3)     -> OK (PARange extract, = 0)
+    // step 7476: pc=0x40c0369c word=0xd28000a6 (mov x6, #0x5)            -> OK
+    // step 7477: pc=0x40c036a0 word=0xeb0600bf (cmp x5, x6)              -> OK
+    // step 7478: pc=0x40c036a4 word=0x9a8580c5 (csel x5, x6, x5, hi)     -> HALT: IllegalInstruction (CSEL not decoded)
+    assert!(trace.len() >= 7478);
     assert_eq!(trace[0].1, 0x4000_0000);
     assert_eq!(trace[0].2, 0x9100_5a4d); // ADD imm
     assert_eq!(trace[1].1, 0x4000_0004);
@@ -223,12 +227,20 @@ fn test_kernel_boot_measured_failure() {
     assert_eq!(trace[7473].1, 0x40c0_3690);
     assert_eq!(trace[7473].2, 0xb340_152a); // BFXIL X10, X9, #0, #6
     assert_eq!(trace[7474].1, 0x40c0_3694);
-    assert_eq!(trace[7474].2, 0xd538_0705); // MRS X5, ID_AA64MMFR0_EL1 (S3_0_C0_C7_0) -> HALT
+    assert_eq!(trace[7474].2, 0xd538_0705); // MRS X5, ID_AA64MMFR0_EL1 (S3_0_C0_C7_0) -> OK (GB-14: recognized -> 0)
+    assert_eq!(trace[7475].1, 0x40c0_3698);
+    assert_eq!(trace[7475].2, 0xd340_08a5); // UBFX X5, X5, #0, #3 (PARange extract)
+    assert_eq!(trace[7476].1, 0x40c0_369c);
+    assert_eq!(trace[7476].2, 0xd280_00a6); // MOV X6, #0x5
+    assert_eq!(trace[7477].1, 0x40c0_36a0);
+    assert_eq!(trace[7477].2, 0xeb06_00bf); // CMP X5, X6
+    assert_eq!(trace[7478].1, 0x40c0_36a4);
+    assert_eq!(trace[7478].2, 0x9a85_80c5); // CSEL X5, X6, X5, HI -> HALT
 
-    // U1 rejects MRS ID_AA64MMFR0_EL1 with the honest system-semantics trap.
-    // Pin the trapping address; the reason string is not pinned.
+    // CSEL is not decoded by U1 at all: honest IllegalInstruction trap.
+    // Pin the trapping address; the word is not pinned.
     match final_halt {
-        Some(HaltReason::Unsupported { addr, .. }) => assert_eq!(addr, 0x40c0_3694),
-        other => panic!("expected Unsupported at 0x40c03694, got {other:?}"),
+        Some(HaltReason::IllegalInstruction { addr, .. }) => assert_eq!(addr, 0x40c0_36a4),
+        other => panic!("expected IllegalInstruction at 0x40c036a4, got {other:?}"),
     }
 }

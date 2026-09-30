@@ -208,6 +208,18 @@ fn lift_system(word: u32) -> Vec<IrOp> {
                     (3, 0, 0, 7, 2) => 0,
                     // ID_AA64DFR0_EL1
                     (3, 0, 0, 5, 0) => 0,
+                    // ID_AA64MMFR0_EL1 (GB-14): measured halt at step 7474
+                    // (pc 0x40c03694, word 0xd5380705 = MRS X5,
+                    // S3_0_C0_C7_0 -- fields extracted by hand from the
+                    // word, not trusted from the first reading). Value 0
+                    // = no memory-model features advertised, matching the
+                    // sibling ID_AA64MMFR1_EL1 / ID_AA64DFR0_EL1 reads.
+                    // The kernel only feature-probes this register
+                    // (MRS -> bitfield extract -> compare -> conditional
+                    // branch, same shape as the ID_AA64DFR0_EL1 probe at
+                    // steps 7462-7465), so 0 takes the honest conservative
+                    // fallback path.
+                    (3, 0, 0, 7, 0) => 0,
                     _ => return trap(R_SYSTEM),
                 };
                 vec![IrOp::Mov { dst: rt, imm: val }]
@@ -1878,6 +1890,19 @@ mod tests {
         assert_eq!(
             lift(&insn(0x4000, 0xD538_A205, InsnKind::System)),
             vec![IrOp::ReadSys { dst: 5, reg: SysReg::MairEl1 }]
+        );
+    }
+
+    #[test]
+    fn gb14_id_aa64mmfr0_el1_mrs_lifts_to_mov() {
+        // Measured halt word: MRS X5, ID_AA64MMFR0_EL1 (step 7474,
+        // pc 0x40c03694). Field extraction: (op0,op1,crn,crm,op2) =
+        // (3,0,0,7,0) = S3_0_C0_C7_0 = ID_AA64MMFR0_EL1; Rt = X5.
+        // Value 0 = no memory-model features advertised (matches the
+        // sibling ID_AA64MMFR1_EL1 / ID_AA64DFR0_EL1 reads).
+        assert_eq!(
+            lift(&insn(0x40c0_3694, 0xD538_0705, InsnKind::System)),
+            vec![IrOp::Mov { dst: 5, imm: 0 }]
         );
     }
 
