@@ -119,8 +119,10 @@ fn test_kernel_boot_measured_failure() {
     // step 7475: pc=0x40c03698 word=0xd34008a5 (ubfx x5, x5, #0, #3)     -> OK (PARange extract, = 0)
     // step 7476: pc=0x40c0369c word=0xd28000a6 (mov x6, #0x5)            -> OK
     // step 7477: pc=0x40c036a0 word=0xeb0600bf (cmp x5, x6)              -> OK
-    // step 7478: pc=0x40c036a4 word=0x9a8580c5 (csel x5, x6, x5, hi)     -> HALT: IllegalInstruction (CSEL not decoded)
-    assert!(trace.len() >= 7478);
+    // step 7478: pc=0x40c036a4 word=0x9a8580c5 (csel x5, x6, x5, hi)     -> OK (GB-15: HI false -> x5 = 0)
+    // step 7479: pc=0x40c036a8 word=0xb36008aa (bfi x10, x5, #32, #3)    -> OK
+    // step 7480: pc=0x40c036ac word=0xd5380729 (mrs x9, id_aa64mmfr1_el1)-> HALT: Unsupported (ID_AA64MMFR1_EL1 not recognized)
+    assert!(trace.len() >= 7480);
     assert_eq!(trace[0].1, 0x4000_0000);
     assert_eq!(trace[0].2, 0x9100_5a4d); // ADD imm
     assert_eq!(trace[1].1, 0x4000_0004);
@@ -235,12 +237,19 @@ fn test_kernel_boot_measured_failure() {
     assert_eq!(trace[7477].1, 0x40c0_36a0);
     assert_eq!(trace[7477].2, 0xeb06_00bf); // CMP X5, X6
     assert_eq!(trace[7478].1, 0x40c0_36a4);
-    assert_eq!(trace[7478].2, 0x9a85_80c5); // CSEL X5, X6, X5, HI -> HALT
+    assert_eq!(trace[7478].2, 0x9a85_80c5); // CSEL X5, X6, X5, HI -> OK (GB-15)
+    assert_eq!(trace[7479].1, 0x40c0_36a8);
+    assert_eq!(trace[7479].2, 0xb360_08aa); // BFI X10, X5, #32, #3 -> OK
+    assert_eq!(trace[7480].1, 0x40c0_36ac);
+    assert_eq!(trace[7480].2, 0xd538_0729); // MRS X9, ID_AA64MMFR1_EL1 -> HALT
 
-    // CSEL is not decoded by U1 at all: honest IllegalInstruction trap.
-    // Pin the trapping address; the word is not pinned.
+    // MRS ID_AA64MMFR1_EL1 is not recognized yet: honest Unsupported trap.
+    // Pin the exact halt: step, pc, word, and reason (GB-16 brief).
     match final_halt {
-        Some(HaltReason::IllegalInstruction { addr, .. }) => assert_eq!(addr, 0x40c0_36a4),
-        other => panic!("expected IllegalInstruction at 0x40c036a4, got {other:?}"),
+        Some(HaltReason::Unsupported { addr, reason }) => {
+            assert_eq!(addr, 0x40c0_36ac);
+            assert_eq!(reason, "System: system and privileged semantics are not lifted");
+        }
+        other => panic!("expected Unsupported at 0x40c036ac, got {other:?}"),
     }
 }

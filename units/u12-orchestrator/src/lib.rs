@@ -816,6 +816,53 @@ impl Orchestrator {
             }
         }
 
+        // 7. Conditional select: CSEL / CSINC / CSINV / CSNEG (GB-15).
+        // sf 00 11010100 Rm cond op(2) Rn Rd -- bits[30:21] == 0xD4.
+        // Executed directly like B.cond: the condition reads the live
+        // NZCV flags from pstate, which the WASM path cannot see, so
+        // no U2/U3 lifting is involved (condition_holds is the shared
+        // GB-2 cond-eval helper).
+        if (word >> 21) & 0x3FF == 0xD4 {
+            let sf = (word >> 31) & 1;
+            if sf == 0 {
+                return Some(Err(HaltReason::Unsupported {
+                    addr: pc,
+                    reason: "CSEL: 32-bit form not implemented",
+                }));
+            }
+            let cond = ((word >> 12) & 0xF) as u8;
+            if cond == 0xF {
+                return Some(Err(HaltReason::Unsupported {
+                    addr: pc,
+                    reason: "CSEL: cond 0b1111 is unallocated",
+                }));
+            }
+            // op: 00 = CSEL, 01 = CSINC, 10 = CSINV, 11 = CSNEG.
+            let op = (word >> 10) & 0x3;
+            let rm = ((word >> 16) & 0x1F) as usize;
+            let rn = ((word >> 5) & 0x1F) as usize;
+            let rd = (word & 0x1F) as usize;
+            let cpu = &mut self.machine.cpu[0];
+            let m_val = if rm == 31 { 0 } else { cpu.regs[rm] };
+            let n_val = if rn == 31 { 0 } else { cpu.regs[rn] };
+            let else_val = match op {
+                0b00 => m_val,
+                0b01 => m_val.wrapping_add(1),
+                0b10 => !m_val,
+                _ => m_val.wrapping_neg(),
+            };
+            let val = if condition_holds(cond, cpu.pstate) {
+                n_val
+            } else {
+                else_val
+            };
+            if rd != 31 {
+                cpu.regs[rd] = val;
+            }
+            cpu.pc = pc.wrapping_add(4);
+            return Some(Ok(()));
+        }
+
         None
     }
 
@@ -2121,5 +2168,100 @@ mod tests {
         assert_eq!(halt, HaltReason::Wfi { addr: 0x4000_0018 });
         assert_eq!(o.machine.cpu[0].regs[1], 0); // skipped by B.EQ
         assert_eq!(o.machine.cpu[0].regs[3], 0); // skipped by B.NE
+    }
+
+    // ---- GB-15: conditional select (CSEL / CSINC / CSINV / CSNEG) ----
+
+    #[test]
+    fn gb15_csel_hi_false_selects_rm() {
+        // The real guest sequence (x5 = min_unsigned(x5, 5)):
+        // 0x4000_0000: CMP X5, X6       (0xEB0600BF) -> 0 - 5 borrows -> C=0
+        // 0x4000_0004: CSEL X5,X6,X5,HI (0x9A8580C5) -> HI false -> X5 = X5
+        // 0x4000_0008: WFI
+        let words = [0xEB06_00BF, 0x9A85_80C5, 0xD503_207F];
+        let mut o = Orchestrator::new();
+        o.load_image(&minimal_image(0x4000_0000, &words)).unwrap();
+        o.machine_mut().cpu[0].regs[5] = 0;
+        o.machine_mut().cpu[0].regs[6] = 5;
+        let halt = o.run_until_halt(100);
+        assert_eq!(halt, HaltReason::Wfi { addr: 0x4000_0008 });
+        assert_eq!(o.machine.cpu[0].regs[5], 0); // HI false -> Rm kept
+    }
+
+    #[test]
+    fn gb15_csel_hi_true_selects_rn() {
+        // CMP X6, X5 (0xEB0500DF): 5 - 0, no borrow -> C=1, Z=0 -> HI true.
+        // CSEL X5, X6, X5, HI -> X5 = X6 = 5.
+        let words = [0xEB05_00DF, 0x9A85_80C5, 0xD503_207F];
+        let mut o = Orchestrator::new();
+        o.load_image(&minimal_image(0x4000_0000, &words)).unwrap();
+        o.machine_mut().cpu[0].regs[5] = 0;
+        o.machine_mut().cpu[0].regs[6] = 5;
+        let halt = o.run_until_halt(100);
+        assert_eq!(halt, HaltReason::Wfi { addr: 0x4000_0008 });
+        assert_eq!(o.machine.cpu[0].regs[5], 5); // HI true -> Rn taken
+    }
+
+    #[test]
+    fn gb15_csinc_csinv_csneg_else_transforms() {
+        // X5 = 0x10. CMP X0, X0 -> Z=1 -> EQ true: CSINC takes Rn (XZR).
+        // CMP X0, #1 -> Z=0 -> EQ false: else-operand transforms apply.
+        // 0x4000_0000: CMP X0, X0          (0xF100001F)
+        // 0x4000_0004: CSINC X7,XZR,X5,EQ (0x9A8507E7) -> X7 = 0
+        // 0x4000_0008: CMP X0, #1          (0xF100041F)
+        // 0x4000_000C: CSINC X8,XZR,X5,EQ (0x9A8507E8) -> X8 = 0x11
+        // 0x4000_0010: CSINV X9,XZR,X5,EQ (0x9A850BE9) -> X9 = !0x10
+        // 0x4000_0014: CSNEG X10,XZR,X5,EQ(0x9A850FEA) -> X10 = -0x10
+        // 0x4000_0018: WFI
+        let words = [
+            0xF100_001F,
+            0x9A85_07E7,
+            0xF100_041F,
+            0x9A85_07E8,
+            0x9A85_0BE9,
+            0x9A85_0FEA,
+            0xD503_207F,
+        ];
+        let mut o = Orchestrator::new();
+        o.load_image(&minimal_image(0x4000_0000, &words)).unwrap();
+        o.machine_mut().cpu[0].regs[5] = 0x10;
+        let halt = o.run_until_halt(100);
+        assert_eq!(halt, HaltReason::Wfi { addr: 0x4000_0018 });
+        assert_eq!(o.machine.cpu[0].regs[7], 0); // EQ true -> Rn (XZR)
+        assert_eq!(o.machine.cpu[0].regs[8], 0x11); // CSINC: m + 1
+        assert_eq!(o.machine.cpu[0].regs[9], !0x10u64); // CSINV: !m
+        assert_eq!(o.machine.cpu[0].regs[10], 0xFFFF_FFFF_FFFF_FFF0); // CSNEG: -m
+    }
+
+    #[test]
+    fn gb15_csel_32bit_traps_unsupported() {
+        // CSEL W5, W6, W5, HI (sf = 0): recognized, explicitly trapped.
+        let words = [0x1A85_80C5];
+        let mut o = Orchestrator::new();
+        o.load_image(&minimal_image(0x4000_0000, &words)).unwrap();
+        let halt = o.run_until_halt(100);
+        assert_eq!(
+            halt,
+            HaltReason::Unsupported {
+                addr: 0x4000_0000,
+                reason: "CSEL: 32-bit form not implemented",
+            }
+        );
+    }
+
+    #[test]
+    fn gb15_csel_cond_nv_traps_unsupported() {
+        // CSEL X5, X6, X5, cond=0b1111: unallocated, explicitly trapped.
+        let words = [0x9A85_F0C5];
+        let mut o = Orchestrator::new();
+        o.load_image(&minimal_image(0x4000_0000, &words)).unwrap();
+        let halt = o.run_until_halt(100);
+        assert_eq!(
+            halt,
+            HaltReason::Unsupported {
+                addr: 0x4000_0000,
+                reason: "CSEL: cond 0b1111 is unallocated",
+            }
+        );
     }
 }

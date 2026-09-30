@@ -173,6 +173,15 @@ fn decode_dp_reg(word: u32) -> Option<InsnKind> {
         // CLZ only (opcode == 0b000100, S == 0); RBIT/REV*/CLS stay Illegal.
         // The 32-bit form (sf == 0) is recognized and trapped in U2.
         0b11010 => {
+            // Conditional select: sf 00 11010100 Rm cond op Rn Rd (GB-15).
+            // bits[30:21] == 0b00_11010100 (0xD4): CSEL / CSINC / CSINV /
+            // CSNEG. Recognized for both sf values; the executor traps
+            // the 32-bit form explicitly. This check must precede the
+            // 2-source check below: a CSEL with cond == 0b0010 would
+            // otherwise alias the 2-source class (opcode2 >> 2 == cond).
+            if ((word >> 21) & 0x3FF) == 0xD4 {
+                return Some(InsnKind::DataProc);
+            }
             let bit30 = (word >> 30) & 1;
             let bit29 = (word >> 29) & 1;
             let bit21 = (word >> 21) & 1;
@@ -863,6 +872,27 @@ mod tests {
         assert_eq!(ok_kind(0xB6F8_0022), InsnKind::Branch);
         // TBNZ X3, #32, +4
         assert_eq!(ok_kind(0xB700_0023), InsnKind::Branch);
+    }
+
+    #[test]
+    fn csel_family_is_dataproc() {
+        // Real guest word: CSEL X5, X6, X5, HI (0x9A8580C5).
+        assert_eq!(ok_kind(0x9A85_80C5), InsnKind::DataProc);
+        // CSINC / CSINV / CSNEG differ only in bits[11:10].
+        assert_eq!(ok_kind(0x9A85_84C5), InsnKind::DataProc); // CSINC
+        assert_eq!(ok_kind(0x9A85_88C5), InsnKind::DataProc); // CSINV
+        assert_eq!(ok_kind(0x9A85_8CC5), InsnKind::DataProc); // CSNEG
+        // 32-bit form classifies too; the executor traps it explicitly.
+        assert_eq!(ok_kind(0x1A85_80C5), InsnKind::DataProc);
+    }
+
+    #[test]
+    fn csel_cond_cs_does_not_alias_two_source() {
+        // CSEL X0, X1, X2, CS (cond == 0b0010): opcode2 >> 2 == cond
+        // would match the data-processing (2 source) check, so the
+        // conditional-select class must be pinned first. The class
+        // check is identical either way here; this guards the order.
+        assert_eq!(ok_kind(0x9A82_2820), InsnKind::DataProc);
     }
 
     #[test]
