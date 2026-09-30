@@ -220,6 +220,11 @@ pub enum IrOp {
     /// form traps in the lifter (upper-bit zeroing is not expressible).
     /// Register 31 reads as 0 (XZR), so CLZ Xd, XZR yields 64.
     Clz { dst: u8, src: u8 },
+    /// Added 2026-09-30 (Track GB-8): multiply-add.
+    /// `dst = a + n * m` (all 64-bit). 64-bit MADD only; the 32-bit form
+    /// traps in the lifter (upper-bit zeroing is not expressible).
+    /// Register 31 reads as 0 (XZR), so with `a = 31` this is a plain multiply.
+    Madd { dst: u8, n: u8, m: u8, a: u8 },
     /// Added 2026-09-27 (Wave 4 amendment U2-G1): wait-for-interrupt marker.
     /// The execution backend yields the vCPU until an IRQ is pending;
     /// resumable, never an error and never a silent nop.

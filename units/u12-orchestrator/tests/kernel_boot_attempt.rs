@@ -91,8 +91,15 @@ fn test_kernel_boot_measured_failure() {
     // step 5202: pc=0x413c008c word=0xf10064bf (cmp x5, #0x19)       -> OK
     // step 5203: pc=0x413c0090 word=0x540001ea (b.gt 0x413c00cc)    -> OK (taken)
     // steps 5204..5216: adrp/ldr/mov/add/movz/ubfiz/subs/eor sequence -> OK
-    // step 5217: pc=0x413c0100 word=0x9b0d7d4a (madd x10,x10,x13,xzr) -> HALT: IllegalInstruction
-    assert!(trace.len() >= 5217);
+    // step 5217: pc=0x413c0100 word=0x9b0d7d4a (madd x10,x10,x13,xzr)  -> OK (GB-8)
+    // ...
+    // step 7452: pc=0x413c027c word=0xd65f0380 (ret x27)                  -> OK
+    // step 7453: pc=0x413c0018 word=0x97e10d8a (bl 0x40c03640)            -> OK
+    // step 7454: pc=0x40c03640 word=0xd508871f (dc cvac, xzr)              -> OK
+    // step 7455: pc=0x40c03644 word=0xd503379f (dsb ish)                  -> OK
+    // step 7456: pc=0x40c03648 word=0xd2a00600 (movz x0, #0x30)           -> OK
+    // step 7457: pc=0x40c0364c word=0xd5181040 (msr tcr_el1, x0)          -> HALT: Unsupported (system)
+    assert!(trace.len() >= 7457);
     assert_eq!(trace[0].1, 0x4000_0000);
     assert_eq!(trace[0].2, 0x9100_5a4d); // ADD imm
     assert_eq!(trace[1].1, 0x4000_0004);
@@ -153,13 +160,25 @@ fn test_kernel_boot_measured_failure() {
     assert_eq!(trace[5216].1, 0x413c_00fc);
     assert_eq!(trace[5216].2, 0xaa04_03ea); // MOV x10, x4
     assert_eq!(trace[5217].1, 0x413c_0100);
-    assert_eq!(trace[5217].2, 0x9b0d_7d4a); // MADD x10, x10, x13, xzr (3-source)
+    assert_eq!(trace[5217].2, 0x9b0d_7d4a); // MADD x10, x10, x13, xzr (3-source, GB-8)
+    assert_eq!(trace[7452].1, 0x413c_027c);
+    assert_eq!(trace[7452].2, 0xd65f_0380); // RET x27
+    assert_eq!(trace[7453].1, 0x413c_0018);
+    assert_eq!(trace[7453].2, 0x97e1_0d8a); // BL 0x40c03640
+    assert_eq!(trace[7454].1, 0x40c0_3640);
+    assert_eq!(trace[7454].2, 0xd508_871f); // DC CVAC, XZR
+    assert_eq!(trace[7455].1, 0x40c0_3644);
+    assert_eq!(trace[7455].2, 0xd503_379f); // DSB ISH
+    assert_eq!(trace[7456].1, 0x40c0_3648);
+    assert_eq!(trace[7456].2, 0xd2a0_0600); // MOVZ x0, #0x30
+    assert_eq!(trace[7457].1, 0x40c0_364c);
+    assert_eq!(trace[7457].2, 0xd518_1040); // MSR TCR_EL1, x0 (S3_0_C1_C0_2)
 
     assert_eq!(
         final_halt,
-        Some(HaltReason::IllegalInstruction {
-            addr: 0x413c_0100,
-            word: 0x9b0d_7d4a,
+        Some(HaltReason::Unsupported {
+            addr: 0x40c0_364c,
+            reason: "System: system and privileged semantics are not lifted",
         })
     );
 }

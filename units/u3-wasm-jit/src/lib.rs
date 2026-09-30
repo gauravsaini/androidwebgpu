@@ -59,6 +59,7 @@ const OP_I64_EQZ: u8 = 0x50;
 const OP_I64_ADD: u8 = 0x7C;
 const OP_I64_SUB: u8 = 0x7D;
 const OP_I64_CLZ: u8 = 0x79;
+const OP_I64_MUL: u8 = 0x7E;
 const OP_I64_AND: u8 = 0x83;
 const OP_I64_OR: u8 = 0x84;
 const OP_I64_XOR: u8 = 0x85;
@@ -162,6 +163,16 @@ pub fn compile(block: &IrBlock) -> WasmModule {
             IrOp::Clz { dst, src } => {
                 reg_get(&mut body, *src);
                 body.push(OP_I64_CLZ);
+                reg_set(&mut body, *dst);
+            }
+            IrOp::Madd { dst, n, m, a } => {
+                // Xd = Ra + Rn * Rm: stack holds a, n, m; mul -> n*m;
+                // add -> a + (n*m). reg_get/reg_set give XZR semantics free.
+                reg_get(&mut body, *a);
+                reg_get(&mut body, *n);
+                reg_get(&mut body, *m);
+                body.push(OP_I64_MUL);
+                body.push(OP_I64_ADD);
                 reg_set(&mut body, *dst);
             }
             IrOp::Mov { dst, imm } => {
@@ -945,6 +956,12 @@ mod tests {
                 IrOp::Add { dst: 0, a: 1, b: 2 },
                 IrOp::Sub { dst: 0, a: 1, b: 2 },
                 IrOp::Clz { dst: 0, src: 1 },
+                IrOp::Madd {
+                    dst: 0,
+                    n: 1,
+                    m: 2,
+                    a: 3,
+                },
                 IrOp::Mov {
                     dst: 3,
                     imm: u64::MAX,
@@ -1007,6 +1024,15 @@ mod tests {
             ),
             (
                 vec![IrOp::Clz { dst: 0, src: 1 }],
+                vec![BlockExit::FallThrough(0x4)],
+            ),
+            (
+                vec![IrOp::Madd {
+                    dst: 0,
+                    n: 1,
+                    m: 2,
+                    a: 3,
+                }],
                 vec![BlockExit::FallThrough(0x4)],
             ),
             (
@@ -1559,6 +1585,24 @@ mod tests {
         assert!(expr
             .windows(5)
             .any(|w| w == [0x23, 0x05, 0x79, 0x24, 0x05]));
+    }
+
+    #[test]
+    fn gb8_codegen_madd_uses_globals() {
+        let block = IrBlock {
+            entry_addr: 0,
+            ops: vec![IrOp::Madd {
+                dst: 5,
+                n: 6,
+                m: 7,
+                a: 8,
+            }],
+            exits: vec![],
+        };
+        let expr = assert_valid(&block);
+        // global.get 8; global.get 6; global.get 7; i64.mul; i64.add; global.set 5
+        assert!(expr.windows(10).any(|w| w
+            == [0x23, 0x08, 0x23, 0x06, 0x23, 0x07, 0x7E, 0x7C, 0x24, 0x05]));
     }
 
     #[test]

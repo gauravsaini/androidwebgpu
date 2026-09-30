@@ -7,7 +7,8 @@
 //! - data-processing immediate: ADD/SUB (immediate, S=0), MOVZ, MOVN
 //! - data-processing register: ADD/SUB (shifted register, S=0),
 //!   ORR/EOR (shifted register), CLZ (1-source, 64-bit; 32-bit recognized,
-//!   trapped in U2)
+//!   trapped in U2), MADD (3-source, 64-bit; 32-bit / MSUB / long-multiply
+//!   recognized, trapped in U2)
 //! - loads/stores: LDR/STR (immediate, unsigned offset), integer registers
 //! - branches: B, BL, CBZ, CBNZ, RET
 //! - system: HINT (NOP = HINT #0)
@@ -185,6 +186,18 @@ fn decode_dp_reg(word: u32) -> Option<InsnKind> {
                 && opcode2 == 0b000100
             {
                 Some(InsnKind::DataProc) // CLZ
+            } else {
+                None
+            }
+        }
+        // Data-processing (3 source): sf op54 11011 op31 Rm o0 Ra Rn Rd (GB-8).
+        // The defined multiply class (op54 == 00/01/10) is recognized and the
+        // lifter sorts it out: 64-bit MADD lifts, 32-bit MADD / MSUB /
+        // long-multiply trap with explicit reasons. op54 == 11 is unallocated.
+        0b11011 => {
+            let op54 = (word >> 29) & 0x3;
+            if op54 < 0b11 {
+                Some(InsnKind::DataProc) // MADD / MSUB / SMADDL / UMADDL / ...
             } else {
                 None
             }
@@ -866,6 +879,24 @@ mod tests {
         assert_eq!(ok_kind(0xEA03_003F), InsnKind::DataProc);
         // SUBS X1, X1, #0x40 (real guest word: 0xf1010021)
         assert_eq!(ok_kind(0xF101_0021), InsnKind::DataProc);
+    }
+
+    #[test]
+    fn madd_family_is_dataproc() {
+        // MADD X10, X10, X13, XZR (real kernel step 5217 word: 0x9b0d7d4a)
+        assert_eq!(ok_kind(0x9B0D_7D4A), InsnKind::DataProc);
+        // MADD W10, W10, W13, WZR (32-bit): recognized, trapped in U2
+        assert_eq!(ok_kind(0x1B0D_7D4A), InsnKind::DataProc);
+        // MSUB X10, X10, X13, XZR (o0 = 1): recognized, trapped in U2
+        assert_eq!(ok_kind(0x9B0D_FD4A), InsnKind::DataProc);
+        // SMADDL X10, W10, W13, XZR (op54 = 01): recognized, trapped in U2
+        assert_eq!(ok_kind(0xDB0D_7D4A), InsnKind::DataProc);
+    }
+
+    #[test]
+    fn madd_unallocated_op54_is_illegal() {
+        // op54 = 11 is unallocated in the 3-source class
+        assert_illegal(0xFB0D_7D4A);
     }
 
     // ---- acceptance: LLD spot-checks ----

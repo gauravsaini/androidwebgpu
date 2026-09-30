@@ -71,6 +71,9 @@ const R_SUB32_REG: &str = "DataProc: 32-bit SUB register width is not expressibl
 const R_SUB_SHIFT: &str =
     "DataProc: shifted SUB register operand is not expressible in IrOp";
 const R_CLZ32: &str = "DataProc: 32-bit CLZ width is not expressible in IrOp::Clz";
+const R_MADD32: &str = "DataProc: 32-bit MADD width is not expressible in IrOp::Madd";
+const R_MSUB: &str = "DataProc: MSUB is not implemented (GB-8 is MADD-64 only)";
+const R_MADD_LONG: &str = "DataProc: long-multiply (SMADDL/UMADDL/SMSUBL/UMSUBL/SMULH/UMULH) is not implemented";
 const R_ADD32_REG: &str = "DataProc: 32-bit ADD register width is not expressible in IrOp::Add";
 const R_ADD_SHIFT: &str =
     "DataProc: shifted or extended ADD register operand is not expressible in IrOp";
@@ -454,6 +457,37 @@ fn lift_data_proc(word: u32) -> Vec<IrOp> {
         let rn = ((word >> 5) & 0x1F) as u8;
         let rd = (word & 0x1F) as u8;
         return vec![IrOp::Clz { dst: rd, src: rn }];
+    }
+    // MADD / MSUB / long-multiply (3 source): sf op54 11011 op31 Rm o0 Ra Rn Rd
+    // (bits 28:24 = 0x1B) — Track GB-8. Only 64-bit MADD
+    // (op54 = 00, op31 = 000, o0 = 0) lifts; 32-bit MADD, MSUB and the
+    // long-multiply family trap with explicit reasons.
+    if (word >> 24) & 0x1F == 0x1B {
+        let op54 = (word >> 29) & 0x3;
+        let op31 = (word >> 21) & 0x7;
+        let o0 = (word >> 15) & 1;
+        if op54 == 0 && op31 == 0 && o0 == 1 {
+            return trap(R_MSUB);
+        }
+        if op54 == 0b01 || op54 == 0b10 {
+            return trap(R_MADD_LONG);
+        }
+        if op54 != 0 || op31 != 0 || o0 != 0 {
+            return trap(R_DP_UNSUPPORTED);
+        }
+        if word >> 31 == 0 {
+            return trap(R_MADD32);
+        }
+        let rm = ((word >> 16) & 0x1F) as u8;
+        let ra = ((word >> 10) & 0x1F) as u8;
+        let rn = ((word >> 5) & 0x1F) as u8;
+        let rd = (word & 0x1F) as u8;
+        return vec![IrOp::Madd {
+            dst: rd,
+            n: rn,
+            m: rm,
+            a: ra,
+        }];
     }
     // Logical (shifted register): sf opc 01010 shift N Rm imm6 Rn Rd  (bits 28:24 = 0x0A) — Track GB-4
     if (word >> 24) & 0x1F == 0x0A {
@@ -983,6 +1017,42 @@ mod tests {
         // RBIT X5, X5 (1-source sibling, out of scope) -> honest trap
         let ops = lift(&insn(0x4000, 0xdac0_00a5, InsnKind::DataProc));
         assert_eq!(ops, vec![IrOp::Trap { reason: R_DP_UNSUPPORTED }]);
+    }
+
+    #[test]
+    fn golden_madd() {
+        // MADD X10, X10, X13, XZR (real kernel step 5217 word: 0x9b0d7d4a)
+        let ops = lift(&insn(0x413c_0100, 0x9b0d_7d4a, InsnKind::DataProc));
+        assert_eq!(
+            ops,
+            vec![IrOp::Madd {
+                dst: 10,
+                n: 10,
+                m: 13,
+                a: 31
+            },]
+        );
+    }
+
+    #[test]
+    fn trap_madd_32bit() {
+        // MADD W10, W10, W13, WZR: 32-bit width not expressible
+        let ops = lift(&insn(0x4000, 0x1b0d_7d4a, InsnKind::DataProc));
+        assert_eq!(ops, vec![IrOp::Trap { reason: R_MADD32 }]);
+    }
+
+    #[test]
+    fn trap_msub_stays_unsupported() {
+        // MSUB X10, X10, X13, XZR (o0 = 1): out of scope -> honest trap
+        let ops = lift(&insn(0x4000, 0x9b0d_fd4a, InsnKind::DataProc));
+        assert_eq!(ops, vec![IrOp::Trap { reason: R_MSUB }]);
+    }
+
+    #[test]
+    fn trap_madd_long_stays_unsupported() {
+        // SMADDL X10, W10, W13, XZR (op54 = 01): out of scope -> honest trap
+        let ops = lift(&insn(0x4000, 0xdb0d_7d4a, InsnKind::DataProc));
+        assert_eq!(ops, vec![IrOp::Trap { reason: R_MADD_LONG }]);
     }
 
     #[test]
