@@ -3,11 +3,11 @@
 //! PURE: deterministic encode/decode. No I/O, no wall-clock, no threads,
 //! no hidden state. A corrupt blob is data ([`SnapshotError`]), never a panic.
 //!
-//! Wire format v6 (all integers little-endian):
+//! Wire format v7 (all integers little-endian):
 //! ```text
-//! u32 version            == SNAPSHOT_VERSION (6)
+//! u32 version            == SNAPSHOT_VERSION (7)
 //! u32 cpu_count
-//! cpu_count × { 31×u64 regs, u64 sp, u64 pc, u64 pstate, 13×u64 sysregs }   (376 bytes each)
+//! cpu_count × { 31×u64 regs, u64 sp, u64 pc, u64 pstate, 14×u64 sysregs }   (384 bytes each)
 //! u64 ttbr0, u64 ttbr1, u64 tcr, u64 sctlr
 //! u32 irq_enabled, u64 irq_pending, u64 timer_count, u64 timer_compare
 //! u64 ram_len, ram_len bytes
@@ -24,8 +24,8 @@ use pathn_contracts::machine::{
     SNAPSHOT_VERSION, SysRegs,
 };
 
-/// Encoded size of one [`CpuState`]: 31 regs + sp + pc + pstate + 13 sysregs, all u64LE.
-const CPU_ENCODED_BYTES: usize = 47 * 8;
+/// Encoded size of one [`CpuState`]: 31 regs + sp + pc + pstate + 14 sysregs, all u64LE.
+const CPU_ENCODED_BYTES: usize = 48 * 8;
 /// Minimum encoded size of one [`DeviceState`]: u8 tag + u64 blob length.
 const DEVICE_MIN_BYTES: usize = 1 + 8;
 
@@ -95,6 +95,7 @@ impl Writer {
         self.u64(c.sysregs.mdscr_el1);
         self.u64(c.sysregs.mair_el1);
         self.u64(c.sysregs.tcr_el1);
+        self.u64(c.sysregs.ttbr0_el1);
     }
 
     fn mmu(&mut self, m: &MmuState) {
@@ -212,6 +213,7 @@ impl<'a> Reader<'a> {
                 mdscr_el1: self.u64()?,
                 mair_el1: self.u64()?,
                 tcr_el1: self.u64()?,
+                ttbr0_el1: self.u64()?,
             },
         })
     }
@@ -324,6 +326,7 @@ mod tests {
                 mdscr_el1: seed.wrapping_add(11),
                 mair_el1: seed.wrapping_add(12),
                 tcr_el1: seed.wrapping_add(13),
+                ttbr0_el1: seed.wrapping_add(14),
             },
         }
     }
@@ -432,6 +435,7 @@ mod tests {
                     mdscr_el1: u64::MAX,
                     mair_el1: u64::MAX,
                     tcr_el1: u64::MAX,
+                    ttbr0_el1: u64::MAX,
                 },
             }],
             mmu: MmuState {
@@ -468,7 +472,7 @@ mod tests {
     // --- corruption matrix: every hostile shape maps to an exact variant ---
 
     /// Byte offset of the ram_len u64 for a state with `cpus` vCPUs:
-    /// version(4) + cpu_count(4) + cpus*376 + mmu(32) + irq(28).
+    /// version(4) + cpu_count(4) + cpus*384 + mmu(32) + irq(28).
     fn ram_len_offset(cpus: usize) -> usize {
         4 + 4 + cpus * CPU_ENCODED_BYTES + 4 * 8 + (4 + 3 * 8)
     }

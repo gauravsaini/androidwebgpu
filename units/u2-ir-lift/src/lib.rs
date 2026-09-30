@@ -196,6 +196,8 @@ fn lift_system(word: u32) -> Vec<IrOp> {
             (3, 0, 10, 2, 0) => SysReg::MairEl1,
             // TCR_EL1 (GB-17): kernel programs translation control via MSR TCR_EL1
             (3, 0, 2, 0, 2) => SysReg::TcrEl1,
+            // TTBR0_EL1 (GB-18): kernel programs translation table base via MSR TTBR0_EL1
+            (3, 0, 2, 0, 0) => SysReg::Ttbr0El1,
             _ => return {
                 let val: u64 = match (op0, op1, crn, crm, op2) {
                     // CurrentEL: bits[3:2] = 0b01 (EL1) -> 0x4
@@ -281,6 +283,8 @@ fn lift_system(word: u32) -> Vec<IrOp> {
             (3, 0, 10, 2, 0) => SysReg::MairEl1,
             // TCR_EL1 (GB-17): kernel programs translation control via MSR TCR_EL1
             (3, 0, 2, 0, 2) => SysReg::TcrEl1,
+            // TTBR0_EL1 (GB-18): kernel programs translation table base via MSR TTBR0_EL1
+            (3, 0, 2, 0, 0) => SysReg::Ttbr0El1,
             // MSR DAIFSet, #imm (op2=6) / MSR DAIFClr, #imm (op2=7): real
             // read-modify-write of the persistent DAIF (GB-11). Upgrades
             // the GB-3 accepted no-ops to honest state.
@@ -1818,6 +1822,7 @@ mod tests {
             ((2, 0, 0, 2, 2), SysReg::MdscrEl1),
             ((3, 0, 10, 2, 0), SysReg::MairEl1),
             ((3, 0, 2, 0, 2), SysReg::TcrEl1),
+            ((3, 0, 2, 0, 0), SysReg::Ttbr0El1),
         ];
         for ((op0, op1, crn, crm, op2), reg) in mrs_cases {
             let word = sys_word(op0, op1, crn, crm, op2, 7, true);
@@ -1842,6 +1847,7 @@ mod tests {
             ((2, 0, 0, 2, 2), SysReg::MdscrEl1),
             ((3, 0, 10, 2, 0), SysReg::MairEl1),
             ((3, 0, 2, 0, 2), SysReg::TcrEl1),
+            ((3, 0, 2, 0, 0), SysReg::Ttbr0El1),
         ];
         for ((op0, op1, crn, crm, op2), reg) in msr_cases {
             let word = sys_word(op0, op1, crn, crm, op2, 5, false);
@@ -1927,6 +1933,22 @@ mod tests {
         assert_eq!(
             lift(&insn(0x4000, 0xD538_204A, InsnKind::System)),
             vec![IrOp::ReadSys { dst: 10, reg: SysReg::TcrEl1 }]
+        );
+    }
+
+    #[test]
+    fn gb18_ttbr0_el1_msr_mrs_lift_to_persistent_ops() {
+        // Measured halt word: MSR TTBR0_EL1, X3 (step 7503, pc 0x40c03274).
+        // Field extraction: (op0,op1,crn,crm,op2) = (3,0,2,0,0) = S3_0_C2_C0_0
+        // = TTBR0_EL1 (verified against the ARM ARM; Rt = bits[4:0] = X3).
+        assert_eq!(
+            lift(&insn(0x4000, 0xD518_2003, InsnKind::System)),
+            vec![IrOp::WriteSys { src: 3, reg: SysReg::Ttbr0El1 }]
+        );
+        // MRS TTBR0_EL1, X3: same system encoding with bit 21 set.
+        assert_eq!(
+            lift(&insn(0x4000, 0xD538_2003, InsnKind::System)),
+            vec![IrOp::ReadSys { dst: 3, reg: SysReg::Ttbr0El1 }]
         );
     }
 

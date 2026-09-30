@@ -290,15 +290,17 @@ fn test_kernel_boot_measured_failure() {
     assert_eq!(trace[7502].1, 0x40c0_3270);
     assert_eq!(trace[7502].2, 0xaa02_03e4); // MOV X4, X2 -> OK
     assert_eq!(trace[7503].1, 0x40c0_3274);
-    assert_eq!(trace[7503].2, 0xd518_2003); // MSR TTBR0_EL1, X3 -> HALT
+    assert_eq!(trace[7503].2, 0xd518_2003); // MSR TTBR0_EL1, X3 -> OK (GB-18: persistent)
+    assert_eq!(trace[7504].1, 0x40c0_3278);
+    assert_eq!(trace[7504].2, 0xd518_2024); // MSR TTBR1_EL1, X4 -> HALT
 
-    // TTBR0_EL1 (S3_0_C2_C0_0, translation table base) is not persistent
+    // TTBR1_EL1 (S3_0_C2_C0_1, translation table base 1) is not persistent
     // yet: honest Unsupported trap. Pin the exact halt: step, pc, word, reason.
     match final_halt {
         Some(HaltReason::Unsupported { addr, reason }) => {
-            assert_eq!(addr, 0x40c0_3274);
+            assert_eq!(addr, 0x40c0_3278);
             assert_eq!(reason, "System: system and privileged semantics are not lifted");
         }
-        other => panic!("expected Unsupported at 0x40c03274, got {other:?}"),
+        other => panic!("expected Unsupported at 0x40c03278, got {other:?}"),
     }
 }
