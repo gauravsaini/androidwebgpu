@@ -67,6 +67,9 @@ const R_DP_UNSUPPORTED: &str = "DataProc: unsupported encoding";
 const R_MOVZ_HW: &str = "DataProc: MOVZ hw field > 1 with sf = 0 is unallocated";
 const R_ADD32_IMM: &str = "DataProc: 32-bit ADD immediate width is not expressible in IrOp::Add";
 const R_SUB32_IMM: &str = "DataProc: 32-bit SUB immediate width is not expressible in IrOp::Sub";
+const R_SUB32_REG: &str = "DataProc: 32-bit SUB register width is not expressible in IrOp::Sub";
+const R_SUB_SHIFT: &str =
+    "DataProc: shifted SUB register operand is not expressible in IrOp";
 const R_ADD32_REG: &str = "DataProc: 32-bit ADD register width is not expressible in IrOp::Add";
 const R_ADD_SHIFT: &str =
     "DataProc: shifted or extended ADD register operand is not expressible in IrOp";
@@ -209,7 +212,7 @@ fn lift_system(word: u32) -> Vec<IrOp> {
     trap(R_SYSTEM)
 }
 
-/// Data-processing: MOVZ/MOVN/MOVK, ADD (immediate), ADD (shifted register, LSL #0),
+/// Data-processing: MOVZ/MOVN/MOVK, ADD/SUB (immediate), ADD/SUB (shifted register, LSL #0),
 /// Logical (immediate / shifted register), Bitfield (SBFM/BFM/UBFM),
 /// Variable shifts (ASRV/LSRV/LSLV/RORV).
 fn lift_data_proc(word: u32) -> Vec<IrOp> {
@@ -383,6 +386,26 @@ fn lift_data_proc(word: u32) -> Vec<IrOp> {
         let rn = ((word >> 5) & 0x1F) as u8;
         let rd = (word & 0x1F) as u8;
         return vec![IrOp::Add {
+            dst: rd,
+            a: rn,
+            b: rm,
+        }];
+    }
+    // SUB (shifted register): sf 1 01011 shift 0 Rm imm6 Rn Rd, LSL #0 only
+    // (bits 31:24 = 0x4B/0xCB; S = 1 would be SUBS and never matches) — Track GB-6
+    if top == 0x4B || top == 0xCB {
+        if word >> 31 == 0 {
+            return trap(R_SUB32_REG);
+        }
+        let shift = (word >> 22) & 0x3;
+        let imm6 = (word >> 10) & 0x3F;
+        if shift != 0 || imm6 != 0 {
+            return trap(R_SUB_SHIFT);
+        }
+        let rm = ((word >> 16) & 0x1F) as u8;
+        let rn = ((word >> 5) & 0x1F) as u8;
+        let rd = (word & 0x1F) as u8;
+        return vec![IrOp::Sub {
             dst: rd,
             a: rn,
             b: rm,
@@ -868,6 +891,44 @@ mod tests {
                     b: SCRATCH
                 },
             ]
+        );
+    }
+
+    #[test]
+    fn golden_sub_reg() {
+        // SUB X1, X1, X0, LSL #0 (real kernel step 57 word: 0xcb000021)
+        let ops = lift(&insn(0x413c_004c, 0xcb00_0021, InsnKind::DataProc));
+        assert_eq!(
+            ops,
+            vec![IrOp::Sub {
+                dst: 1,
+                a: 1,
+                b: 0
+            },]
+        );
+    }
+
+    #[test]
+    fn trap_sub_reg_32bit() {
+        // SUB W1, W1, W0: 32-bit width not expressible
+        let ops = lift(&insn(0x4000, 0x4b00_0021, InsnKind::DataProc));
+        assert_eq!(
+            ops,
+            vec![IrOp::Trap {
+                reason: R_SUB32_REG
+            }]
+        );
+    }
+
+    #[test]
+    fn trap_sub_reg_shifted() {
+        // SUB X1, X1, X0, LSL #1: shifter not expressible
+        let ops = lift(&insn(0x4000, 0xcb00_0421, InsnKind::DataProc));
+        assert_eq!(
+            ops,
+            vec![IrOp::Trap {
+                reason: R_SUB_SHIFT
+            }]
         );
     }
 

@@ -29,7 +29,7 @@ fn test_kernel_boot_measured_failure() {
     orch.machine_mut().cpu[0].regs = [0; 31];
 
     let mut trace = Vec::new();
-    let max_steps = 100;
+    let max_steps = 8192;
     let mut final_halt = None;
 
     for step in 0..max_steps {
@@ -79,10 +79,16 @@ fn test_kernel_boot_measured_failure() {
     // step 14: pc=0x40004d68 word=0xd3504c63 (ubfx x3, x3, #16, #4) -> OK
     // step 15: pc=0x40004d6c word=0xd2800082 (movz x2, #4)          -> OK
     // step 16: pc=0x40004d70 word=0x9ac32042 (lsl x2, x2, x3)       -> OK
-    // step 17: pc=0x40004d74 word=0xd1000443 (sub x3, x2, #1)       -> OK
+    // step 17: pc=0x40004d74 word=0xd1000443 (sub x3, x2, #1)       -> OK (GB-5)
     // ... executes cache clean loop, sysreg setup, bl el2_setup, etc. ...
-    // step 57: pc=0x413c004c word=0xcb000021 (sub x1, x1, x0)       -> HALT: Unsupported (SUB shifted reg)
-    assert!(trace.len() >= 57);
+    // step 57: pc=0x413c004c word=0xcb000021 (sub x1, x1, x0)       -> OK (GB-6)
+    // step 58: pc=0x413c0050 word=0x97b11343 (bl ...)               -> branches to 0x40004d5c
+    // step 59..71: cache-setup prologue at 0x40004d5c (add/mrs/nop/ubfx/movz/lsl/sub/cmp/...)
+    // step 72: pc=0x40004d9c word=0xd5087620 (dc cache maintenance) -> cache-clean loop entry
+    // steps 73..~5199: cache-clean loop (dc; add x0, x0, x2; cmp x0, x1; b.lt) runs to completion
+    // step 5200: pc=0x413c0084 word=0xf0ffc205                     -> OK
+    // step 5201: pc=0x413c0088 word=0xdac010a5 (clz x5, x5)         -> HALT: IllegalInstruction
+    assert!(trace.len() >= 5201);
     assert_eq!(trace[0].1, 0x4000_0000);
     assert_eq!(trace[0].2, 0x9100_5a4d); // ADD imm
     assert_eq!(trace[1].1, 0x4000_0004);
@@ -117,13 +123,23 @@ fn test_kernel_boot_measured_failure() {
     assert_eq!(trace[17].1, 0x4000_4d74);
     assert_eq!(trace[17].2, 0xd100_0443); // SUB x3, x2, #1 (GB-5)
     assert_eq!(trace[57].1, 0x413c_004c);
-    assert_eq!(trace[57].2, 0xcb00_0021); // SUB x1, x1, x0 (shifted reg)
+    assert_eq!(trace[57].2, 0xcb00_0021); // SUB x1, x1, x0 (shifted reg, GB-6)
+    assert_eq!(trace[58].1, 0x413c_0050);
+    assert_eq!(trace[58].2, 0x97b1_1343); // BL cache-maintenance routine
+    assert_eq!(trace[59].1, 0x4000_4d5c);
+    assert_eq!(trace[59].2, 0x8b00_0021); // ADD x1, x1, x0 (routine prologue)
+    assert_eq!(trace[72].1, 0x4000_4d9c);
+    assert_eq!(trace[72].2, 0xd508_7620); // DC cache maintenance (loop entry)
+    assert_eq!(trace[5200].1, 0x413c_0084);
+    assert_eq!(trace[5200].2, 0xf0ff_c205);
+    assert_eq!(trace[5201].1, 0x413c_0088);
+    assert_eq!(trace[5201].2, 0xdac0_10a5); // CLZ x5, x5 (1-source data-processing)
 
     assert_eq!(
         final_halt,
-        Some(HaltReason::Unsupported {
-            addr: 0x413c_004c,
-            reason: "DataProc: unsupported encoding",
+        Some(HaltReason::IllegalInstruction {
+            addr: 0x413c_0088,
+            word: 0xdac0_10a5,
         })
     );
 }
