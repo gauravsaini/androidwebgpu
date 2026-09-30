@@ -86,6 +86,13 @@ pub enum SysReg {
     /// (op0,op1,crn,crm,op2) = (3,0,2,0,0) = S3_0_C2_C0_0, which is
     /// TTBR0_EL1 (verified against the ARM ARM; Rt = bits[4:0] = X3).
     Ttbr0El1 = 13,
+    /// Added 2026-10-01 (Track GB-19): Translation Table Base Register 1,
+    /// EL1. The kernel programs TTBR1_EL1 immediately after TTBR0_EL1
+    /// during early MMU setup (MSR TTBR1_EL1, X4). Field extraction on
+    /// the measured halt word 0xd5182024 gives
+    /// (op0,op1,crn,crm,op2) = (3,0,2,0,1) = S3_0_C2_C0_1, which is
+    /// TTBR1_EL1 (verified against the ARM ARM; Rt = bits[4:0] = X4).
+    Ttbr1El1 = 14,
 }
 
 /// Single IR operation (SSA-style). The lifter (U2) is the only producer.

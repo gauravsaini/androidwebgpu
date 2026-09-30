@@ -311,6 +311,7 @@ mod tests {
                 IrOp::WriteSys { src: 1, reg: SysReg::MairEl1 },
                 IrOp::WriteSys { src: 1, reg: SysReg::TcrEl1 },
                 IrOp::WriteSys { src: 1, reg: SysReg::Ttbr0El1 },
+                IrOp::WriteSys { src: 1, reg: SysReg::Ttbr1El1 },
                 IrOp::ReadSys { dst: 2, reg: SysReg::SctlrEl1 },
                 IrOp::ReadSys { dst: 3, reg: SysReg::TpidrEl1 },
                 IrOp::ReadSys { dst: 4, reg: SysReg::CnthctlEl2 },
@@ -319,6 +320,7 @@ mod tests {
                 IrOp::ReadSys { dst: 8, reg: SysReg::MairEl1 },
                 IrOp::ReadSys { dst: 9, reg: SysReg::TcrEl1 },
                 IrOp::ReadSys { dst: 10, reg: SysReg::Ttbr0El1 },
+                IrOp::ReadSys { dst: 11, reg: SysReg::Ttbr1El1 },
                 IrOp::Branch { target: 0x10 },
             ],
             vec![BlockExit::Branch(0x10)],
@@ -353,6 +355,9 @@ mod tests {
         // TTBR0_EL1 (GB-18, host-call index 13) round-trips through the host.
         assert_eq!(regs[10], 0xdead);
         assert_eq!(host.sysregs.ttbr0_el1, 0xdead);
+        // TTBR1_EL1 (GB-19, host-call index 14) round-trips through the host.
+        assert_eq!(regs[11], 0xdead);
+        assert_eq!(host.sysregs.ttbr1_el1, 0xdead);
     }
 
     #[test]

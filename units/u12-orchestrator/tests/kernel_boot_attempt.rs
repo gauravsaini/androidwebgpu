@@ -292,15 +292,76 @@ fn test_kernel_boot_measured_failure() {
     assert_eq!(trace[7503].1, 0x40c0_3274);
     assert_eq!(trace[7503].2, 0xd518_2003); // MSR TTBR0_EL1, X3 -> OK (GB-18: persistent)
     assert_eq!(trace[7504].1, 0x40c0_3278);
-    assert_eq!(trace[7504].2, 0xd518_2024); // MSR TTBR1_EL1, X4 -> HALT
+    assert_eq!(trace[7504].2, 0xd518_2024); // MSR TTBR1_EL1, X4 -> OK (GB-19: persistent)
+    assert_eq!(trace[7505].1, 0x40c0_327c);
+    assert_eq!(trace[7505].2, 0xd503_3fdf); // ISB -> OK
+    assert_eq!(trace[7506].1, 0x40c0_3280);
+    assert_eq!(trace[7506].2, 0xd518_1000); // MSR SCTLR_EL1, X0 = 0x34f5d91d (M=1: MMU ON) -> OK
+    assert_eq!(trace[7507].1, 0x40c0_3284);
+    assert_eq!(trace[7507].2, 0xd503_3fdf); // ISB -> OK
+    assert_eq!(trace[7508].1, 0x40c0_3288);
+    assert_eq!(trace[7508].2, 0xd508_751f); // IC IALLU -> OK (cache op: nop)
+    assert_eq!(trace[7509].1, 0x40c0_328c);
+    assert_eq!(trace[7509].2, 0xd503_379f); // DSB NSH -> OK
+    assert_eq!(trace[7510].1, 0x40c0_3290);
+    assert_eq!(trace[7510].2, 0xd503_3fdf); // ISB -> OK
+    assert_eq!(trace[7511].1, 0x40c0_3294);
+    assert_eq!(trace[7511].2, 0xd65f_03c0); // RET -> OK (to 0x40c03380)
+    assert_eq!(trace[7512].1, 0x40c0_3380);
+    assert_eq!(trace[7512].2, 0xd280_0018); // MOVZ X24, #0 -> OK
+    assert_eq!(trace[7513].1, 0x40c0_3384);
+    assert_eq!(trace[7513].2, 0x97ff_ffcf); // BL 0x40c032c0 -> OK
+    assert_eq!(trace[7514].1, 0x40c0_32c0);
+    assert_eq!(trace[7514].2, 0x1800_0889); // LDR W9, [PC, #272] (0x40c033d0) -> OK
+    assert_eq!(trace[7515].1, 0x40c0_32c4);
+    assert_eq!(trace[7515].2, 0x1800_088a); // LDR W10, [PC, #272] (0x40c033d4) -> OK
+    assert_eq!(trace[7516].1, 0x40c0_32c8);
+    assert_eq!(trace[7516].2, 0x92c0_0feb); // MOVN X11, #0x7f, LSL #32 -> OK
+    assert_eq!(trace[7517].1, 0x40c0_32cc);
+    assert_eq!(trace[7517].2, 0xf2a1_000b); // MOVK X11, #0x800, LSL #16 -> OK
+    assert_eq!(trace[7518].1, 0x40c0_32d0);
+    assert_eq!(trace[7518].2, 0xf280_000b); // MOVK X11, #0x0, LSL #0 -> OK
+    assert_eq!(trace[7519].1, 0x40c0_32d4);
+    assert_eq!(trace[7519].2, 0x8b17_016b); // ADD X11, X11, X23 -> OK
+    assert_eq!(trace[7520].1, 0x40c0_32d8);
+    assert_eq!(trace[7520].2, 0x8b0b_0129); // ADD X9, X9, X11 -> OK
+    assert_eq!(trace[7521].1, 0x40c0_32dc);
+    assert_eq!(trace[7521].2, 0x8b0a_012a); // ADD X10, X9, X10 -> OK
+    assert_eq!(trace[7522].1, 0x40c0_32e0);
+    assert_eq!(trace[7522].2, 0xeb0a_013f); // CMP X9, X10 -> OK
+    assert_eq!(trace[7523].1, 0x40c0_32e4);
+    assert_eq!(trace[7523].2, 0x5400_0102); // B.CS 0x40c03304 (taken) -> OK
+    assert_eq!(trace[7524].1, 0x40c0_3304);
+    assert_eq!(trace[7524].2, 0x1800_06a9); // LDR W9, [PC, #212] (0x40c033d8) -> OK
+    assert_eq!(trace[7525].1, 0x40c0_3308);
+    assert_eq!(trace[7525].2, 0x1800_06aa); // LDR W10, [PC, #212] (0x40c033dc) -> OK
+    assert_eq!(trace[7526].1, 0x40c0_330c);
+    assert_eq!(trace[7526].2, 0x8b0b_0129); // ADD X9, X9, X11 -> OK
+    assert_eq!(trace[7527].1, 0x40c0_3310);
+    assert_eq!(trace[7527].2, 0x8b0a_012a); // ADD X10, X9, X10 -> OK
+    assert_eq!(trace[7528].1, 0x40c0_3314);
+    assert_eq!(trace[7528].2, 0xcb18_02ef); // SUB X15, X23, X24 -> OK
+    assert_eq!(trace[7529].1, 0x40c0_3318);
+    assert_eq!(trace[7529].2, 0xb400_02cf); // CBZ X15, 0x40c03370 (not taken) -> OK
+    assert_eq!(trace[7530].1, 0x40c0_331c);
+    assert_eq!(trace[7530].2, 0xaa17_03f8); // MOV X24, X23 -> OK
+    assert_eq!(trace[7531].1, 0x40c0_3320);
+    assert_eq!(trace[7531].2, 0xeb0a_013f); // CMP X9, X10 -> OK
+    assert_eq!(trace[7532].1, 0x40c0_3324);
+    assert_eq!(trace[7532].2, 0x5400_0262); // B.CS 0x40c03370 (not taken) -> OK
+    assert_eq!(trace[7533].1, 0x40c0_3328);
+    assert_eq!(trace[7533].2, 0xf840_852b); // LDR X11, [X9], #8 -> HALT (WasmTrap)
 
-    // TTBR1_EL1 (S3_0_C2_C0_1, translation table base 1) is not persistent
-    // yet: honest Unsupported trap. Pin the exact halt: step, pc, word, reason.
+    // The kernel enabled the MMU at step 7506 (SCTLR_EL1 = 0x34f5d91d,
+    // M bit set; measured X0 at the MSR). The emulator stores SCTLR_EL1
+    // but performs no address translation, so the first virtual-address
+    // data access (X9 = 0xffffff80096ab158, a kernel VA) faults honestly
+    // in the wasm backend. Pin the exact halt: step, pc, word, reason.
     match final_halt {
-        Some(HaltReason::Unsupported { addr, reason }) => {
-            assert_eq!(addr, 0x40c0_3278);
-            assert_eq!(reason, "System: system and privileged semantics are not lifted");
+        Some(HaltReason::WasmTrap { addr, message }) => {
+            assert_eq!(addr, 0x40c0_3328);
+            assert!(message.starts_with("trap:"), "unexpected trap message: {message}");
         }
-        other => panic!("expected Unsupported at 0x40c03278, got {other:?}"),
+        other => panic!("expected WasmTrap at 0x40c03328, got {other:?}"),
     }
 }
