@@ -40,6 +40,11 @@ pub enum IrOp {
         a: u8,
         b: u8,
     },
+    Sub {
+        dst: u8,
+        a: u8,
+        b: u8,
+    },
     Mov {
         dst: u8,
         imm: u64,

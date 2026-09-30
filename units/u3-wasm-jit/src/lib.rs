@@ -57,6 +57,7 @@ const OP_GLOBAL_SET: u8 = 0x24;
 const OP_I64_CONST: u8 = 0x42;
 const OP_I64_EQZ: u8 = 0x50;
 const OP_I64_ADD: u8 = 0x7C;
+const OP_I64_SUB: u8 = 0x7D;
 const OP_I64_AND: u8 = 0x83;
 const OP_I64_OR: u8 = 0x84;
 const OP_I64_XOR: u8 = 0x85;
@@ -143,6 +144,12 @@ pub fn compile(block: &IrBlock) -> WasmModule {
                 reg_get(&mut body, *a);
                 reg_get(&mut body, *b);
                 body.push(OP_I64_ADD);
+                reg_set(&mut body, *dst);
+            }
+            IrOp::Sub { dst, a, b } => {
+                reg_get(&mut body, *a);
+                reg_get(&mut body, *b);
+                body.push(OP_I64_SUB);
                 reg_set(&mut body, *dst);
             }
             IrOp::Mov { dst, imm } => {
@@ -904,6 +911,7 @@ mod tests {
             entry_addr: 0x100,
             ops: vec![
                 IrOp::Add { dst: 0, a: 1, b: 2 },
+                IrOp::Sub { dst: 0, a: 1, b: 2 },
                 IrOp::Mov {
                     dst: 3,
                     imm: u64::MAX,
@@ -958,6 +966,10 @@ mod tests {
         let cases: Vec<(Vec<IrOp>, Vec<BlockExit>)> = vec![
             (
                 vec![IrOp::Add { dst: 0, a: 1, b: 2 }],
+                vec![BlockExit::FallThrough(0x4)],
+            ),
+            (
+                vec![IrOp::Sub { dst: 0, a: 1, b: 2 }],
                 vec![BlockExit::FallThrough(0x4)],
             ),
             (
@@ -1416,6 +1428,28 @@ mod tests {
         assert!(expr
             .windows(7)
             .any(|w| w == [0x23, 0x01, 0x23, 0x02, 0x7C, 0x24, 0x03]));
+    }
+
+    #[test]
+    fn gb5_codegen_mov_sub_use_globals() {
+        let block = IrBlock {
+            entry_addr: 0,
+            ops: vec![
+                IrOp::Mov { dst: 1, imm: 10 },
+                IrOp::Mov { dst: 2, imm: 3 },
+                IrOp::Sub { dst: 3, a: 1, b: 2 },
+            ],
+            exits: vec![],
+        };
+        let expr = assert_valid(&block);
+        // i64.const 10; global.set 1
+        assert!(expr.windows(4).any(|w| w == [0x42, 0x0A, 0x24, 0x01]));
+        // i64.const 3; global.set 2
+        assert!(expr.windows(4).any(|w| w == [0x42, 0x03, 0x24, 0x02]));
+        // global.get 1; global.get 2; i64.sub; global.set 3
+        assert!(expr
+            .windows(7)
+            .any(|w| w == [0x23, 0x01, 0x23, 0x02, 0x7D, 0x24, 0x03]));
     }
 
     #[test]

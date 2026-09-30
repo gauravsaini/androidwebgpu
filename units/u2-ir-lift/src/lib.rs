@@ -8,7 +8,7 @@
 //! The frozen contract (`pathn_contracts::cpu::IrOp`) is the whole truth about
 //! what can be expressed:
 //!
-//! - `Add { dst, a, b }` / `Mov { dst, imm }` — operands are indices into the
+//! - `Add { dst, a, b }` / `Sub { dst, a, b }` / `Mov { dst, imm }` — operands are indices into the
 //!   guest register file (`0..=30` = X0-X30/W0-W30, `31` = XZR/SP following the
 //!   usual contextual AArch64 rule; the execution backend applies it).
 //! - `Load { dst, addr, size }` / `Store { src, addr, size }` — `addr` is a
@@ -66,6 +66,7 @@ const R_UNKNOWN: &str = "Unknown: illegal or unrecognized instruction word";
 const R_DP_UNSUPPORTED: &str = "DataProc: unsupported encoding";
 const R_MOVZ_HW: &str = "DataProc: MOVZ hw field > 1 with sf = 0 is unallocated";
 const R_ADD32_IMM: &str = "DataProc: 32-bit ADD immediate width is not expressible in IrOp::Add";
+const R_SUB32_IMM: &str = "DataProc: 32-bit SUB immediate width is not expressible in IrOp::Sub";
 const R_ADD32_REG: &str = "DataProc: 32-bit ADD register width is not expressible in IrOp::Add";
 const R_ADD_SHIFT: &str =
     "DataProc: shifted or extended ADD register operand is not expressible in IrOp";
@@ -269,6 +270,26 @@ fn lift_data_proc(word: u32) -> Vec<IrOp> {
         return vec![
             IrOp::Mov { dst: SCRATCH, imm },
             IrOp::Add {
+                dst: rd,
+                a: rn,
+                b: SCRATCH,
+            },
+        ];
+    }
+    // SUB (immediate): sf 1 0 10001 sh imm12 Rn Rd  (bits 30:24 = 0x51;
+    // bit 29 = 0 excludes SUBS, bit 30 = 1 specifies SUB).
+    if (word >> 24) & 0x7F == 0x51 {
+        if word >> 31 == 0 {
+            return trap(R_SUB32_IMM);
+        }
+        let sh = (word >> 22) & 1;
+        let imm12 = (word >> 10) & 0xFFF;
+        let rn = ((word >> 5) & 0x1F) as u8;
+        let rd = (word & 0x1F) as u8;
+        let imm = (imm12 as u64) << (if sh == 1 { 12 } else { 0 });
+        return vec![
+            IrOp::Mov { dst: SCRATCH, imm },
+            IrOp::Sub {
                 dst: rd,
                 a: rn,
                 b: SCRATCH,
@@ -811,6 +832,46 @@ mod tests {
     }
 
     #[test]
+    fn golden_sub_imm() {
+        // SUB X3, X2, #1 (real kernel step 17 word: 0xd1000443)
+        let ops = lift(&insn(0x4000_4d74, 0xd100_0443, InsnKind::DataProc));
+        assert_eq!(
+            ops,
+            vec![
+                IrOp::Mov {
+                    dst: SCRATCH,
+                    imm: 1
+                },
+                IrOp::Sub {
+                    dst: 3,
+                    a: 2,
+                    b: SCRATCH
+                },
+            ]
+        );
+    }
+
+    #[test]
+    fn golden_sub_imm_shifted12() {
+        // SUB X0, X1, #1, LSL #12 -> imm = 0x1000
+        let ops = lift(&insn(0x4000, 0xd140_0420, InsnKind::DataProc));
+        assert_eq!(
+            ops,
+            vec![
+                IrOp::Mov {
+                    dst: SCRATCH,
+                    imm: 0x1000
+                },
+                IrOp::Sub {
+                    dst: 0,
+                    a: 1,
+                    b: SCRATCH
+                },
+            ]
+        );
+    }
+
+    #[test]
     fn golden_add_reg() {
         // ADD X0, X1, X2
         let ops = lift(&insn(0x4000, 0x8B02_0020, InsnKind::DataProc));
@@ -1079,6 +1140,18 @@ mod tests {
             ops,
             vec![IrOp::Trap {
                 reason: R_ADD32_IMM
+            }]
+        );
+    }
+
+    #[test]
+    fn trap_sub_imm_32bit_width() {
+        // SUB W0, W1, #1: 32-bit zeroing of Xd not expressible in IrOp::Sub
+        let ops = lift(&insn(0x4000, 0x5100_0420, InsnKind::DataProc));
+        assert_eq!(
+            ops,
+            vec![IrOp::Trap {
+                reason: R_SUB32_IMM
             }]
         );
     }
