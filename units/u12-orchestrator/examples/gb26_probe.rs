@@ -80,5 +80,8 @@ fn main() {
         "GB26_HALT sysregs sctlr={:#x} tcr={:#x} ttbr0={:#x} ttbr1={:#x}",
         st.sctlr, st.tcr, st.ttbr0, st.ttbr1
     );
-    println!("GB26_HALT x0={:#x} x1={:#x}", m.cpu[0].regs[0], m.cpu[0].regs[1]);
+    println!(
+        "GB26_HALT x0={:#x} x1={:#x}",
+        m.cpu[0].regs[0], m.cpu[0].regs[1]
+    );
 }

@@ -165,7 +165,9 @@ pub enum HaltReason {
     /// spike, 2026-09-30). Distinct from Unsupported so a future SVC halt is
     /// instantly recognizable in traces. Snapshot tag 8 is reserved for it
     /// (additive - tags 0-7 decode exactly as before).
-    Svc { addr: u64 },
+    Svc {
+        addr: u64,
+    },
 }
 
 /// Image load failure — data, not panic.
@@ -633,23 +635,35 @@ impl Orchestrator {
     }
 
     fn read_ram_u64(&self, pa: u64) -> Result<u64, HaltReason> {
-        let off = self.ram_offset(pa, 8).map_err(|_| HaltReason::FetchFault { addr: pa })?;
-        Ok(u64::from_le_bytes(self.machine.ram[off..off + 8].try_into().unwrap()))
+        let off = self
+            .ram_offset(pa, 8)
+            .map_err(|_| HaltReason::FetchFault { addr: pa })?;
+        Ok(u64::from_le_bytes(
+            self.machine.ram[off..off + 8].try_into().unwrap(),
+        ))
     }
 
     fn read_ram_u32(&self, pa: u64) -> Result<u32, HaltReason> {
-        let off = self.ram_offset(pa, 4).map_err(|_| HaltReason::FetchFault { addr: pa })?;
-        Ok(u32::from_le_bytes(self.machine.ram[off..off + 4].try_into().unwrap()))
+        let off = self
+            .ram_offset(pa, 4)
+            .map_err(|_| HaltReason::FetchFault { addr: pa })?;
+        Ok(u32::from_le_bytes(
+            self.machine.ram[off..off + 4].try_into().unwrap(),
+        ))
     }
 
     fn write_ram_u64(&mut self, pa: u64, val: u64) -> Result<(), HaltReason> {
-        let off = self.ram_offset(pa, 8).map_err(|_| HaltReason::FetchFault { addr: pa })?;
+        let off = self
+            .ram_offset(pa, 8)
+            .map_err(|_| HaltReason::FetchFault { addr: pa })?;
         self.machine.ram[off..off + 8].copy_from_slice(&val.to_le_bytes());
         Ok(())
     }
 
     fn write_ram_u32(&mut self, pa: u64, val: u32) -> Result<(), HaltReason> {
-        let off = self.ram_offset(pa, 4).map_err(|_| HaltReason::FetchFault { addr: pa })?;
+        let off = self
+            .ram_offset(pa, 4)
+            .map_err(|_| HaltReason::FetchFault { addr: pa })?;
         self.machine.ram[off..off + 4].copy_from_slice(&val.to_le_bytes());
         Ok(())
     }
@@ -687,7 +701,11 @@ impl Orchestrator {
             let offset = (((imm14 << 18) >> 18) as i64) * 4;
             let target = (pc as i64).wrapping_add(offset) as u64;
             let rt = (word & 0x1F) as usize;
-            let val = if rt == 31 { 0 } else { self.machine.cpu[0].regs[rt] };
+            let val = if rt == 31 {
+                0
+            } else {
+                self.machine.cpu[0].regs[rt]
+            };
             let bit = (val >> bit_pos) & 1;
             let taken = if op == 0 { bit == 0 } else { bit != 0 };
             self.machine.cpu[0].pc = if taken { target } else { pc.wrapping_add(4) };
@@ -708,32 +726,46 @@ impl Orchestrator {
             let rd = (word & 0x1F) as usize;
             let imm = (imm12 as u64) << (if sh == 1 { 12 } else { 0 });
             // Rn=31 means SP for ADD/SUB (both S=0 and S=1).
-            let rn_val = if rn == 31 { self.machine.cpu[0].sp } else { self.machine.cpu[0].regs[rn] };
+            let rn_val = if rn == 31 {
+                self.machine.cpu[0].sp
+            } else {
+                self.machine.cpu[0].regs[rn]
+            };
             if s == 1 {
                 if sf == 1 {
                     let nzcv = if op == 0 {
                         let res = rn_val.wrapping_add(imm);
-                        if rd != 31 { self.machine.cpu[0].regs[rd] = res; }
+                        if rd != 31 {
+                            self.machine.cpu[0].regs[rd] = res;
+                        }
                         nzcv_add64(rn_val, imm)
                     } else {
                         let res = rn_val.wrapping_sub(imm);
-                        if rd != 31 { self.machine.cpu[0].regs[rd] = res; }
+                        if rd != 31 {
+                            self.machine.cpu[0].regs[rd] = res;
+                        }
                         nzcv_sub64(rn_val, imm)
                     };
-                    self.machine.cpu[0].pstate = (self.machine.cpu[0].pstate & !FLAGS_NZCV_MASK) | nzcv;
+                    self.machine.cpu[0].pstate =
+                        (self.machine.cpu[0].pstate & !FLAGS_NZCV_MASK) | nzcv;
                 } else {
                     let a32 = rn_val as u32;
                     let b32 = imm as u32;
                     let nzcv = if op == 0 {
                         let res = a32.wrapping_add(b32);
-                        if rd != 31 { self.machine.cpu[0].regs[rd] = res as u64; }
+                        if rd != 31 {
+                            self.machine.cpu[0].regs[rd] = res as u64;
+                        }
                         nzcv_add32(a32, b32)
                     } else {
                         let res = a32.wrapping_sub(b32);
-                        if rd != 31 { self.machine.cpu[0].regs[rd] = res as u64; }
+                        if rd != 31 {
+                            self.machine.cpu[0].regs[rd] = res as u64;
+                        }
                         nzcv_sub32(a32, b32)
                     };
-                    self.machine.cpu[0].pstate = (self.machine.cpu[0].pstate & !FLAGS_NZCV_MASK) | nzcv;
+                    self.machine.cpu[0].pstate =
+                        (self.machine.cpu[0].pstate & !FLAGS_NZCV_MASK) | nzcv;
                 }
                 self.machine.cpu[0].pc = pc.wrapping_add(4);
                 return Some(Ok(()));
@@ -791,39 +823,61 @@ impl Orchestrator {
                 let rd = (word & 0x1F) as usize;
                 // Rn=31: SP for S=0 (ADD/SUB), XZR for S=1 (ADDS/SUBS/CMP/CMN).
                 // Rm=31 is always XZR (zero).
-                let rm_val = if rm == 31 { 0 } else { self.machine.cpu[0].regs[rm] };
+                let rm_val = if rm == 31 {
+                    0
+                } else {
+                    self.machine.cpu[0].regs[rm]
+                };
                 if s == 1 {
-                    let rn_val = if rn == 31 { 0 } else { self.machine.cpu[0].regs[rn] };
+                    let rn_val = if rn == 31 {
+                        0
+                    } else {
+                        self.machine.cpu[0].regs[rn]
+                    };
                     if sf == 1 {
                         let operand2 = eval_shift64(rm_val, shift, imm6);
                         let nzcv = if op == 0 {
                             let res = rn_val.wrapping_add(operand2);
-                            if rd != 31 { self.machine.cpu[0].regs[rd] = res; }
+                            if rd != 31 {
+                                self.machine.cpu[0].regs[rd] = res;
+                            }
                             nzcv_add64(rn_val, operand2)
                         } else {
                             let res = rn_val.wrapping_sub(operand2);
-                            if rd != 31 { self.machine.cpu[0].regs[rd] = res; }
+                            if rd != 31 {
+                                self.machine.cpu[0].regs[rd] = res;
+                            }
                             nzcv_sub64(rn_val, operand2)
                         };
-                        self.machine.cpu[0].pstate = (self.machine.cpu[0].pstate & !FLAGS_NZCV_MASK) | nzcv;
+                        self.machine.cpu[0].pstate =
+                            (self.machine.cpu[0].pstate & !FLAGS_NZCV_MASK) | nzcv;
                     } else {
                         let a32 = rn_val as u32;
                         let b32 = eval_shift32(rm_val as u32, shift, imm6 & 0x1F);
                         let nzcv = if op == 0 {
                             let res = a32.wrapping_add(b32);
-                            if rd != 31 { self.machine.cpu[0].regs[rd] = res as u64; }
+                            if rd != 31 {
+                                self.machine.cpu[0].regs[rd] = res as u64;
+                            }
                             nzcv_add32(a32, b32)
                         } else {
                             let res = a32.wrapping_sub(b32);
-                            if rd != 31 { self.machine.cpu[0].regs[rd] = res as u64; }
+                            if rd != 31 {
+                                self.machine.cpu[0].regs[rd] = res as u64;
+                            }
                             nzcv_sub32(a32, b32)
                         };
-                        self.machine.cpu[0].pstate = (self.machine.cpu[0].pstate & !FLAGS_NZCV_MASK) | nzcv;
+                        self.machine.cpu[0].pstate =
+                            (self.machine.cpu[0].pstate & !FLAGS_NZCV_MASK) | nzcv;
                     }
                 } else {
                     // S=0: plain ADD/SUB. Rn=31 means SP, Rd=31 means SP
                     // (not XZR); no flags are updated.
-                    let rn_val = if rn == 31 { self.machine.cpu[0].sp } else { self.machine.cpu[0].regs[rn] };
+                    let rn_val = if rn == 31 {
+                        self.machine.cpu[0].sp
+                    } else {
+                        self.machine.cpu[0].regs[rn]
+                    };
                     if sf == 1 {
                         let operand2 = eval_shift64(rm_val, shift, imm6);
                         let res = if op == 0 {
@@ -885,19 +939,33 @@ impl Orchestrator {
                 // are UNDEFINED — do not claim, fall through.
                 let valid_option = matches!(option, 0b010 | 0b011 | 0b110 | 0b111);
                 if imm3 <= 4 && valid_option {
-                    let w = if rm == 31 { 0 } else { self.machine.cpu[0].regs[rm] as u32 };
+                    let w = if rm == 31 {
+                        0
+                    } else {
+                        self.machine.cpu[0].regs[rm] as u32
+                    };
                     let extended: u64 = match option {
-                        0b000 => (w as u8) as u64,         // UXTB
-                        0b001 => (w as u16) as u64,        // UXTH
-                        0b010 => w as u64,                 // UXTW
-                        0b011 => {                        // UXTX
-                            if rm == 31 { 0 } else { self.machine.cpu[0].regs[rm] }
+                        0b000 => (w as u8) as u64,  // UXTB
+                        0b001 => (w as u16) as u64, // UXTH
+                        0b010 => w as u64,          // UXTW
+                        0b011 => {
+                            // UXTX
+                            if rm == 31 {
+                                0
+                            } else {
+                                self.machine.cpu[0].regs[rm]
+                            }
                         }
                         0b100 => (w as i8) as i64 as u64,  // SXTB
                         0b101 => (w as i16) as i64 as u64, // SXTH
                         0b110 => (w as i32) as i64 as u64, // SXTW
-                        _ => {                            // SXTX
-                            if rm == 31 { 0 } else { self.machine.cpu[0].regs[rm] }
+                        _ => {
+                            // SXTX
+                            if rm == 31 {
+                                0
+                            } else {
+                                self.machine.cpu[0].regs[rm]
+                            }
                         }
                     };
                     let op2 = extended << imm3;
@@ -955,38 +1023,68 @@ impl Orchestrator {
 
             if opc == 0b11 && shift < 3 {
                 // ANDS (TST when rd=31) or BICS
-                let rn_val = if rn == 31 { 0 } else { self.machine.cpu[0].regs[rn] };
-                let rm_val = if rm == 31 { 0 } else { self.machine.cpu[0].regs[rm] };
+                let rn_val = if rn == 31 {
+                    0
+                } else {
+                    self.machine.cpu[0].regs[rn]
+                };
+                let rm_val = if rm == 31 {
+                    0
+                } else {
+                    self.machine.cpu[0].regs[rm]
+                };
                 if sf == 1 {
                     let mut op2 = eval_shift64(rm_val, shift, imm6);
-                    if n == 1 { op2 = !op2; }
+                    if n == 1 {
+                        op2 = !op2;
+                    }
                     let res = rn_val & op2;
-                    if rd != 31 { self.machine.cpu[0].regs[rd] = res; }
+                    if rd != 31 {
+                        self.machine.cpu[0].regs[rd] = res;
+                    }
                     let nzcv = nzcv_and64(res);
-                    self.machine.cpu[0].pstate = (self.machine.cpu[0].pstate & !FLAGS_NZCV_MASK) | nzcv;
+                    self.machine.cpu[0].pstate =
+                        (self.machine.cpu[0].pstate & !FLAGS_NZCV_MASK) | nzcv;
                 } else {
                     let mut op2 = eval_shift32(rm_val as u32, shift, imm6 & 0x1F);
-                    if n == 1 { op2 = !op2; }
+                    if n == 1 {
+                        op2 = !op2;
+                    }
                     let res = (rn_val as u32) & op2;
-                    if rd != 31 { self.machine.cpu[0].regs[rd] = res as u64; }
+                    if rd != 31 {
+                        self.machine.cpu[0].regs[rd] = res as u64;
+                    }
                     let nzcv = nzcv_and32(res);
-                    self.machine.cpu[0].pstate = (self.machine.cpu[0].pstate & !FLAGS_NZCV_MASK) | nzcv;
+                    self.machine.cpu[0].pstate =
+                        (self.machine.cpu[0].pstate & !FLAGS_NZCV_MASK) | nzcv;
                 }
                 self.machine.cpu[0].pc = pc.wrapping_add(4);
                 return Some(Ok(()));
             }
             if opc == 0b00 && n == 1 && shift < 3 {
                 // BIC: Rd = Rn & ~shifted(Rm)
-                let rn_val = if rn == 31 { 0 } else { self.machine.cpu[0].regs[rn] };
-                let rm_val = if rm == 31 { 0 } else { self.machine.cpu[0].regs[rm] };
+                let rn_val = if rn == 31 {
+                    0
+                } else {
+                    self.machine.cpu[0].regs[rn]
+                };
+                let rm_val = if rm == 31 {
+                    0
+                } else {
+                    self.machine.cpu[0].regs[rm]
+                };
                 if sf == 1 {
                     let op2 = !eval_shift64(rm_val, shift, imm6);
                     let res = rn_val & op2;
-                    if rd != 31 { self.machine.cpu[0].regs[rd] = res; }
+                    if rd != 31 {
+                        self.machine.cpu[0].regs[rd] = res;
+                    }
                 } else {
                     let op2 = !eval_shift32(rm_val as u32, shift, imm6 & 0x1F);
                     let res = (rn_val as u32) & op2;
-                    if rd != 31 { self.machine.cpu[0].regs[rd] = res as u64; }
+                    if rd != 31 {
+                        self.machine.cpu[0].regs[rd] = res as u64;
+                    }
                 }
                 self.machine.cpu[0].pc = pc.wrapping_add(4);
                 return Some(Ok(()));
@@ -995,16 +1093,28 @@ impl Orchestrator {
             // 32-bit form (sf=0) zeroes upper 32 bits of Rd.
             // Note: for logical ops, Rn/Rm=31 means XZR (not SP).
             if opc == 0b01 && shift < 3 {
-                let rn_val = if rn == 31 { 0 } else { self.machine.cpu[0].regs[rn] };
-                let rm_val = if rm == 31 { 0 } else { self.machine.cpu[0].regs[rm] };
+                let rn_val = if rn == 31 {
+                    0
+                } else {
+                    self.machine.cpu[0].regs[rn]
+                };
+                let rm_val = if rm == 31 {
+                    0
+                } else {
+                    self.machine.cpu[0].regs[rm]
+                };
                 if sf == 1 {
                     let op2 = eval_shift64(rm_val, shift, imm6);
                     let res = rn_val | op2;
-                    if rd != 31 { self.machine.cpu[0].regs[rd] = res; }
+                    if rd != 31 {
+                        self.machine.cpu[0].regs[rd] = res;
+                    }
                 } else {
                     let op2 = eval_shift32(rm_val as u32, shift, imm6 & 0x1F);
                     let res = (rn_val as u32) | op2;
-                    if rd != 31 { self.machine.cpu[0].regs[rd] = res as u64; }
+                    if rd != 31 {
+                        self.machine.cpu[0].regs[rd] = res as u64;
+                    }
                 }
                 self.machine.cpu[0].pc = pc.wrapping_add(4);
                 return Some(Ok(()));
@@ -1026,11 +1136,27 @@ impl Orchestrator {
             let ra = ((word >> 10) & 0x1F) as usize;
             let rn = ((word >> 5) & 0x1F) as usize;
             let rd = (word & 0x1F) as usize;
-            let n = if rn == 31 { 0 } else { self.machine.cpu[0].regs[rn] as u32 };
-            let m = if rm == 31 { 0 } else { self.machine.cpu[0].regs[rm] as u32 };
-            let a = if ra == 31 { 0 } else { self.machine.cpu[0].regs[ra] as u32 };
+            let n = if rn == 31 {
+                0
+            } else {
+                self.machine.cpu[0].regs[rn] as u32
+            };
+            let m = if rm == 31 {
+                0
+            } else {
+                self.machine.cpu[0].regs[rm] as u32
+            };
+            let a = if ra == 31 {
+                0
+            } else {
+                self.machine.cpu[0].regs[ra] as u32
+            };
             let prod = n.wrapping_mul(m);
-            let res = if is_sub { a.wrapping_sub(prod) } else { a.wrapping_add(prod) };
+            let res = if is_sub {
+                a.wrapping_sub(prod)
+            } else {
+                a.wrapping_add(prod)
+            };
             if rd != 31 {
                 self.machine.cpu[0].regs[rd] = res as u64;
             }
@@ -1048,17 +1174,27 @@ impl Orchestrator {
             let rn = ((word >> 5) & 0x1F) as usize;
             let rd = (word & 0x1F) as usize;
             if let Some(mask) = decode_logical_immediate(sf, n, immr, imms) {
-                let rn_val = if rn == 31 { 0 } else { self.machine.cpu[0].regs[rn] };
+                let rn_val = if rn == 31 {
+                    0
+                } else {
+                    self.machine.cpu[0].regs[rn]
+                };
                 if sf == 1 {
                     let res = rn_val & mask;
-                    if rd != 31 { self.machine.cpu[0].regs[rd] = res; }
+                    if rd != 31 {
+                        self.machine.cpu[0].regs[rd] = res;
+                    }
                     let nzcv = nzcv_and64(res);
-                    self.machine.cpu[0].pstate = (self.machine.cpu[0].pstate & !FLAGS_NZCV_MASK) | nzcv;
+                    self.machine.cpu[0].pstate =
+                        (self.machine.cpu[0].pstate & !FLAGS_NZCV_MASK) | nzcv;
                 } else {
                     let res = (rn_val as u32) & (mask as u32);
-                    if rd != 31 { self.machine.cpu[0].regs[rd] = res as u64; }
+                    if rd != 31 {
+                        self.machine.cpu[0].regs[rd] = res as u64;
+                    }
                     let nzcv = nzcv_and32(res);
-                    self.machine.cpu[0].pstate = (self.machine.cpu[0].pstate & !FLAGS_NZCV_MASK) | nzcv;
+                    self.machine.cpu[0].pstate =
+                        (self.machine.cpu[0].pstate & !FLAGS_NZCV_MASK) | nzcv;
                 }
                 self.machine.cpu[0].pc = pc.wrapping_add(4);
                 return Some(Ok(()));
@@ -1195,15 +1331,11 @@ impl Orchestrator {
                 };
                 let val = match size {
                     0 => self.machine.ram[off] as u64,
-                    1 => u16::from_le_bytes(
-                        self.machine.ram[off..off + 2].try_into().unwrap(),
-                    ) as u64,
-                    2 => u32::from_le_bytes(
-                        self.machine.ram[off..off + 4].try_into().unwrap(),
-                    ) as u64,
-                    _ => u64::from_le_bytes(
-                        self.machine.ram[off..off + 8].try_into().unwrap(),
-                    ),
+                    1 => u16::from_le_bytes(self.machine.ram[off..off + 2].try_into().unwrap())
+                        as u64,
+                    2 => u32::from_le_bytes(self.machine.ram[off..off + 4].try_into().unwrap())
+                        as u64,
+                    _ => u64::from_le_bytes(self.machine.ram[off..off + 8].try_into().unwrap()),
                 };
                 if rt != 31 {
                     self.machine.cpu[0].regs[rt] = val;
@@ -1226,15 +1358,18 @@ impl Orchestrator {
                 };
                 let ok = self.exclusive == Some((va, nbytes as u8));
                 if ok {
-                    let data = if rt == 31 { 0 } else { self.machine.cpu[0].regs[rt] };
+                    let data = if rt == 31 {
+                        0
+                    } else {
+                        self.machine.cpu[0].regs[rt]
+                    };
                     match size {
                         0 => self.machine.ram[off] = data as u8,
                         1 => self.machine.ram[off..off + 2]
                             .copy_from_slice(&(data as u16).to_le_bytes()),
                         2 => self.machine.ram[off..off + 4]
                             .copy_from_slice(&(data as u32).to_le_bytes()),
-                        _ => self.machine.ram[off..off + 8]
-                            .copy_from_slice(&data.to_le_bytes()),
+                        _ => self.machine.ram[off..off + 8].copy_from_slice(&data.to_le_bytes()),
                     }
                 }
                 self.exclusive = None;
@@ -1289,27 +1424,29 @@ impl Orchestrator {
             if is_load {
                 let val = match size {
                     0 => self.machine.ram[off] as u64,
-                    1 => u16::from_le_bytes(
-                        self.machine.ram[off..off + 2].try_into().unwrap(),
-                    ) as u64,
-                    2 => u32::from_le_bytes(
-                        self.machine.ram[off..off + 4].try_into().unwrap(),
-                    ) as u64,
-                    _ => u64::from_le_bytes(
-                        self.machine.ram[off..off + 8].try_into().unwrap(),
-                    ),
+                    1 => u16::from_le_bytes(self.machine.ram[off..off + 2].try_into().unwrap())
+                        as u64,
+                    2 => u32::from_le_bytes(self.machine.ram[off..off + 4].try_into().unwrap())
+                        as u64,
+                    _ => u64::from_le_bytes(self.machine.ram[off..off + 8].try_into().unwrap()),
                 };
                 if rt != 31 {
                     self.machine.cpu[0].regs[rt] = val;
                 }
             } else {
-                let val = if rt == 31 { 0 } else { self.machine.cpu[0].regs[rt] };
+                let val = if rt == 31 {
+                    0
+                } else {
+                    self.machine.cpu[0].regs[rt]
+                };
                 match size {
                     0 => self.machine.ram[off] = val as u8,
-                    1 => self.machine.ram[off..off + 2]
-                        .copy_from_slice(&(val as u16).to_le_bytes()),
-                    2 => self.machine.ram[off..off + 4]
-                        .copy_from_slice(&(val as u32).to_le_bytes()),
+                    1 => {
+                        self.machine.ram[off..off + 2].copy_from_slice(&(val as u16).to_le_bytes())
+                    }
+                    2 => {
+                        self.machine.ram[off..off + 4].copy_from_slice(&(val as u32).to_le_bytes())
+                    }
                     _ => self.machine.ram[off..off + 8].copy_from_slice(&val.to_le_bytes()),
                 }
             }
@@ -1364,8 +1501,7 @@ impl Orchestrator {
                 // nzcv immediate: bit3=N, bit2=Z, bit1=C, bit0=V.
                 (nzcv_imm & 0xF) << 28
             };
-            self.machine.cpu[0].pstate =
-                (self.machine.cpu[0].pstate & !FLAGS_NZCV_MASK) | new_nzcv;
+            self.machine.cpu[0].pstate = (self.machine.cpu[0].pstate & !FLAGS_NZCV_MASK) | new_nzcv;
             self.machine.cpu[0].pc = pc.wrapping_add(4);
             return Some(Ok(()));
         }
@@ -1377,15 +1513,16 @@ impl Orchestrator {
         // bits[30:24] == 0b1011010. opcode: 000001=REV16,
         // 000010=REV(32-bit)/REV32(64-bit), 000011=REV(64-bit).
         // Rd=31 discards (data-processing Rd is XZR, not SP).
-        if (word >> 24) & 0x7F == 0x5A
-            && (word >> 21) & 0x7 == 0b110
-            && (word >> 16) & 0x1F == 0
-        {
+        if (word >> 24) & 0x7F == 0x5A && (word >> 21) & 0x7 == 0b110 && (word >> 16) & 0x1F == 0 {
             let sf = (word >> 31) & 1;
             let opcode = (word >> 10) & 0x3F;
             let rn = ((word >> 5) & 0x1F) as usize;
             let rd = (word & 0x1F) as usize;
-            let rn_val = if rn == 31 { 0 } else { self.machine.cpu[0].regs[rn] };
+            let rn_val = if rn == 31 {
+                0
+            } else {
+                self.machine.cpu[0].regs[rn]
+            };
             let result = match (sf, opcode) {
                 // REV 64-bit: reverse all 8 bytes.
                 (1, 0b000011) => rn_val.swap_bytes(),
@@ -1439,8 +1576,16 @@ impl Orchestrator {
             let lsb = (word >> 10) & 0x3F;
             let rn = ((word >> 5) & 0x1F) as usize;
             let rd = (word & 0x1F) as usize;
-            let n_val = if rn == 31 { 0 } else { self.machine.cpu[0].regs[rn] };
-            let m_val = if rm == 31 { 0 } else { self.machine.cpu[0].regs[rm] };
+            let n_val = if rn == 31 {
+                0
+            } else {
+                self.machine.cpu[0].regs[rn]
+            };
+            let m_val = if rm == 31 {
+                0
+            } else {
+                self.machine.cpu[0].regs[rm]
+            };
             let result = if sf == 1 {
                 if lsb >= 64 {
                     return None; // UNDEFINED: lsb >= datasize.
@@ -1500,7 +1645,11 @@ impl Orchestrator {
                 };
                 let va = base.wrapping_add(imm12 * nbytes);
                 let is_store = opc == 0b00;
-                let access = if is_store { Access::Write } else { Access::Read };
+                let access = if is_store {
+                    Access::Write
+                } else {
+                    Access::Read
+                };
                 let pa = match self.translate_data_orch(va, access) {
                     Ok(pa) => pa,
                     Err(reason) => return Some(Err(reason)),
@@ -1521,7 +1670,11 @@ impl Orchestrator {
                     }
                 };
                 if is_store {
-                    let val = if rt == 31 { 0 } else { self.machine.cpu[0].regs[rt] };
+                    let val = if rt == 31 {
+                        0
+                    } else {
+                        self.machine.cpu[0].regs[rt]
+                    };
                     match size {
                         0 => self.machine.ram[off] = val as u8,
                         1 => self.machine.ram[off..off + 2]
@@ -1535,21 +1688,23 @@ impl Orchestrator {
                         (0, 0b01) => self.machine.ram[off] as u64, // LDRB
                         (0, 0b10) => ((self.machine.ram[off] as i8) as u32) as u64, // LDRSB W
                         (0, _) => (self.machine.ram[off] as i8) as i64 as u64, // LDRSB X
-                        (1, 0b01) => u16::from_le_bytes(
-                            self.machine.ram[off..off + 2].try_into().unwrap(),
-                        ) as u64, // LDRH
-                        (1, 0b10) => ((i16::from_le_bytes(
-                            self.machine.ram[off..off + 2].try_into().unwrap(),
-                        ) as i32) as u32) as u64, // LDRSH W
-                        (1, _) => (i16::from_le_bytes(
-                            self.machine.ram[off..off + 2].try_into().unwrap(),
-                        ) as i64) as u64, // LDRSH X
-                        (2, _) => u32::from_le_bytes(
-                            self.machine.ram[off..off + 4].try_into().unwrap(),
-                        ) as u64, // LDR W
-                        _ => u64::from_le_bytes(
-                            self.machine.ram[off..off + 8].try_into().unwrap(),
-                        ), // LDR X
+                        (1, 0b01) => {
+                            u16::from_le_bytes(self.machine.ram[off..off + 2].try_into().unwrap())
+                                as u64
+                        } // LDRH
+                        (1, 0b10) => {
+                            ((i16::from_le_bytes(self.machine.ram[off..off + 2].try_into().unwrap())
+                                as i32) as u32) as u64
+                        } // LDRSH W
+                        (1, _) => {
+                            (i16::from_le_bytes(self.machine.ram[off..off + 2].try_into().unwrap())
+                                as i64) as u64
+                        } // LDRSH X
+                        (2, _) => {
+                            u32::from_le_bytes(self.machine.ram[off..off + 4].try_into().unwrap())
+                                as u64
+                        } // LDR W
+                        _ => u64::from_le_bytes(self.machine.ram[off..off + 8].try_into().unwrap()), // LDR X
                     };
                     if rt != 31 {
                         self.machine.cpu[0].regs[rt] = val;
@@ -1584,11 +1739,15 @@ impl Orchestrator {
                     let sp_val = self.machine.cpu[0].sp;
                     let addr = match idx {
                         0b11 => sp_val.wrapping_add(imm9 as u64), // pre-index
-                        0b01 => sp_val,                          // post-index
-                        _ => sp_val.wrapping_add(imm9 as u64),   // unscaled
+                        0b01 => sp_val,                           // post-index
+                        _ => sp_val.wrapping_add(imm9 as u64),    // unscaled
                     };
                     let is_store = opc == 0b00;
-                    let access = if is_store { Access::Write } else { Access::Read };
+                    let access = if is_store {
+                        Access::Write
+                    } else {
+                        Access::Read
+                    };
                     let pa = match self.translate_data_orch(addr, access) {
                         Ok(pa) => pa,
                         Err(reason) => return Some(Err(reason)),
@@ -1603,15 +1762,18 @@ impl Orchestrator {
                         }
                     };
                     if is_store {
-                        let val = if rt == 31 { 0 } else { self.machine.cpu[0].regs[rt] };
+                        let val = if rt == 31 {
+                            0
+                        } else {
+                            self.machine.cpu[0].regs[rt]
+                        };
                         match size {
                             0 => self.machine.ram[off] = val as u8,
                             1 => self.machine.ram[off..off + 2]
                                 .copy_from_slice(&(val as u16).to_le_bytes()),
                             2 => self.machine.ram[off..off + 4]
                                 .copy_from_slice(&(val as u32).to_le_bytes()),
-                            _ => self.machine.ram[off..off + 8]
-                                .copy_from_slice(&val.to_le_bytes()),
+                            _ => self.machine.ram[off..off + 8].copy_from_slice(&val.to_le_bytes()),
                         }
                     } else {
                         let val = match (size, opc) {
@@ -1621,12 +1783,16 @@ impl Orchestrator {
                             (1, 0b01) => u16::from_le_bytes(
                                 self.machine.ram[off..off + 2].try_into().unwrap(),
                             ) as u64,
-                            (1, 0b10) => ((i16::from_le_bytes(
-                                self.machine.ram[off..off + 2].try_into().unwrap(),
-                            ) as i32) as u32) as u64,
-                            (1, _) => (i16::from_le_bytes(
-                                self.machine.ram[off..off + 2].try_into().unwrap(),
-                            ) as i64) as u64,
+                            (1, 0b10) => {
+                                ((i16::from_le_bytes(
+                                    self.machine.ram[off..off + 2].try_into().unwrap(),
+                                ) as i32) as u32) as u64
+                            }
+                            (1, _) => {
+                                (i16::from_le_bytes(
+                                    self.machine.ram[off..off + 2].try_into().unwrap(),
+                                ) as i64) as u64
+                            }
                             (2, _) => u32::from_le_bytes(
                                 self.machine.ram[off..off + 4].try_into().unwrap(),
                             ) as u64,
@@ -1682,7 +1848,11 @@ impl Orchestrator {
                     0b01 => sp as u64,
                     _ => sp.wrapping_add(imm7) as u64,
                 };
-                let access = if is_store { Access::Write } else { Access::Read };
+                let access = if is_store {
+                    Access::Write
+                } else {
+                    Access::Read
+                };
                 let pa = match self.translate_data_orch(va, access) {
                     Ok(pa) => pa,
                     Err(reason) => return Some(Err(reason)),
@@ -1712,14 +1882,21 @@ impl Orchestrator {
                     }
                 };
                 if is_store {
-                    let v1 = if rt1 == 31 { 0 } else { self.machine.cpu[0].regs[rt1] };
-                    let v2 = if rt2 == 31 { 0 } else { self.machine.cpu[0].regs[rt2] };
+                    let v1 = if rt1 == 31 {
+                        0
+                    } else {
+                        self.machine.cpu[0].regs[rt1]
+                    };
+                    let v2 = if rt2 == 31 {
+                        0
+                    } else {
+                        self.machine.cpu[0].regs[rt2]
+                    };
                     if is64 {
                         self.machine.ram[off..off + 8].copy_from_slice(&v1.to_le_bytes());
                         self.machine.ram[off2..off2 + 8].copy_from_slice(&v2.to_le_bytes());
                     } else {
-                        self.machine.ram[off..off + 4]
-                            .copy_from_slice(&(v1 as u32).to_le_bytes());
+                        self.machine.ram[off..off + 4].copy_from_slice(&(v1 as u32).to_le_bytes());
                         self.machine.ram[off2..off2 + 4]
                             .copy_from_slice(&(v2 as u32).to_le_bytes());
                     }
@@ -1734,12 +1911,11 @@ impl Orchestrator {
                         self.machine.cpu[0].regs[rt2] = v2;
                     }
                 } else {
-                    let v1 =
-                        u32::from_le_bytes(self.machine.ram[off..off + 4].try_into().unwrap())
+                    let v1 = u32::from_le_bytes(self.machine.ram[off..off + 4].try_into().unwrap())
+                        as u64;
+                    let v2 =
+                        u32::from_le_bytes(self.machine.ram[off2..off2 + 4].try_into().unwrap())
                             as u64;
-                    let v2 = u32::from_le_bytes(
-                        self.machine.ram[off2..off2 + 4].try_into().unwrap(),
-                    ) as u64;
                     if rt1 != 31 {
                         self.machine.cpu[0].regs[rt1] = v1;
                     }
@@ -1782,7 +1958,11 @@ impl Orchestrator {
                 let s = (word >> 12) & 1;
                 let rn = ((word >> 5) & 0x1F) as usize;
                 let rt = (word & 0x1F) as usize;
-                let rm_val = if rm == 31 { 0 } else { self.machine.cpu[0].regs[rm] };
+                let rm_val = if rm == 31 {
+                    0
+                } else {
+                    self.machine.cpu[0].regs[rm]
+                };
                 // Extend the offset register: option 011/111 names the
                 // 64-bit X[m]; the rest name W[m] with the extend applied.
                 let offset = if option == 0b011 || option == 0b111 {
@@ -1790,12 +1970,12 @@ impl Orchestrator {
                 } else {
                     let w = rm_val as u32;
                     match option {
-                        0b000 => (w as u8) as u64,        // UXTB
-                        0b001 => (w as u16) as u64,       // UXTH
-                        0b010 => w as u64,                // UXTW
-                        0b100 => (w as i8) as i64 as u64, // SXTB
+                        0b000 => (w as u8) as u64,         // UXTB
+                        0b001 => (w as u16) as u64,        // UXTH
+                        0b010 => w as u64,                 // UXTW
+                        0b100 => (w as i8) as i64 as u64,  // SXTB
                         0b101 => (w as i16) as i64 as u64, // SXTH
-                        _ => (w as i32) as i64 as u64,    // SXTW (0b110)
+                        _ => (w as i32) as i64 as u64,     // SXTW (0b110)
                     }
                 };
                 // S=1 shifts left by the access size in bytes (option
@@ -1810,7 +1990,11 @@ impl Orchestrator {
                 let va = base.wrapping_add(offset);
                 let nbytes: u64 = if size == 0 { 1 } else { 2 };
                 let is_store = opc == 0b00;
-                let access = if is_store { Access::Write } else { Access::Read };
+                let access = if is_store {
+                    Access::Write
+                } else {
+                    Access::Read
+                };
                 let pa = match self.translate_data_orch(va, access) {
                     Ok(pa) => pa,
                     Err(reason) => return Some(Err(reason)),
@@ -1825,12 +2009,15 @@ impl Orchestrator {
                     }
                 };
                 if is_store {
-                    let v = if rt == 31 { 0 } else { self.machine.cpu[0].regs[rt] };
+                    let v = if rt == 31 {
+                        0
+                    } else {
+                        self.machine.cpu[0].regs[rt]
+                    };
                     if size == 0 {
                         self.machine.ram[off] = v as u8;
                     } else {
-                        self.machine.ram[off..off + 2]
-                            .copy_from_slice(&(v as u16).to_le_bytes());
+                        self.machine.ram[off..off + 2].copy_from_slice(&(v as u16).to_le_bytes());
                     }
                 } else {
                     let val = match (size, opc) {
@@ -1838,19 +2025,16 @@ impl Orchestrator {
                         (0, 0b10) => ((self.machine.ram[off] as i8) as u32) as u64, // LDRSB W
                         (0, _) => (self.machine.ram[off] as i8) as i64 as u64, // LDRSB X
                         (1, 0b01) => {
-                            u16::from_le_bytes(
-                                self.machine.ram[off..off + 2].try_into().unwrap(),
-                            ) as u64 // LDRH
+                            u16::from_le_bytes(self.machine.ram[off..off + 2].try_into().unwrap())
+                                as u64 // LDRH
                         }
                         (1, 0b10) => {
-                            ((i16::from_le_bytes(
-                                self.machine.ram[off..off + 2].try_into().unwrap(),
-                            ) as i32) as u32) as u64 // LDRSH W
+                            ((i16::from_le_bytes(self.machine.ram[off..off + 2].try_into().unwrap())
+                                as i32) as u32) as u64 // LDRSH W
                         }
                         _ => {
-                            (i16::from_le_bytes(
-                                self.machine.ram[off..off + 2].try_into().unwrap(),
-                            ) as i64) as u64 // LDRSH X
+                            (i16::from_le_bytes(self.machine.ram[off..off + 2].try_into().unwrap())
+                                as i64) as u64 // LDRSH X
                         }
                     };
                     if rt != 31 {
@@ -1895,7 +2079,11 @@ impl Orchestrator {
                 };
                 let nbytes: u64 = if size == 0 { 1 } else { 2 };
                 let is_store = opc == 0b00;
-                let access = if is_store { Access::Write } else { Access::Read };
+                let access = if is_store {
+                    Access::Write
+                } else {
+                    Access::Read
+                };
                 let pa = match self.translate_data_orch(va, access) {
                     Ok(pa) => pa,
                     Err(reason) => return Some(Err(reason)),
@@ -1910,12 +2098,15 @@ impl Orchestrator {
                     }
                 };
                 if is_store {
-                    let v = if rt == 31 { 0 } else { self.machine.cpu[0].regs[rt] };
+                    let v = if rt == 31 {
+                        0
+                    } else {
+                        self.machine.cpu[0].regs[rt]
+                    };
                     if size == 0 {
                         self.machine.ram[off] = v as u8;
                     } else {
-                        self.machine.ram[off..off + 2]
-                            .copy_from_slice(&(v as u16).to_le_bytes());
+                        self.machine.ram[off..off + 2].copy_from_slice(&(v as u16).to_le_bytes());
                     }
                 } else {
                     let val = match (size, opc) {
@@ -1923,19 +2114,16 @@ impl Orchestrator {
                         (0, 0b10) => ((self.machine.ram[off] as i8) as u32) as u64, // LDRSB W
                         (0, _) => (self.machine.ram[off] as i8) as i64 as u64, // LDRSB X
                         (1, 0b01) => {
-                            u16::from_le_bytes(
-                                self.machine.ram[off..off + 2].try_into().unwrap(),
-                            ) as u64 // LDRH
+                            u16::from_le_bytes(self.machine.ram[off..off + 2].try_into().unwrap())
+                                as u64 // LDRH
                         }
                         (1, 0b10) => {
-                            ((i16::from_le_bytes(
-                                self.machine.ram[off..off + 2].try_into().unwrap(),
-                            ) as i32) as u32) as u64 // LDRSH W
+                            ((i16::from_le_bytes(self.machine.ram[off..off + 2].try_into().unwrap())
+                                as i32) as u32) as u64 // LDRSH W
                         }
                         _ => {
-                            (i16::from_le_bytes(
-                                self.machine.ram[off..off + 2].try_into().unwrap(),
-                            ) as i64) as u64 // LDRSH X
+                            (i16::from_le_bytes(self.machine.ram[off..off + 2].try_into().unwrap())
+                                as i64) as u64 // LDRSH X
                         }
                     };
                     if rt != 31 {
@@ -2617,14 +2805,12 @@ impl HostOps for WasmHost<'_> {
     }
 
     fn sysreg_load(&mut self, reg: u8) -> Result<i64, String> {
-        let sel = SysRegs::from_index(reg)
-            .ok_or_else(|| format!("sysreg_load: bad index"))?;
+        let sel = SysRegs::from_index(reg).ok_or_else(|| format!("sysreg_load: bad index"))?;
         Ok(self.sysregs.load(sel) as i64)
     }
 
     fn sysreg_store(&mut self, reg: u8, val: i64) -> Result<(), String> {
-        let sel = SysRegs::from_index(reg)
-            .ok_or_else(|| format!("sysreg_store: bad index"))?;
+        let sel = SysRegs::from_index(reg).ok_or_else(|| format!("sysreg_store: bad index"))?;
         self.sysregs.store(sel, val as u64);
         Ok(())
     }
@@ -3305,7 +3491,7 @@ mod tests {
         let mut o = Orchestrator::new();
         o.load_image(&minimal_image(0x4000_0000, &words)).unwrap();
         o.machine_mut().cpu[0].regs[0] = (-5i64) as u64; // (-5) + 5 == 0 -> Z=1
-        o.machine_mut().cpu[0].regs[2] = 0xFF;           // (-5) & 0xFF != 0 -> Z=0
+        o.machine_mut().cpu[0].regs[2] = 0xFF; // (-5) & 0xFF != 0 -> Z=0
 
         let halt = o.run_until_halt(100);
         assert_eq!(halt, HaltReason::Wfi { addr: 0x4000_0018 });
@@ -3478,9 +3664,7 @@ mod tests {
         // Known pattern at physical 0x416AB158.
         let off = (0x416A_B158 - RAM_BASE) as usize;
         p.ram[off..off + 8].copy_from_slice(&0x1122_3344_5566_7788u64.to_le_bytes());
-        let got = with_host(&mut p, |h| {
-            h.mem_load(0xFFFF_FF80_096A_B158u64 as i64, 8)
-        });
+        let got = with_host(&mut p, |h| h.mem_load(0xFFFF_FF80_096A_B158u64 as i64, 8));
         assert_eq!(got, Ok(0x1122_3344_5566_7788u64 as i64));
     }
 
@@ -3620,7 +3804,9 @@ mod tests {
         assert!(
             matches!(
                 outcome,
-                StepOutcome::Halted(HaltReason::FetchFault { addr: 0xffff_ff80_096a_b000 })
+                StepOutcome::Halted(HaltReason::FetchFault {
+                    addr: 0xffff_ff80_096a_b000
+                })
             ),
             "expected FetchFault, got: {outcome:?}"
         );
@@ -3738,8 +3924,7 @@ mod tests {
         let mut o = sp_test_orchestrator(pc, sp, 0xA97F_0BE1);
         let s = (sp - 16 - RAM_BASE) as usize;
         o.machine_mut().ram[s..s + 8].copy_from_slice(&0xAAAA_AAAA_AAAA_AAAAu64.to_le_bytes());
-        o.machine_mut().ram[s + 8..s + 16]
-            .copy_from_slice(&0xBBBB_BBBB_BBBB_BBBBu64.to_le_bytes());
+        o.machine_mut().ram[s + 8..s + 16].copy_from_slice(&0xBBBB_BBBB_BBBB_BBBBu64.to_le_bytes());
         let outcome = o.step_vcpu();
         assert!(
             matches!(outcome, StepOutcome::Continue),
@@ -3786,8 +3971,7 @@ mod tests {
         let mut o = sp_test_orchestrator(pc, sp, 0xA9C1_7BFD);
         let s = (sp + 16 - RAM_BASE) as usize;
         o.machine_mut().ram[s..s + 8].copy_from_slice(&0xCCCC_CCCC_CCCC_CCCCu64.to_le_bytes());
-        o.machine_mut().ram[s + 8..s + 16]
-            .copy_from_slice(&0xDDDD_DDDD_DDDD_DDDDu64.to_le_bytes());
+        o.machine_mut().ram[s + 8..s + 16].copy_from_slice(&0xDDDD_DDDD_DDDD_DDDDu64.to_le_bytes());
         let outcome = o.step_vcpu();
         assert!(
             matches!(outcome, StepOutcome::Continue),

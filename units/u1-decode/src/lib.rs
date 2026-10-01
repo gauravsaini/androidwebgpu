@@ -20,8 +20,8 @@
 //! (ADDS/SUBS, MOVK, extended-register ADD, AND/ANDS, BR/BLR, SIMD …) are also
 //! Illegal: this unit claims only what LLD §U1 lists, never fake-decodes.
 
-use pathn_contracts::cpu::{DecodeResult, InsnKind, Instruction};
 pub use pathn_contracts::cpu::decode_bitmasks;
+use pathn_contracts::cpu::{DecodeResult, InsnKind, Instruction};
 
 /// Decode one 32-bit AArch64 instruction word.
 ///
@@ -237,7 +237,7 @@ fn decode_ldst(word: u32) -> Option<InsnKind> {
             0b00 => Some(InsnKind::LoadStore),            // 32-bit STP / LDP
             0b01 if is_load => Some(InsnKind::LoadStore), // LDPSW
             0b10 => Some(InsnKind::LoadStore),            // 64-bit STP / LDP
-            _ => None,                                   // 01 with store or 11: unallocated
+            _ => None,                                    // 01 with store or 11: unallocated
         };
     }
 
@@ -257,8 +257,8 @@ fn decode_ldst(word: u32) -> Option<InsnKind> {
         let size_bits = (word >> 30) & 0x3;
         let opc = (word >> 22) & 0x3;
         return match opc {
-            0b00 => Some(InsnKind::LoadStore),                   // STR (B, H, W, X)
-            0b01 => Some(InsnKind::LoadStore),                   // LDR (B, H, W, X)
+            0b00 => Some(InsnKind::LoadStore), // STR (B, H, W, X)
+            0b01 => Some(InsnKind::LoadStore), // LDR (B, H, W, X)
             0b10 if size_bits == 2 => Some(InsnKind::LoadStore), // LDRSW
             _ => None,
         };
@@ -504,7 +504,7 @@ mod tests {
         assert_eq!(ok_kind(0xEA02_0020), InsnKind::DataProc); // ANDS X0, X1, X2
         assert_eq!(ok_kind(0xEA03_003F), InsnKind::DataProc); // TST X1, X3 = ANDS XZR, X1, X3 (kernel 0x40004d78)
         assert_eq!(ok_kind(0xEA22_0020), InsnKind::DataProc); // BICS X0, X1, X2
-        // 32-bit forms
+                                                              // 32-bit forms
         assert_eq!(ok_kind(0x0A02_0020), InsnKind::DataProc); // AND W0, W1, W2
         assert_eq!(ok_kind(0x0A22_0020), InsnKind::DataProc); // BIC W0, W1, W2
     }
@@ -515,7 +515,7 @@ mod tests {
         assert_eq!(ok_kind(0x9AC3_2442), InsnKind::DataProc); // LSR X2, X2, X3
         assert_eq!(ok_kind(0x9AC3_2842), InsnKind::DataProc); // ASR X2, X2, X3
         assert_eq!(ok_kind(0x9AC3_2C42), InsnKind::DataProc); // ROR X2, X2, X3
-        // 32-bit forms
+                                                              // 32-bit forms
         assert_eq!(ok_kind(0x1AC3_2042), InsnKind::DataProc); // LSL W2, W2, W3
     }
 
@@ -525,25 +525,52 @@ mod tests {
         assert_eq!(decode_bitmasks(1, 20, 0, true), Some(0x0000_0000_001F_FFFF));
 
         // 2. Alternating bits 0x5555_5555_5555_5555 (len=1, esize=2, S=0, R=0)
-        assert_eq!(decode_bitmasks(0, 0b111100, 0, true), Some(0x5555_5555_5555_5555));
+        assert_eq!(
+            decode_bitmasks(0, 0b111100, 0, true),
+            Some(0x5555_5555_5555_5555)
+        );
         // Alternating bits inverted (R=1) -> 0xAAAA_AAAA_AAAA_AAAA
-        assert_eq!(decode_bitmasks(0, 0b111100, 1, true), Some(0xAAAA_AAAA_AAAA_AAAA));
+        assert_eq!(
+            decode_bitmasks(0, 0b111100, 1, true),
+            Some(0xAAAA_AAAA_AAAA_AAAA)
+        );
 
         // 3. Alternating pairs 0x3333_3333_3333_3333 (len=2, esize=4, S=1, R=0)
-        assert_eq!(decode_bitmasks(0, 0b111001, 0, true), Some(0x3333_3333_3333_3333));
+        assert_eq!(
+            decode_bitmasks(0, 0b111001, 0, true),
+            Some(0x3333_3333_3333_3333)
+        );
         // Inverted pairs (R=2) -> 0xCCCC_CCCC_CCCC_CCCC
-        assert_eq!(decode_bitmasks(0, 0b111001, 2, true), Some(0xCCCC_CCCC_CCCC_CCCC));
+        assert_eq!(
+            decode_bitmasks(0, 0b111001, 2, true),
+            Some(0xCCCC_CCCC_CCCC_CCCC)
+        );
 
         // 4. Alternating nibbles 0x0F0F_0F0F_0F0F_0F0F (len=3, esize=8, S=3, R=0)
-        assert_eq!(decode_bitmasks(0, 0b110011, 0, true), Some(0x0F0F_0F0F_0F0F_0F0F));
-        assert_eq!(decode_bitmasks(0, 0b110011, 4, true), Some(0xF0F0_F0F0_F0F0_F0F0));
+        assert_eq!(
+            decode_bitmasks(0, 0b110011, 0, true),
+            Some(0x0F0F_0F0F_0F0F_0F0F)
+        );
+        assert_eq!(
+            decode_bitmasks(0, 0b110011, 4, true),
+            Some(0xF0F0_F0F0_F0F0_F0F0)
+        );
 
         // 5. Alternating bytes 0x00FF_00FF_00FF_00FF (len=4, esize=16, S=7, R=0)
-        assert_eq!(decode_bitmasks(0, 0b100111, 0, true), Some(0x00FF_00FF_00FF_00FF));
-        assert_eq!(decode_bitmasks(0, 0b100111, 8, true), Some(0xFF00_FF00_FF00_FF00));
+        assert_eq!(
+            decode_bitmasks(0, 0b100111, 0, true),
+            Some(0x00FF_00FF_00FF_00FF)
+        );
+        assert_eq!(
+            decode_bitmasks(0, 0b100111, 8, true),
+            Some(0xFF00_FF00_FF00_FF00)
+        );
 
         // 6. Halfwords 0x0000_FFFF_0000_FFFF (len=5, esize=32, S=15, R=0)
-        assert_eq!(decode_bitmasks(0, 0b001111, 0, true), Some(0x0000_FFFF_0000_FFFF));
+        assert_eq!(
+            decode_bitmasks(0, 0b001111, 0, true),
+            Some(0x0000_FFFF_0000_FFFF)
+        );
 
         // 7. 32-bit forms (must be masked to 32 bits, and N=1 is illegal)
         assert_eq!(decode_bitmasks(0, 0b011110, 0, false), Some(0x7FFF_FFFF));
@@ -791,7 +818,6 @@ mod tests {
 
     // ---- GB-2: branches + flags golden words ----
 
-
     #[test]
     fn dmb_sy_is_system() {
         assert_eq!(ok_kind(0xD503_3FBF), InsnKind::System); // DMB sy
@@ -904,7 +930,7 @@ mod tests {
         assert_eq!(ok_kind(0x9A85_84C5), InsnKind::DataProc); // CSINC
         assert_eq!(ok_kind(0xDA80_202A), InsnKind::DataProc); // CSINV (kernel)
         assert_eq!(ok_kind(0xDA85_84C5), InsnKind::DataProc); // CSNEG
-        // 32-bit form classifies too (sf=0: 0x1A...).
+                                                              // 32-bit form classifies too (sf=0: 0x1A...).
         assert_eq!(ok_kind(0x1A85_80C5), InsnKind::DataProc);
     }
 

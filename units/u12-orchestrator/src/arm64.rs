@@ -19,21 +19,21 @@ pub fn condition_holds(cond: u8, pstate: u64) -> bool {
     let c = ((pstate >> 29) & 1) != 0;
     let v = ((pstate >> 28) & 1) != 0;
     match cond & 0xF {
-        0b0000 => z,                  // EQ: Z == 1
-        0b0001 => !z,                 // NE: Z == 0
-        0b0010 => c,                  // CS / HS: C == 1
-        0b0011 => !c,                 // CC / LO: C == 0
-        0b0100 => n,                  // MI: N == 1
-        0b0101 => !n,                 // PL: N == 0
-        0b0110 => v,                  // VS: V == 1
-        0b0111 => !v,                 // VC: V == 0
-        0b1000 => c && !z,            // HI: C == 1 and Z == 0
-        0b1001 => !c || z,            // LS: !(C == 1 and Z == 0)
-        0b1010 => n == v,             // GE: N == V
-        0b1011 => n != v,             // LT: N != V
-        0b1100 => !z && (n == v),     // GT: Z == 0 and N == V
-        0b1101 => z || (n != v),      // LE: !(Z == 0 and N == V)
-        0b1110 | 0b1111 => true,      // AL / NV: Always
+        0b0000 => z,              // EQ: Z == 1
+        0b0001 => !z,             // NE: Z == 0
+        0b0010 => c,              // CS / HS: C == 1
+        0b0011 => !c,             // CC / LO: C == 0
+        0b0100 => n,              // MI: N == 1
+        0b0101 => !n,             // PL: N == 0
+        0b0110 => v,              // VS: V == 1
+        0b0111 => !v,             // VC: V == 0
+        0b1000 => c && !z,        // HI: C == 1 and Z == 0
+        0b1001 => !c || z,        // LS: !(C == 1 and Z == 0)
+        0b1010 => n == v,         // GE: N == V
+        0b1011 => n != v,         // LT: N != V
+        0b1100 => !z && (n == v), // GT: Z == 0 and N == V
+        0b1101 => z || (n != v),  // LE: !(Z == 0 and N == V)
+        0b1110 | 0b1111 => true,  // AL / NV: Always
         _ => unreachable!(),
     }
 }
@@ -143,7 +143,11 @@ pub fn decode_logical_immediate(sf: u8, n: u8, immr: u8, imms: u8) -> Option<u64
     let ror = if r == 0 {
         ones
     } else {
-        let mask = if esize == 64 { u64::MAX } else { (1u64 << esize) - 1 };
+        let mask = if esize == 64 {
+            u64::MAX
+        } else {
+            (1u64 << esize) - 1
+        };
         let lo = (ones & mask) >> r;
         let hi = (ones & mask) << (esize - r);
         (lo | hi) & mask
@@ -167,67 +171,67 @@ mod tests {
     #[test]
     fn test_condition_codes_eq_ne() {
         assert!(condition_holds(0b0000, FLAG_Z)); // EQ with Z=1
-        assert!(!condition_holds(0b0000, 0));      // EQ with Z=0
-        assert!(condition_holds(0b0001, 0));       // NE with Z=0
+        assert!(!condition_holds(0b0000, 0)); // EQ with Z=0
+        assert!(condition_holds(0b0001, 0)); // NE with Z=0
         assert!(!condition_holds(0b0001, FLAG_Z)); // NE with Z=1
     }
 
     #[test]
     fn test_condition_codes_cs_cc() {
         assert!(condition_holds(0b0010, FLAG_C)); // CS with C=1
-        assert!(!condition_holds(0b0010, 0));      // CS with C=0
-        assert!(condition_holds(0b0011, 0));       // CC with C=0
+        assert!(!condition_holds(0b0010, 0)); // CS with C=0
+        assert!(condition_holds(0b0011, 0)); // CC with C=0
         assert!(!condition_holds(0b0011, FLAG_C)); // CC with C=1
     }
 
     #[test]
     fn test_condition_codes_mi_pl() {
         assert!(condition_holds(0b0100, FLAG_N)); // MI with N=1
-        assert!(!condition_holds(0b0100, 0));      // MI with N=0
-        assert!(condition_holds(0b0101, 0));       // PL with N=0
+        assert!(!condition_holds(0b0100, 0)); // MI with N=0
+        assert!(condition_holds(0b0101, 0)); // PL with N=0
         assert!(!condition_holds(0b0101, FLAG_N)); // PL with N=1
     }
 
     #[test]
     fn test_condition_codes_vs_vc() {
         assert!(condition_holds(0b0110, FLAG_V)); // VS with V=1
-        assert!(!condition_holds(0b0110, 0));      // VS with V=0
-        assert!(condition_holds(0b0111, 0));       // VC with V=0
+        assert!(!condition_holds(0b0110, 0)); // VS with V=0
+        assert!(condition_holds(0b0111, 0)); // VC with V=0
         assert!(!condition_holds(0b0111, FLAG_V)); // VC with V=1
     }
 
     #[test]
     fn test_condition_codes_hi_ls() {
-        assert!(condition_holds(0b1000, FLAG_C));          // HI: C=1 and Z=0
+        assert!(condition_holds(0b1000, FLAG_C)); // HI: C=1 and Z=0
         assert!(!condition_holds(0b1000, FLAG_C | FLAG_Z)); // HI: C=1 and Z=1 -> false
-        assert!(!condition_holds(0b1000, 0));               // HI: C=0 -> false
+        assert!(!condition_holds(0b1000, 0)); // HI: C=0 -> false
 
-        assert!(condition_holds(0b1001, 0));                // LS: C=0 -> true
-        assert!(condition_holds(0b1001, FLAG_C | FLAG_Z));  // LS: Z=1 -> true
-        assert!(!condition_holds(0b1001, FLAG_C));          // LS: C=1 and Z=0 -> false
+        assert!(condition_holds(0b1001, 0)); // LS: C=0 -> true
+        assert!(condition_holds(0b1001, FLAG_C | FLAG_Z)); // LS: Z=1 -> true
+        assert!(!condition_holds(0b1001, FLAG_C)); // LS: C=1 and Z=0 -> false
     }
 
     #[test]
     fn test_condition_codes_ge_lt() {
-        assert!(condition_holds(0b1010, 0));               // GE: N=0, V=0 -> true
+        assert!(condition_holds(0b1010, 0)); // GE: N=0, V=0 -> true
         assert!(condition_holds(0b1010, FLAG_N | FLAG_V)); // GE: N=1, V=1 -> true
-        assert!(!condition_holds(0b1010, FLAG_N));         // GE: N=1, V=0 -> false
-        assert!(!condition_holds(0b1010, FLAG_V));         // GE: N=0, V=1 -> false
+        assert!(!condition_holds(0b1010, FLAG_N)); // GE: N=1, V=0 -> false
+        assert!(!condition_holds(0b1010, FLAG_V)); // GE: N=0, V=1 -> false
 
-        assert!(condition_holds(0b1011, FLAG_N));          // LT: N=1, V=0 -> true
-        assert!(condition_holds(0b1011, FLAG_V));          // LT: N=0, V=1 -> true
-        assert!(!condition_holds(0b1011, 0));              // LT: N=0, V=0 -> false
+        assert!(condition_holds(0b1011, FLAG_N)); // LT: N=1, V=0 -> true
+        assert!(condition_holds(0b1011, FLAG_V)); // LT: N=0, V=1 -> true
+        assert!(!condition_holds(0b1011, 0)); // LT: N=0, V=0 -> false
     }
 
     #[test]
     fn test_condition_codes_gt_le() {
-        assert!(condition_holds(0b1100, 0));               // GT: Z=0, N=0, V=0 -> true
-        assert!(!condition_holds(0b1100, FLAG_Z));         // GT: Z=1 -> false
-        assert!(!condition_holds(0b1100, FLAG_N));         // GT: N!=V -> false
+        assert!(condition_holds(0b1100, 0)); // GT: Z=0, N=0, V=0 -> true
+        assert!(!condition_holds(0b1100, FLAG_Z)); // GT: Z=1 -> false
+        assert!(!condition_holds(0b1100, FLAG_N)); // GT: N!=V -> false
 
-        assert!(condition_holds(0b1101, FLAG_Z));          // LE: Z=1 -> true
-        assert!(condition_holds(0b1101, FLAG_N));          // LE: N!=V -> true
-        assert!(!condition_holds(0b1101, 0));              // LE: Z=0, N==V -> false
+        assert!(condition_holds(0b1101, FLAG_Z)); // LE: Z=1 -> true
+        assert!(condition_holds(0b1101, FLAG_N)); // LE: N!=V -> true
+        assert!(!condition_holds(0b1101, 0)); // LE: Z=0, N==V -> false
     }
 
     #[test]

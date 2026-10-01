@@ -78,12 +78,12 @@ const R_SUB32_REG: &str = "DataProc: 32-bit SUB register width is not expressibl
 fn daif_imm_mask(imm: u32) -> u64 {
     ((imm & 0xF) as u64) << 6
 }
-const R_SUB_SHIFT: &str =
-    "DataProc: shifted SUB register operand is not expressible in IrOp";
+const R_SUB_SHIFT: &str = "DataProc: shifted SUB register operand is not expressible in IrOp";
 const R_CLZ32: &str = "DataProc: 32-bit CLZ width is not expressible in IrOp::Clz";
 const R_MADD32: &str = "DataProc: 32-bit MADD width is not expressible in IrOp::Madd";
 const R_MSUB: &str = "DataProc: MSUB is not implemented (GB-8 is MADD-64 only)";
-const R_MADD_LONG: &str = "DataProc: long-multiply (SMADDL/UMADDL/SMSUBL/UMSUBL/SMULH/UMULH) is not implemented";
+const R_MADD_LONG: &str =
+    "DataProc: long-multiply (SMADDL/UMADDL/SMSUBL/UMSUBL/SMULH/UMULH) is not implemented";
 const R_ADD32_REG: &str = "DataProc: 32-bit ADD register width is not expressible in IrOp::Add";
 const R_ADD_SHIFT: &str =
     "DataProc: shifted or extended ADD register operand is not expressible in IrOp";
@@ -203,85 +203,90 @@ fn lift_system(word: u32) -> Vec<IrOp> {
             (3, 0, 2, 0, 0) => SysReg::Ttbr0El1,
             // TTBR1_EL1 (GB-19): kernel programs translation table base 1 via MSR TTBR1_EL1
             (3, 0, 2, 0, 1) => SysReg::Ttbr1El1,
-            _ => return {
-                let val: u64 = match (op0, op1, crn, crm, op2) {
-                    // CurrentEL: bits[3:2] = 0b01 (EL1) -> 0x4
-                    (3, 0, 4, 2, 2) => 0x4,
-                    // CTR_EL0: Cache Type Register (64B D-cache, 64B I-cache)
-                    (3, 3, 0, 0, 1) => 0x8444_c004,
-                    // NZCV: stays in GB-2 live pstate flag path
-                    (3, 3, 4, 2, 0) => 0,
-                    // ID_AA64PFR0_EL1: EL0/EL1 AArch64 supported
-                    (3, 0, 0, 4, 0) => 0x11,
-                    // ID_AA64MMFR2_EL1 (GB-16: was mislabeled ID_AA64MMFR1_EL1;
-                    // (3,0,0,7,1) is the real ID_AA64MMFR1_EL1 -- see below)
-                    (3, 0, 0, 7, 2) => 0,
-                    // ID_AA64DFR0_EL1
-                    (3, 0, 0, 5, 0) => 0,
-                    // ID_AA64MMFR0_EL1 (GB-14): measured halt at step 7474
-                    // (pc 0x40c03694, word 0xd5380705 = MRS X5,
-                    // S3_0_C0_C7_0 -- fields extracted by hand from the
-                    // word, not trusted from the first reading). Value 0
-                    // = no memory-model features advertised, matching the
-                    // sibling ID_AA64MMFR1_EL1 / ID_AA64DFR0_EL1 reads.
-                    // The kernel only feature-probes this register
-                    // (MRS -> bitfield extract -> compare -> conditional
-                    // branch, same shape as the ID_AA64DFR0_EL1 probe at
-                    // steps 7462-7465), so 0 takes the honest conservative
-                    // fallback path.
-                    (3, 0, 0, 7, 0) => 0,
-                    // ID_AA64MMFR1_EL1 (GB-16): measured halt at step 7480
-                    // (pc 0x40c036ac, word 0xd5380729 = MRS X9,
-                    // S3_0_C0_C7_1 -- (op0,op1,crn,crm,op2) = (3,0,0,7,1)
-                    // extracted by hand from the word and confirmed by
-                    // aarch64-linux-gnu-objdump; not trusted from the
-                    // first reading). Value 0 = no memory-model features
-                    // advertised, matching the sibling ID_AA64MMFR0_EL1 /
-                    // ID_AA64DFR0_EL1 / ID_AA64MMFR2_EL1 reads. The kernel
-                    // only feature-probes this register (MRS -> AND #0xF
-                    // -> CBZ), so 0 takes the honest conservative
-                    // fallback path.
-                    (3, 0, 0, 7, 1) => 0,
-                    // DCZID_EL0 (GB-26): measured halt at step 1210749
-                    // (pc 0xffffff8008209d80, word 0xd53b00e3 = MRS X3,
-                    // S3_3_C0_C0_7 -- (op0,op1,crn,crm,op2) = (3,3,0,0,7)
-                    // extracted by hand from the word and confirmed by
-                    // capstone disassembly; not trusted from the first
-                    // reading). Value 0x10: DZP=1 (DC ZVA prohibited).
-                    // Our DC ops are honest NOPs, so advertising "allowed"
-                    // would corrupt memory the kernel expects zeroed;
-                    // DZP=1 takes the kernel's store-based fallback path,
-                    // which we implement. Same conservative shape as the
-                    // GB-14/GB-16 ID-register probes.
-                    (3, 3, 0, 0, 7) => 0x10,
-                    // MPIDR_EL1 (GB-26): measured halt at step 1248961
-                    // (pc 0xffffff80095d2620, word 0xd53800a9 = MRS X9,
-                    // S3_0_C0_C0_5 -- (op0,op1,crn,crm,op2) = (3,0,0,0,5)
-                    // confirmed by capstone disassembly). Value
-                    // 0x40000000: U (bit 30) = 1, uniprocessor system;
-                    // Aff0 = 0, this is the single vCPU 0. The kernel
-                    // derives its CPU number from MPIDR; this is the
-                    // architecturally correct single-CPU value.
-                    // (Fixed: old 0x80000000 set RES0 bit 31, not U.)
-                    (3, 0, 0, 0, 5) => 0x4000_0000,
-                    // MIDR_EL1 (GB-26): measured halt at step 1248969
-                    // (pc 0xffffff80095d2640, word 0xd5380002 = MRS X2,
-                    // S3_0_C0_C0_0 -- (op0,op1,crn,crm,op2) = (3,0,0,0,0)
-                    // confirmed by capstone disassembly). Value 0: no
-                    // implementer/part advertised, so the kernel's errata
-                    // framework matches nothing and takes the generic
-                    // path -- same conservative shape as the GB-14/GB-16
-                    // ID-register probes. (Deliberately NOT a real
-                    // Cortex-A57 MIDR: claiming real silicon would invite
-                    // errata workarounds that poke IMPLEMENTATION DEFINED
-                    // registers we don't model.)
-                    (3, 0, 0, 0, 0) => 0,
-                    _ => return trap(R_SYSTEM),
-                };
-                vec![IrOp::Mov { dst: rt, imm: val }]
-            },
+            _ => {
+                return {
+                    let val: u64 = match (op0, op1, crn, crm, op2) {
+                        // CurrentEL: bits[3:2] = 0b01 (EL1) -> 0x4
+                        (3, 0, 4, 2, 2) => 0x4,
+                        // CTR_EL0: Cache Type Register (64B D-cache, 64B I-cache)
+                        (3, 3, 0, 0, 1) => 0x8444_c004,
+                        // NZCV: stays in GB-2 live pstate flag path
+                        (3, 3, 4, 2, 0) => 0,
+                        // ID_AA64PFR0_EL1: EL0/EL1 AArch64 supported
+                        (3, 0, 0, 4, 0) => 0x11,
+                        // ID_AA64MMFR2_EL1 (GB-16: was mislabeled ID_AA64MMFR1_EL1;
+                        // (3,0,0,7,1) is the real ID_AA64MMFR1_EL1 -- see below)
+                        (3, 0, 0, 7, 2) => 0,
+                        // ID_AA64DFR0_EL1
+                        (3, 0, 0, 5, 0) => 0,
+                        // ID_AA64MMFR0_EL1 (GB-14): measured halt at step 7474
+                        // (pc 0x40c03694, word 0xd5380705 = MRS X5,
+                        // S3_0_C0_C7_0 -- fields extracted by hand from the
+                        // word, not trusted from the first reading). Value 0
+                        // = no memory-model features advertised, matching the
+                        // sibling ID_AA64MMFR1_EL1 / ID_AA64DFR0_EL1 reads.
+                        // The kernel only feature-probes this register
+                        // (MRS -> bitfield extract -> compare -> conditional
+                        // branch, same shape as the ID_AA64DFR0_EL1 probe at
+                        // steps 7462-7465), so 0 takes the honest conservative
+                        // fallback path.
+                        (3, 0, 0, 7, 0) => 0,
+                        // ID_AA64MMFR1_EL1 (GB-16): measured halt at step 7480
+                        // (pc 0x40c036ac, word 0xd5380729 = MRS X9,
+                        // S3_0_C0_C7_1 -- (op0,op1,crn,crm,op2) = (3,0,0,7,1)
+                        // extracted by hand from the word and confirmed by
+                        // aarch64-linux-gnu-objdump; not trusted from the
+                        // first reading). Value 0 = no memory-model features
+                        // advertised, matching the sibling ID_AA64MMFR0_EL1 /
+                        // ID_AA64DFR0_EL1 / ID_AA64MMFR2_EL1 reads. The kernel
+                        // only feature-probes this register (MRS -> AND #0xF
+                        // -> CBZ), so 0 takes the honest conservative
+                        // fallback path.
+                        (3, 0, 0, 7, 1) => 0,
+                        // DCZID_EL0 (GB-26): measured halt at step 1210749
+                        // (pc 0xffffff8008209d80, word 0xd53b00e3 = MRS X3,
+                        // S3_3_C0_C0_7 -- (op0,op1,crn,crm,op2) = (3,3,0,0,7)
+                        // extracted by hand from the word and confirmed by
+                        // capstone disassembly; not trusted from the first
+                        // reading). Value 0x10: DZP=1 (DC ZVA prohibited).
+                        // Our DC ops are honest NOPs, so advertising "allowed"
+                        // would corrupt memory the kernel expects zeroed;
+                        // DZP=1 takes the kernel's store-based fallback path,
+                        // which we implement. Same conservative shape as the
+                        // GB-14/GB-16 ID-register probes.
+                        (3, 3, 0, 0, 7) => 0x10,
+                        // MPIDR_EL1 (GB-26): measured halt at step 1248961
+                        // (pc 0xffffff80095d2620, word 0xd53800a9 = MRS X9,
+                        // S3_0_C0_C0_5 -- (op0,op1,crn,crm,op2) = (3,0,0,0,5)
+                        // confirmed by capstone disassembly). Value
+                        // 0x40000000: U (bit 30) = 1, uniprocessor system;
+                        // Aff0 = 0, this is the single vCPU 0. The kernel
+                        // derives its CPU number from MPIDR; this is the
+                        // architecturally correct single-CPU value.
+                        // (Fixed: old 0x80000000 set RES0 bit 31, not U.)
+                        (3, 0, 0, 0, 5) => 0x4000_0000,
+                        // MIDR_EL1 (GB-26): measured halt at step 1248969
+                        // (pc 0xffffff80095d2640, word 0xd5380002 = MRS X2,
+                        // S3_0_C0_C0_0 -- (op0,op1,crn,crm,op2) = (3,0,0,0,0)
+                        // confirmed by capstone disassembly). Value 0: no
+                        // implementer/part advertised, so the kernel's errata
+                        // framework matches nothing and takes the generic
+                        // path -- same conservative shape as the GB-14/GB-16
+                        // ID-register probes. (Deliberately NOT a real
+                        // Cortex-A57 MIDR: claiming real silicon would invite
+                        // errata workarounds that poke IMPLEMENTATION DEFINED
+                        // registers we don't model.)
+                        (3, 0, 0, 0, 0) => 0,
+                        _ => return trap(R_SYSTEM),
+                    };
+                    vec![IrOp::Mov { dst: rt, imm: val }]
+                }
+            }
         };
-        return vec![IrOp::ReadSys { dst: rt, reg: persistent }];
+        return vec![IrOp::ReadSys {
+            dst: rt,
+            reg: persistent,
+        }];
     }
     // MSR <sysreg>, Xt or MSR <pstatefield>, #imm: bit 21 == 0.
     if (word >> 22) & 0x3FF == 0x354 && ((word >> 21) & 1) == 0 {
@@ -335,18 +340,23 @@ fn lift_system(word: u32) -> Vec<IrOp> {
                 let clr = daif_imm_mask(imm);
                 return vec![IrOp::DaifRmw { set: 0, clr }];
             }
-            _ => return {
-                match (op0, op1, crn, crm, op2) {
-                    // NZCV: GB-2 live flag path (flags, not a stored register)
-                    (3, 3, 4, 2, 0) => vec![],
-                    // SPSel: accepted no-op (GB-3). DAIFSet/DAIFClr are real
-                    // read-modify-write ops now (GB-11); see the arms above.
-                    (0, 0, 4, 1, 5) => vec![],
-                    _ => return trap(R_SYSTEM),
+            _ => {
+                return {
+                    match (op0, op1, crn, crm, op2) {
+                        // NZCV: GB-2 live flag path (flags, not a stored register)
+                        (3, 3, 4, 2, 0) => vec![],
+                        // SPSel: accepted no-op (GB-3). DAIFSet/DAIFClr are real
+                        // read-modify-write ops now (GB-11); see the arms above.
+                        (0, 0, 4, 1, 5) => vec![],
+                        _ => return trap(R_SYSTEM),
+                    }
                 }
-            },
+            }
         };
-        return vec![IrOp::WriteSys { src: rt, reg: persistent }];
+        return vec![IrOp::WriteSys {
+            src: rt,
+            reg: persistent,
+        }];
     }
     trap(R_SYSTEM)
 }
@@ -764,25 +774,86 @@ fn lift_load_store(insn: &Instruction) -> Vec<IrOp> {
         if is_load {
             if is_signed {
                 // LDPSW: load signed words into 64-bit registers
-                ops.push(IrOp::LoadDyn { dst: SCRATCH, base: rn, off: base_off as u64, size: 4 });
-                ops.push(IrOp::OrrShift { dst: SCRATCH, a: 31, b: SCRATCH, shift: 0, amount: 32 });
-                ops.push(IrOp::OrrShift { dst: rt, a: 31, b: SCRATCH, shift: 2, amount: 32 });
+                ops.push(IrOp::LoadDyn {
+                    dst: SCRATCH,
+                    base: rn,
+                    off: base_off as u64,
+                    size: 4,
+                });
+                ops.push(IrOp::OrrShift {
+                    dst: SCRATCH,
+                    a: 31,
+                    b: SCRATCH,
+                    shift: 0,
+                    amount: 32,
+                });
+                ops.push(IrOp::OrrShift {
+                    dst: rt,
+                    a: 31,
+                    b: SCRATCH,
+                    shift: 2,
+                    amount: 32,
+                });
 
-                ops.push(IrOp::LoadDyn { dst: SCRATCH, base: rn, off: (base_off + 4) as u64, size: 4 });
-                ops.push(IrOp::OrrShift { dst: SCRATCH, a: 31, b: SCRATCH, shift: 0, amount: 32 });
-                ops.push(IrOp::OrrShift { dst: rt2, a: 31, b: SCRATCH, shift: 2, amount: 32 });
+                ops.push(IrOp::LoadDyn {
+                    dst: SCRATCH,
+                    base: rn,
+                    off: (base_off + 4) as u64,
+                    size: 4,
+                });
+                ops.push(IrOp::OrrShift {
+                    dst: SCRATCH,
+                    a: 31,
+                    b: SCRATCH,
+                    shift: 0,
+                    amount: 32,
+                });
+                ops.push(IrOp::OrrShift {
+                    dst: rt2,
+                    a: 31,
+                    b: SCRATCH,
+                    shift: 2,
+                    amount: 32,
+                });
             } else {
-                ops.push(IrOp::LoadDyn { dst: rt, base: rn, off: base_off as u64, size });
-                ops.push(IrOp::LoadDyn { dst: rt2, base: rn, off: (base_off + size as i64) as u64, size });
+                ops.push(IrOp::LoadDyn {
+                    dst: rt,
+                    base: rn,
+                    off: base_off as u64,
+                    size,
+                });
+                ops.push(IrOp::LoadDyn {
+                    dst: rt2,
+                    base: rn,
+                    off: (base_off + size as i64) as u64,
+                    size,
+                });
             }
         } else {
-            ops.push(IrOp::StoreDyn { src: rt, base: rn, off: base_off as u64, size });
-            ops.push(IrOp::StoreDyn { src: rt2, base: rn, off: (base_off + size as i64) as u64, size });
+            ops.push(IrOp::StoreDyn {
+                src: rt,
+                base: rn,
+                off: base_off as u64,
+                size,
+            });
+            ops.push(IrOp::StoreDyn {
+                src: rt2,
+                base: rn,
+                off: (base_off + size as i64) as u64,
+                size,
+            });
         }
 
         if writeback && offset != 0 {
-            ops.push(IrOp::Mov { dst: SCRATCH, imm: offset as u64 });
-            ops.push(IrOp::Add { dst: rn, a: rn, b: SCRATCH });
+            ops.push(IrOp::Mov {
+                dst: SCRATCH,
+                imm: offset as u64,
+            });
+            ops.push(IrOp::Add {
+                dst: rn,
+                a: rn,
+                b: SCRATCH,
+            });
         }
         return ops;
     }
@@ -809,15 +880,42 @@ fn lift_load_store(insn: &Instruction) -> Vec<IrOp> {
         let off = (imm12 as u64) << size_bits;
 
         if opc == 0b00 {
-            return vec![IrOp::StoreDyn { src: rt, base: rn, off, size }];
+            return vec![IrOp::StoreDyn {
+                src: rt,
+                base: rn,
+                off,
+                size,
+            }];
         } else if opc == 0b01 {
-            return vec![IrOp::LoadDyn { dst: rt, base: rn, off, size }];
+            return vec![IrOp::LoadDyn {
+                dst: rt,
+                base: rn,
+                off,
+                size,
+            }];
         } else if opc == 0b10 && size_bits == 2 {
             // LDRSW (unsigned offset)
             return vec![
-                IrOp::LoadDyn { dst: SCRATCH, base: rn, off, size: 4 },
-                IrOp::OrrShift { dst: SCRATCH, a: 31, b: SCRATCH, shift: 0, amount: 32 },
-                IrOp::OrrShift { dst: rt, a: 31, b: SCRATCH, shift: 2, amount: 32 },
+                IrOp::LoadDyn {
+                    dst: SCRATCH,
+                    base: rn,
+                    off,
+                    size: 4,
+                },
+                IrOp::OrrShift {
+                    dst: SCRATCH,
+                    a: 31,
+                    b: SCRATCH,
+                    shift: 0,
+                    amount: 32,
+                },
+                IrOp::OrrShift {
+                    dst: rt,
+                    a: 31,
+                    b: SCRATCH,
+                    shift: 2,
+                    amount: 32,
+                },
             ];
         }
         return trap(R_LS_UNSUPPORTED);
@@ -852,14 +950,41 @@ fn lift_load_store(insn: &Instruction) -> Vec<IrOp> {
 
             let mut ops = Vec::new();
             if opc == 0b00 {
-                ops.push(IrOp::StoreDyn { src: rt, base: rn, off: base_off as u64, size });
+                ops.push(IrOp::StoreDyn {
+                    src: rt,
+                    base: rn,
+                    off: base_off as u64,
+                    size,
+                });
             } else if opc == 0b01 {
-                ops.push(IrOp::LoadDyn { dst: rt, base: rn, off: base_off as u64, size });
+                ops.push(IrOp::LoadDyn {
+                    dst: rt,
+                    base: rn,
+                    off: base_off as u64,
+                    size,
+                });
             } else if opc == 0b10 && size_bits == 2 {
                 // LDRSW (pre/post-indexed)
-                ops.push(IrOp::LoadDyn { dst: SCRATCH, base: rn, off: base_off as u64, size: 4 });
-                ops.push(IrOp::OrrShift { dst: SCRATCH, a: 31, b: SCRATCH, shift: 0, amount: 32 });
-                ops.push(IrOp::OrrShift { dst: rt, a: 31, b: SCRATCH, shift: 2, amount: 32 });
+                ops.push(IrOp::LoadDyn {
+                    dst: SCRATCH,
+                    base: rn,
+                    off: base_off as u64,
+                    size: 4,
+                });
+                ops.push(IrOp::OrrShift {
+                    dst: SCRATCH,
+                    a: 31,
+                    b: SCRATCH,
+                    shift: 0,
+                    amount: 32,
+                });
+                ops.push(IrOp::OrrShift {
+                    dst: rt,
+                    a: 31,
+                    b: SCRATCH,
+                    shift: 2,
+                    amount: 32,
+                });
             } else {
                 return trap(R_LS_UNSUPPORTED);
             }
@@ -867,8 +992,15 @@ fn lift_load_store(insn: &Instruction) -> Vec<IrOp> {
             if simm9 != 0 && idx_type != 0b00 {
                 // Writeback for pre/post-index only. Unscaled (LDUR/STUR)
                 // has no writeback: the address IS base + simm9.
-                ops.push(IrOp::Mov { dst: SCRATCH, imm: simm9 as u64 });
-                ops.push(IrOp::Add { dst: rn, a: rn, b: SCRATCH });
+                ops.push(IrOp::Mov {
+                    dst: SCRATCH,
+                    imm: simm9 as u64,
+                });
+                ops.push(IrOp::Add {
+                    dst: rn,
+                    a: rn,
+                    b: SCRATCH,
+                });
             }
             return ops;
         }
@@ -900,21 +1032,62 @@ fn lift_load_store(insn: &Instruction) -> Vec<IrOp> {
 
             let mut ops = Vec::new();
             if shift_amt > 0 {
-                ops.push(IrOp::OrrShift { dst: SCRATCH, a: 31, b: rm, shift: 0, amount: shift_amt });
-                ops.push(IrOp::Add { dst: SCRATCH, a: rn, b: SCRATCH });
+                ops.push(IrOp::OrrShift {
+                    dst: SCRATCH,
+                    a: 31,
+                    b: rm,
+                    shift: 0,
+                    amount: shift_amt,
+                });
+                ops.push(IrOp::Add {
+                    dst: SCRATCH,
+                    a: rn,
+                    b: SCRATCH,
+                });
             } else {
-                ops.push(IrOp::Add { dst: SCRATCH, a: rn, b: rm });
+                ops.push(IrOp::Add {
+                    dst: SCRATCH,
+                    a: rn,
+                    b: rm,
+                });
             }
 
             if opc == 0b00 {
-                ops.push(IrOp::StoreDyn { src: rt, base: SCRATCH, off: 0, size });
+                ops.push(IrOp::StoreDyn {
+                    src: rt,
+                    base: SCRATCH,
+                    off: 0,
+                    size,
+                });
             } else if opc == 0b01 {
-                ops.push(IrOp::LoadDyn { dst: rt, base: SCRATCH, off: 0, size });
+                ops.push(IrOp::LoadDyn {
+                    dst: rt,
+                    base: SCRATCH,
+                    off: 0,
+                    size,
+                });
             } else if opc == 0b10 && size_bits == 2 {
                 // LDRSW (reg offset)
-                ops.push(IrOp::LoadDyn { dst: SCRATCH, base: SCRATCH, off: 0, size: 4 });
-                ops.push(IrOp::OrrShift { dst: SCRATCH, a: 31, b: SCRATCH, shift: 0, amount: 32 });
-                ops.push(IrOp::OrrShift { dst: rt, a: 31, b: SCRATCH, shift: 2, amount: 32 });
+                ops.push(IrOp::LoadDyn {
+                    dst: SCRATCH,
+                    base: SCRATCH,
+                    off: 0,
+                    size: 4,
+                });
+                ops.push(IrOp::OrrShift {
+                    dst: SCRATCH,
+                    a: 31,
+                    b: SCRATCH,
+                    shift: 0,
+                    amount: 32,
+                });
+                ops.push(IrOp::OrrShift {
+                    dst: rt,
+                    a: 31,
+                    b: SCRATCH,
+                    shift: 2,
+                    amount: 32,
+                });
             } else {
                 return trap(R_LS_UNSUPPORTED);
             }
@@ -1012,9 +1185,25 @@ fn lift_branch(insn: &Instruction) -> Vec<IrOp> {
         let target = (insn.addr as i64).wrapping_add(offset) as u64;
         let rt = (word & 0x1F) as u8;
         return vec![
-            IrOp::OrrShift { dst: SCRATCH, a: 31, b: rt, shift: 0, amount: 32 },
-            IrOp::OrrShift { dst: SCRATCH, a: 31, b: SCRATCH, shift: 1, amount: 32 },
-            IrOp::CondBranch { reg: SCRATCH, target, when_zero: top8 == 0x34 },
+            IrOp::OrrShift {
+                dst: SCRATCH,
+                a: 31,
+                b: rt,
+                shift: 0,
+                amount: 32,
+            },
+            IrOp::OrrShift {
+                dst: SCRATCH,
+                a: 31,
+                b: SCRATCH,
+                shift: 1,
+                amount: 32,
+            },
+            IrOp::CondBranch {
+                reg: SCRATCH,
+                target,
+                when_zero: top8 == 0x34,
+            },
         ];
     }
     trap(R_BR_UNSUPPORTED)
@@ -1134,14 +1323,7 @@ mod tests {
     fn golden_sub_reg() {
         // SUB X1, X1, X0, LSL #0 (real kernel step 57 word: 0xcb000021)
         let ops = lift(&insn(0x413c_004c, 0xcb00_0021, InsnKind::DataProc));
-        assert_eq!(
-            ops,
-            vec![IrOp::Sub {
-                dst: 1,
-                a: 1,
-                b: 0
-            },]
-        );
+        assert_eq!(ops, vec![IrOp::Sub { dst: 1, a: 1, b: 0 },]);
     }
 
     #[test]
@@ -1174,7 +1356,12 @@ mod tests {
     fn trap_clz_sibling_stays_unsupported() {
         // RBIT X5, X5 (1-source sibling, out of scope) -> honest trap
         let ops = lift(&insn(0x4000, 0xdac0_00a5, InsnKind::DataProc));
-        assert_eq!(ops, vec![IrOp::Trap { reason: R_DP_UNSUPPORTED }]);
+        assert_eq!(
+            ops,
+            vec![IrOp::Trap {
+                reason: R_DP_UNSUPPORTED
+            }]
+        );
     }
 
     #[test]
@@ -1210,7 +1397,12 @@ mod tests {
     fn trap_madd_long_stays_unsupported() {
         // SMADDL X10, W10, W13, XZR (op54 = 01): out of scope -> honest trap
         let ops = lift(&insn(0x4000, 0xdb0d_7d4a, InsnKind::DataProc));
-        assert_eq!(ops, vec![IrOp::Trap { reason: R_MADD_LONG }]);
+        assert_eq!(
+            ops,
+            vec![IrOp::Trap {
+                reason: R_MADD_LONG
+            }]
+        );
     }
 
     #[test]
@@ -1299,8 +1491,18 @@ mod tests {
         assert_eq!(
             ops,
             vec![
-                IrOp::StoreDyn { src: 21, base: 0, off: 0, size: 8 },
-                IrOp::StoreDyn { src: 1, base: 0, off: 8, size: 8 },
+                IrOp::StoreDyn {
+                    src: 21,
+                    base: 0,
+                    off: 0,
+                    size: 8
+                },
+                IrOp::StoreDyn {
+                    src: 1,
+                    base: 0,
+                    off: 8,
+                    size: 8
+                },
             ]
         );
     }
@@ -1312,8 +1514,18 @@ mod tests {
         assert_eq!(
             ops,
             vec![
-                IrOp::StoreDyn { src: 2, base: 0, off: 16, size: 8 },
-                IrOp::StoreDyn { src: 3, base: 0, off: 24, size: 8 },
+                IrOp::StoreDyn {
+                    src: 2,
+                    base: 0,
+                    off: 16,
+                    size: 8
+                },
+                IrOp::StoreDyn {
+                    src: 3,
+                    base: 0,
+                    off: 24,
+                    size: 8
+                },
             ]
         );
     }
@@ -1325,10 +1537,27 @@ mod tests {
         assert_eq!(
             ops_pre,
             vec![
-                IrOp::StoreDyn { src: 2, base: 0, off: 16, size: 8 },
-                IrOp::StoreDyn { src: 3, base: 0, off: 24, size: 8 },
-                IrOp::Mov { dst: SCRATCH, imm: 16 },
-                IrOp::Add { dst: 0, a: 0, b: SCRATCH },
+                IrOp::StoreDyn {
+                    src: 2,
+                    base: 0,
+                    off: 16,
+                    size: 8
+                },
+                IrOp::StoreDyn {
+                    src: 3,
+                    base: 0,
+                    off: 24,
+                    size: 8
+                },
+                IrOp::Mov {
+                    dst: SCRATCH,
+                    imm: 16
+                },
+                IrOp::Add {
+                    dst: 0,
+                    a: 0,
+                    b: SCRATCH
+                },
             ]
         );
 
@@ -1337,10 +1566,27 @@ mod tests {
         assert_eq!(
             ops_post,
             vec![
-                IrOp::StoreDyn { src: 2, base: 0, off: 0, size: 8 },
-                IrOp::StoreDyn { src: 3, base: 0, off: 8, size: 8 },
-                IrOp::Mov { dst: SCRATCH, imm: 16 },
-                IrOp::Add { dst: 0, a: 0, b: SCRATCH },
+                IrOp::StoreDyn {
+                    src: 2,
+                    base: 0,
+                    off: 0,
+                    size: 8
+                },
+                IrOp::StoreDyn {
+                    src: 3,
+                    base: 0,
+                    off: 8,
+                    size: 8
+                },
+                IrOp::Mov {
+                    dst: SCRATCH,
+                    imm: 16
+                },
+                IrOp::Add {
+                    dst: 0,
+                    a: 0,
+                    b: SCRATCH
+                },
             ]
         );
     }
@@ -1352,8 +1598,18 @@ mod tests {
         assert_eq!(
             ops_64,
             vec![
-                IrOp::LoadDyn { dst: 2, base: 0, off: 16, size: 8 },
-                IrOp::LoadDyn { dst: 3, base: 0, off: 24, size: 8 },
+                IrOp::LoadDyn {
+                    dst: 2,
+                    base: 0,
+                    off: 16,
+                    size: 8
+                },
+                IrOp::LoadDyn {
+                    dst: 3,
+                    base: 0,
+                    off: 24,
+                    size: 8
+                },
             ]
         );
 
@@ -1362,8 +1618,18 @@ mod tests {
         assert_eq!(
             ops_32,
             vec![
-                IrOp::LoadDyn { dst: 2, base: 0, off: 8, size: 4 },
-                IrOp::LoadDyn { dst: 3, base: 0, off: 12, size: 4 },
+                IrOp::LoadDyn {
+                    dst: 2,
+                    base: 0,
+                    off: 8,
+                    size: 4
+                },
+                IrOp::LoadDyn {
+                    dst: 3,
+                    base: 0,
+                    off: 12,
+                    size: 4
+                },
             ]
         );
     }
@@ -1375,12 +1641,46 @@ mod tests {
         assert_eq!(
             ops,
             vec![
-                IrOp::LoadDyn { dst: SCRATCH, base: 0, off: 8, size: 4 },
-                IrOp::OrrShift { dst: SCRATCH, a: 31, b: SCRATCH, shift: 0, amount: 32 },
-                IrOp::OrrShift { dst: 2, a: 31, b: SCRATCH, shift: 2, amount: 32 },
-                IrOp::LoadDyn { dst: SCRATCH, base: 0, off: 12, size: 4 },
-                IrOp::OrrShift { dst: SCRATCH, a: 31, b: SCRATCH, shift: 0, amount: 32 },
-                IrOp::OrrShift { dst: 3, a: 31, b: SCRATCH, shift: 2, amount: 32 },
+                IrOp::LoadDyn {
+                    dst: SCRATCH,
+                    base: 0,
+                    off: 8,
+                    size: 4
+                },
+                IrOp::OrrShift {
+                    dst: SCRATCH,
+                    a: 31,
+                    b: SCRATCH,
+                    shift: 0,
+                    amount: 32
+                },
+                IrOp::OrrShift {
+                    dst: 2,
+                    a: 31,
+                    b: SCRATCH,
+                    shift: 2,
+                    amount: 32
+                },
+                IrOp::LoadDyn {
+                    dst: SCRATCH,
+                    base: 0,
+                    off: 12,
+                    size: 4
+                },
+                IrOp::OrrShift {
+                    dst: SCRATCH,
+                    a: 31,
+                    b: SCRATCH,
+                    shift: 0,
+                    amount: 32
+                },
+                IrOp::OrrShift {
+                    dst: 3,
+                    a: 31,
+                    b: SCRATCH,
+                    shift: 2,
+                    amount: 32
+                },
             ]
         );
     }
@@ -1392,9 +1692,21 @@ mod tests {
         assert_eq!(
             ops_pre,
             vec![
-                IrOp::LoadDyn { dst: 0, base: 1, off: 8, size: 8 },
-                IrOp::Mov { dst: SCRATCH, imm: 8 },
-                IrOp::Add { dst: 1, a: 1, b: SCRATCH },
+                IrOp::LoadDyn {
+                    dst: 0,
+                    base: 1,
+                    off: 8,
+                    size: 8
+                },
+                IrOp::Mov {
+                    dst: SCRATCH,
+                    imm: 8
+                },
+                IrOp::Add {
+                    dst: 1,
+                    a: 1,
+                    b: SCRATCH
+                },
             ]
         );
 
@@ -1403,9 +1715,21 @@ mod tests {
         assert_eq!(
             ops_post,
             vec![
-                IrOp::LoadDyn { dst: 0, base: 1, off: 0, size: 8 },
-                IrOp::Mov { dst: SCRATCH, imm: 8 },
-                IrOp::Add { dst: 1, a: 1, b: SCRATCH },
+                IrOp::LoadDyn {
+                    dst: 0,
+                    base: 1,
+                    off: 0,
+                    size: 8
+                },
+                IrOp::Mov {
+                    dst: SCRATCH,
+                    imm: 8
+                },
+                IrOp::Add {
+                    dst: 1,
+                    a: 1,
+                    b: SCRATCH
+                },
             ]
         );
     }
@@ -1418,14 +1742,24 @@ mod tests {
         let ops = lift(&insn(0x4000, 0xF81F_83A8, InsnKind::LoadStore));
         assert_eq!(
             ops,
-            vec![IrOp::StoreDyn { src: 8, base: 29, off: (-8i64) as u64, size: 8 }]
+            vec![IrOp::StoreDyn {
+                src: 8,
+                base: 29,
+                off: (-8i64) as u64,
+                size: 8
+            }]
         );
 
         // LDUR X0, [X1] (word 0xF8400020): zero offset, still no writeback.
         let ops = lift(&insn(0x4000, 0xF840_0020, InsnKind::LoadStore));
         assert_eq!(
             ops,
-            vec![IrOp::LoadDyn { dst: 0, base: 1, off: 0, size: 8 }]
+            vec![IrOp::LoadDyn {
+                dst: 0,
+                base: 1,
+                off: 0,
+                size: 8
+            }]
         );
     }
 
@@ -1436,9 +1770,26 @@ mod tests {
         assert_eq!(
             ops_off,
             vec![
-                IrOp::LoadDyn { dst: SCRATCH, base: 1, off: 4, size: 4 },
-                IrOp::OrrShift { dst: SCRATCH, a: 31, b: SCRATCH, shift: 0, amount: 32 },
-                IrOp::OrrShift { dst: 0, a: 31, b: SCRATCH, shift: 2, amount: 32 },
+                IrOp::LoadDyn {
+                    dst: SCRATCH,
+                    base: 1,
+                    off: 4,
+                    size: 4
+                },
+                IrOp::OrrShift {
+                    dst: SCRATCH,
+                    a: 31,
+                    b: SCRATCH,
+                    shift: 0,
+                    amount: 32
+                },
+                IrOp::OrrShift {
+                    dst: 0,
+                    a: 31,
+                    b: SCRATCH,
+                    shift: 2,
+                    amount: 32
+                },
             ]
         );
 
@@ -1447,9 +1798,25 @@ mod tests {
         assert_eq!(
             ops_lit,
             vec![
-                IrOp::Load { dst: SCRATCH, addr: 0x4008, size: 4 },
-                IrOp::OrrShift { dst: SCRATCH, a: 31, b: SCRATCH, shift: 0, amount: 32 },
-                IrOp::OrrShift { dst: 0, a: 31, b: SCRATCH, shift: 2, amount: 32 },
+                IrOp::Load {
+                    dst: SCRATCH,
+                    addr: 0x4008,
+                    size: 4
+                },
+                IrOp::OrrShift {
+                    dst: SCRATCH,
+                    a: 31,
+                    b: SCRATCH,
+                    shift: 0,
+                    amount: 32
+                },
+                IrOp::OrrShift {
+                    dst: 0,
+                    a: 31,
+                    b: SCRATCH,
+                    shift: 2,
+                    amount: 32
+                },
             ]
         );
     }
@@ -1461,9 +1828,24 @@ mod tests {
         assert_eq!(
             ops,
             vec![
-                IrOp::OrrShift { dst: SCRATCH, a: 31, b: 2, shift: 0, amount: 3 },
-                IrOp::Add { dst: SCRATCH, a: 1, b: SCRATCH },
-                IrOp::LoadDyn { dst: 0, base: SCRATCH, off: 0, size: 8 },
+                IrOp::OrrShift {
+                    dst: SCRATCH,
+                    a: 31,
+                    b: 2,
+                    shift: 0,
+                    amount: 3
+                },
+                IrOp::Add {
+                    dst: SCRATCH,
+                    a: 1,
+                    b: SCRATCH
+                },
+                IrOp::LoadDyn {
+                    dst: 0,
+                    base: SCRATCH,
+                    off: 0,
+                    size: 8
+                },
             ]
         );
     }
@@ -1502,7 +1884,12 @@ mod tests {
     #[test]
     fn trap_svc_kind_is_honest_unimplemented() {
         let ops = lift(&insn(0x4000, 0xD400_0001, InsnKind::Svc));
-        assert_eq!(ops, vec![IrOp::Trap { reason: R_SVC_UNIMPL }]);
+        assert_eq!(
+            ops,
+            vec![IrOp::Trap {
+                reason: R_SVC_UNIMPL
+            }]
+        );
         assert!(matches!(&ops[0], IrOp::Trap { reason } if reason.contains("Svc")));
     }
 
@@ -1663,7 +2050,10 @@ mod tests {
         assert_eq!(
             ops,
             vec![
-                IrOp::Mov { dst: 30, imm: 0x4004 },
+                IrOp::Mov {
+                    dst: 30,
+                    imm: 0x4004
+                },
                 IrOp::BranchDyn { reg: 3 },
             ]
         );
@@ -1682,7 +2072,10 @@ mod tests {
                     a: 30,
                     b: 31
                 },
-                IrOp::Mov { dst: 30, imm: 0x4004 },
+                IrOp::Mov {
+                    dst: 30,
+                    imm: 0x4004
+                },
                 IrOp::BranchDyn { reg: SCRATCH },
             ]
         );
@@ -1696,7 +2089,10 @@ mod tests {
         assert_eq!(
             ops,
             vec![
-                IrOp::Mov { dst: 30, imm: 0x4004 },
+                IrOp::Mov {
+                    dst: 30,
+                    imm: 0x4004
+                },
                 IrOp::BranchDyn { reg: 31 },
             ]
         );
@@ -1872,9 +2268,25 @@ mod tests {
         assert_eq!(
             ops,
             vec![
-                IrOp::OrrShift { dst: SCRATCH, a: 31, b: 0, shift: 0, amount: 32 },
-                IrOp::OrrShift { dst: SCRATCH, a: 31, b: SCRATCH, shift: 1, amount: 32 },
-                IrOp::CondBranch { reg: SCRATCH, target: 0x4000, when_zero: true },
+                IrOp::OrrShift {
+                    dst: SCRATCH,
+                    a: 31,
+                    b: 0,
+                    shift: 0,
+                    amount: 32
+                },
+                IrOp::OrrShift {
+                    dst: SCRATCH,
+                    a: 31,
+                    b: SCRATCH,
+                    shift: 1,
+                    amount: 32
+                },
+                IrOp::CondBranch {
+                    reg: SCRATCH,
+                    target: 0x4000,
+                    when_zero: true
+                },
             ]
         );
     }
@@ -1887,9 +2299,25 @@ mod tests {
         assert_eq!(
             ops,
             vec![
-                IrOp::OrrShift { dst: SCRATCH, a: 31, b: 22, shift: 0, amount: 32 },
-                IrOp::OrrShift { dst: SCRATCH, a: 31, b: SCRATCH, shift: 1, amount: 32 },
-                IrOp::CondBranch { reg: SCRATCH, target: 0xffffff800839b398, when_zero: false },
+                IrOp::OrrShift {
+                    dst: SCRATCH,
+                    a: 31,
+                    b: 22,
+                    shift: 0,
+                    amount: 32
+                },
+                IrOp::OrrShift {
+                    dst: SCRATCH,
+                    a: 31,
+                    b: SCRATCH,
+                    shift: 1,
+                    amount: 32
+                },
+                IrOp::CondBranch {
+                    reg: SCRATCH,
+                    target: 0xffffff800839b398,
+                    when_zero: false
+                },
             ]
         );
     }
@@ -1968,18 +2396,27 @@ mod tests {
         // CTR_EL0 -> 0x8444_c004
         assert_eq!(
             lift(&insn(0x4000, 0xD53B_0023, InsnKind::System)),
-            vec![IrOp::Mov { dst: 3, imm: 0x8444_C004 }]
+            vec![IrOp::Mov {
+                dst: 3,
+                imm: 0x8444_C004
+            }]
         );
         // DAIF -> persistent (GB-sysreg2)
         assert_eq!(
             lift(&insn(0x4000, 0xD53B_4220, InsnKind::System)),
-            vec![IrOp::ReadSys { dst: 0, reg: SysReg::Daif }]
+            vec![IrOp::ReadSys {
+                dst: 0,
+                reg: SysReg::Daif
+            }]
         );
         // SP_EL0 -> persistent (GB-26: kernel reads thread_info base via
         // `mrs x21, sp_el0`; word 0xD5384115, halt at step 1249003)
         assert_eq!(
             lift(&insn(0x4000, 0xD538_4115, InsnKind::System)),
-            vec![IrOp::ReadSys { dst: 21, reg: SysReg::SpEl0 }]
+            vec![IrOp::ReadSys {
+                dst: 21,
+                reg: SysReg::SpEl0
+            }]
         );
         // NZCV -> 0 (stays in GB-2 live pstate flag path)
         assert_eq!(
@@ -1989,7 +2426,10 @@ mod tests {
         // TPIDR_EL1 -> persistent (GB-sysreg2)
         assert_eq!(
             lift(&insn(0x4000, 0xD538_D080, InsnKind::System)),
-            vec![IrOp::ReadSys { dst: 0, reg: SysReg::TpidrEl1 }]
+            vec![IrOp::ReadSys {
+                dst: 0,
+                reg: SysReg::TpidrEl1
+            }]
         );
     }
 
@@ -2012,7 +2452,10 @@ mod tests {
         // U (bit 30) = 1: uniprocessor; Aff0 = 0: this is vCPU 0.
         assert_eq!(
             lift(&insn(0x4000, 0xD538_00A9, InsnKind::System)),
-            vec![IrOp::Mov { dst: 9, imm: 0x4000_0000 }]
+            vec![IrOp::Mov {
+                dst: 9,
+                imm: 0x4000_0000
+            }]
         );
     }
 
@@ -2030,8 +2473,14 @@ mod tests {
 
     // Build an MRS (mrs=true) or MSR (mrs=false) system-register word.
     fn sys_word(op0: u32, op1: u32, crn: u32, crm: u32, op2: u32, rt: u32, mrs: bool) -> u32 {
-        (0x354 << 22) | ((mrs as u32) << 21) | (op0 << 19) | (op1 << 16)
-            | (crn << 12) | (crm << 8) | (op2 << 5) | rt
+        (0x354 << 22)
+            | ((mrs as u32) << 21)
+            | (op0 << 19)
+            | (op1 << 16)
+            | (crn << 12)
+            | (crm << 8)
+            | (op2 << 5)
+            | rt
     }
 
     #[test]
@@ -2106,12 +2555,18 @@ mod tests {
         // (GB-8 mislabeled this TCR_EL1; S3_0_C1_C0_2 is CPACR_EL1.)
         assert_eq!(
             lift(&insn(0x4000, 0xD518_1040, InsnKind::System)),
-            vec![IrOp::WriteSys { src: 0, reg: SysReg::CpacrEl1 }]
+            vec![IrOp::WriteSys {
+                src: 0,
+                reg: SysReg::CpacrEl1
+            }]
         );
         // MRS CPACR_EL1, X5: same system encoding with bit 21 set.
         assert_eq!(
             lift(&insn(0x4000, 0xD538_1045, InsnKind::System)),
-            vec![IrOp::ReadSys { dst: 5, reg: SysReg::CpacrEl1 }]
+            vec![IrOp::ReadSys {
+                dst: 5,
+                reg: SysReg::CpacrEl1
+            }]
         );
     }
 
@@ -2120,12 +2575,18 @@ mod tests {
         // Measured halt word: MSR MDSCR_EL1, X0 (step 7459, pc 0x40c03654).
         assert_eq!(
             lift(&insn(0x4000, 0xD510_0240, InsnKind::System)),
-            vec![IrOp::WriteSys { src: 0, reg: SysReg::MdscrEl1 }]
+            vec![IrOp::WriteSys {
+                src: 0,
+                reg: SysReg::MdscrEl1
+            }]
         );
         // MRS MDSCR_EL1, X5: same system encoding with bit 21 set.
         assert_eq!(
             lift(&insn(0x4000, 0xD530_0245, InsnKind::System)),
-            vec![IrOp::ReadSys { dst: 5, reg: SysReg::MdscrEl1 }]
+            vec![IrOp::ReadSys {
+                dst: 5,
+                reg: SysReg::MdscrEl1
+            }]
         );
     }
 
@@ -2136,12 +2597,18 @@ mod tests {
         // = MAIR_EL1; Rt = bits[4:0] = X5.
         assert_eq!(
             lift(&insn(0x4000, 0xD518_A205, InsnKind::System)),
-            vec![IrOp::WriteSys { src: 5, reg: SysReg::MairEl1 }]
+            vec![IrOp::WriteSys {
+                src: 5,
+                reg: SysReg::MairEl1
+            }]
         );
         // MRS MAIR_EL1, X5: same system encoding with bit 21 set.
         assert_eq!(
             lift(&insn(0x4000, 0xD538_A205, InsnKind::System)),
-            vec![IrOp::ReadSys { dst: 5, reg: SysReg::MairEl1 }]
+            vec![IrOp::ReadSys {
+                dst: 5,
+                reg: SysReg::MairEl1
+            }]
         );
     }
 
@@ -2154,12 +2621,18 @@ mod tests {
         // S3_0_C1_C0_2 = CPACR_EL1).
         assert_eq!(
             lift(&insn(0x4000, 0xD518_204A, InsnKind::System)),
-            vec![IrOp::WriteSys { src: 10, reg: SysReg::TcrEl1 }]
+            vec![IrOp::WriteSys {
+                src: 10,
+                reg: SysReg::TcrEl1
+            }]
         );
         // MRS TCR_EL1, X10: same system encoding with bit 21 set.
         assert_eq!(
             lift(&insn(0x4000, 0xD538_204A, InsnKind::System)),
-            vec![IrOp::ReadSys { dst: 10, reg: SysReg::TcrEl1 }]
+            vec![IrOp::ReadSys {
+                dst: 10,
+                reg: SysReg::TcrEl1
+            }]
         );
     }
 
@@ -2170,12 +2643,18 @@ mod tests {
         // = TTBR0_EL1 (verified against the ARM ARM; Rt = bits[4:0] = X3).
         assert_eq!(
             lift(&insn(0x4000, 0xD518_2003, InsnKind::System)),
-            vec![IrOp::WriteSys { src: 3, reg: SysReg::Ttbr0El1 }]
+            vec![IrOp::WriteSys {
+                src: 3,
+                reg: SysReg::Ttbr0El1
+            }]
         );
         // MRS TTBR0_EL1, X3: same system encoding with bit 21 set.
         assert_eq!(
             lift(&insn(0x4000, 0xD538_2003, InsnKind::System)),
-            vec![IrOp::ReadSys { dst: 3, reg: SysReg::Ttbr0El1 }]
+            vec![IrOp::ReadSys {
+                dst: 3,
+                reg: SysReg::Ttbr0El1
+            }]
         );
     }
 
@@ -2186,12 +2665,18 @@ mod tests {
         // = TTBR1_EL1 (verified against the ARM ARM; Rt = bits[4:0] = X4).
         assert_eq!(
             lift(&insn(0x4000, 0xD518_2024, InsnKind::System)),
-            vec![IrOp::WriteSys { src: 4, reg: SysReg::Ttbr1El1 }]
+            vec![IrOp::WriteSys {
+                src: 4,
+                reg: SysReg::Ttbr1El1
+            }]
         );
         // MRS TTBR1_EL1, X4: same system encoding with bit 21 set.
         assert_eq!(
             lift(&insn(0x4000, 0xD538_2024, InsnKind::System)),
-            vec![IrOp::ReadSys { dst: 4, reg: SysReg::Ttbr1El1 }]
+            vec![IrOp::ReadSys {
+                dst: 4,
+                reg: SysReg::Ttbr1El1
+            }]
         );
     }
 
@@ -2257,14 +2742,20 @@ mod tests {
         // MSR DAIF, X0 -> persistent store (GB-sysreg2)
         assert_eq!(
             lift(&insn(0x4000, 0xD51B_4220, InsnKind::System)),
-            vec![IrOp::WriteSys { src: 0, reg: SysReg::Daif }]
+            vec![IrOp::WriteSys {
+                src: 0,
+                reg: SysReg::Daif
+            }]
         );
         // MSR NZCV, X0 -> still accepted no-op (GB-2 live flag path)
         assert_eq!(lift(&insn(0x4000, 0xD51B_4200, InsnKind::System)), vec![]);
         // MSR TPIDR_EL1, X0 -> persistent store (GB-sysreg2)
         assert_eq!(
             lift(&insn(0x4000, 0xD518_D080, InsnKind::System)),
-            vec![IrOp::WriteSys { src: 0, reg: SysReg::TpidrEl1 }]
+            vec![IrOp::WriteSys {
+                src: 0,
+                reg: SysReg::TpidrEl1
+            }]
         );
         // MSR SPSel, #1
         assert_eq!(lift(&insn(0x4000, 0xD500_41BF, InsnKind::System)), vec![]);
