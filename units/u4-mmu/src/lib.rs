@@ -5,6 +5,16 @@
 //! values. No globals, no I/O, no time, no threads; same inputs always give
 //! the same output. All failures are data ([`MemFault`]), never panics.
 //!
+//! Two entry points:
+//! - [`translate`] assumes the `ram` slice starts at guest-physical address
+//!   0 (the unit-test convention).
+//! - [`translate_with_base`] takes an explicit `ram_base`: guest-physical
+//!   addresses (table descriptors, TTBRs) are rebased by
+//!   `pa.checked_sub(ram_base)` before indexing `ram`. A descriptor PA below
+//!   `ram_base` is a [`MemFault::TranslationFault`], never a panic or a
+//!   wraparound read. Production callers (whose RAM slice starts at
+//!   `RAM_BASE = 0x4000_0000`) must use this entry point.
+//!
 //! Documented model (vs the ARM ARM VMSA):
 //! - Stage 1 only. `Access` carries no exception level, so the model is
 //!   EL1-equivalent data access: `AP[7:6]` of `0b00`/`0b01` allows read+write,
@@ -94,23 +104,61 @@ fn start_level(granule: Granule, ia_bits: u32) -> Option<u32> {
 }
 
 /// Read 8 bytes at guest-physical `pa` from `ram` as little-endian u64.
-/// Out-of-range reads are `TranslationFault`, never panics.
-fn read_desc(ram: &[u8], pa: u64, va: u64) -> Result<u64, MemFault> {
-    let end = pa.checked_add(8).ok_or(MemFault::TranslationFault { va })?;
+/// The `ram` slice starts at guest-physical `ram_base`; `pa` is rebased by
+/// `checked_sub`, so a PA below `ram_base` is a `TranslationFault`, never a
+/// panic or a wraparound read. Out-of-range reads are `TranslationFault`,
+/// never panics.
+fn read_desc(ram: &[u8], pa: u64, va: u64, ram_base: u64) -> Result<u64, MemFault> {
+    let rebased = pa
+        .checked_sub(ram_base)
+        .ok_or(MemFault::TranslationFault { va })?;
+    let end = rebased
+        .checked_add(8)
+        .ok_or(MemFault::TranslationFault { va })?;
     if end > ram.len() as u64 {
         return Err(MemFault::TranslationFault { va });
     }
-    // Bounds proven above; `pa <= ram.len()` always fits in `usize`
+    // Bounds proven above; `rebased <= ram.len()` always fits in `usize`
     // because `ram.len()` itself is a `usize`.
-    let s = pa as usize;
+    let s = rebased as usize;
     let mut b = [0u8; 8];
     b.copy_from_slice(&ram[s..s + 8]);
     Ok(u64::from_le_bytes(b))
 }
 
 /// Translate `va` to a guest-physical address per the AArch64 VMSA stage-1
-/// walk described in the module docs.
+/// walk described in the module docs. Unit-test convention: the `ram`
+/// slice starts at guest-physical address 0.
 pub fn translate(state: &MmuState, ram: &[u8], va: u64, access: Access) -> Result<u64, MemFault> {
+    translate_impl(state, ram, va, access, 0)
+}
+
+/// Translate `va` to a guest-physical address where the `ram` slice starts
+/// at guest-physical `ram_base` (e.g. `0x4000_0000`). All descriptor PAs —
+/// TTBR bases, table addresses, entry addresses — are rebased before
+/// indexing `ram`; a PA below `ram_base` or outside the slice is a
+/// [`MemFault::TranslationFault`]. The RETURNED address is a true
+/// guest-physical address (not rebased): pass it on to the caller's
+/// physical dispatch (MMIO / RAM offset), never as an index into `ram`.
+pub fn translate_with_base(
+    state: &MmuState,
+    ram: &[u8],
+    ram_base: u64,
+    va: u64,
+    access: Access,
+) -> Result<u64, MemFault> {
+    translate_impl(state, ram, va, access, ram_base)
+}
+
+/// Shared walk implementation. `ram_base` is the guest-physical address
+/// the `ram` slice starts at; descriptor PAs are rebased against it.
+fn translate_impl(
+    state: &MmuState,
+    ram: &[u8],
+    va: u64,
+    access: Access,
+    ram_base: u64,
+) -> Result<u64, MemFault> {
     // MMU off: flat identity map.
     if state.sctlr & 1 == 0 {
         return Ok(va);
@@ -166,7 +214,7 @@ pub fn translate(state: &MmuState, ram: &[u8], va: u64, access: Access) -> Resul
         let entry_pa = table_base
             .checked_add(index * 8)
             .ok_or(MemFault::TranslationFault { va })?;
-        let desc = read_desc(ram, entry_pa, va)?;
+        let desc = read_desc(ram, entry_pa, va, ram_base)?;
 
         match desc & 0b11 {
             0b00 | 0b10 => return Err(MemFault::TranslationFault { va }), // invalid / reserved
@@ -451,6 +499,117 @@ mod tests {
         assert_eq!(
             translate(&st, &ram, 0xDEAD_BEEF, Access::Execute),
             Ok(0xDEAD_BEEF)
+        );
+    }
+
+    // ---- GB-20: base-aware entry point ----
+
+    /// Write helper rebased by `base`: stores `v` at guest-physical `pa`.
+    fn w64_base(ram: &mut [u8], base: u64, pa: u64, v: u64) {
+        let s = (pa - base) as usize;
+        ram[s..s + 8].copy_from_slice(&v.to_le_bytes());
+    }
+
+    const RAM_BASE: u64 = 0x4000_0000;
+
+    /// Real AOSP kernel V01 vector (GB-19 halt, step 7533):
+    /// va 0xFFFF_FF80_096A_B158 -> pa 0x416A_B158 via TTBR1.
+    /// SCTLR_EL1=0x34f5d91d (M=1), TCR_EL1=0x00400030b5593519
+    /// (T1SZ=25, 39-bit IA, TG1=4K -> walk starts at level 1),
+    /// TTBR1_EL1=0x4166a000. L1[0]=0x4166b003 -> L2 table at
+    /// 0x4166b000; L2[75]=0x41600711 -> 2 MiB block, AF=1,
+    /// AP=0b00 (read/write), physical block base 0x41600000,
+    /// offset 0x0ab158 -> 0x416ab158.
+    fn v01_state() -> MmuState {
+        MmuState {
+            ttbr0: 0x4166_5000,
+            ttbr1: 0x4166_a000,
+            tcr: 0x0040_0030_b559_3519,
+            sctlr: 0x34f5_d91d,
+        }
+    }
+
+    fn v01_ram() -> Vec<u8> {
+        // Tables live at 0x4166a000..0x4166c000; a 0x1700000-byte slice
+        // starting at RAM_BASE covers them at rebased offsets.
+        let mut ram = vec![0u8; 0x170_0000];
+        w64_base(&mut ram, RAM_BASE, 0x4166_a000, 0x4166_b003); // L1[0]
+        w64_base(&mut ram, RAM_BASE, 0x4166_b258, 0x4160_0711); // L2[75]
+        ram
+    }
+
+    #[test]
+    fn gb20_translate_with_base_real_kernel_v01_vector() {
+        let ram = v01_ram();
+        let va = 0xFFFF_FF80_096A_B158u64;
+        assert_eq!(
+            translate_with_base(&v01_state(), &ram, RAM_BASE, va, Access::Read),
+            Ok(0x416A_B158)
+        );
+        assert_eq!(
+            translate_with_base(&v01_state(), &ram, RAM_BASE, va, Access::Write),
+            Ok(0x416A_B158)
+        );
+    }
+
+    #[test]
+    fn gb20_translate_with_base_mmu_off_is_identity() {
+        let st = MmuState {
+            sctlr: 0,
+            ..v01_state()
+        };
+        let ram = v01_ram();
+        assert_eq!(
+            translate_with_base(&st, &ram, RAM_BASE, 0xFFFF_FF80_096A_B158, Access::Read),
+            Ok(0xFFFF_FF80_096A_B158)
+        );
+    }
+
+    #[test]
+    fn gb20_base_zero_matches_translate() {
+        // translate_with_base with base 0 must equal the legacy entry point.
+        let (ram, _) = chain4k();
+        let st = st4k(0x1000);
+        assert_eq!(
+            translate_with_base(&st, &ram, 0, 0x401234, Access::Read),
+            translate(&st, &ram, 0x401234, Access::Read)
+        );
+        assert_eq!(
+            translate_with_base(&st, &ram, 0, 0x401234, Access::Write),
+            translate(&st, &ram, 0x401234, Access::Write)
+        );
+    }
+
+    #[test]
+    fn gb20_base_underflow_is_translation_fault() {
+        // TTBR0 below ram_base: rebasing underflows -> TranslationFault,
+        // never a wraparound read.
+        let st = MmuState {
+            ttbr0: 0x1000, // < RAM_BASE
+            ttbr1: 0,
+            tcr: 16, // 4K, 48-bit, low region
+            sctlr: 1,
+        };
+        let ram = vec![0u8; 0x10000];
+        assert_eq!(
+            translate_with_base(&st, &ram, RAM_BASE, 0x401234, Access::Read),
+            Err(MemFault::TranslationFault { va: 0x401234 })
+        );
+    }
+
+    #[test]
+    fn gb20_base_out_of_range_is_translation_fault() {
+        // TTBR0 rebases to an offset past the end of the slice.
+        let st = MmuState {
+            ttbr0: RAM_BASE + 0x1000, // rebased 0x1000 == slice len
+            ttbr1: 0,
+            tcr: 16,
+            sctlr: 1,
+        };
+        let ram = vec![0u8; 0x1000];
+        assert_eq!(
+            translate_with_base(&st, &ram, RAM_BASE, 0x401234, Access::Read),
+            Err(MemFault::TranslationFault { va: 0x401234 })
         );
     }
 }

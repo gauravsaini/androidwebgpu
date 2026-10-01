@@ -29,8 +29,9 @@ fn test_kernel_boot_measured_failure() {
     orch.machine_mut().cpu[0].regs = [0; 31];
 
     let mut trace = Vec::new();
-    let max_steps = 8192;
+    let max_steps = 16384;
     let mut final_halt = None;
+    let mut x9_at_7534 = 0u64;
 
     for step in 0..max_steps {
         let pc = orch.machine().cpu[0].pc;
@@ -41,6 +42,11 @@ fn test_kernel_boot_measured_failure() {
         );
 
         trace.push((step, pc, word));
+        if step == 7534 {
+            // First fixup-loop iteration: X9 was post-incremented by the
+            // LDR at step 7533; it advances 8 bytes per outer iteration.
+            x9_at_7534 = orch.machine().cpu[0].regs[9];
+        }
 
         match orch.step_vcpu() {
             StepOutcome::Continue => {}
@@ -350,18 +356,49 @@ fn test_kernel_boot_measured_failure() {
     assert_eq!(trace[7532].1, 0x40c0_3324);
     assert_eq!(trace[7532].2, 0x5400_0262); // B.CS 0x40c03370 (not taken) -> OK
     assert_eq!(trace[7533].1, 0x40c0_3328);
-    assert_eq!(trace[7533].2, 0xf840_852b); // LDR X11, [X9], #8 -> HALT (WasmTrap)
+    assert_eq!(trace[7533].2, 0xf840_852b); // LDR X11, [X9], #8 -> OK (GB-20: translated)
+    assert_eq!(trace[7534].1, 0x40c0_332c);
+    assert_eq!(trace[7534].2, 0x3700_00cb); // TBNZ W11, #0, 0x40c03344 -> OK
+    assert_eq!(trace[7535].1, 0x40c0_3330);
+    assert_eq!(trace[7535].2, 0x8b17_016d); // ADD X13, X11, X23 (shifted) -> OK
+    assert_eq!(trace[7536].1, 0x40c0_3334);
+    assert_eq!(trace[7536].2, 0xf940_01ac); // LDR X12, [X13] -> OK (translated)
+    assert_eq!(trace[7537].1, 0x40c0_3338);
+    assert_eq!(trace[7537].2, 0x8b0f_018c); // ADD X12, X12, X15 -> OK
+    assert_eq!(trace[7538].1, 0x40c0_333c);
+    assert_eq!(trace[7538].2, 0xf800_85ac); // STR X12, [X13, X0, LSL #3] -> OK (translated)
+    assert_eq!(trace[7539].1, 0x40c0_3340);
+    assert_eq!(trace[7539].2, 0x17ff_fff8); // B 0x40c03320 -> OK
+    assert_eq!(trace[7540].1, 0x40c0_3320);
+    assert_eq!(trace[7540].2, 0xeb0a_013f); // CMP X9, X10 -> OK
+    assert_eq!(trace[7541].1, 0x40c0_3324);
+    assert_eq!(trace[7541].2, 0x5400_0262); // B.CS 0x40c03370 (not taken) -> OK
+    assert_eq!(trace[7542].1, 0x40c0_3328);
+    assert_eq!(trace[7542].2, 0xf840_852b); // LDR X11, [X9], #8 (2nd outer iter) -> OK
 
-    // The kernel enabled the MMU at step 7506 (SCTLR_EL1 = 0x34f5d91d,
-    // M bit set; measured X0 at the MSR). The emulator stores SCTLR_EL1
-    // but performs no address translation, so the first virtual-address
-    // data access (X9 = 0xffffff80096ab158, a kernel VA) faults honestly
-    // in the wasm backend. Pin the exact halt: step, pc, word, reason.
-    match final_halt {
-        Some(HaltReason::WasmTrap { addr, message }) => {
-            assert_eq!(addr, 0x40c0_3328);
-            assert!(message.starts_with("trap:"), "unexpected trap message: {message}");
-        }
-        other => panic!("expected WasmTrap at 0x40c03328, got {other:?}"),
-    }
+    // GB-20: the MMU data-access translation is wired into WasmHost. The
+    // LDR at step 7533 (X9 = 0xffffff80096ab158, a kernel VA) now walks
+    // the live page tables to PA 0x416ab158 instead of trapping. The
+    // kernel proceeds into its page-table fixup loop (0x40c03320..0x40c0336c):
+    // each outer iteration loads a 64-bit bitmask via LDR X11,[X9],#8
+    // (X9 post-increments by 8) and walks its bits, adding the phys
+    // offset X15 to live entries at X14. Measured over a 1M-step run:
+    // 3141 outer iterations, inner bit counts varying 0..64 per
+    // iteration — X9 genuinely advances, this is forward progress, not
+    // a spin. With the 16384-step budget the kernel is still running:
+    // no halt, no trap. Frontier: no halt within 16384 steps.
+    assert!(
+        final_halt.is_none(),
+        "expected no halt within budget, got {final_halt:?}"
+    );
+    let (_, last_pc, _) = trace.last().unwrap();
+    assert!(
+        (0x40c0_3320..0x40c0_3370).contains(last_pc),
+        "expected final pc in fixup loop, got {last_pc:#x}"
+    );
+    let x9_final = orch.machine().cpu[0].regs[9];
+    assert!(
+        x9_final > x9_at_7534,
+        "X9 did not advance ({x9_final:#x} <= {x9_at_7534:#x}): not progress"
+    );
 }

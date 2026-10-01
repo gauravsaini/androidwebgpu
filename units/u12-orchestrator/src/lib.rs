@@ -67,7 +67,7 @@ use std::collections::VecDeque;
 
 use pathn_contracts::adapters::{BlobStore, InputSource};
 use pathn_contracts::cpu::{
-    BlockExit, DecodeResult, Instruction, IrBlock, IrOp, IrqState, MemFault, MmuState,
+    Access, BlockExit, DecodeResult, Instruction, IrBlock, IrOp, IrqState, MemFault, MmuState,
 };
 use pathn_contracts::device::{DevEvent, DevOut, GpuCmd, GpuDevState, TransportState};
 use pathn_contracts::execution::{BlockExecutor, HostOps};
@@ -1379,6 +1379,35 @@ struct WasmHost<'a> {
     sysregs: &'a mut SysRegs,
 }
 
+impl WasmHost<'_> {
+    /// Live stage-1 translation state, rebuilt from the guest's current
+    /// system registers on every data access. MSR writes update
+    /// `sysregs` directly, so this is always fresh; the persisted
+    /// `MachineState.mmu` snapshot is NOT used here (it is stale).
+    fn mmu_state(&self) -> MmuState {
+        MmuState {
+            sctlr: self.sysregs.sctlr_el1,
+            tcr: self.sysregs.tcr_el1,
+            ttbr0: self.sysregs.ttbr0_el1,
+            ttbr1: self.sysregs.ttbr1_el1,
+        }
+    }
+
+    /// Translate a data-access VA to a guest-physical address. MMU off
+    /// (SCTLR_EL1.M == 0): identity. MMU on: stage-1 walk against the
+    /// live registers, rebasing descriptor PAs by RAM_BASE. Faults
+    /// surface as `mmu_fault: <MemFault>` strings, which the executor
+    /// turns into `HaltReason::WasmTrap`.
+    fn translate_data(&self, va: u64, access: Access) -> Result<u64, String> {
+        let st = self.mmu_state();
+        if st.sctlr & 1 == 0 {
+            return Ok(va);
+        }
+        u4_mmu::translate_with_base(&st, self.ram, RAM_BASE, va, access)
+            .map_err(|f| format!("mmu_fault: {f:?}"))
+    }
+}
+
 /// Translate a guest physical address to a RAM offset (M0: MMU disabled,
 /// identity-with-bounds-check). Free function so the WASM host closures can
 /// use it without borrowing the whole orchestrator.
@@ -1400,7 +1429,9 @@ fn ram_offset_in(ram: &[u8], pa: u64, len: u64) -> Result<usize, MemFault> {
 /// check. Faults become WASM traps (surfaced as `HaltReason::WasmTrap`).
 impl HostOps for WasmHost<'_> {
     fn mem_load(&mut self, addr: i64, size: i64) -> Result<i64, String> {
-        let pa = addr as u64;
+        // Data VA -> PA first (identity when the MMU is off); the
+        // translated PA then dispatches to MMIO or RAM as before.
+        let pa = self.translate_data(addr as u64, Access::Read)?;
         if (CONSOLE_BASE..CONSOLE_BASE + CONSOLE_SIZE).contains(&pa) {
             if size != 1 {
                 return Err("mem_load: console MMIO is byte-only".to_string());
@@ -1434,7 +1465,9 @@ impl HostOps for WasmHost<'_> {
     /// dispatched to their device models; everything else goes through the
     /// RAM bounds check.
     fn mem_store(&mut self, addr: i64, size: i64, val: i64) -> Result<(), String> {
-        let pa = addr as u64;
+        // Data VA -> PA first (identity when the MMU is off); the
+        // translated PA then dispatches to MMIO or RAM as before.
+        let pa = self.translate_data(addr as u64, Access::Write)?;
         if (CONSOLE_BASE..CONSOLE_BASE + CONSOLE_SIZE).contains(&pa) {
             if size != 1 {
                 return Err("mem_store: console MMIO is byte-only".to_string());
@@ -2262,6 +2295,116 @@ mod tests {
                 addr: 0x4000_0000,
                 reason: "CSEL: cond 0b1111 is unallocated",
             }
+        );
+    }
+
+    // ---- GB-20: MMU data-access translation in WasmHost ----
+
+    /// Real AOSP kernel V01 translation vector (GB-19 halt, step 7533).
+    /// VA 0xFFFF_FF80_096A_B158 -> PA 0x416A_B158 via TTBR1, 2 MiB block.
+    fn v01_sysregs() -> SysRegs {
+        SysRegs {
+            sctlr_el1: 0x34f5_d91d, // M=1
+            tcr_el1: 0x0040_0030_b559_3519,
+            ttbr0_el1: 0x4166_5000,
+            ttbr1_el1: 0x4166_a000,
+            ..Default::default()
+        }
+    }
+
+    /// RAM slice starting at RAM_BASE carrying the V01 page tables:
+    /// L1[0]@0x4166a000 = 0x4166b003, L2[75]@0x4166b258 = 0x41600711.
+    fn v01_ram() -> Vec<u8> {
+        let mut ram = vec![0u8; 0x170_0000];
+        let w = |ram: &mut Vec<u8>, pa: u64, v: u64| {
+            let s = (pa - RAM_BASE) as usize;
+            ram[s..s + 8].copy_from_slice(&v.to_le_bytes());
+        };
+        w(&mut ram, 0x4166_a000, 0x4166_b003);
+        w(&mut ram, 0x4166_b258, 0x4160_0711);
+        ram
+    }
+
+    struct HostParts {
+        ram: Vec<u8>,
+        console: ConsoleState,
+        gpu_port: GpuPort,
+        sysregs: SysRegs,
+    }
+
+    fn host_parts(sysregs: SysRegs) -> HostParts {
+        HostParts {
+            ram: v01_ram(),
+            console: ConsoleState::new(),
+            gpu_port: GpuPort::new(),
+            sysregs,
+        }
+    }
+
+    /// Split-borrow helper: build a WasmHost over the parts.
+    fn with_host<T>(p: &mut HostParts, f: impl FnOnce(&mut WasmHost) -> T) -> T {
+        let mut host = WasmHost {
+            ram: &mut p.ram,
+            console: &mut p.console,
+            gpu_port: &mut p.gpu_port,
+            sysregs: &mut p.sysregs,
+        };
+        f(&mut host)
+    }
+
+    #[test]
+    fn gb20_host_translated_read() {
+        let mut p = host_parts(v01_sysregs());
+        // Known pattern at physical 0x416AB158.
+        let off = (0x416A_B158 - RAM_BASE) as usize;
+        p.ram[off..off + 8].copy_from_slice(&0x1122_3344_5566_7788u64.to_le_bytes());
+        let got = with_host(&mut p, |h| {
+            h.mem_load(0xFFFF_FF80_096A_B158u64 as i64, 8)
+        });
+        assert_eq!(got, Ok(0x1122_3344_5566_7788u64 as i64));
+    }
+
+    #[test]
+    fn gb20_host_translated_store() {
+        let mut p = host_parts(v01_sysregs());
+        let r = with_host(&mut p, |h| {
+            h.mem_store(
+                0xFFFF_FF80_096A_B158u64 as i64,
+                8,
+                0xAABB_CCDD_EEFF_0011u64 as i64,
+            )
+        });
+        assert_eq!(r, Ok(()));
+        let off = (0x416A_B158 - RAM_BASE) as usize;
+        let mut b = [0u8; 8];
+        b.copy_from_slice(&p.ram[off..off + 8]);
+        assert_eq!(u64::from_le_bytes(b), 0xAABB_CCDD_EEFF_0011);
+    }
+
+    #[test]
+    fn gb20_host_mmu_off_is_identity() {
+        let mut sysregs = v01_sysregs();
+        sysregs.sctlr_el1 = 0; // MMU off: no walk, identity map.
+        let mut p = host_parts(sysregs);
+        // Physical read at RAM_BASE works with no page tables consulted.
+        let got = with_host(&mut p, |h| h.mem_load(RAM_BASE as i64, 1));
+        assert_eq!(got, Ok(0));
+    }
+
+    #[test]
+    fn gb20_host_translation_fault_surfaces_as_err() {
+        // MMU on but TTBR0 points below RAM_BASE: the walk faults.
+        // WasmHost reports `mmu_fault: ...`; step_vcpu turns any host
+        // Err into HaltReason::WasmTrap (existing path).
+        let mut sysregs = SysRegs::default();
+        sysregs.sctlr_el1 = 1;
+        sysregs.tcr_el1 = 16; // 4K granule, 48-bit, low region
+        sysregs.ttbr0_el1 = 0x1000; // below RAM_BASE -> rebase underflow
+        let mut p = host_parts(sysregs);
+        let err = with_host(&mut p, |h| h.mem_load(0x401234, 8)).unwrap_err();
+        assert!(
+            err.starts_with("mmu_fault:"),
+            "expected mmu_fault prefix, got: {err}"
         );
     }
 }
