@@ -173,13 +173,18 @@ fn decode_dp_reg(word: u32) -> Option<InsnKind> {
         // CLZ only (opcode == 0b000100, S == 0); RBIT/REV*/CLS stay Illegal.
         // The 32-bit form (sf == 0) is recognized and trapped in U2.
         0b11010 => {
-            // Conditional select: sf 00 11010100 Rm cond op Rn Rd (GB-15).
-            // bits[30:21] == 0b00_11010100 (0xD4): CSEL / CSINC / CSINV /
-            // CSNEG. Recognized for both sf values; the executor traps
-            // the 32-bit form explicitly. This check must precede the
-            // 2-source check below: a CSEL with cond == 0b0010 would
-            // otherwise alias the 2-source class (opcode2 >> 2 == cond).
-            if ((word >> 21) & 0x3FF) == 0xD4 {
+            // Conditional select: sf op S 11010100 Rm cond op2 Rn Rd
+            // (GB-15, encoding corrected GB-26). bits[30:21] ==
+            // 0xD4 (op=0: CSEL/CSINC) or 0x2D4 (op=1: CSINV/CSNEG);
+            // bit29 (S) is 0, op2 (bits[11:10]) picks within the pair.
+            // GB-15 only matched op=0, so real CSINV/CSNEG words (op=1,
+            // e.g. 0xDA80202A = csinv x10, x1, x0, hs, measured kernel
+            // halt at step 1249127) fell through to Illegal. This check
+            // must precede the 2-source check below: a CSEL with
+            // cond == 0b0010 would otherwise alias the 2-source class
+            // (opcode2 >> 2 == cond).
+            let b30_21 = (word >> 21) & 0x3FF;
+            if b30_21 == 0xD4 || b30_21 == 0x2D4 {
                 return Some(InsnKind::DataProc);
             }
             let bit30 = (word >> 30) & 1;
@@ -259,13 +264,15 @@ fn decode_ldst(word: u32) -> Option<InsnKind> {
         };
     }
 
-    // 4. Load/store register (immediate pre/post-indexed):
+    // 4. Load/store register (immediate pre/post-indexed, and unscaled):
     // size 111 V 00 opc 0 imm9 type Rn Rt
-    // with bits[29:24] == 0b111000, bit 21 == 0, and type in {0b01 (post), 0b11 (pre)}.
-    // (type == 0b00 is unscaled LDUR/STUR, kept out of scope per existing tests).
+    // with bits[29:24] == 0b111000, bit 21 == 0, and type in {0b01 (post),
+    // 0b11 (pre), 0b00 (unscaled LDUR/STUR)}.
+    // (GB-26: type 0b00 was kept out of scope until the kernel hit STUR
+    // at step 1248988.)
     if (word >> 24) & 0x3F == 0b111000 && (word >> 21) & 1 == 0 {
         let idx_type = (word >> 10) & 0x3;
-        if idx_type == 0b01 || idx_type == 0b11 {
+        if idx_type == 0b01 || idx_type == 0b11 || idx_type == 0b00 {
             let size_bits = (word >> 30) & 0x3;
             let opc = (word >> 22) & 0x3;
             return match opc {
@@ -624,8 +631,12 @@ mod tests {
     }
 
     #[test]
-    fn stur_unscaled_is_illegal() {
-        assert_illegal(0xB800_0020); // unscaled-imm form: out of scope
+    fn stur_unscaled_is_loadstore() {
+        // GB-26: unscaled-imm (LDUR/STUR) is in scope -- the kernel hits
+        // STUR X8, [X29, #-8] (0xF81F83A8) at step 1248988.
+        assert_eq!(ok_kind(0xB800_0020), InsnKind::LoadStore); // STUR W0, [X0]
+        assert_eq!(ok_kind(0xF81F_83A8), InsnKind::LoadStore); // STUR X8, [X29, #-8]
+        assert_eq!(ok_kind(0xF840_0020), InsnKind::LoadStore); // LDUR X0, [X0]
     }
 
     #[test]
@@ -886,11 +897,14 @@ mod tests {
     fn csel_family_is_dataproc() {
         // Real guest word: CSEL X5, X6, X5, HI (0x9A8580C5).
         assert_eq!(ok_kind(0x9A85_80C5), InsnKind::DataProc);
-        // CSINC / CSINV / CSNEG differ only in bits[11:10].
+        // op=bit30 selects the pair, op2=bits[11:10] selects within it:
+        // (0,01)=CSINC, (1,00)=CSINV, (1,01)=CSNEG. GB-15 had the
+        // CSINV/CSNEG words wrong (bit30=0 is unallocated); corrected
+        // GB-26 against capstone + the real kernel word 0xDA80202A.
         assert_eq!(ok_kind(0x9A85_84C5), InsnKind::DataProc); // CSINC
-        assert_eq!(ok_kind(0x9A85_88C5), InsnKind::DataProc); // CSINV
-        assert_eq!(ok_kind(0x9A85_8CC5), InsnKind::DataProc); // CSNEG
-        // 32-bit form classifies too; the executor traps it explicitly.
+        assert_eq!(ok_kind(0xDA80_202A), InsnKind::DataProc); // CSINV (kernel)
+        assert_eq!(ok_kind(0xDA85_84C5), InsnKind::DataProc); // CSNEG
+        // 32-bit form classifies too (sf=0: 0x1A...).
         assert_eq!(ok_kind(0x1A85_80C5), InsnKind::DataProc);
     }
 

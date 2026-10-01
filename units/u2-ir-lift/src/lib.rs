@@ -90,7 +90,6 @@ const R_ADD_SHIFT: &str =
 const R_LS_UNSUPPORTED: &str = "LoadStore: unsupported encoding";
 const R_LS_SUBWORD: &str = "LoadStore: sub-word access width is not expressible in IrOp";
 const R_BR_UNSUPPORTED: &str = "Branch: only B/BL/RET/CBZ/CBNZ are lifted";
-const R_CBZ32: &str = "Branch: 32-bit CBZ/CBNZ width is not expressible in IrOp::CondBranch";
 const R_ORR32: &str = "DataProc: 32-bit ORR width is not expressible in IrOp::OrrShift";
 const R_LS_SP: &str =
     "LoadStore: SP-relative address is not expressible (no SP in the Wave-4 register file)";
@@ -181,6 +180,12 @@ fn lift_system(word: u32) -> Vec<IrOp> {
             (3, 3, 4, 2, 1) => SysReg::Daif,
             // TPIDR_EL1: thread ID register
             (3, 0, 13, 0, 4) => SysReg::TpidrEl1,
+            // SP_EL0 (GB-26): the kernel keeps the current task's
+            // thread_info base here (read in preempt_disable/enable via
+            // `mrs xN, sp_el0`; measured halt at step 1249003,
+            // pc 0xffffff800839b164, word 0xd5384115). MSR SP_EL0 was
+            // already persistent; the MRS read side was missing.
+            (3, 0, 4, 1, 0) => SysReg::SpEl0,
             // CNTHCTL_EL2
             (3, 4, 14, 1, 0) => SysReg::CnthctlEl2,
             // SCTLR_EL1, SCTLR_EL2
@@ -190,8 +195,6 @@ fn lift_system(word: u32) -> Vec<IrOp> {
             (3, 0, 1, 0, 2) => SysReg::CpacrEl1,
             // MDSCR_EL1 (GB-10): kernel zeroes debug control via MSR MDSCR_EL1
             (2, 0, 0, 2, 2) => SysReg::MdscrEl1,
-            // MAIR_EL1 (GB-13): kernel programs memory attributes via MSR MAIR_EL1
-            (3, 0, 10, 2, 0) => SysReg::MairEl1,
             // MAIR_EL1 (GB-13): kernel programs memory attributes via MSR MAIR_EL1
             (3, 0, 10, 2, 0) => SysReg::MairEl1,
             // TCR_EL1 (GB-17): kernel programs translation control via MSR TCR_EL1
@@ -239,6 +242,40 @@ fn lift_system(word: u32) -> Vec<IrOp> {
                     // -> CBZ), so 0 takes the honest conservative
                     // fallback path.
                     (3, 0, 0, 7, 1) => 0,
+                    // DCZID_EL0 (GB-26): measured halt at step 1210749
+                    // (pc 0xffffff8008209d80, word 0xd53b00e3 = MRS X3,
+                    // S3_3_C0_C0_7 -- (op0,op1,crn,crm,op2) = (3,3,0,0,7)
+                    // extracted by hand from the word and confirmed by
+                    // capstone disassembly; not trusted from the first
+                    // reading). Value 0x10: DZP=1 (DC ZVA prohibited).
+                    // Our DC ops are honest NOPs, so advertising "allowed"
+                    // would corrupt memory the kernel expects zeroed;
+                    // DZP=1 takes the kernel's store-based fallback path,
+                    // which we implement. Same conservative shape as the
+                    // GB-14/GB-16 ID-register probes.
+                    (3, 3, 0, 0, 7) => 0x10,
+                    // MPIDR_EL1 (GB-26): measured halt at step 1248961
+                    // (pc 0xffffff80095d2620, word 0xd53800a9 = MRS X9,
+                    // S3_0_C0_C0_5 -- (op0,op1,crn,crm,op2) = (3,0,0,0,5)
+                    // confirmed by capstone disassembly). Value
+                    // 0x40000000: U (bit 30) = 1, uniprocessor system;
+                    // Aff0 = 0, this is the single vCPU 0. The kernel
+                    // derives its CPU number from MPIDR; this is the
+                    // architecturally correct single-CPU value.
+                    // (Fixed: old 0x80000000 set RES0 bit 31, not U.)
+                    (3, 0, 0, 0, 5) => 0x4000_0000,
+                    // MIDR_EL1 (GB-26): measured halt at step 1248969
+                    // (pc 0xffffff80095d2640, word 0xd5380002 = MRS X2,
+                    // S3_0_C0_C0_0 -- (op0,op1,crn,crm,op2) = (3,0,0,0,0)
+                    // confirmed by capstone disassembly). Value 0: no
+                    // implementer/part advertised, so the kernel's errata
+                    // framework matches nothing and takes the generic
+                    // path -- same conservative shape as the GB-14/GB-16
+                    // ID-register probes. (Deliberately NOT a real
+                    // Cortex-A57 MIDR: claiming real silicon would invite
+                    // errata workarounds that poke IMPLEMENTATION DEFINED
+                    // registers we don't model.)
+                    (3, 0, 0, 0, 0) => 0,
                     _ => return trap(R_SYSTEM),
                 };
                 vec![IrOp::Mov { dst: rt, imm: val }]
@@ -279,8 +316,6 @@ fn lift_system(word: u32) -> Vec<IrOp> {
             (3, 0, 1, 0, 2) => SysReg::CpacrEl1,
             // MDSCR_EL1 (GB-10): kernel zeroes debug control via MSR MDSCR_EL1
             (2, 0, 0, 2, 2) => SysReg::MdscrEl1,
-            // MAIR_EL1 (GB-13): kernel programs memory attributes via MSR MAIR_EL1
-            (3, 0, 10, 2, 0) => SysReg::MairEl1,
             // MAIR_EL1 (GB-13): kernel programs memory attributes via MSR MAIR_EL1
             (3, 0, 10, 2, 0) => SysReg::MairEl1,
             // TCR_EL1 (GB-17): kernel programs translation control via MSR TCR_EL1
@@ -788,11 +823,15 @@ fn lift_load_store(insn: &Instruction) -> Vec<IrOp> {
         return trap(R_LS_UNSUPPORTED);
     }
 
-    // 4. Load/store register (immediate pre/post-indexed):
+    // 4. Load/store register (immediate pre/post-indexed, and unscaled):
     // size 111 V 00 opc 0 imm9 type Rn Rt with bits[29:24] == 0b111000, bit 21 == 0.
+    // type 0b01 = post-index, 0b11 = pre-index, 0b00 = unscaled (LDUR/STUR:
+    // address = base + simm9, no writeback). GB-26: unscaled was
+    // deliberately out of scope until the kernel hit STUR at step 1248988
+    // (pc 0xffffff80083969c0, word 0xf81f83a8 = STUR X8, [X29, #-8]).
     if (word >> 24) & 0x3F == 0b111000 && (word >> 21) & 1 == 0 {
         let idx_type = (word >> 10) & 0x3;
-        if idx_type == 0b01 || idx_type == 0b11 {
+        if idx_type == 0b01 || idx_type == 0b11 || idx_type == 0b00 {
             let size_bits = (word >> 30) & 0x3;
             let opc = (word >> 22) & 0x3;
             let imm9 = ((word >> 12) & 0x1FF) as i32;
@@ -825,7 +864,9 @@ fn lift_load_store(insn: &Instruction) -> Vec<IrOp> {
                 return trap(R_LS_UNSUPPORTED);
             }
 
-            if simm9 != 0 {
+            if simm9 != 0 && idx_type != 0b00 {
+                // Writeback for pre/post-index only. Unscaled (LDUR/STUR)
+                // has no writeback: the address IS base + simm9.
                 ops.push(IrOp::Mov { dst: SCRATCH, imm: simm9 as u64 });
                 ops.push(IrOp::Add { dst: rn, a: rn, b: SCRATCH });
             }
@@ -947,7 +988,6 @@ fn lift_branch(insn: &Instruction) -> Vec<IrOp> {
         return vec![link, IrOp::BranchDyn { reg: rn }];
     }
     // CBZ/CBNZ (64-bit): sf 011010 op imm19 Rt (bits 31:24 = 0xB4/0xB5).
-    // 32-bit forms trap: the low-32 test is not expressible in CondBranch.
     let top8 = (word >> 24) & 0xFF;
     if top8 == 0xB4 || top8 == 0xB5 {
         let imm19 = (word >> 5) & 0x7FFFF;
@@ -960,8 +1000,22 @@ fn lift_branch(insn: &Instruction) -> Vec<IrOp> {
             when_zero: top8 == 0xB4,
         }];
     }
+    // CBZ/CBNZ (32-bit): sf 001010 op imm19 Rt (bits 31:24 = 0x34/0x35).
+    // Tests only the LOW 32 bits of Rt. Not directly expressible in
+    // CondBranch (which tests the full 64-bit slot), so zero-extend
+    // into SCRATCH first: (Rt << 32) >> 32 logical = Rt & 0xFFFFFFFF.
+    // (GB-26: was a deliberate trap until the kernel hit 32-bit CBZ at
+    // step 1249078, pc 0xffffff800839b390, word 0x35000056.)
     if top8 == 0x34 || top8 == 0x35 {
-        return trap(R_CBZ32);
+        let imm19 = (word >> 5) & 0x7FFFF;
+        let offset = (((imm19 as i32) << 13) >> 13) as i64 * 4;
+        let target = (insn.addr as i64).wrapping_add(offset) as u64;
+        let rt = (word & 0x1F) as u8;
+        return vec![
+            IrOp::OrrShift { dst: SCRATCH, a: 31, b: rt, shift: 0, amount: 32 },
+            IrOp::OrrShift { dst: SCRATCH, a: 31, b: SCRATCH, shift: 1, amount: 32 },
+            IrOp::CondBranch { reg: SCRATCH, target, when_zero: top8 == 0x34 },
+        ];
     }
     trap(R_BR_UNSUPPORTED)
 }
@@ -1353,6 +1407,25 @@ mod tests {
                 IrOp::Mov { dst: SCRATCH, imm: 8 },
                 IrOp::Add { dst: 1, a: 1, b: SCRATCH },
             ]
+        );
+    }
+
+    #[test]
+    fn gb26_stur_ldur_unscaled_no_writeback() {
+        // GB-26: STUR X8, [X29, #-8] (word 0xF81F83A8, measured kernel
+        // halt at step 1248988). Unscaled: address = base + simm9, and
+        // -- unlike pre/post-index -- there is NO writeback.
+        let ops = lift(&insn(0x4000, 0xF81F_83A8, InsnKind::LoadStore));
+        assert_eq!(
+            ops,
+            vec![IrOp::StoreDyn { src: 8, base: 29, off: (-8i64) as u64, size: 8 }]
+        );
+
+        // LDUR X0, [X1] (word 0xF8400020): zero offset, still no writeback.
+        let ops = lift(&insn(0x4000, 0xF840_0020, InsnKind::LoadStore));
+        assert_eq!(
+            ops,
+            vec![IrOp::LoadDyn { dst: 0, base: 1, off: 0, size: 8 }]
         );
     }
 
@@ -1792,10 +1865,33 @@ mod tests {
     }
 
     #[test]
-    fn wave4_cbz_32bit_traps() {
-        // CBZ W0, #0: 32-bit width is not expressible in CondBranch.
+    fn wave4_cbz_32bit_zero_extends() {
+        // CBZ W0, #0 (0x34000000): tests only the low 32 bits, so the
+        // lifter zero-extends W0 into SCRATCH, then CondBranches on it.
         let ops = lift(&insn(0x4000, 0x3400_0000, InsnKind::Branch));
-        assert_eq!(ops, vec![IrOp::Trap { reason: R_CBZ32 }]);
+        assert_eq!(
+            ops,
+            vec![
+                IrOp::OrrShift { dst: SCRATCH, a: 31, b: 0, shift: 0, amount: 32 },
+                IrOp::OrrShift { dst: SCRATCH, a: 31, b: SCRATCH, shift: 1, amount: 32 },
+                IrOp::CondBranch { reg: SCRATCH, target: 0x4000, when_zero: true },
+            ]
+        );
+    }
+
+    #[test]
+    fn gb26_cbnz_32bit_kernel_word() {
+        // CBNZ W22, #+8 (word 0x35000056, measured kernel halt at step
+        // 1249078, pc 0xffffff800839b390). imm19 = 2 -> offset +8.
+        let ops = lift(&insn(0xffffff800839b390, 0x3500_0056, InsnKind::Branch));
+        assert_eq!(
+            ops,
+            vec![
+                IrOp::OrrShift { dst: SCRATCH, a: 31, b: 22, shift: 0, amount: 32 },
+                IrOp::OrrShift { dst: SCRATCH, a: 31, b: SCRATCH, shift: 1, amount: 32 },
+                IrOp::CondBranch { reg: SCRATCH, target: 0xffffff800839b398, when_zero: false },
+            ]
+        );
     }
 
     #[test]
@@ -1879,6 +1975,12 @@ mod tests {
             lift(&insn(0x4000, 0xD53B_4220, InsnKind::System)),
             vec![IrOp::ReadSys { dst: 0, reg: SysReg::Daif }]
         );
+        // SP_EL0 -> persistent (GB-26: kernel reads thread_info base via
+        // `mrs x21, sp_el0`; word 0xD5384115, halt at step 1249003)
+        assert_eq!(
+            lift(&insn(0x4000, 0xD538_4115, InsnKind::System)),
+            vec![IrOp::ReadSys { dst: 21, reg: SysReg::SpEl0 }]
+        );
         // NZCV -> 0 (stays in GB-2 live pstate flag path)
         assert_eq!(
             lift(&insn(0x4000, 0xD53B_4200, InsnKind::System)),
@@ -1888,6 +1990,41 @@ mod tests {
         assert_eq!(
             lift(&insn(0x4000, 0xD538_D080, InsnKind::System)),
             vec![IrOp::ReadSys { dst: 0, reg: SysReg::TpidrEl1 }]
+        );
+    }
+
+    #[test]
+    fn gb26_mrs_dczid_el0_lifts_to_mov_prohibited() {
+        // DCZID_EL0 = MRS X3, S3_3_C0_C0_7 (word 0xD53B00E3, measured
+        // kernel halt at step 1210749, pc 0xffffff8008209d80).
+        // DZP (bit 4) is set: our DC ZVA is an honest NOP, so the
+        // kernel must take its store-based zeroing fallback.
+        assert_eq!(
+            lift(&insn(0x4000, 0xD53B_00E3, InsnKind::System)),
+            vec![IrOp::Mov { dst: 3, imm: 0x10 }]
+        );
+    }
+
+    #[test]
+    fn gb26_mrs_mpidr_el1_lifts_to_mov_uniprocessor() {
+        // MPIDR_EL1 = MRS X9, S3_0_C0_C0_5 (word 0xD53800A9, measured
+        // kernel halt at step 1248961, pc 0xffffff80095d2620).
+        // U (bit 30) = 1: uniprocessor; Aff0 = 0: this is vCPU 0.
+        assert_eq!(
+            lift(&insn(0x4000, 0xD538_00A9, InsnKind::System)),
+            vec![IrOp::Mov { dst: 9, imm: 0x4000_0000 }]
+        );
+    }
+
+    #[test]
+    fn gb26_mrs_midr_el1_lifts_to_mov_zero() {
+        // MIDR_EL1 = MRS X2, S3_0_C0_C0_0 (word 0xD5380002, measured
+        // kernel halt at step 1248969, pc 0xffffff80095d2640).
+        // 0 = no implementer/part advertised; the kernel's errata
+        // framework matches nothing and takes the generic path.
+        assert_eq!(
+            lift(&insn(0x4000, 0xD538_0002, InsnKind::System)),
+            vec![IrOp::Mov { dst: 2, imm: 0 }]
         );
     }
 

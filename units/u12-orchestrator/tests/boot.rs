@@ -92,13 +92,19 @@ fn boot_pipeline_chains_blocks_through_wasmtime() {
     );
     // 5 blocks executed through real wasmtime (one per lifted
     // instruction); the 6th step halted at decode and never executed.
+    // GB-26: ADD (0x8B020023) now uses the U12 shifted-register S=0
+    // fast path instead of WASM, so only 4 WASM blocks are compiled.
+    // The ADD still executes correctly via the fast path.
     assert_eq!(o.steps(), 5);
     assert_eq!(
         o.machine().irq.timer_count,
         5 * u12_orchestrator::TIMER_CYCLES_PER_STEP
     );
-    // The block cache actually cached: 5 distinct pcs compiled.
-    assert_eq!(o.block_cache_len(), 5);
+    // The block cache actually cached: 4 distinct pcs compiled
+    // (ADD bypassed WASM via fast path).
+    assert_eq!(o.block_cache_len(), 4);
+    // Verify the ADD executed correctly via fast path: X3 = 5 + 7 = 12.
+    assert_eq!(o.machine().cpu[0].regs[3], 12);
 }
 
 #[test]
