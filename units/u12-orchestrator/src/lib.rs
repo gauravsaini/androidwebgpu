@@ -690,17 +690,20 @@ impl Orchestrator {
 
         // 3. Add/subtract (immediate) with S=1: ADDS / SUBS / CMP / CMN
         // sf op S 10001 sh imm12 Rn Rd
+        // GB-24: Also handle S=0 (plain ADD/SUB). For S=0, Rd=31 means SP
+        // (not XZR) — this is how the kernel sets up its stack.
         if (word >> 24) & 0x1F == 0x11 {
             let s = (word >> 29) & 1;
+            let sf = (word >> 31) & 1;
+            let op = (word >> 30) & 1; // 0 = ADD, 1 = SUB
+            let sh = (word >> 22) & 1;
+            let imm12 = (word >> 10) & 0xFFF;
+            let rn = ((word >> 5) & 0x1F) as usize;
+            let rd = (word & 0x1F) as usize;
+            let imm = (imm12 as u64) << (if sh == 1 { 12 } else { 0 });
+            // Rn=31 means SP for ADD/SUB (both S=0 and S=1).
+            let rn_val = if rn == 31 { self.machine.cpu[0].sp } else { self.machine.cpu[0].regs[rn] };
             if s == 1 {
-                let sf = (word >> 31) & 1;
-                let op = (word >> 30) & 1; // 0 = ADD, 1 = SUB
-                let sh = (word >> 22) & 1;
-                let imm12 = (word >> 10) & 0xFFF;
-                let rn = ((word >> 5) & 0x1F) as usize;
-                let rd = (word & 0x1F) as usize;
-                let imm = (imm12 as u64) << (if sh == 1 { 12 } else { 0 });
-                let rn_val = if rn == 31 { self.machine.cpu[0].sp } else { self.machine.cpu[0].regs[rn] };
                 if sf == 1 {
                     let nzcv = if op == 0 {
                         let res = rn_val.wrapping_add(imm);
@@ -725,6 +728,37 @@ impl Orchestrator {
                         nzcv_sub32(a32, b32)
                     };
                     self.machine.cpu[0].pstate = (self.machine.cpu[0].pstate & !FLAGS_NZCV_MASK) | nzcv;
+                }
+                self.machine.cpu[0].pc = pc.wrapping_add(4);
+                return Some(Ok(()));
+            } else {
+                // S=0: plain ADD/SUB. Rd=31 means SP (not XZR).
+                // This handles stack setup like SUB SP, SP, #imm.
+                if sf == 1 {
+                    let res = if op == 0 {
+                        rn_val.wrapping_add(imm)
+                    } else {
+                        rn_val.wrapping_sub(imm)
+                    };
+                    if rd == 31 {
+                        self.machine.cpu[0].sp = res;
+                    } else {
+                        self.machine.cpu[0].regs[rd] = res;
+                    }
+                } else {
+                    let a32 = rn_val as u32;
+                    let b32 = imm as u32;
+                    let res = if op == 0 {
+                        a32.wrapping_add(b32)
+                    } else {
+                        a32.wrapping_sub(b32)
+                    };
+                    if rd == 31 {
+                        // 32-bit ADD/SUB to SP: zero-extend to 64-bit.
+                        self.machine.cpu[0].sp = res as u64;
+                    } else {
+                        self.machine.cpu[0].regs[rd] = res as u64;
+                    }
                 }
                 self.machine.cpu[0].pc = pc.wrapping_add(4);
                 return Some(Ok(()));
@@ -822,6 +856,24 @@ impl Orchestrator {
                 } else {
                     let op2 = !eval_shift32(rm_val as u32, shift, imm6 & 0x1F);
                     let res = (rn_val as u32) & op2;
+                    if rd != 31 { self.machine.cpu[0].regs[rd] = res as u64; }
+                }
+                self.machine.cpu[0].pc = pc.wrapping_add(4);
+                return Some(Ok(()));
+            }
+            // GB-25: ORR (opc=01). Rd = Rn | shift(Rm).
+            // 32-bit form (sf=0) zeroes upper 32 bits of Rd.
+            // Note: for logical ops, Rn/Rm=31 means XZR (not SP).
+            if opc == 0b01 && shift < 3 {
+                let rn_val = if rn == 31 { 0 } else { self.machine.cpu[0].regs[rn] };
+                let rm_val = if rm == 31 { 0 } else { self.machine.cpu[0].regs[rm] };
+                if sf == 1 {
+                    let op2 = eval_shift64(rm_val, shift, imm6);
+                    let res = rn_val | op2;
+                    if rd != 31 { self.machine.cpu[0].regs[rd] = res; }
+                } else {
+                    let op2 = eval_shift32(rm_val as u32, shift, imm6 & 0x1F);
+                    let res = (rn_val as u32) | op2;
                     if rd != 31 { self.machine.cpu[0].regs[rd] = res as u64; }
                 }
                 self.machine.cpu[0].pc = pc.wrapping_add(4);
@@ -2833,5 +2885,110 @@ mod tests {
         let mut b = [0u8; 8];
         b.copy_from_slice(&o.machine().ram[s..s + 8]);
         assert_eq!(u64::from_le_bytes(b), 0);
+    }
+
+    #[test]
+    fn gb24_add_sp_imm_updates_sp() {
+        // GB-24: ADD SP, SP, #16 updates SP (Rd=31 means SP for S=0).
+        // 1001000100 imm12=16 11111 11111 = 0x910040FF.
+        let pc = RAM_BASE + 0x1000;
+        let sp = RAM_BASE + 0x2000;
+        let mut o = sp_test_orchestrator(pc, sp, 0x9100_43FF);
+        let outcome = o.step_vcpu();
+        assert!(
+            matches!(outcome, StepOutcome::Continue),
+            "expected Continue, got: {outcome:?}"
+        );
+        assert_eq!(o.machine().cpu[0].sp, sp + 16);
+        assert_eq!(o.machine().cpu[0].pc, pc + 4);
+    }
+
+    #[test]
+    fn gb24_sub_sp_imm_updates_sp() {
+        // GB-24: SUB SP, SP, #32 updates SP.
+        // 1101000100 imm12=32 11111 11111 = 0xD10080FF.
+        let pc = RAM_BASE + 0x1000;
+        let sp = RAM_BASE + 0x2000;
+        let mut o = sp_test_orchestrator(pc, sp, 0xD100_83FF);
+        let outcome = o.step_vcpu();
+        assert!(
+            matches!(outcome, StepOutcome::Continue),
+            "expected Continue, got: {outcome:?}"
+        );
+        assert_eq!(o.machine().cpu[0].sp, sp - 32);
+        assert_eq!(o.machine().cpu[0].pc, pc + 4);
+    }
+
+    #[test]
+    fn gb24_add_x0_sp_imm_reads_sp() {
+        // GB-24: ADD X0, SP, #8 reads SP (Rn=31) into X0.
+        // 1001000100 imm12=8 11111 00000 = 0x910020E0.
+        let pc = RAM_BASE + 0x1000;
+        let sp = RAM_BASE + 0x2000;
+        let mut o = sp_test_orchestrator(pc, sp, 0x9100_23E0);
+        let outcome = o.step_vcpu();
+        assert!(
+            matches!(outcome, StepOutcome::Continue),
+            "expected Continue, got: {outcome:?}"
+        );
+        assert_eq!(o.machine().cpu[0].regs[0], sp + 8);
+        // SP unchanged.
+        assert_eq!(o.machine().cpu[0].sp, sp);
+    }
+
+    #[test]
+    fn gb25_orr_32() {
+        // GB-25: ORR W0, W1, W2 (32-bit). Rd = Rn | Rm, upper 32 zeroed.
+        // 00101010 00 0 00010 000000 00001 00000 = 0x2A020020.
+        let pc = RAM_BASE + 0x1000;
+        let sp = RAM_BASE + 0x2000;
+        let mut o = sp_test_orchestrator(pc, sp, 0x2A02_0020);
+        o.machine_mut().cpu[0].regs[1] = 0xFFFF_FFFF_0000_00F0;
+        o.machine_mut().cpu[0].regs[2] = 0x0000_0000_0000_0F0F;
+        let outcome = o.step_vcpu();
+        assert!(
+            matches!(outcome, StepOutcome::Continue),
+            "expected Continue, got: {outcome:?}"
+        );
+        // 32-bit: (0x000000F0 | 0x00000F0F) = 0x00000FFF, upper zeroed.
+        assert_eq!(o.machine().cpu[0].regs[0], 0x0000_0FFF);
+        assert_eq!(o.machine().cpu[0].pc, pc + 4);
+    }
+
+    #[test]
+    fn gb25_orr_64() {
+        // GB-25: ORR X0, X1, X2 (64-bit).
+        // 10101010 00 0 00010 000000 00001 00000 = 0xAA020020.
+        let pc = RAM_BASE + 0x1000;
+        let sp = RAM_BASE + 0x2000;
+        let mut o = sp_test_orchestrator(pc, sp, 0xAA02_0020);
+        o.machine_mut().cpu[0].regs[1] = 0xF0F0_0000_0000_00F0;
+        o.machine_mut().cpu[0].regs[2] = 0x0F0F_FFFF_FFFF_0F0F;
+        let outcome = o.step_vcpu();
+        assert!(
+            matches!(outcome, StepOutcome::Continue),
+            "expected Continue, got: {outcome:?}"
+        );
+        assert_eq!(o.machine().cpu[0].regs[0], 0xFFFF_FFFF_FFFF_0FFF);
+        assert_eq!(o.machine().cpu[0].pc, pc + 4);
+    }
+
+    #[test]
+    fn gb25_orr_32_shifted() {
+        // GB-25: ORR W0, W1, W2, LSL #4 (32-bit with shift).
+        // 00101010 00 0 00010 000100 00001 00000 = 0x2A021020.
+        let pc = RAM_BASE + 0x1000;
+        let sp = RAM_BASE + 0x2000;
+        let mut o = sp_test_orchestrator(pc, sp, 0x2A02_1020);
+        o.machine_mut().cpu[0].regs[1] = 0x0000_00F0;
+        o.machine_mut().cpu[0].regs[2] = 0x0000_000F;
+        let outcome = o.step_vcpu();
+        assert!(
+            matches!(outcome, StepOutcome::Continue),
+            "expected Continue, got: {outcome:?}"
+        );
+        // W2 << 4 = 0xF0, 0xF0 | 0xF0 = 0xF0.
+        assert_eq!(o.machine().cpu[0].regs[0], 0x0000_00F0);
+        assert_eq!(o.machine().cpu[0].pc, pc + 4);
     }
 }
