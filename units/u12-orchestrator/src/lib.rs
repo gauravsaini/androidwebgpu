@@ -548,12 +548,35 @@ impl Orchestrator {
     }
 
     fn fetch_word(&self, pc: u64) -> Result<u32, HaltReason> {
-        match self.ram_offset(pc, 4) {
+        // GB-22: instruction fetch goes through stage-1 translation, same
+        // as GB-20's data accesses. MMU off: identity. MMU on: VA -> PA
+        // with Access::Execute (XN/PXN enforced); a translation fault is
+        // an honest FetchFault at the faulting VA.
+        let pa = self.translate_fetch(pc)?;
+        match self.ram_offset(pa, 4) {
             Ok(off) => Ok(u32::from_le_bytes(
                 self.machine.ram[off..off + 4].try_into().unwrap(),
             )),
             Err(_) => Err(HaltReason::FetchFault { addr: pc }),
         }
+    }
+
+    /// Translate a fetch VA to a guest-physical address. Mirrors
+    /// WasmHost::translate_data but reports FetchFault (the fetch path's
+    /// own halt reason) instead of a trap string.
+    fn translate_fetch(&self, va: u64) -> Result<u64, HaltReason> {
+        let sysregs = &self.machine.cpu[0].sysregs;
+        if sysregs.sctlr_el1 & 1 == 0 {
+            return Ok(va);
+        }
+        let st = MmuState {
+            sctlr: sysregs.sctlr_el1,
+            tcr: sysregs.tcr_el1,
+            ttbr0: sysregs.ttbr0_el1,
+            ttbr1: sysregs.ttbr1_el1,
+        };
+        u4_mmu::translate_with_base(&st, &self.machine.ram, RAM_BASE, va, Access::Execute)
+            .map_err(|_| HaltReason::FetchFault { addr: va })
     }
 
     /// MMIO dispatch per PLATFORM.md. Returns Some(byte) for console reads,
@@ -2452,6 +2475,64 @@ mod tests {
         assert!(
             matches!(outcome, StepOutcome::Halted(HaltReason::ExitVm)),
             "expected ExitVm halt, got: {outcome:?}"
+        );
+    }
+
+    #[test]
+    fn gb22_fetch_translates_kernel_va() {
+        // GB-22: fetch_word goes through stage-1 translation. With the V01
+        // page tables (VA 0xffffff80096abxxx -> PA 0x416abxxx, verified in
+        // GB-20), a NOP at PA 0x416ab000 must be fetched when pc is the
+        // kernel VA 0xffffff80096ab000.
+        let mut o = Orchestrator::new();
+        {
+            let m = o.machine_mut();
+            // V01 page tables: L1[0]@0x4166a000, L2[75]@0x4166b258.
+            let w = |ram: &mut Vec<u8>, pa: u64, v: u64| {
+                let s = (pa - RAM_BASE) as usize;
+                ram[s..s + 8].copy_from_slice(&v.to_le_bytes());
+            };
+            w(&mut m.ram, 0x4166_a000, 0x4166_b003);
+            w(&mut m.ram, 0x4166_b258, 0x4160_0711);
+            // NOP (0xD503201F) at PA 0x416ab000.
+            let s = (0x416a_b000 - RAM_BASE) as usize;
+            m.ram[s..s + 4].copy_from_slice(&0xD503_201Fu32.to_le_bytes());
+            // MMU on, V01 registers.
+            m.cpu[0].sysregs.sctlr_el1 = 0x34f5_d91d; // M=1
+            m.cpu[0].sysregs.tcr_el1 = 0x0040_0030_b559_3519;
+            m.cpu[0].sysregs.ttbr0_el1 = 0x4166_5000;
+            m.cpu[0].sysregs.ttbr1_el1 = 0x4166_a000;
+            m.cpu[0].pc = 0xffff_ff80_096a_b000;
+        }
+        let outcome = o.step_vcpu();
+        assert!(
+            matches!(outcome, StepOutcome::Continue),
+            "expected Continue, got: {outcome:?}"
+        );
+        assert_eq!(o.machine().cpu[0].pc, 0xffff_ff80_096a_b004);
+        assert_eq!(o.halted(), None);
+    }
+
+    #[test]
+    fn gb22_fetch_unmapped_va_is_fetch_fault() {
+        // GB-22: a fetch VA with no mapping faults honestly as FetchFault
+        // at the VA (not a silent wrong-physical read).
+        let mut o = Orchestrator::new();
+        {
+            let m = o.machine_mut();
+            m.cpu[0].sysregs.sctlr_el1 = 0x34f5_d91d; // M=1, no tables
+            m.cpu[0].sysregs.tcr_el1 = 0x0040_0030_b559_3519;
+            m.cpu[0].sysregs.ttbr0_el1 = 0x4166_5000;
+            m.cpu[0].sysregs.ttbr1_el1 = 0x4166_a000;
+            m.cpu[0].pc = 0xffff_ff80_096a_b000;
+        }
+        let outcome = o.step_vcpu();
+        assert!(
+            matches!(
+                outcome,
+                StepOutcome::Halted(HaltReason::FetchFault { addr: 0xffff_ff80_096a_b000 })
+            ),
+            "expected FetchFault, got: {outcome:?}"
         );
     }
 }
