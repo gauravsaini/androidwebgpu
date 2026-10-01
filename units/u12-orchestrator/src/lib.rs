@@ -333,6 +333,9 @@ pub struct Orchestrator {
     pub clock_cycles: u64,
     pub steps: u64,
     pub halted: Option<HaltReason>,
+    /// Optional trace writer for per-step tracing.
+    #[cfg(not(target_arch = "wasm32"))]
+    trace_writer: Option<std::io::BufWriter<std::fs::File>>,
     /// Per-queue last-notified used index for EVENT_IDX decisions.
     last_notified: Vec<u16>,
     /// Local exclusive monitor for LDXR/STXR (GB-26). `Some((addr, size))`
@@ -360,7 +363,8 @@ fn default_executor() -> Box<dyn BlockExecutor> {
 
 impl Orchestrator {
     pub fn new() -> Self {
-        Self {
+        #[allow(unused_mut)]
+        let mut orch = Self {
             machine: MachineState {
                 cpu: vec![CpuState {
                     regs: [0; 31],
@@ -399,9 +403,37 @@ impl Orchestrator {
             clock_cycles: 0,
             steps: 0,
             halted: None,
+            #[cfg(not(target_arch = "wasm32"))]
+            trace_writer: None,
             last_notified: Vec::new(),
             exclusive: None,
             executor: default_executor(),
+        };
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            if let Ok(trace_path) = std::env::var("PATHN_TRACE") {
+                if !trace_path.is_empty() {
+                    let _ = orch.enable_trace_file(&trace_path);
+                }
+            }
+        }
+        orch
+    }
+
+    /// Enable instruction tracing to the specified file path.
+    /// Format per instruction: `step pc word x0..x30 sp nzcv`
+    #[cfg(not(target_arch = "wasm32"))]
+    pub fn enable_trace_file(&mut self, path: &str) -> std::io::Result<()> {
+        let file = std::fs::File::create(path)?;
+        self.trace_writer = Some(std::io::BufWriter::new(file));
+        Ok(())
+    }
+
+    /// Flush any pending trace output.
+    #[cfg(not(target_arch = "wasm32"))]
+    pub fn flush_trace(&mut self) {
+        if let Some(ref mut w) = self.trace_writer {
+            let _ = std::io::Write::flush(w);
         }
     }
 
@@ -2185,6 +2217,20 @@ impl Orchestrator {
             }
         };
 
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            if let Some(ref mut w) = self.trace_writer {
+                use std::io::Write;
+                let cpu = &self.machine.cpu[0];
+                let nzcv = (cpu.pstate >> 28) & 0xF;
+                let _ = write!(w, "{} 0x{:016x} 0x{:08x}", self.steps, pc, word);
+                for r in &cpu.regs {
+                    let _ = write!(w, " 0x{:016x}", r);
+                }
+                let _ = writeln!(w, " 0x{:016x} 0x{:x}", cpu.sp, nzcv);
+            }
+        }
+
         // Fast path first (GB-23): handles SP-relative and other forms that
         // U1/U2 don't lift yet. Tried before decode so unrecognized words
         // get a chance here. The kind is unused by execute_arm64 (it decodes
@@ -2622,6 +2668,13 @@ impl Orchestrator {
 impl Default for Orchestrator {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+impl Drop for Orchestrator {
+    fn drop(&mut self) {
+        self.flush_trace();
     }
 }
 
