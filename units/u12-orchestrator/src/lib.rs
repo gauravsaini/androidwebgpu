@@ -67,7 +67,8 @@ use std::collections::VecDeque;
 
 use pathn_contracts::adapters::{BlobStore, InputSource};
 use pathn_contracts::cpu::{
-    Access, BlockExit, DecodeResult, Instruction, IrBlock, IrOp, IrqState, MemFault, MmuState,
+    Access, BlockExit, DecodeResult, InsnKind, Instruction, IrBlock, IrOp, IrqState, MemFault,
+    MmuState,
 };
 use pathn_contracts::device::{DevEvent, DevOut, GpuCmd, GpuDevState, TransportState};
 use pathn_contracts::execution::{BlockExecutor, HostOps};
@@ -565,6 +566,23 @@ impl Orchestrator {
     /// WasmHost::translate_data but reports FetchFault (the fetch path's
     /// own halt reason) instead of a trap string.
     fn translate_fetch(&self, va: u64) -> Result<u64, HaltReason> {
+        self.translate_va(va, Access::Execute)
+            .map_err(|_| HaltReason::FetchFault { addr: va })
+    }
+
+    /// Translate a data-access VA to a guest-physical address for the
+    /// fast-path interpreter. MMU off: identity. Faults become WasmTrap
+    /// (same surfacing as WasmHost data accesses).
+    fn translate_data_orch(&self, va: u64, access: Access) -> Result<u64, HaltReason> {
+        self.translate_va(va, access)
+            .map_err(|f| HaltReason::WasmTrap {
+                addr: va,
+                message: format!("mmu_fault: {f:?}"),
+            })
+    }
+
+    /// Shared VA->PA translation. MMU off (SCTLR_EL1.M == 0): identity.
+    fn translate_va(&self, va: u64, access: Access) -> Result<u64, MemFault> {
         let sysregs = &self.machine.cpu[0].sysregs;
         if sysregs.sctlr_el1 & 1 == 0 {
             return Ok(va);
@@ -575,8 +593,7 @@ impl Orchestrator {
             ttbr0: sysregs.ttbr0_el1,
             ttbr1: sysregs.ttbr1_el1,
         };
-        u4_mmu::translate_with_base(&st, &self.machine.ram, RAM_BASE, va, Access::Execute)
-            .map_err(|_| HaltReason::FetchFault { addr: va })
+        u4_mmu::translate_with_base(&st, &self.machine.ram, RAM_BASE, va, access)
     }
 
     /// MMIO dispatch per PLATFORM.md. Returns Some(byte) for console reads,
@@ -886,6 +903,142 @@ impl Orchestrator {
             return Some(Ok(()));
         }
 
+        // 7. SP-relative load/store (unsigned immediate and pair).
+        // GB-23: the Wave-4 IR has no SP, so U2 traps these. The fast path
+        // handles the common forms directly: Rn=31 reads SP.
+        // STR/LDR (unsigned imm): xx111000 Vx imm12 Rn Rt
+        //   xx=10 (32-bit) / 11 (64-bit); V=0 (STR) / 1 (LDR)
+        // STP/LDP (signed off): 10101001 1x imm7 Rt2 Rn Rt1
+        //   x=1 (STP) / 0 (LDP), 64-bit only here
+        let op10 = (word >> 22) & 0x3FF;
+        let rn = ((word >> 5) & 0x1F) as usize;
+        if rn == 31 {
+            // STR/LDR unsigned immediate.
+            if (op10 & 0x3FC) == 0x3E0 || (op10 & 0x3FC) == 0x2E0 {
+                // Size is word bit 30 -> op10 bit 8 (0x100). Bit 31 is 1
+                // for both 32-bit and 64-bit unsigned-immediate forms.
+                let is64 = (op10 & 0x100) != 0;
+                let is_load = (op10 & 0x1) != 0;
+                let imm12 = ((word >> 10) & 0xFFF) as u64;
+                let rt = (word & 0x1F) as usize;
+                let size: u64 = if is64 { 8 } else { 4 };
+                let va = self.machine.cpu[0].sp.wrapping_add(imm12 * size);
+                let access = if is_load { Access::Read } else { Access::Write };
+                let pa = match self.translate_data_orch(va, access) {
+                    Ok(pa) => pa,
+                    Err(reason) => return Some(Err(reason)),
+                };
+                let off = match self.ram_offset(pa, size) {
+                    Ok(off) => off,
+                    Err(_) => {
+                        return Some(Err(HaltReason::WasmTrap {
+                            addr: va,
+                            message: "sp-relative access outside RAM".to_string(),
+                        }))
+                    }
+                };
+                if is_load {
+                    let val = if is64 {
+                        u64::from_le_bytes(self.machine.ram[off..off + 8].try_into().unwrap())
+                    } else {
+                        u32::from_le_bytes(self.machine.ram[off..off + 4].try_into().unwrap()) as u64
+                    };
+                    if rt != 31 {
+                        self.machine.cpu[0].regs[rt] = val;
+                    }
+                } else {
+                    let val = if rt == 31 { 0 } else { self.machine.cpu[0].regs[rt] };
+                    if is64 {
+                        self.machine.ram[off..off + 8].copy_from_slice(&val.to_le_bytes());
+                    } else {
+                        self.machine.ram[off..off + 4]
+                            .copy_from_slice(&(val as u32).to_le_bytes());
+                    }
+                }
+                self.machine.cpu[0].pc = pc.wrapping_add(4);
+                return Some(Ok(()));
+            }
+            // STP/LDP (pair, signed offset). 64-bit: 10101001 1x;
+            // 32-bit: 00101001 1x.
+            if op10 == 0x2A6 || op10 == 0x2A5 || op10 == 0x0A6 || op10 == 0x0A5 {
+                let is_store = (op10 & 0x1) == 0;
+                let is64 = (op10 & 0x200) != 0;
+                let scale: i64 = if is64 { 8 } else { 4 };
+                let imm7 = ((word >> 15) & 0x7F) as i64;
+                let imm7 = ((imm7 << 57) >> 57) * scale; // sign-extend, scale
+                let rt2 = ((word >> 10) & 0x1F) as usize;
+                let rt1 = (word & 0x1F) as usize;
+                let va = (self.machine.cpu[0].sp as i64).wrapping_add(imm7) as u64;
+                let access = if is_store { Access::Write } else { Access::Read };
+                let pa = match self.translate_data_orch(va, access) {
+                    Ok(pa) => pa,
+                    Err(reason) => return Some(Err(reason)),
+                };
+                // Pair accesses 2*scale bytes; translate the second half too.
+                let va2 = va.wrapping_add(scale as u64);
+                let pa2 = match self.translate_data_orch(va2, access) {
+                    Ok(pa) => pa,
+                    Err(reason) => return Some(Err(reason)),
+                };
+                let off = match self.ram_offset(pa, scale as u64) {
+                    Ok(off) => off,
+                    Err(_) => {
+                        return Some(Err(HaltReason::WasmTrap {
+                            addr: va,
+                            message: "sp-relative pair access outside RAM".to_string(),
+                        }))
+                    }
+                };
+                let off2 = match self.ram_offset(pa2, scale as u64) {
+                    Ok(off) => off,
+                    Err(_) => {
+                        return Some(Err(HaltReason::WasmTrap {
+                            addr: va2,
+                            message: "sp-relative pair access outside RAM".to_string(),
+                        }))
+                    }
+                };
+                if is_store {
+                    let v1 = if rt1 == 31 { 0 } else { self.machine.cpu[0].regs[rt1] };
+                    let v2 = if rt2 == 31 { 0 } else { self.machine.cpu[0].regs[rt2] };
+                    if is64 {
+                        self.machine.ram[off..off + 8].copy_from_slice(&v1.to_le_bytes());
+                        self.machine.ram[off2..off2 + 8].copy_from_slice(&v2.to_le_bytes());
+                    } else {
+                        self.machine.ram[off..off + 4]
+                            .copy_from_slice(&(v1 as u32).to_le_bytes());
+                        self.machine.ram[off2..off2 + 4]
+                            .copy_from_slice(&(v2 as u32).to_le_bytes());
+                    }
+                } else if is64 {
+                    let v1 = u64::from_le_bytes(self.machine.ram[off..off + 8].try_into().unwrap());
+                    let v2 =
+                        u64::from_le_bytes(self.machine.ram[off2..off2 + 8].try_into().unwrap());
+                    if rt1 != 31 {
+                        self.machine.cpu[0].regs[rt1] = v1;
+                    }
+                    if rt2 != 31 {
+                        self.machine.cpu[0].regs[rt2] = v2;
+                    }
+                } else {
+                    let v1 =
+                        u32::from_le_bytes(self.machine.ram[off..off + 4].try_into().unwrap())
+                            as u64;
+                    let v2 = u32::from_le_bytes(
+                        self.machine.ram[off2..off2 + 4].try_into().unwrap(),
+                    ) as u64;
+                    if rt1 != 31 {
+                        self.machine.cpu[0].regs[rt1] = v1;
+                    }
+                    if rt2 != 31 {
+                        self.machine.cpu[0].regs[rt2] = v2;
+                    }
+                }
+                self.machine.cpu[0].pc = pc.wrapping_add(4);
+                return Some(Ok(()));
+            }
+        }
+
         None
     }
 
@@ -908,6 +1061,31 @@ impl Orchestrator {
             }
         };
 
+        // Fast path first (GB-23): handles SP-relative and other forms that
+        // U1/U2 don't lift yet. Tried before decode so unrecognized words
+        // get a chance here. The kind is unused by execute_arm64 (it decodes
+        // from the word directly).
+        {
+            let insn = Instruction {
+                addr: pc,
+                word,
+                kind: InsnKind::LoadStore,
+            };
+            if let Some(res) = self.execute_arm64(&insn) {
+                match res {
+                    Ok(()) => {
+                        self.steps += 1;
+                        self.tick_clock(TIMER_CYCLES_PER_STEP);
+                        return StepOutcome::Continue;
+                    }
+                    Err(reason) => {
+                        self.halted = Some(reason.clone());
+                        return StepOutcome::Halted(reason);
+                    }
+                }
+            }
+        }
+
         // Decode (U1).
         let kind = match u1_decode::decode(word) {
             DecodeResult::Illegal { word } => {
@@ -922,21 +1100,6 @@ impl Orchestrator {
             word,
             kind,
         };
-
-        // Direct execution for GB-2 branches/flags.
-        if let Some(res) = self.execute_arm64(&insn) {
-            match res {
-                Ok(()) => {
-                    self.steps += 1;
-                    self.tick_clock(TIMER_CYCLES_PER_STEP);
-                    return StepOutcome::Continue;
-                }
-                Err(reason) => {
-                    self.halted = Some(reason.clone());
-                    return StepOutcome::Halted(reason);
-                }
-            }
-        }
 
         // Lift (U2).
         let ops = u2_ir_lift::lift(&insn);
@@ -2534,5 +2697,141 @@ mod tests {
             ),
             "expected FetchFault, got: {outcome:?}"
         );
+    }
+
+    /// Helper: fresh Orchestrator with MMU off (identity), PC at `pc`,
+    /// SP at `sp`, and `word` written at PC.
+    fn sp_test_orchestrator(pc: u64, sp: u64, word: u32) -> Orchestrator {
+        let mut o = Orchestrator::new();
+        {
+            let m = o.machine_mut();
+            m.cpu[0].sysregs.sctlr_el1 = 0; // MMU off: identity map.
+            let s = (pc - RAM_BASE) as usize;
+            m.ram[s..s + 4].copy_from_slice(&word.to_le_bytes());
+            m.cpu[0].pc = pc;
+            m.cpu[0].sp = sp;
+        }
+        o
+    }
+
+    #[test]
+    fn gb23_sp_str_imm_64() {
+        // GB-23: STR X1, [SP, #16] stores X1 at SP+16.
+        // 1111100000 imm12=2 11111 00001 = 0xF8000BE1.
+        let pc = RAM_BASE + 0x1000;
+        let sp = RAM_BASE + 0x2000;
+        let mut o = sp_test_orchestrator(pc, sp, 0xF800_0BE1);
+        o.machine_mut().cpu[0].regs[1] = 0xDEAD_BEEF_CAFE_1234;
+        let outcome = o.step_vcpu();
+        assert!(
+            matches!(outcome, StepOutcome::Continue),
+            "expected Continue, got: {outcome:?}"
+        );
+        let s = (sp + 16 - RAM_BASE) as usize;
+        let mut b = [0u8; 8];
+        b.copy_from_slice(&o.machine().ram[s..s + 8]);
+        assert_eq!(u64::from_le_bytes(b), 0xDEAD_BEEF_CAFE_1234);
+        assert_eq!(o.machine().cpu[0].pc, pc + 4);
+    }
+
+    #[test]
+    fn gb23_sp_ldr_imm_64() {
+        // GB-23: LDR X2, [SP, #16] loads SP+16 into X2.
+        // 1111100001 imm12=2 11111 00010 = 0xF8400BE2.
+        let pc = RAM_BASE + 0x1000;
+        let sp = RAM_BASE + 0x2000;
+        let mut o = sp_test_orchestrator(pc, sp, 0xF840_0BE2);
+        let s = (sp + 16 - RAM_BASE) as usize;
+        o.machine_mut().ram[s..s + 8].copy_from_slice(&0x1122_3344_5566_7788u64.to_le_bytes());
+        let outcome = o.step_vcpu();
+        assert!(
+            matches!(outcome, StepOutcome::Continue),
+            "expected Continue, got: {outcome:?}"
+        );
+        assert_eq!(o.machine().cpu[0].regs[2], 0x1122_3344_5566_7788);
+        assert_eq!(o.machine().cpu[0].pc, pc + 4);
+    }
+
+    #[test]
+    fn gb23_sp_str_imm_32() {
+        // GB-23: STR W3, [SP, #8] stores low 32 bits of X3 at SP+8.
+        // 1011100000 imm12=2 11111 00011 = 0xB8000BE3.
+        let pc = RAM_BASE + 0x1000;
+        let sp = RAM_BASE + 0x2000;
+        let mut o = sp_test_orchestrator(pc, sp, 0xB800_0BE3);
+        o.machine_mut().cpu[0].regs[3] = 0xFFFF_FFFF_ABCD_1234;
+        let outcome = o.step_vcpu();
+        assert!(
+            matches!(outcome, StepOutcome::Continue),
+            "expected Continue, got: {outcome:?}"
+        );
+        let s = (sp + 8 - RAM_BASE) as usize;
+        let mut b = [0u8; 4];
+        b.copy_from_slice(&o.machine().ram[s..s + 4]);
+        assert_eq!(u32::from_le_bytes(b), 0xABCD_1234);
+        assert_eq!(o.machine().cpu[0].pc, pc + 4);
+    }
+
+    #[test]
+    fn gb23_sp_stp_pair() {
+        // GB-23: STP X1, X2, [SP, #-16] stores the pair at SP-16, SP-8.
+        // 1010100110 imm7=-2(0x7E) 00010 11111 00001 = 0xA9BF0BE1.
+        let pc = RAM_BASE + 0x1000;
+        let sp = RAM_BASE + 0x2000;
+        let mut o = sp_test_orchestrator(pc, sp, 0xA9BF_0BE1);
+        o.machine_mut().cpu[0].regs[1] = 0x1111_1111_1111_1111;
+        o.machine_mut().cpu[0].regs[2] = 0x2222_2222_2222_2222;
+        let outcome = o.step_vcpu();
+        assert!(
+            matches!(outcome, StepOutcome::Continue),
+            "expected Continue, got: {outcome:?}"
+        );
+        let s = (sp - 16 - RAM_BASE) as usize;
+        let mut b = [0u8; 8];
+        b.copy_from_slice(&o.machine().ram[s..s + 8]);
+        assert_eq!(u64::from_le_bytes(b), 0x1111_1111_1111_1111);
+        b.copy_from_slice(&o.machine().ram[s + 8..s + 16]);
+        assert_eq!(u64::from_le_bytes(b), 0x2222_2222_2222_2222);
+        assert_eq!(o.machine().cpu[0].pc, pc + 4);
+    }
+
+    #[test]
+    fn gb23_sp_ldp_pair() {
+        // GB-23: LDP X1, X2, [SP, #-16] loads the pair from SP-16, SP-8.
+        // 1010100101 imm7=-2(0x7E) 00010 11111 00001 = 0xA97F0BE1.
+        let pc = RAM_BASE + 0x1000;
+        let sp = RAM_BASE + 0x2000;
+        let mut o = sp_test_orchestrator(pc, sp, 0xA97F_0BE1);
+        let s = (sp - 16 - RAM_BASE) as usize;
+        o.machine_mut().ram[s..s + 8].copy_from_slice(&0xAAAA_AAAA_AAAA_AAAAu64.to_le_bytes());
+        o.machine_mut().ram[s + 8..s + 16]
+            .copy_from_slice(&0xBBBB_BBBB_BBBB_BBBBu64.to_le_bytes());
+        let outcome = o.step_vcpu();
+        assert!(
+            matches!(outcome, StepOutcome::Continue),
+            "expected Continue, got: {outcome:?}"
+        );
+        assert_eq!(o.machine().cpu[0].regs[1], 0xAAAA_AAAA_AAAA_AAAA);
+        assert_eq!(o.machine().cpu[0].regs[2], 0xBBBB_BBBB_BBBB_BBBB);
+        assert_eq!(o.machine().cpu[0].pc, pc + 4);
+    }
+
+    #[test]
+    fn gb23_sp_store_does_not_clobber_xzr() {
+        // GB-23: STR XZR, [SP, #0] stores 0 (XZR read), not SP.
+        // 1111100000 imm12=0 11111 11111 = 0xF80003FF.
+        let pc = RAM_BASE + 0x1000;
+        let sp = RAM_BASE + 0x2000;
+        let mut o = sp_test_orchestrator(pc, sp, 0xF800_03FF);
+        let s = (sp - RAM_BASE) as usize;
+        o.machine_mut().ram[s..s + 8].copy_from_slice(&0xFFFF_FFFF_FFFF_FFFFu64.to_le_bytes());
+        let outcome = o.step_vcpu();
+        assert!(
+            matches!(outcome, StepOutcome::Continue),
+            "expected Continue, got: {outcome:?}"
+        );
+        let mut b = [0u8; 8];
+        b.copy_from_slice(&o.machine().ram[s..s + 8]);
+        assert_eq!(u64::from_le_bytes(b), 0);
     }
 }
