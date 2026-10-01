@@ -319,6 +319,139 @@ pub struct GpuSubmit {
 // Orchestrator
 // ---------------------------------------------------------------------------
 
+/// Recorded unimplemented or illegal instruction in survey mode.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SurveyMiss {
+    pub step: u64,
+    pub pc: u64,
+    pub word: u32,
+    pub kind: InsnKind,
+    pub mnemonic: &'static str,
+}
+
+/// Best-effort classification of an instruction word for survey mode logging.
+/// Pure function: word -> (InsnKind, &'static str).
+pub fn best_effort_classify(word: u32) -> (InsnKind, &'static str) {
+    // 1. Branches & Exceptions & System
+    if word & 0xFC00_0000 == 0x1400_0000 {
+        return (InsnKind::Branch, "B");
+    }
+    if word & 0xFC00_0000 == 0x9400_0000 {
+        return (InsnKind::Branch, "BL");
+    }
+    if word & 0xFF00_0000 == 0x5400_0000 {
+        return (InsnKind::Branch, "B.cond");
+    }
+    if word & 0x7F00_0000 == 0x3400_0000 {
+        return (InsnKind::Branch, "CBZ");
+    }
+    if word & 0x7F00_0000 == 0x3500_0000 {
+        return (InsnKind::Branch, "CBNZ");
+    }
+    if word & 0x7F00_0000 == 0x3600_0000 {
+        return (InsnKind::Branch, "TBZ");
+    }
+    if word & 0x7F00_0000 == 0x3700_0000 {
+        return (InsnKind::Branch, "TBNZ");
+    }
+    if word == 0xD69F_03E0 {
+        return (InsnKind::Branch, "ERET");
+    }
+    if word & 0xFE00_0000 == 0xD600_0000 {
+        let op = (word >> 21) & 0xF;
+        return match op {
+            0b0001 => (InsnKind::Branch, "BR"),
+            0b0010 => (InsnKind::Branch, "BLR"),
+            0b0100 => (InsnKind::Branch, "RET"),
+            _ => (InsnKind::Branch, "Branch (reg)"),
+        };
+    }
+    if word & 0xFF80_0000 == 0xD400_0000 {
+        let opc = (word >> 21) & 0x7;
+        return match opc {
+            0b001 => (InsnKind::Svc, "SVC"),
+            0b010 => (InsnKind::System, "HVC"),
+            0b011 => (InsnKind::System, "SMC"),
+            0b000 => (InsnKind::System, "BRK"),
+            0b100 => (InsnKind::System, "HLT"),
+            _ => (InsnKind::System, "Exception"),
+        };
+    }
+    if word & 0xFFC0_0000 == 0xD500_0000 {
+        if word & 0xFFFF_F000 == 0xD503_2000 || word & 0xFFFF_F000 == 0xD503_3000 {
+            return (InsnKind::System, "HINT / NOP / Barrier");
+        }
+        let op0 = (word >> 19) & 0x7;
+        return match op0 {
+            0 => (InsnKind::System, "MSR (imm)"),
+            1 => (InsnKind::System, "SYS"),
+            3 => (InsnKind::System, "MSR (reg)"),
+            7 => (InsnKind::System, "MRS"),
+            _ => (InsnKind::System, "System"),
+        };
+    }
+
+    // 2. PC-relative addressing
+    if word & 0x1F00_0000 == 0x1000_0000 {
+        let op = (word >> 31) & 1;
+        return if op == 1 {
+            (InsnKind::PcRel, "ADRP")
+        } else {
+            (InsnKind::PcRel, "ADR")
+        };
+    }
+
+    // 3. Data Processing - Immediate
+    if word & 0x1F00_0000 == 0x1100_0000 {
+        return (InsnKind::DataProc, "ADD/SUB (imm)");
+    }
+    if word & 0x1F80_0000 == 0x1200_0000 {
+        return (InsnKind::DataProc, "Logical (imm)");
+    }
+    if word & 0x1F80_0000 == 0x1280_0000 {
+        return (InsnKind::DataProc, "MOV wide (imm)");
+    }
+    if word & 0x1F00_0000 == 0x1300_0000 {
+        return (InsnKind::DataProc, "Bitfield");
+    }
+
+    // 4. Data Processing - Register
+    if word & 0x1F00_0000 == 0x0B00_0000 {
+        return (InsnKind::DataProc, "ADD/SUB (shifted reg)");
+    }
+    if word & 0x1F00_0000 == 0x0A00_0000 {
+        return (InsnKind::DataProc, "Logical (shifted reg)");
+    }
+    if word & 0x1F00_0000 == 0x1B00_0000 {
+        return (InsnKind::DataProc, "MADD / MSUB");
+    }
+    if word & 0x7FE0_0000 == 0x1AC0_0000 {
+        return (InsnKind::DataProc, "DP (2-source)");
+    }
+    if word & 0x7FE0_0000 == 0x1A80_0000
+        || word & 0x7FE0_0000 == 0x3A40_0000
+        || word & 0x7FE0_0000 == 0x7A40_0000
+    {
+        return (InsnKind::DataProc, "Conditional Select / Compare");
+    }
+    if word & 0x7FE0_0000 == 0x5AC0_0000 {
+        return (InsnKind::DataProc, "DP (1-source: CLZ/REV)");
+    }
+
+    // 5. Loads and Stores
+    let top4 = (word >> 25) & 0xF;
+    if top4 == 0b0100 || top4 == 0b1100 {
+        return (InsnKind::LoadStore, "LDR / STR");
+    }
+
+    // 6. FP / SIMD
+    if top4 == 0b0111 || top4 == 0b1111 || top4 == 0b0110 || top4 == 0b1110 {
+        return (InsnKind::Unknown, "FP / SIMD");
+    }
+
+    (InsnKind::Unknown, "Unknown")
+}
+
 /// The single quarantined coordinator. Owns the machine state and threads it
 /// through every unit. `engine` and `block_cache` are runtime machinery —
 /// explicitly NOT part of the hashed state.
@@ -336,6 +469,11 @@ pub struct Orchestrator {
     /// Optional trace writer for per-step tracing.
     #[cfg(not(target_arch = "wasm32"))]
     trace_writer: Option<std::io::BufWriter<std::fs::File>>,
+    /// Survey mode: skips unimplemented/illegal instructions for opcode discovery.
+    /// Hard rule: discovery only — never progress.
+    pub survey_mode: bool,
+    /// First unimplemented/illegal miss per InsnKind seen during survey mode.
+    pub survey_first_miss: Vec<SurveyMiss>,
     /// Per-queue last-notified used index for EVENT_IDX decisions.
     last_notified: Vec<u16>,
     /// Local exclusive monitor for LDXR/STXR (GB-26). `Some((addr, size))`
@@ -405,6 +543,8 @@ impl Orchestrator {
             halted: None,
             #[cfg(not(target_arch = "wasm32"))]
             trace_writer: None,
+            survey_mode: false,
+            survey_first_miss: Vec::new(),
             last_notified: Vec::new(),
             exclusive: None,
             executor: default_executor(),
@@ -435,6 +575,76 @@ impl Orchestrator {
         if let Some(ref mut w) = self.trace_writer {
             let _ = std::io::Write::flush(w);
         }
+    }
+
+    /// Configure survey mode.
+    ///
+    /// HARD RULE: Survey mode is discovery only — it must NEVER be used to
+    /// claim boot progress or move any baseline.
+    pub fn set_survey_mode(&mut self, enabled: bool) {
+        self.survey_mode = enabled;
+    }
+
+    /// Check if survey mode is active.
+    pub fn survey_mode(&self) -> bool {
+        self.survey_mode
+    }
+
+    /// Read the first-miss-per-class summary recorded in survey mode.
+    pub fn survey_summary(&self) -> &[SurveyMiss] {
+        &self.survey_first_miss
+    }
+
+    /// Print the first-miss-per-class summary.
+    pub fn print_survey_summary(&self) {
+        println!("=== Survey Mode: First-Miss-Per-Class Summary ===");
+        if self.survey_first_miss.is_empty() {
+            println!("No unimplemented/illegal instructions encountered.");
+            return;
+        }
+        for miss in &self.survey_first_miss {
+            println!(
+                "{:<12}: first miss at step {:>7}, pc={:#018x}, word={:#010x} ({})",
+                format!("{:?}", miss.kind),
+                miss.step,
+                miss.pc,
+                miss.word,
+                miss.mnemonic
+            );
+        }
+    }
+
+    /// Record a survey miss if the InsnKind has not been seen yet.
+    pub fn record_survey_miss(&mut self, miss: SurveyMiss) {
+        if !self.survey_first_miss.iter().any(|m| m.kind == miss.kind) {
+            self.survey_first_miss.push(miss);
+        }
+    }
+
+    /// Skip an unimplemented/illegal instruction in survey mode, logging and continuing.
+    fn survey_skip_instruction(
+        &mut self,
+        pc: u64,
+        word: u32,
+        known_kind: Option<InsnKind>,
+    ) -> StepOutcome {
+        let (best_kind, mnemonic) = best_effort_classify(word);
+        let kind = known_kind.unwrap_or(best_kind);
+        println!(
+            "SURVEY [step {}]: pc={:#018x} word={:#010x} kind={:?} ({}) - SKIPPED",
+            self.steps, pc, word, kind, mnemonic
+        );
+        self.record_survey_miss(SurveyMiss {
+            step: self.steps,
+            pc,
+            word,
+            kind,
+            mnemonic,
+        });
+        self.machine.cpu[0].pc = pc.wrapping_add(4);
+        self.steps += 1;
+        self.tick_clock(TIMER_CYCLES_PER_STEP);
+        StepOutcome::Continue
     }
 
     /// Build with an explicit execution backend — the injection point for the
@@ -2249,6 +2459,15 @@ impl Orchestrator {
                         return StepOutcome::Continue;
                     }
                     Err(reason) => {
+                        if self.survey_mode
+                            && matches!(
+                                reason,
+                                HaltReason::Unsupported { .. }
+                                    | HaltReason::IllegalInstruction { .. }
+                            )
+                        {
+                            return self.survey_skip_instruction(pc, word, None);
+                        }
                         self.halted = Some(reason.clone());
                         return StepOutcome::Halted(reason);
                     }
@@ -2259,6 +2478,9 @@ impl Orchestrator {
         // Decode (U1).
         let kind = match u1_decode::decode(word) {
             DecodeResult::Illegal { word } => {
+                if self.survey_mode {
+                    return self.survey_skip_instruction(pc, word, None);
+                }
                 let reason = HaltReason::IllegalInstruction { addr: pc, word };
                 self.halted = Some(reason.clone());
                 return StepOutcome::Halted(reason);
@@ -2277,6 +2499,9 @@ impl Orchestrator {
         // Trap check BEFORE compiling: U2's trap strings are the exact,
         // honest reason. Compiling a trap would only produce `unreachable`.
         if let Some(reason) = first_trap_reason(&ops) {
+            if self.survey_mode {
+                return self.survey_skip_instruction(pc, word, Some(kind));
+            }
             // Phase-2 spike: SVC gets its own halt variant so a future SVC
             // halt is instantly recognizable in traces vs generic Unsupported.
             let halt = if reason == u2_ir_lift::R_SVC_UNIMPL {
@@ -4891,5 +5116,57 @@ mod tests {
             0x1122_3344_5566_7788
         );
         assert_eq!(o.machine().cpu[0].pc, pc + 4);
+    }
+
+    #[test]
+    fn test_survey_mode_skips_illegal_word_and_continues() {
+        let pc = RAM_BASE + 0x1000;
+        let sp = RAM_BASE + 0x2000;
+        let mut o = Orchestrator::new();
+        o.machine_mut().cpu[0].pc = pc;
+        o.machine_mut().cpu[0].sp = sp;
+        o.machine_mut().cpu[0].sysregs.sctlr_el1 = 0; // MMU off
+
+        let off = (pc - RAM_BASE) as usize;
+        // 0x0000_0000 is unallocated / illegal
+        o.machine_mut().ram[off..off + 4].copy_from_slice(&0x0000_0000u32.to_le_bytes());
+        // 0xD503_201F is NOP at pc + 4
+        o.machine_mut().ram[off + 4..off + 8].copy_from_slice(&0xD503_201Fu32.to_le_bytes());
+
+        // Without survey mode, it halts with IllegalInstruction
+        let outcome_halt = o.step_vcpu();
+        assert_eq!(
+            outcome_halt,
+            StepOutcome::Halted(HaltReason::IllegalInstruction {
+                addr: pc,
+                word: 0x0000_0000
+            })
+        );
+
+        // Fresh orchestrator with survey mode enabled: skips illegal word and continues
+        let mut o_survey = Orchestrator::new();
+        o_survey.machine_mut().cpu[0].pc = pc;
+        o_survey.machine_mut().cpu[0].sp = sp;
+        o_survey.machine_mut().cpu[0].sysregs.sctlr_el1 = 0;
+        o_survey.machine_mut().ram[off..off + 4].copy_from_slice(&0x0000_0000u32.to_le_bytes());
+        o_survey.machine_mut().ram[off + 4..off + 8].copy_from_slice(&0xD503_201Fu32.to_le_bytes());
+
+        o_survey.set_survey_mode(true);
+        assert!(o_survey.survey_mode());
+
+        // Step 1: hits illegal instruction, skips to pc + 4 and continues
+        let outcome1 = o_survey.step_vcpu();
+        assert_eq!(outcome1, StepOutcome::Continue);
+        assert_eq!(o_survey.steps(), 1);
+        assert_eq!(o_survey.machine().cpu[0].pc, pc + 4);
+        assert_eq!(o_survey.survey_summary().len(), 1);
+        assert_eq!(o_survey.survey_summary()[0].pc, pc);
+        assert_eq!(o_survey.survey_summary()[0].word, 0x0000_0000);
+
+        // Step 2: executes NOP at pc + 4 and continues to pc + 8
+        let outcome2 = o_survey.step_vcpu();
+        assert_eq!(outcome2, StepOutcome::Continue);
+        assert_eq!(o_survey.steps(), 2);
+        assert_eq!(o_survey.machine().cpu[0].pc, pc + 8);
     }
 }

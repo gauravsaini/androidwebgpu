@@ -15,6 +15,7 @@ fn print_help() {
     println!("  --kernel <PATH>       Path to ARM64 kernel Image (default: /mnt/sdb1/aosp/Image)");
     println!("  --max-steps <N>       Step budget cap (default: 2000000)");
     println!("  --trace <FILE>        Enable per-step execution tracing to file");
+    println!("  --survey              Enable survey mode (discovery only, never progress)");
     println!("  --help, -h            Print this help text");
 }
 
@@ -22,6 +23,7 @@ fn main() {
     let mut kernel_path = "/mnt/sdb1/aosp/Image".to_string();
     let mut max_steps: u64 = 2_000_000;
     let mut trace_file: Option<String> = None;
+    let mut survey = false;
 
     let args: Vec<String> = env::args().collect();
     let mut i = 1;
@@ -51,6 +53,11 @@ fn main() {
                     trace_file = Some(args[i].clone());
                 }
             }
+            "--survey" => {
+                // HARD RULE: Survey mode is discovery only — it must NEVER be used
+                // to claim boot progress or move any baseline.
+                survey = true;
+            }
             other => {
                 eprintln!("Unknown argument: {other}");
                 print_help();
@@ -73,6 +80,12 @@ fn main() {
         orch.enable_trace_file(tf)
             .expect("failed to open trace output file");
         println!("[trace] Writing per-step execution trace to {tf}");
+    }
+    if survey {
+        // HARD RULE: Survey mode is discovery only — it must NEVER be used
+        // to claim boot progress or move any baseline.
+        orch.set_survey_mode(true);
+        println!("[survey] Survey mode active: skipping unimplemented opcodes (discovery only)");
     }
 
     let ram = &mut orch.machine_mut().ram;
@@ -112,5 +125,9 @@ fn main() {
     match halt_reason {
         Some(reason) => println!("[halt] Reason: {reason:?}"),
         None => println!("[limit] Step budget ({max_steps}) reached without halt"),
+    }
+
+    if survey {
+        orch.print_survey_summary();
     }
 }
