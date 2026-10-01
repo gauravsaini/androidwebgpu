@@ -50,7 +50,7 @@
 //! Anything the contract cannot express — flag-setting ALU ops, 32-bit ALU
 //! widths (upper-bit zeroing is not expressible in `IrOp::Add`/`OrrShift`),
 //! halfword memory widths, SP-relative addresses, unrecognized words, and
-//! the still-out-of-scope classes (B.cond/TBZ/TBNZ, BR/BLR, other system
+//! the still-out-of-scope classes (B.cond/TBZ/TBNZ, other system
 //! instructions) — lifts to `IrOp::Trap { reason }` naming exactly what is
 //! unsupported. A trap is data, never a silent nop and never a panic.
 
@@ -911,11 +911,40 @@ fn lift_branch(insn: &Instruction) -> Vec<IrOp> {
         ];
     }
     // RET: 1101011 0 010 11111 000000 Rn 00000 — indirect branch to regs[Rn].
-    // The mask clears only the Rn field, so any RET <Xn> matches; BR/BLR
-    // never reach the lifter as InsnKind::Branch (U1 rejects them).
+    // The mask clears only the Rn field, so any RET <Xn> matches.
     if word & 0xFFFF_FC1F == 0xD65F_0000 {
         let rn = ((word >> 5) & 0x1F) as u8;
         return vec![IrOp::BranchDyn { reg: rn }];
+    }
+    // BR: 1101011 0 000 11111 000000 Rn 00000 — indirect branch to regs[Rn],
+    // no link. Same lowering as RET.
+    if word & 0xFFFF_FC1F == 0xD61F_0000 {
+        let rn = ((word >> 5) & 0x1F) as u8;
+        return vec![IrOp::BranchDyn { reg: rn }];
+    }
+    // BLR: 1101011 0 001 11111 000000 Rn 00000 — X30 = addr + 4 (the link),
+    // then indirect branch to regs[Rn]. The link is written first; when
+    // rn == 30 the old X30 is preserved via SCRATCH first (MOV (register)
+    // is ADD with XZR, the architectural alias — the target must be the
+    // pre-link value).
+    if word & 0xFFFF_FC1F == 0xD63F_0000 {
+        let rn = ((word >> 5) & 0x1F) as u8;
+        let link = IrOp::Mov {
+            dst: 30,
+            imm: insn.addr.wrapping_add(4),
+        };
+        if rn == 30 {
+            return vec![
+                IrOp::Add {
+                    dst: SCRATCH,
+                    a: 30,
+                    b: 31,
+                },
+                link,
+                IrOp::BranchDyn { reg: SCRATCH },
+            ];
+        }
+        return vec![link, IrOp::BranchDyn { reg: rn }];
     }
     // CBZ/CBNZ (64-bit): sf 011010 op imm19 Rt (bits 31:24 = 0xB4/0xB5).
     // 32-bit forms trap: the low-32 test is not expressible in CondBranch.
@@ -1543,6 +1572,61 @@ mod tests {
         // RET X9 (0xD65F0120): indirect through regs[9], not just X30.
         let ops = lift(&insn(0x4000, 0xD65F_0120, InsnKind::Branch));
         assert_eq!(ops, vec![IrOp::BranchDyn { reg: 9 }]);
+    }
+
+    #[test]
+    fn gb21_br_x3() {
+        // BR X3 (0xD61F0060): indirect branch, no link — same as RET.
+        let ops = lift(&insn(0x4000, 0xD61F_0060, InsnKind::Branch));
+        assert_eq!(ops, vec![IrOp::BranchDyn { reg: 3 }]);
+    }
+
+    #[test]
+    fn gb21_blr_x3() {
+        // BLR X3 (0xD63F0060): X30 = addr + 4, then indirect branch to
+        // regs[3]. (The real GB-21 halt word was BLR X8, 0xD63F0100 —
+        // same shape, Rn = 8.)
+        let ops = lift(&insn(0x4000, 0xD63F_0060, InsnKind::Branch));
+        assert_eq!(
+            ops,
+            vec![
+                IrOp::Mov { dst: 30, imm: 0x4004 },
+                IrOp::BranchDyn { reg: 3 },
+            ]
+        );
+    }
+
+    #[test]
+    fn gb21_blr_x30_preserves_old_link() {
+        // BLR X30 (0xD63F03C0): the target must be the PRE-link X30, so
+        // the old value is spilled to SCRATCH before X30 is overwritten.
+        let ops = lift(&insn(0x4000, 0xD63F_03C0, InsnKind::Branch));
+        assert_eq!(
+            ops,
+            vec![
+                IrOp::Add {
+                    dst: SCRATCH,
+                    a: 30,
+                    b: 31
+                },
+                IrOp::Mov { dst: 30, imm: 0x4004 },
+                IrOp::BranchDyn { reg: SCRATCH },
+            ]
+        );
+    }
+
+    #[test]
+    fn gb21_blr_xzr_targets_zero() {
+        // BLR XZR (0xD63F03E0): regs[31] reads as 0; the backend
+        // fetch-faults honestly on target 0. The link is still written.
+        let ops = lift(&insn(0x4000, 0xD63F_03E0, InsnKind::Branch));
+        assert_eq!(
+            ops,
+            vec![
+                IrOp::Mov { dst: 30, imm: 0x4004 },
+                IrOp::BranchDyn { reg: 31 },
+            ]
+        );
     }
 
     // ---------- structural properties ----------

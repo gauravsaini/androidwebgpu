@@ -337,8 +337,14 @@ fn decode_branch_sys(word: u32) -> Option<InsnKind> {
         return Some(InsnKind::Branch);
     }
     // RET: 1101011 0 010 11111 000000 Rn 00000. Mask keeps everything except
-    // the Rn field, so any RET <Xn> matches; BR (0xD61F…) / BLR (0xD63F…) do not.
+    // the Rn field, so any RET <Xn> matches.
     if word & 0xFFFF_FC1F == 0xD65F_0000 {
+        return Some(InsnKind::Branch);
+    }
+    // BR: 1101011 0 000 11111 000000 Rn 00000.
+    // BLR: 1101011 0 001 11111 000000 Rn 00000.
+    // Masks clear only the Rn field, so any register matches.
+    if word & 0xFFFF_FC1F == 0xD61F_0000 || word & 0xFFFF_FC1F == 0xD63F_0000 {
         return Some(InsnKind::Branch);
     }
     // SVC (immediate): 11010100 000 imm16 00001. bits[31:21] == 0b11010100000.
@@ -737,13 +743,15 @@ mod tests {
     }
 
     #[test]
-    fn br_x0_is_illegal() {
-        assert_illegal(0xD61F_0000); // BR: out of scope, must not match RET mask
+    fn br_any_register_is_branch() {
+        assert_eq!(ok_kind(0xD61F_0000), InsnKind::Branch); // BR X0
+        assert_eq!(ok_kind(0xD61F_03E0), InsnKind::Branch); // BR X30
     }
 
     #[test]
-    fn blr_is_illegal() {
-        assert_illegal(0xD63F_0000); // BLR: out of scope
+    fn blr_any_register_is_branch() {
+        assert_eq!(ok_kind(0xD63F_0000), InsnKind::Branch); // BLR X0
+        assert_eq!(ok_kind(0xD63F_0060), InsnKind::Branch); // BLR X3
     }
 
     // ---- supervisor call (Phase-2 spike) ----

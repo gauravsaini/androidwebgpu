@@ -1883,6 +1883,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "u16-pl011-uart"
+version = "0.1.0"
+
+[[package]]
 name = "u2-ir-lift"
 version = "0.1.0"
 dependencies = [

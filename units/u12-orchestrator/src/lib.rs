@@ -965,7 +965,14 @@ impl Orchestrator {
                 return StepOutcome::Halted(halt);
             }
         };
-        if exit_addr < 0 {
+        // The ExitVm sentinel is exactly -1 (0xFFFF_FFFF_FFFF_FFFF). A `< 0`
+        // test is wrong: kernel VAs live in the high half (0xFFFF_...), so
+        // every legitimate kernel-VA indirect-branch target is negative as
+        // i64. Only the exact sentinel means "exit the VM"; anything else —
+        // even 0xFFFF_FFFF_FFFF_FFFE — is a real address that fetch will
+        // translate or fault honestly. (GB-21: BLR X8 to 0xffffff80095c0280
+        // falsely halted here.)
+        if exit_addr == -1 {
             let halt = HaltReason::ExitVm;
             self.halted = Some(halt.clone());
             return StepOutcome::Halted(halt);
@@ -2405,6 +2412,46 @@ mod tests {
         assert!(
             err.starts_with("mmu_fault:"),
             "expected mmu_fault prefix, got: {err}"
+        );
+    }
+
+    #[test]
+    fn gb21_blr_to_kernel_va_does_not_exit_vm() {
+        // Regression: the ExitVm sentinel is exactly -1. A dynamic-branch
+        // target in the kernel high half (0xFFFF_...) is negative as i64
+        // but is NOT the sentinel — the old `exit_addr < 0` check falsely
+        // halted the real kernel's BLR X8 to 0xffffff80095c0280 as ExitVm.
+        let mut o = Orchestrator::new();
+        {
+            let m = o.machine_mut();
+            // BLR X8 at the reset vector (MMU off: identity fetch).
+            m.ram[0..4].copy_from_slice(&0xD63F_0100u32.to_le_bytes());
+            m.cpu[0].regs[8] = 0xffff_ff80_095c_0280;
+        }
+        let outcome = o.step_vcpu();
+        assert!(
+            matches!(outcome, StepOutcome::Continue),
+            "expected Continue, got: {outcome:?}"
+        );
+        assert_eq!(o.machine().cpu[0].pc, 0xffff_ff80_095c_0280);
+        assert_eq!(o.machine().cpu[0].regs[30], 0x4000_0004); // link written
+        assert_eq!(o.halted(), None);
+    }
+
+    #[test]
+    fn gb21_exact_sentinel_still_exits_vm() {
+        // The exact -1 sentinel still means ExitVm: a dynamic branch to
+        // 0xFFFF_FFFF_FFFF_FFFF halts (it is not a translatable address).
+        let mut o = Orchestrator::new();
+        {
+            let m = o.machine_mut();
+            m.ram[0..4].copy_from_slice(&0xD63F_0100u32.to_le_bytes()); // BLR X8
+            m.cpu[0].regs[8] = 0xffff_ffff_ffff_ffff;
+        }
+        let outcome = o.step_vcpu();
+        assert!(
+            matches!(outcome, StepOutcome::Halted(HaltReason::ExitVm)),
+            "expected ExitVm halt, got: {outcome:?}"
         );
     }
 }
