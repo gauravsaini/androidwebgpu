@@ -217,3 +217,86 @@ fn test_b_imm_qemu_vectors() {
 fn test_bl_imm_qemu_vectors() {
     run_suite("BL (immediate)", include_str!("fixtures/bl_imm.json"), 10);
 }
+#[test]
+fn test_ldr_immediate_qemu_vectors() {
+    let json_str = include_str!("fixtures/ldr_imm.json");
+    let vectors: Vec<TestVector> =
+        serde_json::from_str(json_str).expect("Failed to deserialize ldr_imm.json");
+
+    assert!(
+        vectors.len() >= 20,
+        "Expected at least 20 test vectors, found {}",
+        vectors.len()
+    );
+
+    let mut passed = 0;
+    let mut failed = 0;
+    let mut failure_details = Vec::new();
+
+    for (idx, vec) in vectors.iter().enumerate() {
+        match execute_vector(vec) {
+            Ok(()) => {
+                passed += 1;
+            }
+            Err(e) => {
+                failed += 1;
+                failure_details.push(format!("[Vector #{:03}] {}: {}", idx, vec.name, e));
+            }
+        }
+    }
+
+    println!("\n=== QEMU Oracle Vector Test Report ===");
+    println!("Instruction Family: LDR (immediate)");
+    println!("Total Vectors Evaluated: {}", vectors.len());
+    println!("Passed: {}", passed);
+    println!("Failed: {}", failed);
+    if !failure_details.is_empty() {
+        println!("\nFailures:");
+        for f in &failure_details {
+            println!("  {}", f);
+        }
+    }
+    println!("======================================\n");
+}
+
+#[test]
+fn test_str_immediate_qemu_vectors() {
+    let json_str = include_str!("fixtures/str_imm.json");
+    let vectors: Vec<TestVector> =
+        serde_json::from_str(json_str).expect("Failed to deserialize str_imm.json");
+
+    assert!(
+        vectors.len() >= 20,
+        "Expected at least 20 test vectors, found {}",
+        vectors.len()
+    );
+
+    let mut passed = 0;
+    let mut failed = 0;
+    let mut failure_details = Vec::new();
+
+    for (idx, vec) in vectors.iter().enumerate() {
+        match execute_vector(vec) {
+            Ok(()) => {
+                passed += 1;
+            }
+            Err(e) => {
+                failed += 1;
+                failure_details.push(format!("[Vector #{:03}] {}: {}", idx, vec.name, e));
+            }
+        }
+    }
+
+    println!("\n=== QEMU Oracle Vector Test Report ===");
+    println!("Instruction Family: STR (immediate)");
+    println!("Total Vectors Evaluated: {}", vectors.len());
+    println!("Passed: {}", passed);
+    println!("Failed: {}", failed);
+    if !failure_details.is_empty() {
+        println!("\nFailures:");
+        for f in &failure_details {
+            println!("  {}", f);
+        }
+    }
+    println!("======================================\n");
+}

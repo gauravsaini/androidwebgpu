@@ -837,4 +837,53 @@ mod tests {
         assert_eq!(ok_kind(0xF820_3041), InsnKind::LoadStore); // LDSET X0, X1, [X2]
         assert_eq!(ok_kind(0xF820_2041), InsnKind::LoadStore); // LDEOR X0, X1, [X2]
     }
+
+    #[test]
+    fn gb_loadstore_expansion_decodes_correctly() {
+        // PRFM (literal): 0xD800_0080
+        assert_eq!(
+            decode(0xD800_0080),
+            DecodeResult::Ok(Instruction {
+                addr: 0,
+                word: 0xD800_0080,
+                kind: InsnKind::LoadStore,
+            })
+        );
+        // PRFM (unsigned imm): 0xF980_0400
+        assert_eq!(
+            decode(0xF980_0400),
+            DecodeResult::Ok(Instruction {
+                addr: 0,
+                word: 0xF980_0400,
+                kind: InsnKind::LoadStore,
+            })
+        );
+        // LDRSB Xt, [X1, #2]: 0x3980_0820
+        assert_eq!(
+            decode(0x3980_0820),
+            DecodeResult::Ok(Instruction {
+                addr: 0,
+                word: 0x3980_0820,
+                kind: InsnKind::LoadStore,
+            })
+        );
+        // LDRSH Xt, [X1, #4]: 0x7980_0820
+        assert_eq!(
+            decode(0x7980_0820),
+            DecodeResult::Ok(Instruction {
+                addr: 0,
+                word: 0x7980_0820,
+                kind: InsnKind::LoadStore,
+            })
+        );
+        // LDRH W0, [X1, #2]: 0x7940_0420
+        assert_eq!(
+            decode(0x7940_0420),
+            DecodeResult::Ok(Instruction {
+                addr: 0,
+                word: 0x7940_0420,
+                kind: InsnKind::LoadStore,
+            })
+        );
+    }
 }

@@ -28,8 +28,8 @@ pub fn decode(word: u32) -> Option<InsnKind> {
     if (word >> 24) & 0x3F == 0b011000 {
         let opc = (word >> 30) & 0x3;
         return match opc {
-            0b00 | 0b01 | 0b10 => Some(InsnKind::LoadStore), // 32-bit LDR, 64-bit LDR, LDRSW
-            _ => None,                                       // 11 = PRFM (out of scope)
+            0b00 | 0b01 | 0b10 | 0b11 => Some(InsnKind::LoadStore), // 32-bit LDR, 64-bit LDR, LDRSW, PRFM
+            _ => None,
         };
     }
 
@@ -38,10 +38,10 @@ pub fn decode(word: u32) -> Option<InsnKind> {
     if (word >> 24) & 0x3F == 0b111001 {
         let size_bits = (word >> 30) & 0x3;
         let opc = (word >> 22) & 0x3;
-        return match opc {
-            0b00 => Some(InsnKind::LoadStore), // STR (B, H, W, X)
-            0b01 => Some(InsnKind::LoadStore), // LDR (B, H, W, X)
-            0b10 if size_bits == 2 => Some(InsnKind::LoadStore), // LDRSW
+        return match (size_bits, opc) {
+            (_, 0b00 | 0b01) => Some(InsnKind::LoadStore), // STR, LDR (B, H, W, X)
+            (_, 0b10) => Some(InsnKind::LoadStore),        // LDRSB Xt, LDRSH Xt, LDRSW, PRFM
+            (0 | 1, 0b11) => Some(InsnKind::LoadStore),    // LDRSB Wt, LDRSH Wt
             _ => None,
         };
     }
@@ -54,16 +54,16 @@ pub fn decode(word: u32) -> Option<InsnKind> {
     // at step 1248988.)
     if (word >> 24) & 0x3F == 0b111000 && (word >> 21) & 1 == 0 {
         let idx_type = (word >> 10) & 0x3;
-        if idx_type == 0b01 || idx_type == 0b11 || idx_type == 0b00 {
-            let size_bits = (word >> 30) & 0x3;
-            let opc = (word >> 22) & 0x3;
-            return match opc {
-                0b00 => Some(InsnKind::LoadStore),                   // STR
-                0b01 => Some(InsnKind::LoadStore),                   // LDR
-                0b10 if size_bits == 2 => Some(InsnKind::LoadStore), // LDRSW
-                _ => None,
-            };
-        }
+        // 00 = unscaled (LDUR/STUR/PRFUM), 01 = post-index, 10 = unprivileged (LDTR/STTR), 11 = pre-index
+        let size_bits = (word >> 30) & 0x3;
+        let opc = (word >> 22) & 0x3;
+        return match (size_bits, opc) {
+            (_, 0b00 | 0b01) => Some(InsnKind::LoadStore),
+            (3, 0b10) if idx_type == 0b00 => Some(InsnKind::LoadStore), // PRFUM (unscaled only)
+            (0..=2, 0b10) => Some(InsnKind::LoadStore),                 // LDRSB/H/W (64-bit)
+            (0..=1, 0b11) => Some(InsnKind::LoadStore),                 // LDRSB/H (32-bit)
+            _ => None,
+        };
     }
 
     // 5. Load/store register (register offset) and atomic memory operations:
@@ -73,10 +73,10 @@ pub fn decode(word: u32) -> Option<InsnKind> {
         if sub_op == 0b10 {
             let size_bits = (word >> 30) & 0x3;
             let opc = (word >> 22) & 0x3;
-            return match opc {
-                0b00 => Some(InsnKind::LoadStore),                   // STR
-                0b01 => Some(InsnKind::LoadStore),                   // LDR
-                0b10 if size_bits == 2 => Some(InsnKind::LoadStore), // LDRSW
+            return match (size_bits, opc) {
+                (_, 0b00 | 0b01) => Some(InsnKind::LoadStore),
+                (_, 0b10) => Some(InsnKind::LoadStore), // LDRSB Xt, LDRSH Xt, LDRSW, PRFM
+                (0 | 1, 0b11) => Some(InsnKind::LoadStore), // LDRSB Wt, LDRSH Wt
                 _ => None,
             };
         }

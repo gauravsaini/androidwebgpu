@@ -786,13 +786,202 @@ fn lift_data_proc(word: u32) -> Vec<IrOp> {
 /// - LDR/STR (immediate unsigned offset, pre/post-indexed, register-offset)
 ///   lower to LoadDyn/StoreDyn.
 /// - LDRSW variants load 4 bytes and sign-extend to 64-bit via OrrShift.
+fn lift_signed_extend(ops: &mut Vec<IrOp>, rt: u8, size: u8, is_64: bool) {
+    let shift = match size {
+        1 => 56,
+        2 => 48,
+        4 => 32,
+        _ => unreachable!(),
+    };
+    if is_64 {
+        ops.push(IrOp::OrrShift {
+            dst: SCRATCH,
+            a: 31,
+            b: SCRATCH,
+            shift: 0,
+            amount: shift,
+        });
+        ops.push(IrOp::OrrShift {
+            dst: rt,
+            a: 31,
+            b: SCRATCH,
+            shift: 2,
+            amount: shift,
+        });
+    } else {
+        ops.push(IrOp::OrrShift {
+            dst: SCRATCH,
+            a: 31,
+            b: SCRATCH,
+            shift: 0,
+            amount: shift,
+        });
+        ops.push(IrOp::OrrShift {
+            dst: SCRATCH,
+            a: 31,
+            b: SCRATCH,
+            shift: 2,
+            amount: shift,
+        });
+        ops.push(IrOp::AndShift {
+            dst: rt,
+            a: SCRATCH,
+            b: 31,
+            shift: 0,
+            amount: 0,
+            invert: false,
+            is_32: true,
+        });
+    }
+}
+
 fn lift_load_store(insn: &Instruction) -> Vec<IrOp> {
     let word = insn.word;
+    // 6. Atomic swap (SWP / SWPA / SWPL / SWPAL):
+    // size 111 0 00 A R 1 Rs 1 00000 Rn Rt (bits 29:24 = 0b111000, bit 21 = 1, bit 15 = 1, bits 14:10 = 0)
+    if (word >> 24) & 0x3F == 0b111000
+        && (word >> 21) & 1 == 1
+        && (word >> 15) & 1 == 1
+        && (word >> 10) & 0x1F == 0b00000
+    {
+        let size_bits = (word >> 30) & 0x3;
+        let rs = ((word >> 16) & 0x1F) as u8;
+        let rn = ((word >> 5) & 0x1F) as u8;
+        let rt = (word & 0x1F) as u8;
 
-    // 1. LDR / LDRSW (literal): sf 00 011000 imm19 Rt (bits 31:24 = 0x18 / 0x58 / 0x98).
+        if rn == 31 {
+            return trap(R_LS_SP);
+        }
+        if size_bits == 1 {
+            return trap(R_LS_SUBWORD);
+        }
+
+        let size: u8 = 1 << size_bits;
+        let mut ops = vec![
+            IrOp::LoadDyn {
+                dst: SCRATCH,
+                base: rn,
+                off: 0,
+                size,
+            },
+            IrOp::StoreDyn {
+                src: rs,
+                base: rn,
+                off: 0,
+                size,
+            },
+        ];
+        if rt != 31 {
+            ops.push(IrOp::OrrShift {
+                dst: rt,
+                a: 31,
+                b: SCRATCH,
+                shift: 0,
+                amount: 0,
+            });
+        }
+        return ops;
+    }
+
+    // 7. Load-acquire / store-release (LDAR / STLR):
+    // size 001000 1 L 0 11111 1 11111 Rn Rt
+    if (word >> 24) & 0x3F == 0b001000
+        && (word >> 23) & 1 == 1
+        && (word >> 21) & 1 == 0
+        && (word >> 16) & 0x1F == 0b11111
+        && (word >> 15) & 1 == 1
+        && (word >> 10) & 0x1F == 0b11111
+    {
+        let size_bits = (word >> 30) & 0x3;
+        let is_load = (word >> 22) & 1 == 1;
+        let rn = ((word >> 5) & 0x1F) as u8;
+        let rt = (word & 0x1F) as u8;
+
+        if rn == 31 {
+            return trap(R_LS_SP);
+        }
+        if size_bits == 1 {
+            return trap(R_LS_SUBWORD);
+        }
+
+        let size: u8 = 1 << size_bits;
+        if is_load {
+            return vec![IrOp::LoadDyn {
+                dst: rt,
+                base: rn,
+                off: 0,
+                size,
+            }];
+        } else {
+            return vec![IrOp::StoreDyn {
+                src: rt,
+                base: rn,
+                off: 0,
+                size,
+            }];
+        }
+    }
+
+    // 8. Load-acquire RCpc (LDAPR):
+    // size 111 0 00 0 1 1 11111 110000 Rn Rt
+    if (word >> 24) & 0x3F == 0b111000
+        && (word >> 21) & 1 == 1
+        && (word >> 16) & 0x1F == 0b11111
+        && (word >> 10) & 0x3F == 0b110000
+    {
+        let size_bits = (word >> 30) & 0x3;
+        let rn = ((word >> 5) & 0x1F) as u8;
+        let rt = (word & 0x1F) as u8;
+
+        if rn == 31 {
+            return trap(R_LS_SP);
+        }
+        if size_bits == 1 {
+            return trap(R_LS_SUBWORD);
+        }
+
+        let size: u8 = 1 << size_bits;
+        return vec![IrOp::LoadDyn {
+            dst: rt,
+            base: rn,
+            off: 0,
+            size,
+        }];
+    }
+
+    // 9. Compare and swap (CAS / CASA / CASL / CASAL):
+    // size 001000 1 R 1 Rs L 011111 Rn Rt
+    if (word >> 24) & 0x3F == 0b001000
+        && (word >> 23) & 1 == 1
+        && (word >> 21) & 1 == 1
+        && (word >> 10) & 0x1F == 0b11111
+    {
+        return trap(R_ATOMIC_CAS);
+    }
+
+    // 10. Load/store exclusive (LDXR / STXR / LDAXR / STLXR):
+    // size 001000 0 L 0 Rs o0 11111 Rn Rt
+    if (word >> 24) & 0x3F == 0b001000 && (word >> 23) & 1 == 0 && (word >> 10) & 0x1F == 0b11111 {
+        return trap(R_EXCLUSIVE);
+    }
+
+    // 11. Other LSE atomic memory operations (LDADD, STADD, LDCLR, STCLR, etc.):
+    if (word >> 24) & 0x3F == 0b111000 && (word >> 21) & 1 == 1 && (word >> 10) & 0x3 == 0b00 {
+        return trap(R_ATOMIC_LSE);
+    }
+
+
+
+    let word = insn.word;
+
+    // 1. LDR / LDRSW / PRFM (literal): sf 00 011000 imm19 Rt (bits 31:24 = 0x18 / 0x58 / 0x98 / 0xD8).
     // Address = PC + sign_extend(imm19 << 2): fully static.
     let top = (word >> 24) & 0xFF;
-    if top == 0x18 || top == 0x58 || top == 0x98 {
+    if top == 0x18 || top == 0x58 || top == 0x98 || top == 0xD8 {
+        if top == 0xD8 {
+            // PRFM (literal): true no-op
+            return vec![];
+        }
         let size: u8 = if top == 0x58 { 8 } else { 4 };
         let imm19 = (word >> 5) & 0x7FFFF;
         let offset = (((imm19 as i32) << 13) >> 13) as i64 * 4;
@@ -800,27 +989,13 @@ fn lift_load_store(insn: &Instruction) -> Vec<IrOp> {
         let rt = (word & 0x1F) as u8;
         if top == 0x98 {
             // LDRSW (literal): load 4 bytes and sign-extend to 64 bits.
-            return vec![
-                IrOp::Load {
-                    dst: SCRATCH,
-                    addr,
-                    size: 4,
-                },
-                IrOp::OrrShift {
-                    dst: SCRATCH,
-                    a: 31,
-                    b: SCRATCH,
-                    shift: 0,
-                    amount: 32,
-                },
-                IrOp::OrrShift {
-                    dst: rt,
-                    a: 31,
-                    b: SCRATCH,
-                    shift: 2,
-                    amount: 32,
-                },
-            ];
+            let mut ops = vec![IrOp::Load {
+                dst: SCRATCH,
+                addr,
+                size: 4,
+            }];
+            lift_signed_extend(&mut ops, rt, 4, true);
+            return ops;
         }
         return vec![IrOp::Load {
             dst: rt,
@@ -962,9 +1137,9 @@ fn lift_load_store(insn: &Instruction) -> Vec<IrOp> {
             return trap(R_LS_SP);
         }
 
-        // Halfword is still sub-word and kept as trap per existing tests.
-        if size_bits == 1 {
-            return trap(R_LS_SUBWORD);
+        if opc == 0b10 && size_bits == 3 {
+            // PRFM (immediate): true no-op
+            return vec![];
         }
 
         let size: u8 = 1 << size_bits;
@@ -984,117 +1159,103 @@ fn lift_load_store(insn: &Instruction) -> Vec<IrOp> {
                 off,
                 size,
             }];
-        } else if opc == 0b10 && size_bits == 2 {
-            // LDRSW (unsigned offset)
-            return vec![
-                IrOp::LoadDyn {
-                    dst: SCRATCH,
-                    base: rn,
-                    off,
-                    size: 4,
-                },
-                IrOp::OrrShift {
-                    dst: SCRATCH,
-                    a: 31,
-                    b: SCRATCH,
-                    shift: 0,
-                    amount: 32,
-                },
-                IrOp::OrrShift {
-                    dst: rt,
-                    a: 31,
-                    b: SCRATCH,
-                    shift: 2,
-                    amount: 32,
-                },
-            ];
+        } else if opc == 0b10 {
+            // Signed load into 64-bit register: LDRSB (size=1), LDRSH (size=2), LDRSW (size=4)
+            let mut ops = vec![IrOp::LoadDyn {
+                dst: SCRATCH,
+                base: rn,
+                off,
+                size,
+            }];
+            lift_signed_extend(&mut ops, rt, size, true);
+            return ops;
+        } else if opc == 0b11 && size_bits <= 1 {
+            // Signed load into 32-bit register: LDRSB Wt (size=1), LDRSH Wt (size=2)
+            let mut ops = vec![IrOp::LoadDyn {
+                dst: SCRATCH,
+                base: rn,
+                off,
+                size,
+            }];
+            lift_signed_extend(&mut ops, rt, size, false);
+            return ops;
         }
         return trap(R_LS_UNSUPPORTED);
     }
 
-    // 4. Load/store register (immediate pre/post-indexed, and unscaled):
+    // 4. Load/store register (immediate pre/post-indexed, unscaled, and unprivileged):
     // size 111 V 00 opc 0 imm9 type Rn Rt with bits[29:24] == 0b111000, bit 21 == 0.
-    // type 0b01 = post-index, 0b11 = pre-index, 0b00 = unscaled (LDUR/STUR:
-    // address = base + simm9, no writeback). GB-26: unscaled was
-    // deliberately out of scope until the kernel hit STUR at step 1248988
-    // (pc 0xffffff80083969c0, word 0xf81f83a8 = STUR X8, [X29, #-8]).
     if (word >> 24) & 0x3F == 0b111000 && (word >> 21) & 1 == 0 {
         let idx_type = (word >> 10) & 0x3;
-        if idx_type == 0b01 || idx_type == 0b11 || idx_type == 0b00 {
-            let size_bits = (word >> 30) & 0x3;
-            let opc = (word >> 22) & 0x3;
-            let imm9 = ((word >> 12) & 0x1FF) as i32;
-            let simm9 = ((imm9 << 23) >> 23) as i64;
-            let rn = ((word >> 5) & 0x1F) as u8;
-            let rt = (word & 0x1F) as u8;
+        let size_bits = (word >> 30) & 0x3;
+        let opc = (word >> 22) & 0x3;
+        let imm9 = ((word >> 12) & 0x1FF) as i32;
+        let simm9 = ((imm9 << 23) >> 23) as i64;
+        let rn = ((word >> 5) & 0x1F) as u8;
+        let rt = (word & 0x1F) as u8;
 
-            if rn == 31 {
-                return trap(R_LS_SP);
-            }
-
-            if size_bits == 1 {
-                return trap(R_LS_SUBWORD);
-            }
-
-            let size: u8 = 1 << size_bits;
-            let base_off = if idx_type == 0b01 { 0i64 } else { simm9 };
-
-            let mut ops = Vec::new();
-            if opc == 0b00 {
-                ops.push(IrOp::StoreDyn {
-                    src: rt,
-                    base: rn,
-                    off: base_off as u64,
-                    size,
-                });
-            } else if opc == 0b01 {
-                ops.push(IrOp::LoadDyn {
-                    dst: rt,
-                    base: rn,
-                    off: base_off as u64,
-                    size,
-                });
-            } else if opc == 0b10 && size_bits == 2 {
-                // LDRSW (pre/post-indexed)
-                ops.push(IrOp::LoadDyn {
-                    dst: SCRATCH,
-                    base: rn,
-                    off: base_off as u64,
-                    size: 4,
-                });
-                ops.push(IrOp::OrrShift {
-                    dst: SCRATCH,
-                    a: 31,
-                    b: SCRATCH,
-                    shift: 0,
-                    amount: 32,
-                });
-                ops.push(IrOp::OrrShift {
-                    dst: rt,
-                    a: 31,
-                    b: SCRATCH,
-                    shift: 2,
-                    amount: 32,
-                });
-            } else {
-                return trap(R_LS_UNSUPPORTED);
-            }
-
-            if simm9 != 0 && idx_type != 0b00 {
-                // Writeback for pre/post-index only. Unscaled (LDUR/STUR)
-                // has no writeback: the address IS base + simm9.
-                ops.push(IrOp::Mov {
-                    dst: SCRATCH,
-                    imm: simm9 as u64,
-                });
-                ops.push(IrOp::Add {
-                    dst: rn,
-                    a: rn,
-                    b: SCRATCH,
-                });
-            }
-            return ops;
+        if rn == 31 {
+            return trap(R_LS_SP);
         }
+
+        if opc == 0b10 && size_bits == 3 && idx_type == 0b00 {
+            // PRFUM: true no-op
+            return vec![];
+        }
+
+        let size: u8 = 1 << size_bits;
+        let base_off = if idx_type == 0b01 { 0i64 } else { simm9 };
+
+        let mut ops = Vec::new();
+        if opc == 0b00 {
+            ops.push(IrOp::StoreDyn {
+                src: rt,
+                base: rn,
+                off: base_off as u64,
+                size,
+            });
+        } else if opc == 0b01 {
+            ops.push(IrOp::LoadDyn {
+                dst: rt,
+                base: rn,
+                off: base_off as u64,
+                size,
+            });
+        } else if opc == 0b10 && size_bits <= 2 {
+            // LDRSB/H/W Xt (64-bit sign-extended)
+            ops.push(IrOp::LoadDyn {
+                dst: SCRATCH,
+                base: rn,
+                off: base_off as u64,
+                size,
+            });
+            lift_signed_extend(&mut ops, rt, size, true);
+        } else if opc == 0b11 && size_bits <= 1 {
+            // LDRSB/H Wt (32-bit sign-extended)
+            ops.push(IrOp::LoadDyn {
+                dst: SCRATCH,
+                base: rn,
+                off: base_off as u64,
+                size,
+            });
+            lift_signed_extend(&mut ops, rt, size, false);
+        } else {
+            return trap(R_LS_UNSUPPORTED);
+        }
+
+        if simm9 != 0 && (idx_type == 0b01 || idx_type == 0b11) {
+            // Writeback for pre/post-index only
+            ops.push(IrOp::Mov {
+                dst: SCRATCH,
+                imm: simm9 as u64,
+            });
+            ops.push(IrOp::Add {
+                dst: rn,
+                a: rn,
+                b: SCRATCH,
+            });
+        }
+        return ops;
     }
 
     // 5. Load/store register (register offset):
@@ -1112,17 +1273,43 @@ fn lift_load_store(insn: &Instruction) -> Vec<IrOp> {
             return trap(R_LS_SP);
         }
 
-        if size_bits == 1 {
-            return trap(R_LS_SUBWORD);
+        if opc == 0b10 && size_bits == 3 {
+            // PRFM (register): true no-op
+            return vec![];
         }
 
-        // option 011 = 64-bit register offset (LSL #0 or LSL #size_bits)
-        if option == 0b011 {
-            let size: u8 = 1 << size_bits;
-            let shift_amt: u8 = if s == 1 { size_bits as u8 } else { 0 };
+        let size: u8 = 1 << size_bits;
+        let shift_amt: u8 = if s == 1 { size_bits as u8 } else { 0 };
 
+        // option 011 = 64-bit register offset (LSL), 010 = 32-bit UXTW (zero-extended)
+        if option == 0b011 || option == 0b010 {
             let mut ops = Vec::new();
-            if shift_amt > 0 {
+            if option == 0b010 {
+                // UXTW: zero-extend Wm to 64-bit into SCRATCH
+                ops.push(IrOp::AndShift {
+                    dst: SCRATCH,
+                    a: rm,
+                    b: 31,
+                    shift: 0,
+                    amount: 0,
+                    invert: false,
+                    is_32: true,
+                });
+                if shift_amt > 0 {
+                    ops.push(IrOp::OrrShift {
+                        dst: SCRATCH,
+                        a: 31,
+                        b: SCRATCH,
+                        shift: 0,
+                        amount: shift_amt,
+                    });
+                }
+                ops.push(IrOp::Add {
+                    dst: SCRATCH,
+                    a: rn,
+                    b: SCRATCH,
+                });
+            } else if shift_amt > 0 {
                 ops.push(IrOp::OrrShift {
                     dst: SCRATCH,
                     a: 31,
@@ -1157,166 +1344,29 @@ fn lift_load_store(insn: &Instruction) -> Vec<IrOp> {
                     off: 0,
                     size,
                 });
-            } else if opc == 0b10 && size_bits == 2 {
-                // LDRSW (reg offset)
+            } else if opc == 0b10 && size_bits <= 2 {
+                // LDRSB/H/W Xt (64-bit sign-extended)
                 ops.push(IrOp::LoadDyn {
                     dst: SCRATCH,
                     base: SCRATCH,
                     off: 0,
-                    size: 4,
+                    size,
                 });
-                ops.push(IrOp::OrrShift {
+                lift_signed_extend(&mut ops, rt, size, true);
+            } else if opc == 0b11 && size_bits <= 1 {
+                // LDRSB/H Wt (32-bit sign-extended)
+                ops.push(IrOp::LoadDyn {
                     dst: SCRATCH,
-                    a: 31,
-                    b: SCRATCH,
-                    shift: 0,
-                    amount: 32,
+                    base: SCRATCH,
+                    off: 0,
+                    size,
                 });
-                ops.push(IrOp::OrrShift {
-                    dst: rt,
-                    a: 31,
-                    b: SCRATCH,
-                    shift: 2,
-                    amount: 32,
-                });
+                lift_signed_extend(&mut ops, rt, size, false);
             } else {
                 return trap(R_LS_UNSUPPORTED);
             }
             return ops;
         }
-    }
-
-    // 6. Atomic swap (SWP / SWPA / SWPL / SWPAL):
-    // size 111 0 00 A R 1 Rs 1 00000 Rn Rt (bits 29:24 = 0b111000, bit 21 = 1, bit 15 = 1, bits 14:10 = 0)
-    if (word >> 24) & 0x3F == 0b111000
-        && (word >> 21) & 1 == 1
-        && (word >> 15) & 1 == 1
-        && (word >> 10) & 0x1F == 0b00000
-    {
-        let size_bits = (word >> 30) & 0x3;
-        let rs = ((word >> 16) & 0x1F) as u8;
-        let rn = ((word >> 5) & 0x1F) as u8;
-        let rt = (word & 0x1F) as u8;
-
-        if rn == 31 {
-            return trap(R_LS_SP);
-        }
-        if size_bits == 1 {
-            return trap(R_LS_SUBWORD);
-        }
-
-        let size: u8 = 1 << size_bits;
-        let mut ops = vec![
-            IrOp::LoadDyn {
-                dst: SCRATCH,
-                base: rn,
-                off: 0,
-                size,
-            },
-            IrOp::StoreDyn {
-                src: rs,
-                base: rn,
-                off: 0,
-                size,
-            },
-        ];
-        if rt != 31 {
-            ops.push(IrOp::OrrShift {
-                dst: rt,
-                a: 31,
-                b: SCRATCH,
-                shift: 0,
-                amount: 0,
-            });
-        }
-        return ops;
-    }
-
-    // 7. Load-acquire / store-release (LDAR / STLR):
-    // size 001000 1 L 0 11111 1 11111 Rn Rt
-    if (word >> 24) & 0x3F == 0b001000
-        && (word >> 23) & 1 == 1
-        && (word >> 21) & 1 == 0
-        && (word >> 16) & 0x1F == 0b11111
-        && (word >> 15) & 1 == 1
-        && (word >> 10) & 0x1F == 0b11111
-    {
-        let size_bits = (word >> 30) & 0x3;
-        let is_load = (word >> 22) & 1 == 1;
-        let rn = ((word >> 5) & 0x1F) as u8;
-        let rt = (word & 0x1F) as u8;
-
-        if rn == 31 {
-            return trap(R_LS_SP);
-        }
-        if size_bits == 1 {
-            return trap(R_LS_SUBWORD);
-        }
-
-        let size: u8 = 1 << size_bits;
-        if is_load {
-            return vec![IrOp::LoadDyn {
-                dst: rt,
-                base: rn,
-                off: 0,
-                size,
-            }];
-        } else {
-            return vec![IrOp::StoreDyn {
-                src: rt,
-                base: rn,
-                off: 0,
-                size,
-            }];
-        }
-    }
-
-    // 8. Load-acquire RCpc (LDAPR):
-    // size 111 0 00 0 1 1 11111 110000 Rn Rt
-    if (word >> 24) & 0x3F == 0b111000
-        && (word >> 21) & 1 == 1
-        && (word >> 16) & 0x1F == 0b11111
-        && (word >> 10) & 0x3F == 0b110000
-    {
-        let size_bits = (word >> 30) & 0x3;
-        let rn = ((word >> 5) & 0x1F) as u8;
-        let rt = (word & 0x1F) as u8;
-
-        if rn == 31 {
-            return trap(R_LS_SP);
-        }
-        if size_bits == 1 {
-            return trap(R_LS_SUBWORD);
-        }
-
-        let size: u8 = 1 << size_bits;
-        return vec![IrOp::LoadDyn {
-            dst: rt,
-            base: rn,
-            off: 0,
-            size,
-        }];
-    }
-
-    // 9. Compare and swap (CAS / CASA / CASL / CASAL):
-    // size 001000 1 R 1 Rs L 011111 Rn Rt
-    if (word >> 24) & 0x3F == 0b001000
-        && (word >> 23) & 1 == 1
-        && (word >> 21) & 1 == 1
-        && (word >> 10) & 0x1F == 0b11111
-    {
-        return trap(R_ATOMIC_CAS);
-    }
-
-    // 10. Load/store exclusive (LDXR / STXR / LDAXR / STLXR):
-    // size 001000 0 L 0 Rs o0 11111 Rn Rt
-    if (word >> 24) & 0x3F == 0b001000 && (word >> 23) & 1 == 0 && (word >> 10) & 0x1F == 0b11111 {
-        return trap(R_EXCLUSIVE);
-    }
-
-    // 11. Other LSE atomic memory operations (LDADD, STADD, LDCLR, STCLR, etc.):
-    if (word >> 24) & 0x3F == 0b111000 && (word >> 21) & 1 == 1 && (word >> 10) & 0x3 == 0b00 {
-        return trap(R_ATOMIC_LSE);
     }
 
     trap(R_LS_UNSUPPORTED)
@@ -2273,15 +2323,144 @@ mod tests {
     }
 
     #[test]
-    fn trap_ldrh_subword() {
-        // LDRH W0, [X1]: 16-bit width is still not expressible (Wave 4
-        // lifted only the byte forms).
+    fn ldrh_16bit_supported() {
+        // LDRH W0, [X1, #2]: 16-bit halfword load lifts to LoadDyn with size: 2.
         let ops = lift(&insn(0x4000, 0x7940_0420, InsnKind::LoadStore));
         assert_eq!(
             ops,
-            vec![IrOp::Trap {
-                reason: R_LS_SUBWORD
+            vec![IrOp::LoadDyn {
+                dst: 0,
+                base: 1,
+                off: 2,
+                size: 2
             }]
+        );
+
+        // STRH W0, [X1, #2]: 16-bit halfword store lifts to StoreDyn with size: 2.
+        let ops_strh = lift(&insn(0x4000, 0x7900_0420, InsnKind::LoadStore));
+        assert_eq!(
+            ops_strh,
+            vec![IrOp::StoreDyn {
+                src: 0,
+                base: 1,
+                off: 2,
+                size: 2
+            }]
+        );
+    }
+
+    #[test]
+    fn prfm_prefetch_is_true_noop() {
+        // PRFM PLDL1KEEP, [X0, #8] (unsigned imm)
+        let ops_imm = lift(&insn(0x4000, 0xF980_0400, InsnKind::LoadStore));
+        assert_eq!(ops_imm, Vec::<IrOp>::new());
+
+        // PRFM PLDL1KEEP, [PC, #16] (literal)
+        let ops_lit = lift(&insn(0x4000, 0xD800_0080, InsnKind::LoadStore));
+        assert_eq!(ops_lit, Vec::<IrOp>::new());
+
+        // PRFUM PLDL1KEEP, [X0, #-8] (unscaled)
+        let ops_unscaled = lift(&insn(0x4000, 0xF89F_8000, InsnKind::LoadStore));
+        assert_eq!(ops_unscaled, Vec::<IrOp>::new());
+
+        // PRFM PLDL1KEEP, [X0, X1, LSL #3] (register offset)
+        let ops_reg = lift(&insn(0x4000, 0xF8A1_7800, InsnKind::LoadStore));
+        assert_eq!(ops_reg, Vec::<IrOp>::new());
+    }
+
+    #[test]
+    fn ldrsb_ldrsh_signed_loads() {
+        // LDRSB X0, [X1, #2]: signed byte -> 64-bit (LSL 56, ASR 56)
+        let ops = lift(&insn(0x4000, 0x3980_0820, InsnKind::LoadStore));
+        assert_eq!(
+            ops,
+            vec![
+                IrOp::LoadDyn {
+                    dst: SCRATCH,
+                    base: 1,
+                    off: 2,
+                    size: 1
+                },
+                IrOp::OrrShift {
+                    dst: SCRATCH,
+                    a: 31,
+                    b: SCRATCH,
+                    shift: 0,
+                    amount: 56
+                },
+                IrOp::OrrShift {
+                    dst: 0,
+                    a: 31,
+                    b: SCRATCH,
+                    shift: 2,
+                    amount: 56
+                }
+            ]
+        );
+
+        // LDRSB W0, [X1, #2]: signed byte -> 32-bit (LSL 56, ASR 56, AndShift is_32: true)
+        let ops = lift(&insn(0x4000, 0x39C0_0820, InsnKind::LoadStore));
+        assert_eq!(
+            ops,
+            vec![
+                IrOp::LoadDyn {
+                    dst: SCRATCH,
+                    base: 1,
+                    off: 2,
+                    size: 1
+                },
+                IrOp::OrrShift {
+                    dst: SCRATCH,
+                    a: 31,
+                    b: SCRATCH,
+                    shift: 0,
+                    amount: 56
+                },
+                IrOp::OrrShift {
+                    dst: SCRATCH,
+                    a: 31,
+                    b: SCRATCH,
+                    shift: 2,
+                    amount: 56
+                },
+                IrOp::AndShift {
+                    dst: 0,
+                    a: SCRATCH,
+                    b: 31,
+                    shift: 0,
+                    amount: 0,
+                    invert: false,
+                    is_32: true
+                }
+            ]
+        );
+
+        // LDRSH X0, [X1, #4]: signed halfword -> 64-bit (LSL 48, ASR 48)
+        let ops = lift(&insn(0x4000, 0x7980_0820, InsnKind::LoadStore));
+        assert_eq!(
+            ops,
+            vec![
+                IrOp::LoadDyn {
+                    dst: SCRATCH,
+                    base: 1,
+                    off: 4,
+                    size: 2
+                },
+                IrOp::OrrShift {
+                    dst: SCRATCH,
+                    a: 31,
+                    b: SCRATCH,
+                    shift: 0,
+                    amount: 48
+                },
+                IrOp::OrrShift {
+                    dst: 0,
+                    a: 31,
+                    b: SCRATCH,
+                    shift: 2,
+                    amount: 48
+                }
+            ]
         );
     }
 
