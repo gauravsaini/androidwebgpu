@@ -2316,7 +2316,59 @@ mod tests {
                 IrOp::CondBranch {
                     reg: SCRATCH,
                     target: 0xffffff800839b398,
-                    when_zero: false
+                    when_zero: false,
+                },
+            ]
+        );
+    }
+
+    #[test]
+    fn f2_cbz_cbnz_xzr_lifting() {
+        // CBZ XZR, +16: 0xB400_009F at 0x4000
+        let ops_cbz64 = lift(&insn(0x4000, 0xB400_009F, InsnKind::Branch));
+        assert_eq!(
+            ops_cbz64,
+            vec![IrOp::CondBranch {
+                reg: 31,
+                target: 0x4010,
+                when_zero: true,
+            }]
+        );
+
+        // CBNZ XZR, +16: 0xB500_009F at 0x4000
+        let ops_cbnz64 = lift(&insn(0x4000, 0xB500_009F, InsnKind::Branch));
+        assert_eq!(
+            ops_cbnz64,
+            vec![IrOp::CondBranch {
+                reg: 31,
+                target: 0x4010,
+                when_zero: false,
+            }]
+        );
+
+        // CBZ WZR, +16: 0x3400_009F at 0x4000
+        let ops_cbz32 = lift(&insn(0x4000, 0x3400_009F, InsnKind::Branch));
+        assert_eq!(
+            ops_cbz32,
+            vec![
+                IrOp::OrrShift {
+                    dst: SCRATCH,
+                    a: 31,
+                    b: 31,
+                    shift: 0,
+                    amount: 32,
+                },
+                IrOp::OrrShift {
+                    dst: SCRATCH,
+                    a: 31,
+                    b: SCRATCH,
+                    shift: 1,
+                    amount: 32,
+                },
+                IrOp::CondBranch {
+                    reg: SCRATCH,
+                    target: 0x4010,
+                    when_zero: true,
                 },
             ]
         );
