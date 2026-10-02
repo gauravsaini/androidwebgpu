@@ -276,6 +276,23 @@ fn lift_system(word: u32) -> Vec<IrOp> {
                         (3, 3, 4, 2, 0) => 0,
                         // ID_AA64PFR0_EL1: EL0/EL1 AArch64 supported
                         (3, 0, 0, 4, 0) => 0x11,
+                        // ID_AA64PFR1_EL1 (2026-10-02): minimal Cortex-A53 =
+                        // 0. No BT, no MTE, no RAS. If we advertised these,
+                        // the alternatives framework would patch in code
+                        // using unimplemented features.
+                        (3, 0, 0, 4, 1) => 0,
+                        // ID_AA64ISAR0_EL1 (2026-10-02): minimal Cortex-A53 =
+                        // 0. No LSE atomics, no AES/SHA crypto, no CRC32.
+                        // The kernel's alternatives framework reads this to
+                        // decide patches; 0 takes the generic fallback path
+                        // instead of patching in optimized sequences we can't
+                        // execute (e.g. the 0x7a44_1060 / 0x7a43_2040
+                        // unallocated-encoding patches).
+                        (3, 0, 0, 6, 0) => 0,
+                        // ID_AA64ISAR1_EL1 (2026-10-02): minimal Cortex-A53 =
+                        // 0. No DPB, no APA, no JSCVT, no FCMA. Same
+                        // alternatives-framework reasoning as ISAR0.
+                        (3, 0, 0, 6, 1) => 0,
                         // ID_AA64MMFR2_EL1 (GB-16: was mislabeled ID_AA64MMFR1_EL1;
                         // (3,0,0,7,1) is the real ID_AA64MMFR1_EL1 -- see below)
                         (3, 0, 0, 7, 2) => 0,
