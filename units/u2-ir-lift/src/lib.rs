@@ -543,7 +543,7 @@ fn lift_data_proc(word: u32) -> Vec<IrOp> {
                 IrOp::AndShift {
                     dst: rd,
                     a: SCRATCH,
-                    b: 31,
+                    b: SCRATCH,
                     shift: 0,
                     amount: 0,
                     invert: false,
@@ -581,7 +581,7 @@ fn lift_data_proc(word: u32) -> Vec<IrOp> {
                 IrOp::AndShift {
                     dst: rd,
                     a: SCRATCH,
-                    b: 31,
+                    b: SCRATCH,
                     shift: 0,
                     amount: 0,
                     invert: false,
@@ -693,7 +693,7 @@ fn lift_data_proc(word: u32) -> Vec<IrOp> {
                 IrOp::AndShift {
                     dst: rd,
                     a: SCRATCH,
-                    b: 31,
+                    b: SCRATCH,
                     shift: 0,
                     amount: 0,
                     invert: false,
@@ -730,7 +730,7 @@ fn lift_data_proc(word: u32) -> Vec<IrOp> {
                 IrOp::AndShift {
                     dst: rd,
                     a: SCRATCH,
-                    b: 31,
+                    b: SCRATCH,
                     shift: 0,
                     amount: 0,
                     invert: false,
@@ -944,7 +944,7 @@ fn lift_signed_extend(ops: &mut Vec<IrOp>, rt: u8, size: u8, is_64: bool) {
         ops.push(IrOp::AndShift {
             dst: rt,
             a: SCRATCH,
-            b: 31,
+            b: SCRATCH,
             shift: 0,
             amount: 0,
             invert: false,
@@ -1405,7 +1405,7 @@ fn lift_load_store(insn: &Instruction) -> Vec<IrOp> {
                 ops.push(IrOp::AndShift {
                     dst: SCRATCH,
                     a: rm,
-                    b: 31,
+                    b: SCRATCH,
                     shift: 0,
                     amount: 0,
                     invert: false,
@@ -1834,7 +1834,7 @@ mod tests {
                 IrOp::AndShift {
                     dst: 1,
                     a: SCRATCH,
-                    b: 31,
+                    b: SCRATCH,
                     shift: 0,
                     amount: 0,
                     invert: false,
@@ -2449,7 +2449,7 @@ mod tests {
                 IrOp::AndShift {
                     dst: 0,
                     a: SCRATCH,
-                    b: 31,
+                    b: SCRATCH,
                     shift: 0,
                     amount: 0,
                     invert: false,
@@ -2479,7 +2479,7 @@ mod tests {
                 IrOp::AndShift {
                     dst: 0,
                     a: SCRATCH,
-                    b: 31,
+                    b: SCRATCH,
                     shift: 0,
                     amount: 0,
                     invert: false,
@@ -2612,7 +2612,7 @@ mod tests {
                 IrOp::AndShift {
                     dst: 0,
                     a: SCRATCH,
-                    b: 31,
+                    b: SCRATCH,
                     shift: 0,
                     amount: 0,
                     invert: false,
