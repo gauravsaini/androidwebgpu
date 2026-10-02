@@ -9,12 +9,9 @@ pub fn decode(word: u32) -> Option<InsnKind> {
         _ => {}
     }
     // B.cond: 0101010 0 imm19 0 cond.
-    // bits[31:24] == 0x54, bit 4 == 0, cond < 0b1111 (0..14).
+    // bits[31:24] == 0x54, bit 4 == 0, cond is bits[3:0] (0..15, all legal; AL/NV always true).
     if (word >> 24) == 0x54 && (word & 0x10) == 0 {
-        let cond = word & 0xF;
-        if cond < 0b1111 {
-            return Some(InsnKind::Branch);
-        }
+        return Some(InsnKind::Branch);
     }
     // CBZ / CBNZ: sf 011010 op imm19 Rt. bits[29:24] = 0b11010_op, so the op
     // bit (bit 24) distinguishes them: 0b110100 = CBZ, 0b110101 = CBNZ.

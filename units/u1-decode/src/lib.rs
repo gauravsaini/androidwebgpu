@@ -583,9 +583,10 @@ mod tests {
     }
 
     #[test]
-    fn b_cond_all_14_conditions_are_branch() {
+    fn b_cond_all_16_conditions_are_branch() {
         // B.cond: 0x54000000 | (imm19 << 5) | cond
-        for cond in 0..=14u32 {
+        // All 16 conditions (0..=15) are legal; AL (14) and NV (15) must decode as Branch.
+        for cond in 0..=15u32 {
             let word = 0x5400_0000 | cond;
             assert_eq!(
                 ok_kind(word),
@@ -593,6 +594,11 @@ mod tests {
                 "B.cond with cond {cond} must decode as Branch"
             );
         }
+        // Exact witnesses:
+        // b.al +0: 0x5400_000E
+        assert_eq!(ok_kind(0x5400_000E), InsnKind::Branch);
+        // b.nv +0: 0x5400_000F
+        assert_eq!(ok_kind(0x5400_000F), InsnKind::Branch);
     }
 
     #[test]
