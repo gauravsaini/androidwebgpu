@@ -631,6 +631,55 @@ mod tests {
     }
 
     #[test]
+    fn atomics_and_exclusives_are_load_store() {
+        // SWP variants (32-bit and 64-bit)
+        assert_eq!(ok_kind(0xB820_8041), InsnKind::LoadStore); // SWP W0, W1, [X2]
+        assert_eq!(ok_kind(0xB8A0_8041), InsnKind::LoadStore); // SWPA W0, W1, [X2]
+        assert_eq!(ok_kind(0xB860_8041), InsnKind::LoadStore); // SWPL W0, W1, [X2]
+        assert_eq!(ok_kind(0xB8E0_8041), InsnKind::LoadStore); // SWPAL W0, W1, [X2]
+        assert_eq!(ok_kind(0xF820_8041), InsnKind::LoadStore); // SWP X0, X1, [X2]
+        assert_eq!(ok_kind(0xF8A0_8041), InsnKind::LoadStore); // SWPA X0, X1, [X2]
+        assert_eq!(ok_kind(0xF860_8041), InsnKind::LoadStore); // SWPL X0, X1, [X2]
+        assert_eq!(ok_kind(0xF8E0_8041), InsnKind::LoadStore); // SWPAL X0, X1, [X2]
+        assert_eq!(ok_kind(0x3820_8041), InsnKind::LoadStore); // SWPB W0, W1, [X2]
+
+        // CAS variants (32-bit and 64-bit)
+        assert_eq!(ok_kind(0x88A0_7C41), InsnKind::LoadStore); // CAS W0, W1, [X2]
+        assert_eq!(ok_kind(0x88E0_7C41), InsnKind::LoadStore); // CASA W0, W1, [X2]
+        assert_eq!(ok_kind(0x88A0_FC41), InsnKind::LoadStore); // CASL W0, W1, [X2]
+        assert_eq!(ok_kind(0x88E0_FC41), InsnKind::LoadStore); // CASAL W0, W1, [X2]
+        assert_eq!(ok_kind(0xC8A0_7C41), InsnKind::LoadStore); // CAS X0, X1, [X2]
+        assert_eq!(ok_kind(0xC8E0_7C41), InsnKind::LoadStore); // CASA X0, X1, [X2]
+        assert_eq!(ok_kind(0xC8A0_FC41), InsnKind::LoadStore); // CASL X0, X1, [X2]
+        assert_eq!(ok_kind(0xC8E0_FC41), InsnKind::LoadStore); // CASAL X0, X1, [X2]
+
+        // LDXR / STXR variants
+        assert_eq!(ok_kind(0x885F_7C20), InsnKind::LoadStore); // LDXR W0, [X1]
+        assert_eq!(ok_kind(0x8802_7C20), InsnKind::LoadStore); // STXR W2, W0, [X1]
+        assert_eq!(ok_kind(0xC85F_7C20), InsnKind::LoadStore); // LDXR X0, [X1]
+        assert_eq!(ok_kind(0xC802_7C20), InsnKind::LoadStore); // STXR W2, X0, [X1]
+        assert_eq!(ok_kind(0xC85F_FC20), InsnKind::LoadStore); // LDAXR X0, [X1]
+        assert_eq!(ok_kind(0xC802_FC20), InsnKind::LoadStore); // STLXR W2, X0, [X1]
+
+        // LDAR / STLR / LDAPR variants
+        assert_eq!(ok_kind(0x88DF_FC20), InsnKind::LoadStore); // LDAR W0, [X1]
+        assert_eq!(ok_kind(0x889F_FC20), InsnKind::LoadStore); // STLR W0, [X1]
+        assert_eq!(ok_kind(0xC8DF_FC20), InsnKind::LoadStore); // LDAR X0, [X1]
+        assert_eq!(ok_kind(0xC89F_FC20), InsnKind::LoadStore); // STLR X0, [X1]
+        assert_eq!(ok_kind(0x38BF_C020), InsnKind::LoadStore); // LDAPRB W0, [X1]
+        assert_eq!(ok_kind(0xB8BF_C020), InsnKind::LoadStore); // LDAPR W0, [X1]
+        assert_eq!(ok_kind(0xF8BF_C020), InsnKind::LoadStore); // LDAPR X0, [X1]
+
+        // Arithmetic / bitwise atomics (LDADD, STADD, LDCLR, LDSET, LDEOR)
+        assert_eq!(ok_kind(0xB820_0041), InsnKind::LoadStore); // LDADD W0, W1, [X2]
+        assert_eq!(ok_kind(0xF8E0_0041), InsnKind::LoadStore); // LDADDAL X0, X1, [X2]
+        assert_eq!(ok_kind(0xF820_003F), InsnKind::LoadStore); // STADD X0, [X1]
+        assert_eq!(ok_kind(0xF820_1041), InsnKind::LoadStore); // LDCLR X0, X1, [X2]
+        assert_eq!(ok_kind(0xF820_3041), InsnKind::LoadStore); // LDSET X0, X1, [X2]
+        assert_eq!(ok_kind(0xF820_2041), InsnKind::LoadStore); // LDEOR X0, X1, [X2]
+    }
+
+    #[test]
     fn b_cond_all_14_conditions_are_branch() {
         // B.cond: 0x54000000 | (imm19 << 5) | cond
         for cond in 0..=14u32 {

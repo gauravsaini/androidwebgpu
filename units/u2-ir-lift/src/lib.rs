@@ -101,6 +101,11 @@ pub const R_HLT: &str = "System: HLT exception";
 pub const R_HVC: &str = "System: HVC exception";
 pub const R_SMC: &str = "System: SMC exception";
 pub const R_ERET: &str = "System: ERET exception return not yet implemented";
+pub const R_ATOMIC_CAS: &str =
+    "LoadStore: atomic CAS requires memory arbitration (unsupported in IR)";
+pub const R_EXCLUSIVE: &str =
+    "LoadStore: exclusive monitor requires orchestrator state (unsupported in IR)";
+pub const R_ATOMIC_LSE: &str = "LoadStore: atomic LSE operation (unsupported in IR)";
 
 fn trap(reason: &'static str) -> Vec<IrOp> {
     vec![IrOp::Trap { reason }]
@@ -1164,6 +1169,139 @@ fn lift_load_store(insn: &Instruction) -> Vec<IrOp> {
             }
             return ops;
         }
+    }
+
+    // 6. Atomic swap (SWP / SWPA / SWPL / SWPAL):
+    // size 111 0 00 A R 1 Rs 1 00000 Rn Rt (bits 29:24 = 0b111000, bit 21 = 1, bit 15 = 1, bits 14:10 = 0)
+    if (word >> 24) & 0x3F == 0b111000
+        && (word >> 21) & 1 == 1
+        && (word >> 15) & 1 == 1
+        && (word >> 10) & 0x1F == 0b00000
+    {
+        let size_bits = (word >> 30) & 0x3;
+        let rs = ((word >> 16) & 0x1F) as u8;
+        let rn = ((word >> 5) & 0x1F) as u8;
+        let rt = (word & 0x1F) as u8;
+
+        if rn == 31 {
+            return trap(R_LS_SP);
+        }
+        if size_bits == 1 {
+            return trap(R_LS_SUBWORD);
+        }
+
+        let size: u8 = 1 << size_bits;
+        let mut ops = vec![
+            IrOp::LoadDyn {
+                dst: SCRATCH,
+                base: rn,
+                off: 0,
+                size,
+            },
+            IrOp::StoreDyn {
+                src: rs,
+                base: rn,
+                off: 0,
+                size,
+            },
+        ];
+        if rt != 31 {
+            ops.push(IrOp::OrrShift {
+                dst: rt,
+                a: 31,
+                b: SCRATCH,
+                shift: 0,
+                amount: 0,
+            });
+        }
+        return ops;
+    }
+
+    // 7. Load-acquire / store-release (LDAR / STLR):
+    // size 001000 1 L 0 11111 1 11111 Rn Rt
+    if (word >> 24) & 0x3F == 0b001000
+        && (word >> 23) & 1 == 1
+        && (word >> 21) & 1 == 0
+        && (word >> 16) & 0x1F == 0b11111
+        && (word >> 15) & 1 == 1
+        && (word >> 10) & 0x1F == 0b11111
+    {
+        let size_bits = (word >> 30) & 0x3;
+        let is_load = (word >> 22) & 1 == 1;
+        let rn = ((word >> 5) & 0x1F) as u8;
+        let rt = (word & 0x1F) as u8;
+
+        if rn == 31 {
+            return trap(R_LS_SP);
+        }
+        if size_bits == 1 {
+            return trap(R_LS_SUBWORD);
+        }
+
+        let size: u8 = 1 << size_bits;
+        if is_load {
+            return vec![IrOp::LoadDyn {
+                dst: rt,
+                base: rn,
+                off: 0,
+                size,
+            }];
+        } else {
+            return vec![IrOp::StoreDyn {
+                src: rt,
+                base: rn,
+                off: 0,
+                size,
+            }];
+        }
+    }
+
+    // 8. Load-acquire RCpc (LDAPR):
+    // size 111 0 00 0 1 1 11111 110000 Rn Rt
+    if (word >> 24) & 0x3F == 0b111000
+        && (word >> 21) & 1 == 1
+        && (word >> 16) & 0x1F == 0b11111
+        && (word >> 10) & 0x3F == 0b110000
+    {
+        let size_bits = (word >> 30) & 0x3;
+        let rn = ((word >> 5) & 0x1F) as u8;
+        let rt = (word & 0x1F) as u8;
+
+        if rn == 31 {
+            return trap(R_LS_SP);
+        }
+        if size_bits == 1 {
+            return trap(R_LS_SUBWORD);
+        }
+
+        let size: u8 = 1 << size_bits;
+        return vec![IrOp::LoadDyn {
+            dst: rt,
+            base: rn,
+            off: 0,
+            size,
+        }];
+    }
+
+    // 9. Compare and swap (CAS / CASA / CASL / CASAL):
+    // size 001000 1 R 1 Rs L 011111 Rn Rt
+    if (word >> 24) & 0x3F == 0b001000
+        && (word >> 23) & 1 == 1
+        && (word >> 21) & 1 == 1
+        && (word >> 10) & 0x1F == 0b11111
+    {
+        return trap(R_ATOMIC_CAS);
+    }
+
+    // 10. Load/store exclusive (LDXR / STXR / LDAXR / STLXR):
+    // size 001000 0 L 0 Rs o0 11111 Rn Rt
+    if (word >> 24) & 0x3F == 0b001000 && (word >> 23) & 1 == 0 && (word >> 10) & 0x1F == 0b11111 {
+        return trap(R_EXCLUSIVE);
+    }
+
+    // 11. Other LSE atomic memory operations (LDADD, STADD, LDCLR, STCLR, etc.):
+    if (word >> 24) & 0x3F == 0b111000 && (word >> 21) & 1 == 1 && (word >> 10) & 0x3 == 0b00 {
+        return trap(R_ATOMIC_LSE);
     }
 
     trap(R_LS_UNSUPPORTED)
@@ -3074,5 +3212,269 @@ mod tests {
                 is_32: false,
             }]
         );
+    }
+
+    #[test]
+    fn swp_lifts_to_load_store_and_transfer() {
+        // SWP X0, X1, [X2]
+        assert_eq!(
+            lift(&insn(0x4000, 0xF820_8041, InsnKind::LoadStore)),
+            vec![
+                IrOp::LoadDyn {
+                    dst: SCRATCH,
+                    base: 2,
+                    off: 0,
+                    size: 8,
+                },
+                IrOp::StoreDyn {
+                    src: 0,
+                    base: 2,
+                    off: 0,
+                    size: 8,
+                },
+                IrOp::OrrShift {
+                    dst: 1,
+                    a: 31,
+                    b: SCRATCH,
+                    shift: 0,
+                    amount: 0,
+                },
+            ]
+        );
+        // SWPA X0, X1, [X2]
+        assert_eq!(
+            lift(&insn(0x4000, 0xF8A0_8041, InsnKind::LoadStore)),
+            vec![
+                IrOp::LoadDyn {
+                    dst: SCRATCH,
+                    base: 2,
+                    off: 0,
+                    size: 8,
+                },
+                IrOp::StoreDyn {
+                    src: 0,
+                    base: 2,
+                    off: 0,
+                    size: 8,
+                },
+                IrOp::OrrShift {
+                    dst: 1,
+                    a: 31,
+                    b: SCRATCH,
+                    shift: 0,
+                    amount: 0,
+                },
+            ]
+        );
+        // SWPL X0, X1, [X2]
+        assert_eq!(
+            lift(&insn(0x4000, 0xF860_8041, InsnKind::LoadStore)),
+            vec![
+                IrOp::LoadDyn {
+                    dst: SCRATCH,
+                    base: 2,
+                    off: 0,
+                    size: 8,
+                },
+                IrOp::StoreDyn {
+                    src: 0,
+                    base: 2,
+                    off: 0,
+                    size: 8,
+                },
+                IrOp::OrrShift {
+                    dst: 1,
+                    a: 31,
+                    b: SCRATCH,
+                    shift: 0,
+                    amount: 0,
+                },
+            ]
+        );
+        // SWPAL X0, X1, [X2]
+        assert_eq!(
+            lift(&insn(0x4000, 0xF8E0_8041, InsnKind::LoadStore)),
+            vec![
+                IrOp::LoadDyn {
+                    dst: SCRATCH,
+                    base: 2,
+                    off: 0,
+                    size: 8,
+                },
+                IrOp::StoreDyn {
+                    src: 0,
+                    base: 2,
+                    off: 0,
+                    size: 8,
+                },
+                IrOp::OrrShift {
+                    dst: 1,
+                    a: 31,
+                    b: SCRATCH,
+                    shift: 0,
+                    amount: 0,
+                },
+            ]
+        );
+        // SWP W0, W1, [X2]
+        assert_eq!(
+            lift(&insn(0x4000, 0xB820_8041, InsnKind::LoadStore)),
+            vec![
+                IrOp::LoadDyn {
+                    dst: SCRATCH,
+                    base: 2,
+                    off: 0,
+                    size: 4,
+                },
+                IrOp::StoreDyn {
+                    src: 0,
+                    base: 2,
+                    off: 0,
+                    size: 4,
+                },
+                IrOp::OrrShift {
+                    dst: 1,
+                    a: 31,
+                    b: SCRATCH,
+                    shift: 0,
+                    amount: 0,
+                },
+            ]
+        );
+        // SWPB W0, W1, [X2]
+        assert_eq!(
+            lift(&insn(0x4000, 0x3820_8041, InsnKind::LoadStore)),
+            vec![
+                IrOp::LoadDyn {
+                    dst: SCRATCH,
+                    base: 2,
+                    off: 0,
+                    size: 1,
+                },
+                IrOp::StoreDyn {
+                    src: 0,
+                    base: 2,
+                    off: 0,
+                    size: 1,
+                },
+                IrOp::OrrShift {
+                    dst: 1,
+                    a: 31,
+                    b: SCRATCH,
+                    shift: 0,
+                    amount: 0,
+                },
+            ]
+        );
+    }
+
+    #[test]
+    fn ldar_stlr_ldapr_lift() {
+        // LDAR X0, [X1]
+        assert_eq!(
+            lift(&insn(0x4000, 0xC8DF_FC20, InsnKind::LoadStore)),
+            vec![IrOp::LoadDyn {
+                dst: 0,
+                base: 1,
+                off: 0,
+                size: 8,
+            }]
+        );
+        // STLR X0, [X1]
+        assert_eq!(
+            lift(&insn(0x4000, 0xC89F_FC20, InsnKind::LoadStore)),
+            vec![IrOp::StoreDyn {
+                src: 0,
+                base: 1,
+                off: 0,
+                size: 8,
+            }]
+        );
+        // LDAR W0, [X1]
+        assert_eq!(
+            lift(&insn(0x4000, 0x88DF_FC20, InsnKind::LoadStore)),
+            vec![IrOp::LoadDyn {
+                dst: 0,
+                base: 1,
+                off: 0,
+                size: 4,
+            }]
+        );
+        // STLR W0, [X1]
+        assert_eq!(
+            lift(&insn(0x4000, 0x889F_FC20, InsnKind::LoadStore)),
+            vec![IrOp::StoreDyn {
+                src: 0,
+                base: 1,
+                off: 0,
+                size: 4,
+            }]
+        );
+        // LDAPR X0, [X1]
+        assert_eq!(
+            lift(&insn(0x4000, 0xF8BF_C020, InsnKind::LoadStore)),
+            vec![IrOp::LoadDyn {
+                dst: 0,
+                base: 1,
+                off: 0,
+                size: 8,
+            }]
+        );
+        // LDAPR W0, [X1]
+        assert_eq!(
+            lift(&insn(0x4000, 0xB8BF_C020, InsnKind::LoadStore)),
+            vec![IrOp::LoadDyn {
+                dst: 0,
+                base: 1,
+                off: 0,
+                size: 4,
+            }]
+        );
+    }
+
+    #[test]
+    fn cas_and_exclusives_lift_to_honest_traps() {
+        assert_eq!(
+            lift(&insn(0x4000, 0x88A0_7C41, InsnKind::LoadStore)),
+            vec![IrOp::Trap {
+                reason: R_ATOMIC_CAS,
+            }]
+        ); // CAS W0, W1, [X2]
+        assert_eq!(
+            lift(&insn(0x4000, 0x88E0_7C41, InsnKind::LoadStore)),
+            vec![IrOp::Trap {
+                reason: R_ATOMIC_CAS,
+            }]
+        ); // CASA W0, W1, [X2]
+        assert_eq!(
+            lift(&insn(0x4000, 0x88A0_FC41, InsnKind::LoadStore)),
+            vec![IrOp::Trap {
+                reason: R_ATOMIC_CAS,
+            }]
+        ); // CASL W0, W1, [X2]
+        assert_eq!(
+            lift(&insn(0x4000, 0x88E0_FC41, InsnKind::LoadStore)),
+            vec![IrOp::Trap {
+                reason: R_ATOMIC_CAS,
+            }]
+        ); // CASAL W0, W1, [X2]
+        assert_eq!(
+            lift(&insn(0x4000, 0xC8A0_7C41, InsnKind::LoadStore)),
+            vec![IrOp::Trap {
+                reason: R_ATOMIC_CAS,
+            }]
+        ); // CAS X0, X1, [X2]
+        assert_eq!(
+            lift(&insn(0x4000, 0x885F_7C20, InsnKind::LoadStore)),
+            vec![IrOp::Trap {
+                reason: R_EXCLUSIVE,
+            }]
+        ); // LDXR W0, [X1]
+        assert_eq!(
+            lift(&insn(0x4000, 0x8802_7C20, InsnKind::LoadStore)),
+            vec![IrOp::Trap {
+                reason: R_EXCLUSIVE,
+            }]
+        ); // STXR W2, W0, [X1]
     }
 }

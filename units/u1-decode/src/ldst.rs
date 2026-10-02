@@ -66,17 +66,28 @@ pub fn decode(word: u32) -> Option<InsnKind> {
         }
     }
 
-    // 5. Load/store register (register offset):
+    // 5. Load/store register (register offset) and atomic memory operations:
     // size 111 V 00 opc 1 Rm option S 10 Rn Rt
     if (word >> 24) & 0x3F == 0b111000 && (word >> 21) & 1 == 1 {
-        let size_bits = (word >> 30) & 0x3;
-        let opc = (word >> 22) & 0x3;
-        return match opc {
-            0b00 => Some(InsnKind::LoadStore),                   // STR
-            0b01 => Some(InsnKind::LoadStore),                   // LDR
-            0b10 if size_bits == 2 => Some(InsnKind::LoadStore), // LDRSW
-            _ => None,
-        };
+        let sub_op = (word >> 10) & 0x3;
+        if sub_op == 0b10 {
+            let size_bits = (word >> 30) & 0x3;
+            let opc = (word >> 22) & 0x3;
+            return match opc {
+                0b00 => Some(InsnKind::LoadStore),                   // STR
+                0b01 => Some(InsnKind::LoadStore),                   // LDR
+                0b10 if size_bits == 2 => Some(InsnKind::LoadStore), // LDRSW
+                _ => None,
+            };
+        }
+        // Atomic memory operations (LSE: SWP, LDADD, STADD, etc.) and LDAPR:
+        return Some(InsnKind::LoadStore);
+    }
+
+    // 6. Load/store exclusive, load-acquire / store-release, and compare-and-swap:
+    // bits[29:24] == 0b001000 (V=0)
+    if (word >> 24) & 0x3F == 0b001000 {
+        return Some(InsnKind::LoadStore);
     }
 
     None
