@@ -21,6 +21,9 @@ fn print_help() {
     println!("  --save-snapshot <PATH>  Write emulator snapshot to PATH after the run");
     println!("  --save-at <STEP>     With --save-snapshot: save when step counter reaches STEP and exit");
     println!("                        (default: save at end of run)");
+    println!("  --save-every <N>     With --save-snapshot: auto-save every N steps to PATH.<step>");
+    println!("                        (e.g. --save-snapshot snap.bin --save-every 100000)");
+    println!("                        Enables restart from pre-divergence snapshot instead of reset.");
     println!("  --load-snapshot <PATH>  Restore emulator state from PATH instead of fresh boot;");
     println!("                        --max-steps then counts from the snapshot's step count.");
     println!("                        Snapshot files store an 8-byte LE step count header.");
@@ -37,6 +40,7 @@ fn main() {
     let mut survey = false;
     let mut save_snapshot: Option<String> = None;
     let mut save_at: Option<u64> = None;
+    let mut save_every: Option<u64> = None;
     let mut load_snapshot: Option<String> = None;
 
     let args: Vec<String> = env::args().collect();
@@ -101,6 +105,14 @@ fn main() {
                     }
                 }
             }
+            "--save-every" => {
+                i += 1;
+                if i < args.len() {
+                    if let Ok(val) = args[i].parse() {
+                        save_every = Some(val);
+                    }
+                }
+            }
             "--load-snapshot" => {
                 i += 1;
                 if i < args.len() {
@@ -160,18 +172,26 @@ fn main() {
 
         let kernel_bytes = fs::read(path).expect("failed to read kernel image");
 
+        // ARM64 Linux boot protocol (matches QEMU -machine virt):
+        // - Kernel Image loaded at RAM_BASE + TEXT_OFFSET (0x80000)
+        // - PC set to kernel entry (RAM_BASE + 0x80000)
+        // - X0 = DTB physical address (if --dtb given)
+        // - SP left as 0 (kernel sets up its own stack)
+        const TEXT_OFFSET: u64 = 0x80000;
+        const KERNEL_LOAD_ADDR: u64 = RAM_BASE + TEXT_OFFSET;
         let ram = &mut orch.machine_mut().ram;
-        let load_len = kernel_bytes.len().min(ram.len());
-        ram[..load_len].copy_from_slice(&kernel_bytes[..load_len]);
+        let load_len = kernel_bytes.len().min(ram.len() - TEXT_OFFSET as usize);
+        let k_off = TEXT_OFFSET as usize;
+        ram[k_off..k_off + load_len].copy_from_slice(&kernel_bytes[..load_len]);
 
         // Linux kernel entry point
-        orch.machine_mut().cpu[0].pc = RAM_BASE;
-        orch.machine_mut().cpu[0].sp = RAM_BASE + 0x0800_0000;
+        orch.machine_mut().cpu[0].pc = KERNEL_LOAD_ADDR;
+        orch.machine_mut().cpu[0].sp = 0;
         orch.machine_mut().cpu[0].regs = [0; 31];
 
-        // Optional DTB: load at 0x4700_0000 (112MB offset, clear of 23MB kernel
-        // and top-of-RAM stack), set x0 per ARM64 boot protocol.
-        const DTB_LOAD_ADDR: u64 = RAM_BASE + 0x0700_0000;
+        // Optional DTB: load at 0x4800_0000 (128MB offset, matches QEMU virt),
+        // set x0 per ARM64 boot protocol.
+        const DTB_LOAD_ADDR: u64 = RAM_BASE + 0x0800_0000;
         if let Some(ref dtb_p) = dtb_path {
             let dtb_bytes = fs::read(dtb_p).expect("failed to read DTB");
             let off = (DTB_LOAD_ADDR - RAM_BASE) as usize;
@@ -186,7 +206,7 @@ fn main() {
         }
 
         println!(
-            "[boot] Loaded {} bytes at {RAM_BASE:#x}. Running up to {max_steps} steps...",
+            "[boot] Loaded {} bytes at {KERNEL_LOAD_ADDR:#x}. Running up to {max_steps} steps...",
             load_len
         );
     }
@@ -210,6 +230,20 @@ fn main() {
             if orch.steps() >= target {
                 saved_at_step = Some(target);
                 break;
+            }
+        }
+        // --save-every: periodic auto-save for fast restart from pre-divergence.
+        if let (Some(ref base), Some(every)) = (&save_snapshot, save_every) {
+            if every > 0 && orch.steps() > 0 && orch.steps() % every == 0 {
+                let path = format!("{}.{}", base, orch.steps());
+                let blob = u11_snapshot::snapshot(orch.machine()).0;
+                let mut out = Vec::with_capacity(8 + blob.len());
+                out.extend_from_slice(&orch.steps().to_le_bytes());
+                out.extend_from_slice(&blob);
+                if fs::write(&path, &out).is_ok() {
+                    println!("[snapshot] Auto-saved {} bytes to {} at step {}",
+                             out.len(), path, orch.steps());
+                }
             }
         }
     }
