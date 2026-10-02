@@ -6,13 +6,22 @@ use pathn_contracts::cpu::InsnKind;
 pub fn decode(word: u32) -> Option<InsnKind> {
     match (word >> 24) & 0x1F {
         // Add/subtract (shifted register): sf op S 01011 shift 0 Rm imm6 Rn Rd.
+        // Add/subtract (extended register): sf op S 01011 opt 1 Rm option imm3 Rn Rd.
         0b01011 => {
-            let shifted = (word >> 21) & 1 == 0;
-            let shift = (word >> 22) & 0x3;
-            if shifted && shift < 0b11 {
-                Some(InsnKind::DataProc) // ADD / SUB / ADDS / SUBS (including CMP / CMN reg)
+            let bit21 = (word >> 21) & 1;
+            if bit21 == 0 {
+                // Shifted register form.
+                let shift = (word >> 22) & 0x3;
+                if shift < 0b11 {
+                    Some(InsnKind::DataProc) // ADD / SUB / ADDS / SUBS (including CMP / CMN reg)
+                } else {
+                    None // reserved shift: out of scope
+                }
             } else {
-                None // extended register / reserved shift: out of scope
+                // Extended register form (bit 21 = 1).
+                // Implemented in U2 for unsigned extends (UXTB/UXTH/UXTW/UXTX);
+                // signed extends trap honestly.
+                Some(InsnKind::DataProc)
             }
         }
         // Logical (shifted register): sf opc 01010 shift N Rm imm6 Rn Rd.

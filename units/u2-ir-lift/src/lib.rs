@@ -87,6 +87,8 @@ const R_MADD_LONG: &str =
 const R_ADD32_REG: &str = "DataProc: 32-bit ADD register width is not expressible in IrOp::Add";
 const R_ADD_SHIFT: &str =
     "DataProc: shifted or extended ADD register operand is not expressible in IrOp";
+const R_ADD_EXTEND_SIGNED: &str =
+    "DataProc: signed-extend (SXTB/SXTH/SXTW/SXTX) ADD/SUB not yet implemented";
 const R_ADC_CARRY: &str =
     "DataProc: ADC/SBC/ADCS/SBCS need NZCV carry flag, not expressible in IrOp";
 const R_CSEL_COND: &str =
@@ -673,6 +675,95 @@ fn lift_data_proc(word: u32) -> Vec<IrOp> {
                 imms,
                 is_32: sf == 0,
             }];
+        }
+    }
+    // ADD/SUB (extended register): sf op S 01011 opt 1 Rm option imm3 Rn Rd
+    // (bit 21 = 1 distinguishes from shifted register form).
+    // Unsigned extends (UXTB/UXTH/UXTW/UXTX) are implemented via AND mask + LSL.
+    // Signed extends (SXTB/SXTH/SXTW/SXTX) trap honestly.
+    {
+        let top = (word >> 24) & 0xFF;
+        let bit21 = (word >> 21) & 1;
+        if (top == 0x0B || top == 0x8B || top == 0x4B || top == 0xCB) && bit21 == 1 {
+            let sf = word >> 31;
+            let op = (word >> 30) & 1; // 0=ADD, 1=SUB
+            let rm = ((word >> 16) & 0x1F) as u8;
+            let option = (word >> 13) & 0x7;
+            let imm3 = ((word >> 10) & 0x7) as u8;
+            let rn = ((word >> 5) & 0x1F) as u8;
+            let rd = (word & 0x1F) as u8;
+            // option: 0=UXTB, 1=UXTH, 2=UXTW, 3=UXTX, 4=SXTB, 5=SXTH, 6=SXTW, 7=SXTX
+            let mask: u64 = match option {
+                0 => 0xFF,       // UXTB
+                1 => 0xFFFF,     // UXTH
+                2 => 0xFFFFFFFF, // UXTW
+                3 => u64::MAX,   // UXTX (no mask)
+                _ => return trap(R_ADD_EXTEND_SIGNED), // SXTB/SXTH/SXTW/SXTX: honest trap
+            };
+            let mut ops = Vec::new();
+            if option != 3 {
+                // Load mask and AND to zero-extend.
+                ops.push(IrOp::Mov {
+                    dst: SCRATCH,
+                    imm: mask,
+                });
+                ops.push(IrOp::AndShift {
+                    dst: SCRATCH,
+                    a: rm,
+                    b: SCRATCH,
+                    shift: 0,
+                    amount: 0,
+                    invert: false,
+                    is_32: false,
+                });
+            } else {
+                // UXTX: no mask needed, just use Rm directly.
+                // Move to SCRATCH for the shift step.
+                ops.push(IrOp::OrrShift {
+                    dst: SCRATCH,
+                    a: 31, // XZR
+                    b: rm,
+                    shift: 0, // LSL
+                    amount: 0,
+                });
+            }
+            // Shift left by imm3: SCRATCH = SCRATCH << imm3
+            if imm3 != 0 {
+                ops.push(IrOp::OrrShift {
+                    dst: SCRATCH,
+                    a: 31, // XZR
+                    b: SCRATCH,
+                    shift: 0, // LSL
+                    amount: imm3,
+                });
+            }
+            // ADD or SUB: Rd = Rn +/- SCRATCH
+            if op == 0 {
+                ops.push(IrOp::Add {
+                    dst: rd,
+                    a: rn,
+                    b: SCRATCH,
+                });
+            } else {
+                ops.push(IrOp::Sub {
+                    dst: rd,
+                    a: rn,
+                    b: SCRATCH,
+                });
+            }
+            // 32-bit form: mask result to 32 bits.
+            if sf == 0 {
+                ops.push(IrOp::AndShift {
+                    dst: rd,
+                    a: rd,
+                    b: rd, // AND with itself = identity, is_32 does masking
+                    shift: 0,
+                    amount: 0,
+                    invert: false,
+                    is_32: true,
+                });
+            }
+            return ops;
         }
     }
     // ADD (shifted register): sf 0 01011 00 0 Rm imm6 Rn Rd, LSL #0 only
@@ -2460,6 +2551,43 @@ mod tests {
                     amount: 0,
                     invert: false,
                     is_32: true,
+                },
+            ]
+        );
+    }
+
+    #[test]
+    fn add_extended_uxtb() {
+        // ADD X13, X8, UXTB X14, #2 (0x8b2e090d): unsigned extend byte + LSL #2 + ADD.
+        // Lifts to: Mov(0xFF) + AndShift(mask) + OrrShift(LSL #2) + Add.
+        let ops = lift(&insn(0x4000, 0x8B2E_090D, InsnKind::DataProc));
+        assert_eq!(
+            ops,
+            vec![
+                IrOp::Mov {
+                    dst: SCRATCH,
+                    imm: 0xFF,
+                },
+                IrOp::AndShift {
+                    dst: SCRATCH,
+                    a: 14,
+                    b: SCRATCH,
+                    shift: 0,
+                    amount: 0,
+                    invert: false,
+                    is_32: false,
+                },
+                IrOp::OrrShift {
+                    dst: SCRATCH,
+                    a: 31,
+                    b: SCRATCH,
+                    shift: 0,
+                    amount: 2,
+                },
+                IrOp::Add {
+                    dst: 13,
+                    a: 8,
+                    b: SCRATCH,
                 },
             ]
         );

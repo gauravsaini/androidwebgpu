@@ -335,8 +335,10 @@ mod tests {
     }
 
     #[test]
-    fn add_reg_extended_is_illegal() {
-        assert_illegal(0x8B20_2020); // bit21=1: extend form, out of scope
+    fn add_reg_extended_is_dataproc() {
+        // bit21=1: extend form, now implemented (unsigned extends in U2).
+        assert_eq!(ok_kind(0x8B20_2020), InsnKind::DataProc);
+        assert_eq!(ok_kind(0x8B2E_090D), InsnKind::DataProc); // ADD X13, X8, UXTB X14, #2
     }
 
     #[test]
