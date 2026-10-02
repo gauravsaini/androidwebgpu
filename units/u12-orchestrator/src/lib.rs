@@ -875,6 +875,17 @@ impl Orchestrator {
         ram_offset_in(&self.machine.ram, pa, len)
     }
 
+    /// Debug: fetch instruction words around a PC for bringup diagnostics.
+    pub fn debug_fetch_around(&self, pc: u64, count: usize) -> Vec<(u64, Result<u32, String>)> {
+        let mut out = Vec::new();
+        for i in 0..count {
+            let addr = pc.wrapping_add((i as u64) * 4);
+            let word = self.fetch_word(addr).map_err(|e| format!("{:?}", e));
+            out.push((addr, word));
+        }
+        out
+    }
+
     fn fetch_word(&self, pc: u64) -> Result<u32, HaltReason> {
         // GB-22: instruction fetch goes through stage-1 translation, same
         // as GB-20's data accesses. MMU off: identity. MMU on: VA -> PA
@@ -2672,8 +2683,22 @@ impl Orchestrator {
     /// Wave-4 work, stated here, not faked.
     pub fn tick_clock(&mut self, cycles: u64) {
         self.clock_cycles = self.clock_cycles.wrapping_add(cycles);
+        // Sync guest timer programming into irq state before ticking:
+        // ENABLE bit from CNTP_CTL_EL0, compare from CNTP_CVAL_EL0.
+        {
+            let sysregs = &self.machine.cpu[0].sysregs;
+            let irq = &mut self.machine.irq;
+            if (sysregs.cntp_ctl_el0 & 0x1) != 0 {
+                irq.enabled |= 1u32 << u5_gic_timer::TIMER_ENABLE_BIT;
+            } else {
+                irq.enabled &= !(1u32 << u5_gic_timer::TIMER_ENABLE_BIT);
+            }
+            irq.timer_compare = sysregs.cntp_cval_el0;
+        }
         let (next_irq, _irqs) = u5_gic_timer::tick(&self.machine.irq, cycles);
         self.machine.irq = next_irq;
+        // Sync the free-running counter back so MRS CNTPCT_EL0 sees it.
+        self.machine.cpu[0].sysregs.cntpct_el0 = self.machine.irq.timer_count;
     }
 
     /// Currently asserted interrupt lines (INTIDs with pending bits set).
@@ -3381,9 +3406,10 @@ mod tests {
     #[test]
     fn timer_fires_intid_27_on_injected_ticks_only() {
         let mut o = Orchestrator::new();
-        // Enable the timer (bit 0) and arm the compare.
-        o.machine.irq.enabled = 1;
-        o.machine.irq.timer_compare = 5000;
+        // Enable the timer via CNTP_CTL_EL0 (bit 0) and arm the compare
+        // via CNTP_CVAL_EL0 — the honest guest programming path.
+        o.machine.cpu[0].sysregs.cntp_ctl_el0 = 1;
+        o.machine.cpu[0].sysregs.cntp_cval_el0 = 5000;
         o.tick_clock(4000);
         assert!(o.pending_irqs().is_empty());
         assert_eq!(o.machine.irq.timer_count, 4000);
@@ -3400,7 +3426,7 @@ mod tests {
     #[test]
     fn timer_disabled_never_fires() {
         let mut o = Orchestrator::new();
-        o.machine.irq.timer_compare = 1;
+        o.machine.cpu[0].sysregs.cntp_cval_el0 = 1;
         o.tick_clock(1 << 20);
         assert!(o.pending_irqs().is_empty());
     }

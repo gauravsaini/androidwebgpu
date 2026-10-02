@@ -25,7 +25,7 @@ use pathn_contracts::machine::{
 };
 
 /// Encoded size of one [`CpuState`]: 31 regs + sp + pc + pstate + 15 sysregs, all u64LE.
-const CPU_ENCODED_BYTES: usize = 49 * 8;
+const CPU_ENCODED_BYTES: usize = 54 * 8;
 /// Minimum encoded size of one [`DeviceState`]: u8 tag + u64 blob length.
 const DEVICE_MIN_BYTES: usize = 1 + 8;
 
@@ -97,6 +97,11 @@ impl Writer {
         self.u64(c.sysregs.tcr_el1);
         self.u64(c.sysregs.ttbr0_el1);
         self.u64(c.sysregs.ttbr1_el1);
+        self.u64(c.sysregs.cntpct_el0);
+        self.u64(c.sysregs.cntp_ctl_el0);
+        self.u64(c.sysregs.cntp_cval_el0);
+        self.u64(c.sysregs.cntv_ctl_el0);
+        self.u64(c.sysregs.cntv_cval_el0);
     }
 
     fn mmu(&mut self, m: &MmuState) {
@@ -216,6 +221,11 @@ impl<'a> Reader<'a> {
                 tcr_el1: self.u64()?,
                 ttbr0_el1: self.u64()?,
                 ttbr1_el1: self.u64()?,
+                cntpct_el0: self.u64()?,
+                cntp_ctl_el0: self.u64()?,
+                cntp_cval_el0: self.u64()?,
+                cntv_ctl_el0: self.u64()?,
+                cntv_cval_el0: self.u64()?,
             },
         })
     }
@@ -330,6 +340,11 @@ mod tests {
                 tcr_el1: seed.wrapping_add(13),
                 ttbr0_el1: seed.wrapping_add(14),
                 ttbr1_el1: seed.wrapping_add(15),
+                cntpct_el0: seed.wrapping_add(16),
+                cntp_ctl_el0: seed.wrapping_add(17),
+                cntp_cval_el0: seed.wrapping_add(18),
+                cntv_ctl_el0: seed.wrapping_add(19),
+                cntv_cval_el0: seed.wrapping_add(20),
             },
         }
     }
@@ -440,6 +455,11 @@ mod tests {
                     tcr_el1: u64::MAX,
                     ttbr0_el1: u64::MAX,
                     ttbr1_el1: u64::MAX,
+                    cntpct_el0: u64::MAX,
+                    cntp_ctl_el0: u64::MAX,
+                    cntp_cval_el0: u64::MAX,
+                    cntv_ctl_el0: u64::MAX,
+                    cntv_cval_el0: u64::MAX,
                 },
             }],
             mmu: MmuState {
