@@ -20,13 +20,16 @@
 //! (ADDS/SUBS, MOVK, extended-register ADD, AND/ANDS, BR/BLR, SIMD …) are also
 //! Illegal: this unit claims only what LLD §U1 lists, never fake-decodes.
 
+pub mod branch;
+pub mod dp_imm;
+pub mod dp_reg;
+pub mod fp_simd;
+pub mod ldst;
+pub mod system;
+
 pub use pathn_contracts::cpu::decode_bitmasks;
 use pathn_contracts::cpu::{DecodeResult, InsnKind, Instruction};
 
-/// Decode one 32-bit AArch64 instruction word.
-///
-/// `Instruction.addr` is always 0: decode takes only the word, so no address
-/// is known. The lifter (U2) / orchestrator stamps the real address.
 pub fn decode(word: u32) -> DecodeResult {
     match classify(word) {
         Some(kind) => DecodeResult::Ok(Instruction {
@@ -38,7 +41,10 @@ pub fn decode(word: u32) -> DecodeResult {
     }
 }
 
-/// Major group by bits[28:25]. Mapping cross-checked against known encodings:
+
+/// Registration table mapping major bit-pattern groups (bits[28:25]) to family decoders.
+/// One line per family module so future family agents each own exactly one file.
+/// Major-group mapping cross-checked against known encodings:
 /// 0x91004420 (ADD imm) → 1000, 0xD2800000 (MOVZ) → 1001,
 /// 0x14000000 (B) / 0xD503201F (NOP) → 1010, 0xD65F03C0 (RET) → 1011,
 /// 0x8B020020 (ADD reg) / 0xAA020020 (ORR reg) → 0101,
@@ -46,326 +52,14 @@ pub fn decode(word: u32) -> DecodeResult {
 /// 0xB9000020 (STR) / 0xF9400020 (LDR) → 1100.
 fn classify(word: u32) -> Option<InsnKind> {
     match (word >> 25) & 0xF {
-        0b1000 | 0b1001 => decode_dp_imm(word),
-        0b1010 | 0b1011 => decode_branch_sys(word),
-        0b0101 | 0b1101 => decode_dp_reg(word),
-        0b0100 | 0b1100 => decode_ldst(word),
+        0b1000 | 0b1001 => dp_imm::decode(word),
+        0b1010 | 0b1011 => branch::decode(word).or_else(|| system::decode(word)),
+        0b0101 | 0b1101 => dp_reg::decode(word),
+        0b0100 | 0b1100 => ldst::decode(word),
+        0b0111 | 0b1111 | 0b0110 | 0b1110 => fp_simd::decode(word),
         // 0b000x..0b001x: unallocated; 0b011x/0b111x: SIMD/FP/SVE (out of scope)
         _ => None,
     }
-}
-
-/// Data-processing (immediate). Key = bits[28:22] (7 bits) so the shift/halfword
-/// selector bit is pinned, not assumed.
-fn decode_dp_imm(word: u32) -> Option<InsnKind> {
-    match (word >> 22) & 0x7F {
-        // Add/subtract (immediate): sf op S 10001 sh imm12 Rn Rd, sh ∈ {00,01}.
-        0b1000100 | 0b1000101 => {
-            Some(InsnKind::DataProc) // ADD / SUB / ADDS / SUBS (including CMP / CMN imm)
-        }
-        // Logical (immediate): sf opc 100100 N immr imms Rn Rd.
-        0b1001000 | 0b1001001 => {
-            let sf = (word >> 31) & 1 == 1;
-            let n = ((word >> 22) & 1) as u8;
-            let immr = ((word >> 16) & 0x3F) as u8;
-            let imms = ((word >> 10) & 0x3F) as u8;
-            if decode_bitmasks(n, imms, immr, sf).is_some() {
-                Some(InsnKind::DataProc)
-            } else {
-                None
-            }
-        }
-        // Move wide (immediate): sf opc 100101 hw imm16 Rd.
-        0b1001010 | 0b1001011 => {
-            let sf = (word >> 31) & 1;
-            let hw = (word >> 21) & 0x3;
-            if sf == 0 && hw > 1 {
-                return None; // 32-bit hw > 1 is unallocated
-            }
-            match (word >> 29) & 0x3 {
-                0b00 => Some(InsnKind::DataProc), // MOVN
-                0b10 => Some(InsnKind::DataProc), // MOVZ
-                0b11 => Some(InsnKind::DataProc), // MOVK (Track GB-4)
-                _ => None,                        // 01 unallocated
-            }
-        }
-        // Bitfield (immediate): sf opc 100110 N immr imms Rn Rd.
-        0b1001100 | 0b1001101 => {
-            let sf = (word >> 31) & 1;
-            let opc = (word >> 29) & 0x3;
-            let n = (word >> 22) & 1;
-            if opc == 0b11 {
-                return None; // opc=11 unallocated
-            }
-            if sf == 0 {
-                if n != 0 {
-                    return None;
-                }
-                let immr = (word >> 16) & 0x3F;
-                let imms = (word >> 10) & 0x3F;
-                if (immr & 0x20) != 0 || (imms & 0x20) != 0 {
-                    return None;
-                }
-            } else if n != 1 {
-                return None;
-            }
-            Some(InsnKind::DataProc)
-        }
-        // PC-relative addressing (ADR/ADRP): bits[28:24]=0b10000 — Wave 4 (U1-G1).
-        // bits[23:22] are immhi[18:17] (either value); the class is exclusive
-        // to PC-rel within data-processing-immediate (0x44+ = add/sub-imm…).
-        0b1000000..=0b1000011 => Some(InsnKind::PcRel),
-        // Logical (immediate): sf opc 100100 N immr imms Rn Rd.
-        // Validated via decode_bitmasks (GB-4): unallocated encodings are Illegal.
-        0b1001000 | 0b1001001 => {
-            let sf = (word >> 31) & 1 == 1;
-            let n = ((word >> 22) & 1) as u8;
-            let immr = ((word >> 16) & 0x3F) as u8;
-            let imms = ((word >> 10) & 0x3F) as u8;
-            if decode_bitmasks(n, imms, immr, sf).is_some() {
-                Some(InsnKind::DataProc) // AND / ORR / EOR / ANDS (including TST imm)
-            } else {
-                None
-            }
-        }
-        // Bitfield, extract: out of scope.
-        _ => None,
-    }
-}
-
-/// Data-processing (register). Key = bits[28:24].
-fn decode_dp_reg(word: u32) -> Option<InsnKind> {
-    match (word >> 24) & 0x1F {
-        // Add/subtract (shifted register): sf op S 01011 shift 0 Rm imm6 Rn Rd.
-        0b01011 => {
-            let shifted = (word >> 21) & 1 == 0;
-            let shift = (word >> 22) & 0x3;
-            if shifted && shift < 0b11 {
-                Some(InsnKind::DataProc) // ADD / SUB / ADDS / SUBS (including CMP / CMN reg)
-            } else {
-                None // extended register / reserved shift: out of scope
-            }
-        }
-        // Logical (shifted register): sf opc 01010 shift N Rm imm6 Rn Rd.
-        0b01010 => {
-            let sf = (word >> 31) & 1;
-            let opc = (word >> 29) & 0x3;
-            let n = (word >> 21) & 1;
-            let shift = (word >> 22) & 0x3;
-            let imm6 = (word >> 10) & 0x3F;
-            // shift==0b11 (ROR) is reserved; 32-bit shift amount >= 32 is
-            // unallocated; 32-bit ORR with N==1 is reserved (GB-4 refinement).
-            // N==1 itself is valid: it selects BIC / ORN / EON / BICS.
-            let encoding_valid = shift < 0b11
-                && (sf == 1 || (imm6 & 0x20) == 0)
-                && (sf == 1 || opc != 0b01 || n == 0);
-            if encoding_valid {
-                Some(InsnKind::DataProc) // AND / BIC / ORR / ORN / EOR / EON / ANDS (TST) / BICS
-            } else {
-                None
-            }
-        }
-        // Data-processing (2 source): sf 0 S 11010 110 Rm 0010 op2 Rn Rd (GB-4).
-        // LSLV / LSRV / ASRV / RORV. bit30 == 0 is what separates this class
-        // from data-processing (1 source); pinning it keeps CLZ (bit30 == 1)
-        // from ever being misread here.
-        // Data-processing (1 source): sf 1 S 11010 110 00000 opcode Rn Rd (GB-7).
-        // CLZ only (opcode == 0b000100, S == 0); RBIT/REV*/CLS stay Illegal.
-        // The 32-bit form (sf == 0) is recognized and trapped in U2.
-        0b11010 => {
-            // Conditional select: sf op S 11010100 Rm cond op2 Rn Rd
-            // (GB-15, encoding corrected GB-26). bits[30:21] ==
-            // 0xD4 (op=0: CSEL/CSINC) or 0x2D4 (op=1: CSINV/CSNEG);
-            // bit29 (S) is 0, op2 (bits[11:10]) picks within the pair.
-            // GB-15 only matched op=0, so real CSINV/CSNEG words (op=1,
-            // e.g. 0xDA80202A = csinv x10, x1, x0, hs, measured kernel
-            // halt at step 1249127) fell through to Illegal. This check
-            // must precede the 2-source check below: a CSEL with
-            // cond == 0b0010 would otherwise alias the 2-source class
-            // (opcode2 >> 2 == cond).
-            let b30_21 = (word >> 21) & 0x3FF;
-            if b30_21 == 0xD4 || b30_21 == 0x2D4 {
-                return Some(InsnKind::DataProc);
-            }
-            let bit30 = (word >> 30) & 1;
-            let bit29 = (word >> 29) & 1;
-            let bit21 = (word >> 21) & 1;
-            let opcode2 = (word >> 10) & 0x3F;
-            if bit30 == 0 && bit29 == 0 && bit21 == 0 && ((opcode2 >> 2) == 0b0010) {
-                Some(InsnKind::DataProc)
-            } else if bit30 == 1
-                && bit29 == 0
-                && ((word >> 21) & 0x7) == 0b110
-                && ((word >> 16) & 0x1F) == 0
-                && opcode2 == 0b000100
-            {
-                Some(InsnKind::DataProc) // CLZ
-            } else {
-                None
-            }
-        }
-        // Data-processing (3 source): sf op54 11011 op31 Rm o0 Ra Rn Rd (GB-8).
-        // The defined multiply class (op54 == 00/01/10) is recognized and the
-        // lifter sorts it out: 64-bit MADD lifts, 32-bit MADD / MSUB /
-        // long-multiply trap with explicit reasons. op54 == 11 is unallocated.
-        0b11011 => {
-            let op54 = (word >> 29) & 0x3;
-            if op54 < 0b11 {
-                Some(InsnKind::DataProc) // MADD / MSUB / SMADDL / UMADDL / ...
-            } else {
-                None
-            }
-        }
-        _ => None,
-    }
-}
-
-/// Loads/stores (GB-1 scope):
-/// - Load/store pair: STP, LDP, LDPSW, STNP, LDNP
-/// - Load/store literal: LDR (32/64-bit), LDRSW
-/// - Load/store register (immediate, unsigned offset): LDR, STR, LDRSW
-/// - Load/store register (immediate pre/post-indexed): LDR, STR, LDRSW
-/// - Load/store register (register offset): LDR, STR, LDRSW
-fn decode_ldst(word: u32) -> Option<InsnKind> {
-    // 1. Load/store pair (STP, LDP, LDPSW, STNP, LDNP):
-    // opc 101 V 0 index L imm7 Rt2 Rn Rt
-    // with bits[29:25] == 0b10100 (which pins V=0, integer registers).
-    if (word >> 25) & 0x1F == 0b10100 {
-        let opc = (word >> 30) & 0x3;
-        let is_load = (word >> 22) & 1 == 1;
-        return match opc {
-            0b00 => Some(InsnKind::LoadStore),            // 32-bit STP / LDP
-            0b01 if is_load => Some(InsnKind::LoadStore), // LDPSW
-            0b10 => Some(InsnKind::LoadStore),            // 64-bit STP / LDP
-            _ => None,                                    // 01 with store or 11: unallocated
-        };
-    }
-
-    // 2. Load/store literal:
-    // opc 011 V 00 imm19 Rt with bits[29:24] == 0b011000 (V=0).
-    if (word >> 24) & 0x3F == 0b011000 {
-        let opc = (word >> 30) & 0x3;
-        return match opc {
-            0b00 | 0b01 | 0b10 => Some(InsnKind::LoadStore), // 32-bit LDR, 64-bit LDR, LDRSW
-            _ => None,                                       // 11 = PRFM (out of scope)
-        };
-    }
-
-    // 3. Load/store register (immediate, unsigned offset):
-    // size 111 V 01 opc imm12 Rn Rt with bits[29:24] == 0b111001 (V=0).
-    if (word >> 24) & 0x3F == 0b111001 {
-        let size_bits = (word >> 30) & 0x3;
-        let opc = (word >> 22) & 0x3;
-        return match opc {
-            0b00 => Some(InsnKind::LoadStore), // STR (B, H, W, X)
-            0b01 => Some(InsnKind::LoadStore), // LDR (B, H, W, X)
-            0b10 if size_bits == 2 => Some(InsnKind::LoadStore), // LDRSW
-            _ => None,
-        };
-    }
-
-    // 4. Load/store register (immediate pre/post-indexed, and unscaled):
-    // size 111 V 00 opc 0 imm9 type Rn Rt
-    // with bits[29:24] == 0b111000, bit 21 == 0, and type in {0b01 (post),
-    // 0b11 (pre), 0b00 (unscaled LDUR/STUR)}.
-    // (GB-26: type 0b00 was kept out of scope until the kernel hit STUR
-    // at step 1248988.)
-    if (word >> 24) & 0x3F == 0b111000 && (word >> 21) & 1 == 0 {
-        let idx_type = (word >> 10) & 0x3;
-        if idx_type == 0b01 || idx_type == 0b11 || idx_type == 0b00 {
-            let size_bits = (word >> 30) & 0x3;
-            let opc = (word >> 22) & 0x3;
-            return match opc {
-                0b00 => Some(InsnKind::LoadStore),                   // STR
-                0b01 => Some(InsnKind::LoadStore),                   // LDR
-                0b10 if size_bits == 2 => Some(InsnKind::LoadStore), // LDRSW
-                _ => None,
-            };
-        }
-    }
-
-    // 5. Load/store register (register offset):
-    // size 111 V 00 opc 1 Rm option S 10 Rn Rt
-    if (word >> 24) & 0x3F == 0b111000 && (word >> 21) & 1 == 1 {
-        let size_bits = (word >> 30) & 0x3;
-        let opc = (word >> 22) & 0x3;
-        return match opc {
-            0b00 => Some(InsnKind::LoadStore),                   // STR
-            0b01 => Some(InsnKind::LoadStore),                   // LDR
-            0b10 if size_bits == 2 => Some(InsnKind::LoadStore), // LDRSW
-            _ => None,
-        };
-    }
-
-    None
-}
-
-/// Load/store register pair: STP, LDP.
-/// opc(2) 101 V(1) 0 mode(2) L(1) imm7(7) Rt2(5) Rn(5) Rt(5).
-/// bits[29:25] == 0b10100 pins V=0 (integer registers; V=1 is SIMD).
-fn decode_ldst_pair(word: u32) -> Option<InsnKind> {
-    if (word >> 25) & 0x1F != 0b10100 {
-        return None;
-    }
-    let mode = (word >> 23) & 0x3;
-    if mode == 0 {
-        return None; // 00 is unallocated
-    }
-    let opc = (word >> 30) & 0x3;
-    if opc == 0b11 {
-        return None; // 11 is unallocated
-    }
-    Some(InsnKind::LoadStore)
-}
-
-/// Branches + system instructions.
-fn decode_branch_sys(word: u32) -> Option<InsnKind> {
-    // B / BL: 000101 / 100101 imm26.
-    match (word >> 26) & 0x3F {
-        0b000101 | 0b100101 => return Some(InsnKind::Branch),
-        _ => {}
-    }
-    // B.cond: 0101010 0 imm19 0 cond.
-    // bits[31:24] == 0x54, bit 4 == 0, cond < 0b1111 (0..14).
-    if (word >> 24) == 0x54 && (word & 0x10) == 0 {
-        let cond = word & 0xF;
-        if cond < 0b1111 {
-            return Some(InsnKind::Branch);
-        }
-    }
-    // CBZ / CBNZ: sf 011010 op imm19 Rt. bits[29:24] = 0b11010_op, so the op
-    // bit (bit 24) distinguishes them: 0b110100 = CBZ, 0b110101 = CBNZ.
-    if (word >> 24) & 0x3F == 0b110100 || (word >> 24) & 0x3F == 0b110101 {
-        return Some(InsnKind::Branch);
-    }
-    // TBZ / TBNZ: b5 011011 op b40 imm14 Rt.
-    // bits[30:25] == 0b011011.
-    if (word >> 25) & 0x3F == 0b011011 {
-        return Some(InsnKind::Branch);
-    }
-    // RET: 1101011 0 010 11111 000000 Rn 00000. Mask keeps everything except
-    // the Rn field, so any RET <Xn> matches.
-    if word & 0xFFFF_FC1F == 0xD65F_0000 {
-        return Some(InsnKind::Branch);
-    }
-    // BR: 1101011 0 000 11111 000000 Rn 00000.
-    // BLR: 1101011 0 001 11111 000000 Rn 00000.
-    // Masks clear only the Rn field, so any register matches.
-    if word & 0xFFFF_FC1F == 0xD61F_0000 || word & 0xFFFF_FC1F == 0xD63F_0000 {
-        return Some(InsnKind::Branch);
-    }
-    // SVC (immediate): 11010100 000 imm16 00001. bits[31:21] == 0b11010100000.
-    // Phase-2 spike: recognized so a future SVC halt is instantly
-    // identifiable in traces; U2 lifts it to an honest unimplemented trap.
-    if (word >> 21) & 0x7FF == 0b11010100000 {
-        return Some(InsnKind::Svc);
-    }
-    // System instructions: bits[31:22] == 0b1101_0101_00 (0x354).
-    // Covers barriers (DMB, DSB, ISB), HINTs (NOP, WFI), MSR, MRS, SYS ops (DC, IC, TLBI).
-    if (word >> 22) & 0x3FF == 0x354 {
-        return Some(InsnKind::System);
-    }
-    None
 }
 
 #[cfg(test)]
