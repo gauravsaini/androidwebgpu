@@ -188,6 +188,9 @@ fn main() {
         orch.machine_mut().cpu[0].pc = KERNEL_LOAD_ADDR;
         orch.machine_mut().cpu[0].sp = 0;
         orch.machine_mut().cpu[0].regs = [0; 31];
+        // QEMU sets X4 to kernel load address and Z flag in PSTATE at boot.
+        orch.machine_mut().cpu[0].regs[4] = KERNEL_LOAD_ADDR;
+        orch.machine_mut().cpu[0].pstate = 0x4000_0000; // Z flag (bit 30)
 
         // Optional DTB: load at 0x4800_0000 (128MB offset, matches QEMU virt),
         // set x0 per ARM64 boot protocol.
