@@ -160,18 +160,26 @@ fn main() {
 
         let kernel_bytes = fs::read(path).expect("failed to read kernel image");
 
+        // ARM64 Linux boot protocol (matches QEMU -machine virt):
+        // - Kernel Image loaded at RAM_BASE + TEXT_OFFSET (0x80000)
+        // - PC set to kernel entry (RAM_BASE + 0x80000)
+        // - X0 = DTB physical address (if --dtb given)
+        // - SP left as 0 (kernel sets up its own stack)
+        const TEXT_OFFSET: u64 = 0x80000;
+        const KERNEL_LOAD_ADDR: u64 = RAM_BASE + TEXT_OFFSET;
         let ram = &mut orch.machine_mut().ram;
-        let load_len = kernel_bytes.len().min(ram.len());
-        ram[..load_len].copy_from_slice(&kernel_bytes[..load_len]);
+        let load_len = kernel_bytes.len().min(ram.len() - TEXT_OFFSET as usize);
+        let k_off = TEXT_OFFSET as usize;
+        ram[k_off..k_off + load_len].copy_from_slice(&kernel_bytes[..load_len]);
 
         // Linux kernel entry point
-        orch.machine_mut().cpu[0].pc = RAM_BASE;
-        orch.machine_mut().cpu[0].sp = RAM_BASE + 0x0800_0000;
+        orch.machine_mut().cpu[0].pc = KERNEL_LOAD_ADDR;
+        orch.machine_mut().cpu[0].sp = 0;
         orch.machine_mut().cpu[0].regs = [0; 31];
 
-        // Optional DTB: load at 0x4700_0000 (112MB offset, clear of 23MB kernel
-        // and top-of-RAM stack), set x0 per ARM64 boot protocol.
-        const DTB_LOAD_ADDR: u64 = RAM_BASE + 0x0700_0000;
+        // Optional DTB: load at 0x4800_0000 (128MB offset, matches QEMU virt),
+        // set x0 per ARM64 boot protocol.
+        const DTB_LOAD_ADDR: u64 = RAM_BASE + 0x0800_0000;
         if let Some(ref dtb_p) = dtb_path {
             let dtb_bytes = fs::read(dtb_p).expect("failed to read DTB");
             let off = (DTB_LOAD_ADDR - RAM_BASE) as usize;
@@ -186,7 +194,7 @@ fn main() {
         }
 
         println!(
-            "[boot] Loaded {} bytes at {RAM_BASE:#x}. Running up to {max_steps} steps...",
+            "[boot] Loaded {} bytes at {KERNEL_LOAD_ADDR:#x}. Running up to {max_steps} steps...",
             load_len
         );
     }
