@@ -96,6 +96,11 @@ const R_LS_SP: &str =
 /// Phase-2 spike (2026-09-30): SVC recognized by U1 but the exception model
 /// does not exist yet. Public so the orchestrator can map it to the distinct HaltReason::Svc instead of generic Unsupported.
 pub const R_SVC_UNIMPL: &str = "Svc: exception model not yet implemented";
+pub const R_BRK: &str = "System: BRK exception";
+pub const R_HLT: &str = "System: HLT exception";
+pub const R_HVC: &str = "System: HVC exception";
+pub const R_SMC: &str = "System: SMC exception";
+pub const R_ERET: &str = "System: ERET exception return not yet implemented";
 
 fn trap(reason: &'static str) -> Vec<IrOp> {
     vec![IrOp::Trap { reason }]
@@ -145,6 +150,22 @@ fn lift_pc_rel(insn: &Instruction) -> Vec<IrOp> {
 /// System: WFI, barriers (DMB, DSB, ISB), HINTs (NOP, YIELD), system register
 /// access (MSR, MRS), and system operations (DC, IC, TLBI).
 fn lift_system(word: u32) -> Vec<IrOp> {
+    // Exception generation instructions: bits[31:24] == 0xD4
+    if (word >> 24) == 0xD4 {
+        let opc = (word >> 21) & 0x7;
+        let ll = word & 0x3;
+        return match opc {
+            0b000 if ll == 0b10 => trap(R_HVC),
+            0b000 if ll == 0b11 => trap(R_SMC),
+            0b001 if (word & 0x1F) == 0 => trap(R_BRK),
+            0b010 if (word & 0x1F) == 0 => trap(R_HLT),
+            _ => trap(R_SYSTEM),
+        };
+    }
+    // ERET: 1101 0110 100 11111 0000 00 11111 00000 (0xD69F03E0)
+    if word == 0xD69F_03E0 {
+        return trap(R_ERET);
+    }
     // WFI is HINT #3 with CRm:op2 = 00100:01111: exact word match, no aliases.
     if word == 0xD503_207F {
         return vec![IrOp::Wfi];
@@ -277,10 +298,37 @@ fn lift_system(word: u32) -> Vec<IrOp> {
                         // errata workarounds that poke IMPLEMENTATION DEFINED
                         // registers we don't model.)
                         (3, 0, 0, 0, 0) => 0,
+                        // TPIDR_EL2: Hypervisor Thread ID (4,998 static hits)
+                        (3, 4, 13, 0, 2) => 0,
+                        // CLIDR_EL1: Cache Level ID Register (10 static hits)
+                        // L1 Harvard (separate I/D), L2 unified, LoUIS=1, LoUU=1, LoC=2
+                        (3, 1, 0, 0, 1) => 0x0920_0023,
+                        // CSSELR_EL1: Cache Size Selection Register
+                        (3, 2, 0, 0, 0) => 0,
+                        // CCSIDR_EL1: Cache Size ID Register (64B line, 4-way, 64KB)
+                        (3, 1, 0, 0, 0) => 0x701F_E00A,
+                        // CNTFRQ_EL0: Counter-timer frequency (62.5MHz)
+                        (3, 3, 14, 0, 0) => 0x03B9_ACA0,
+                        // CNTVCT_EL0: Virtual counter count
+                        (3, 3, 14, 0, 2) => 0,
+                        // CNTPCT_EL0: Physical counter count
+                        (3, 3, 14, 0, 1) => 0,
+                        // TPIDRRO_EL0: Thread read-only register (22 static hits)
+                        (3, 3, 13, 0, 3) => 0,
+                        // TPIDR_EL0: Thread ID register EL0 (21 static hits)
+                        (3, 3, 13, 0, 2) => 0,
+                        // Exception status / syndrome registers
+                        (3, 0, 5, 2, 0) => 0, // ESR_EL1
+                        (3, 0, 6, 0, 0) => 0, // FAR_EL1
+                        (3, 0, 4, 0, 1) => 0, // ELR_EL1
+                        (3, 0, 4, 0, 0) => 0, // SPSR_EL1
+                        // Performance monitors
+                        (3, 3, 9, 12, 0) => 0, // PMCR_EL0
+                        (3, 3, 9, 14, 0) => 0, // PMUSERENR_EL0
                         _ => return trap(R_SYSTEM),
                     };
                     vec![IrOp::Mov { dst: rt, imm: val }]
-                }
+                };
             }
         };
         return vec![IrOp::ReadSys {
@@ -340,6 +388,14 @@ fn lift_system(word: u32) -> Vec<IrOp> {
                 let clr = daif_imm_mask(imm);
                 return vec![IrOp::DaifRmw { set: 0, clr }];
             }
+            // MSR PAN, #imm: Privileged Access Never (2,653 static hits)
+            (0, 0, 4, _imm, 4) => return vec![],
+            // MSR UAO, #imm: User Access Override (102 static hits)
+            (0, 0, 4, _imm, 3) => return vec![],
+            // MSR DIT / SSBS / TCO, #imm: Speculative & timing hints
+            (0, 3, 4, _imm, 1) => return vec![],
+            (0, 3, 4, _imm, 4) => return vec![],
+            (0, 3, 4, _imm, 5) => return vec![],
             _ => {
                 return {
                     match (op0, op1, crn, crm, op2) {
@@ -348,9 +404,24 @@ fn lift_system(word: u32) -> Vec<IrOp> {
                         // SPSel: accepted no-op (GB-3). DAIFSet/DAIFClr are real
                         // read-modify-write ops now (GB-11); see the arms above.
                         (0, 0, 4, 1, 5) => vec![],
+                        // TPIDRRO_EL0 (29 static hits)
+                        (3, 3, 13, 0, 3) => vec![],
+                        // TPIDR_EL0 (19 static hits)
+                        (3, 3, 13, 0, 2) => vec![],
+                        // CSSELR_EL1: Cache Size Selection
+                        (3, 2, 0, 0, 0) => vec![],
+                        // Exception registers (ESR_EL1, FAR_EL1, ELR_EL1, SPSR_EL1)
+                        (3, 0, 5, 2, 0) => vec![],
+                        (3, 0, 6, 0, 0) => vec![],
+                        (3, 0, 4, 0, 1) => vec![],
+                        (3, 0, 4, 0, 0) => vec![],
+                        // Performance monitors (PMCR_EL0, PMINTENSET_EL1, PMINTENCLR_EL1)
+                        (3, 3, 9, 12, 0) => vec![],
+                        (3, 0, 9, 14, 1) => vec![],
+                        (3, 0, 9, 14, 2) => vec![],
                         _ => return trap(R_SYSTEM),
                     }
-                }
+                };
             }
         };
         return vec![IrOp::WriteSys {
@@ -2761,6 +2832,110 @@ mod tests {
         assert_eq!(lift(&insn(0x4000, 0xD500_41BF, InsnKind::System)), vec![]);
         // DC CIVAC, X1
         assert_eq!(lift(&insn(0x4000, 0xD50B_7E21, InsnKind::System)), vec![]);
+    }
+
+    #[test]
+    fn exceptions_lift_to_honest_traps() {
+        assert_eq!(
+            lift(&insn(0x4000, 0xD420_0000, InsnKind::System)),
+            vec![IrOp::Trap { reason: R_BRK }]
+        );
+        assert_eq!(
+            lift(&insn(0x4000, 0xD440_0000, InsnKind::System)),
+            vec![IrOp::Trap { reason: R_HLT }]
+        );
+        assert_eq!(
+            lift(&insn(0x4000, 0xD400_0002, InsnKind::System)),
+            vec![IrOp::Trap { reason: R_HVC }]
+        );
+        assert_eq!(
+            lift(&insn(0x4000, 0xD400_0003, InsnKind::System)),
+            vec![IrOp::Trap { reason: R_SMC }]
+        );
+        assert_eq!(
+            lift(&insn(0x4000, 0xD69F_03E0, InsnKind::System)),
+            vec![IrOp::Trap { reason: R_ERET }]
+        );
+    }
+
+    #[test]
+    fn pan_and_uao_lift_to_empty() {
+        assert_eq!(lift(&insn(0x4000, 0xD500_419F, InsnKind::System)), vec![]); // MSR PAN, #1
+        assert_eq!(lift(&insn(0x4000, 0xD500_409F, InsnKind::System)), vec![]); // MSR PAN, #0
+        assert_eq!(lift(&insn(0x4000, 0xD500_417F, InsnKind::System)), vec![]); // MSR UAO, #1
+        assert_eq!(lift(&insn(0x4000, 0xD500_407F, InsnKind::System)), vec![]); // MSR UAO, #0
+    }
+
+    #[test]
+    fn high_frequency_sysregs_lift_correctly() {
+        assert_eq!(
+            lift(&insn(0x4000, 0xD53C_D040, InsnKind::System)),
+            vec![IrOp::Mov { dst: 0, imm: 0 }] // MRS X0, TPIDR_EL2
+        );
+        assert_eq!(
+            lift(&insn(0x4000, 0xD539_0020, InsnKind::System)),
+            vec![IrOp::Mov {
+                dst: 0,
+                imm: 0x0920_0023
+            }] // MRS X0, CLIDR_EL1
+        );
+        assert_eq!(
+            lift(&insn(0x4000, 0xD53A_0000, InsnKind::System)),
+            vec![IrOp::Mov { dst: 0, imm: 0 }] // MRS X0, CSSELR_EL1
+        );
+        assert_eq!(
+            lift(&insn(0x4000, 0xD51A_0000, InsnKind::System)),
+            vec![] // MSR CSSELR_EL1, X0
+        );
+        assert_eq!(
+            lift(&insn(0x4000, 0xD539_0000, InsnKind::System)),
+            vec![IrOp::Mov {
+                dst: 0,
+                imm: 0x701F_E00A
+            }] // MRS X0, CCSIDR_EL1
+        );
+        assert_eq!(
+            lift(&insn(0x4000, 0xD53B_E000, InsnKind::System)),
+            vec![IrOp::Mov {
+                dst: 0,
+                imm: 0x03B9_ACA0
+            }] // MRS X0, CNTFRQ_EL0
+        );
+        assert_eq!(
+            lift(&insn(0x4000, 0xD53B_E040, InsnKind::System)),
+            vec![IrOp::Mov { dst: 0, imm: 0 }] // MRS X0, CNTVCT_EL0
+        );
+        assert_eq!(
+            lift(&insn(0x4000, 0xD53B_E020, InsnKind::System)),
+            vec![IrOp::Mov { dst: 0, imm: 0 }] // MRS X0, CNTPCT_EL0
+        );
+        assert_eq!(
+            lift(&insn(0x4000, 0xD538_5200, InsnKind::System)),
+            vec![IrOp::Mov { dst: 0, imm: 0 }] // MRS X0, ESR_EL1
+        );
+        assert_eq!(
+            lift(&insn(0x4000, 0xD538_6000, InsnKind::System)),
+            vec![IrOp::Mov { dst: 0, imm: 0 }] // MRS X0, FAR_EL1
+        );
+        assert_eq!(
+            lift(&insn(0x4000, 0xD538_4020, InsnKind::System)),
+            vec![IrOp::Mov { dst: 0, imm: 0 }] // MRS X0, ELR_EL1
+        );
+        assert_eq!(
+            lift(&insn(0x4000, 0xD538_4000, InsnKind::System)),
+            vec![IrOp::Mov { dst: 0, imm: 0 }] // MRS X0, SPSR_EL1
+        );
+    }
+
+    #[test]
+    fn cache_and_tlb_maintenance_lift_to_empty() {
+        assert_eq!(lift(&insn(0x4000, 0xD508_871F, InsnKind::System)), vec![]); // TLBI VMALLE1
+        assert_eq!(lift(&insn(0x4000, 0xD508_831F, InsnKind::System)), vec![]); // TLBI VMALLE1IS
+        assert_eq!(lift(&insn(0x4000, 0xD508_837F, InsnKind::System)), vec![]); // TLBI VAAE1IS
+        assert_eq!(lift(&insn(0x4000, 0xD508_7620, InsnKind::System)), vec![]); // DC IVAC, X0
+        assert_eq!(lift(&insn(0x4000, 0xD50B_7E20, InsnKind::System)), vec![]); // DC CIVAC, X0
+        assert_eq!(lift(&insn(0x4000, 0xD508_751F, InsnKind::System)), vec![]); // IC IALLU
+        assert_eq!(lift(&insn(0x4000, 0xD508_711F, InsnKind::System)), vec![]); // IC IALLUIS
     }
 
     #[test]

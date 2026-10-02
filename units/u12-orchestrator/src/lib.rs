@@ -681,7 +681,11 @@ impl Orchestrator {
                 kind,
                 mnemonic,
             };
-            if !self.survey_traps.iter().any(|m| m.mnemonic == trap.mnemonic) {
+            if !self
+                .survey_traps
+                .iter()
+                .any(|m| m.mnemonic == trap.mnemonic)
+            {
                 self.survey_traps.push(trap);
             }
         } else {
@@ -3204,6 +3208,11 @@ fn match_static_reason(bytes: &[u8]) -> Option<&'static str> {
         "Branch: 32-bit CBZ/CBNZ width is not expressible in IrOp::CondBranch",
         "Branch: 32-bit ORR width is not expressible in IrOp::OrrShift",
         "System: system and privileged semantics are not lifted",
+        "System: BRK exception",
+        "System: HLT exception",
+        "System: HVC exception",
+        "System: SMC exception",
+        "System: ERET exception return not yet implemented",
         "Unknown: illegal or unrecognized instruction word",
     ];
     let s = std::str::from_utf8(bytes).ok()?;

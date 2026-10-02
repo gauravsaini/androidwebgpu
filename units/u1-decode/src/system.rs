@@ -2,13 +2,29 @@
 
 use pathn_contracts::cpu::InsnKind;
 
-/// Decode system and exception instructions: SVC, HINT/NOP/barriers, MSR, MRS, SYS.
+/// Decode system and exception instructions:
+/// - Exceptions: SVC, HVC, SMC, BRK, HLT, ERET
+/// - System instructions: HINT/NOP/barriers, MSR, MRS, SYS, SYSL (DC, IC, TLBI)
 pub fn decode(word: u32) -> Option<InsnKind> {
-    // SVC (immediate): 11010100 000 imm16 00001. bits[31:21] == 0b11010100000.
-    // Phase-2 spike: recognized so a future SVC halt is instantly
-    // identifiable in traces; U2 lifts it to an honest unimplemented trap.
-    if (word >> 21) & 0x7FF == 0b11010100000 {
-        return Some(InsnKind::Svc);
+    // Exception generation instructions: bits[31:24] == 0b11010100 (0xD4).
+    // opc = bits[23:21], LL = bits[1:0].
+    if (word >> 24) == 0xD4 {
+        let opc = (word >> 21) & 0x7;
+        let ll = word & 0x3;
+        match opc {
+            0b000 => match ll {
+                0b01 => return Some(InsnKind::Svc),
+                0b10 | 0b11 => return Some(InsnKind::System), // HVC, SMC
+                _ => {}
+            },
+            0b001 if (word & 0x1F) == 0 => return Some(InsnKind::System), // BRK
+            0b010 if (word & 0x1F) == 0 => return Some(InsnKind::System), // HLT
+            _ => {}
+        }
+    }
+    // ERET: 1101 0110 100 11111 0000 00 11111 00000 (0xD69F03E0)
+    if word == 0xD69F_03E0 {
+        return Some(InsnKind::System);
     }
     // System instructions: bits[31:22] == 0b1101_0101_00 (0x354).
     // Covers barriers (DMB, DSB, ISB), HINTs (NOP, WFI), MSR, MRS, SYS ops (DC, IC, TLBI).

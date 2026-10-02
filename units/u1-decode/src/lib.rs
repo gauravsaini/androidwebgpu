@@ -41,7 +41,6 @@ pub fn decode(word: u32) -> DecodeResult {
     }
 }
 
-
 /// Registration table mapping major bit-pattern groups (bits[28:25]) to family decoders.
 /// One line per family module so future family agents each own exactly one file.
 /// Major-group mapping cross-checked against known encodings:
@@ -580,6 +579,55 @@ mod tests {
     #[test]
     fn msr_spsel_is_system() {
         assert_eq!(ok_kind(0xD500_41BF), InsnKind::System); // MSR SPSel, #1
+    }
+
+    #[test]
+    fn exceptions_and_eret_are_system_or_svc() {
+        assert_eq!(ok_kind(0xD400_0001), InsnKind::Svc); // SVC #0
+        assert_eq!(ok_kind(0xD400_0002), InsnKind::System); // HVC #0
+        assert_eq!(ok_kind(0xD400_0022), InsnKind::System); // HVC #1
+        assert_eq!(ok_kind(0xD400_0003), InsnKind::System); // SMC #0
+        assert_eq!(ok_kind(0xD400_0023), InsnKind::System); // SMC #1
+        assert_eq!(ok_kind(0xD420_0000), InsnKind::System); // BRK #0
+        assert_eq!(ok_kind(0xD422_4680), InsnKind::System); // BRK #0x1234
+        assert_eq!(ok_kind(0xD440_0000), InsnKind::System); // HLT #0
+        assert_eq!(ok_kind(0xD44A_CF00), InsnKind::System); // HLT #0x5678
+        assert_eq!(ok_kind(0xD69F_03E0), InsnKind::System); // ERET
+    }
+
+    #[test]
+    fn pstate_fields_pan_uao_are_system() {
+        assert_eq!(ok_kind(0xD500_419F), InsnKind::System); // MSR PAN, #1
+        assert_eq!(ok_kind(0xD500_409F), InsnKind::System); // MSR PAN, #0
+        assert_eq!(ok_kind(0xD500_417F), InsnKind::System); // MSR UAO, #1
+        assert_eq!(ok_kind(0xD500_407F), InsnKind::System); // MSR UAO, #0
+    }
+
+    #[test]
+    fn high_frequency_sysregs_are_system() {
+        assert_eq!(ok_kind(0xD53C_D040), InsnKind::System); // MRS X0, TPIDR_EL2
+        assert_eq!(ok_kind(0xD539_0020), InsnKind::System); // MRS X0, CLIDR_EL1
+        assert_eq!(ok_kind(0xD53A_0000), InsnKind::System); // MRS X0, CSSELR_EL1
+        assert_eq!(ok_kind(0xD51A_0000), InsnKind::System); // MSR CSSELR_EL1, X0
+        assert_eq!(ok_kind(0xD539_0000), InsnKind::System); // MRS X0, CCSIDR_EL1
+        assert_eq!(ok_kind(0xD53B_E000), InsnKind::System); // MRS X0, CNTFRQ_EL0
+        assert_eq!(ok_kind(0xD53B_E040), InsnKind::System); // MRS X0, CNTVCT_EL0
+        assert_eq!(ok_kind(0xD53B_E020), InsnKind::System); // MRS X0, CNTPCT_EL0
+        assert_eq!(ok_kind(0xD538_5200), InsnKind::System); // MRS X0, ESR_EL1
+        assert_eq!(ok_kind(0xD538_6000), InsnKind::System); // MRS X0, FAR_EL1
+        assert_eq!(ok_kind(0xD538_4020), InsnKind::System); // MRS X0, ELR_EL1
+        assert_eq!(ok_kind(0xD538_4000), InsnKind::System); // MRS X0, SPSR_EL1
+    }
+
+    #[test]
+    fn tlbi_ic_dc_are_system() {
+        assert_eq!(ok_kind(0xD508_871F), InsnKind::System); // TLBI VMALLE1
+        assert_eq!(ok_kind(0xD508_831F), InsnKind::System); // TLBI VMALLE1IS
+        assert_eq!(ok_kind(0xD508_837F), InsnKind::System); // TLBI VAAE1IS
+        assert_eq!(ok_kind(0xD508_7620), InsnKind::System); // DC IVAC, X0
+        assert_eq!(ok_kind(0xD50B_7E20), InsnKind::System); // DC CIVAC, X0
+        assert_eq!(ok_kind(0xD508_751F), InsnKind::System); // IC IALLU
+        assert_eq!(ok_kind(0xD508_711F), InsnKind::System); // IC IALLUIS
     }
 
     #[test]
