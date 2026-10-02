@@ -976,17 +976,15 @@ impl Orchestrator {
         let word = insn.word;
         let pc = insn.addr;
 
-        // 1. B.cond: 0101010 0 imm19 0 cond
+        // 1. B.cond: 0101010 0 imm19 0 cond (cond 0..15, AL/NV legal and always true)
         if (word >> 24) == 0x54 && (word & 0x10) == 0 {
             let cond = (word & 0xF) as u8;
-            if cond < 15 {
-                let imm19 = ((word >> 5) & 0x7FFFF) as i32;
-                let offset = (((imm19 << 13) >> 13) as i64) * 4;
-                let target = (pc as i64).wrapping_add(offset) as u64;
-                let taken = condition_holds(cond, self.machine.cpu[0].pstate);
-                self.machine.cpu[0].pc = if taken { target } else { pc.wrapping_add(4) };
-                return Some(Ok(()));
-            }
+            let imm19 = ((word >> 5) & 0x7FFFF) as i32;
+            let offset = (((imm19 << 13) >> 13) as i64) * 4;
+            let target = (pc as i64).wrapping_add(offset) as u64;
+            let taken = condition_holds(cond, self.machine.cpu[0].pstate);
+            self.machine.cpu[0].pc = if taken { target } else { pc.wrapping_add(4) };
+            return Some(Ok(()));
         }
 
         // 2. TBZ / TBNZ: b5 011011 op b40 imm14 Rt
@@ -5225,4 +5223,281 @@ mod tests {
         assert_eq!(o_survey.steps(), 2);
         assert_eq!(o_survey.machine().cpu[0].pc, pc + 8);
     }
+
+    // =========================================================================
+    // F2-branch family tests (all 25 mnemonics, taken and not-taken witnesses)
+    // =========================================================================
+
+    #[test]
+    fn f2_b_cond_all_16_conditions_taken_and_not_taken() {
+        let pc = RAM_BASE + 0x1000;
+        let sp = RAM_BASE + 0x2000;
+
+        // Conditions:
+        // (cond, pstate_taken, pstate_not_taken, name)
+        let test_cases: [(u8, u64, u64, &str); 16] = [
+            (0, FLAG_Z, 0, "EQ"),
+            (1, 0, FLAG_Z, "NE"),
+            (2, FLAG_C, 0, "CS/HS"),
+            (3, 0, FLAG_C, "CC/LO"),
+            (4, FLAG_N, 0, "MI"),
+            (5, 0, FLAG_N, "PL"),
+            (6, FLAG_V, 0, "VS"),
+            (7, 0, FLAG_V, "VC"),
+            (8, FLAG_C, 0, "HI"), // C=1, Z=0 -> taken; C=0, Z=0 -> not taken
+            (9, 0, FLAG_C, "LS"), // C=0 -> taken; C=1, Z=0 -> not taken
+            (10, FLAG_N | FLAG_V, FLAG_N, "GE"), // N==V -> taken; N!=V -> not taken
+            (11, FLAG_N, FLAG_N | FLAG_V, "LT"), // N!=V -> taken; N==V -> not taken
+            (12, FLAG_N | FLAG_V, FLAG_Z | FLAG_N | FLAG_V, "GT"), // Z=0, N==V -> taken; Z=1 -> not taken
+            (13, FLAG_Z, FLAG_N | FLAG_V, "LE"), // Z=1 -> taken; Z=0, N==V -> not taken
+            (14, 0, 0, "AL"), // always taken
+            (15, 0, 0, "NV"), // always taken
+        ];
+
+        for (cond, pstate_taken, pstate_not_taken, name) in test_cases {
+            // b.cond +8 (imm19 = 2): word = 0x54000000 | (2 << 5) | cond = 0x54000040 | cond
+            let word = 0x5400_0040 | (cond as u32);
+
+            // 1. Taken test
+            let mut o_taken = sp_test_orchestrator(pc, sp, word);
+            o_taken.machine_mut().cpu[0].pstate = pstate_taken;
+            assert_eq!(
+                o_taken.step_vcpu(),
+                StepOutcome::Continue,
+                "B.{name} taken step failed"
+            );
+            assert_eq!(
+                o_taken.machine().cpu[0].pc,
+                pc + 8,
+                "B.{name} should be taken to pc+8"
+            );
+
+            // 2. Not-taken test (for conditions other than AL and NV)
+            if cond < 14 {
+                let mut o_not_taken = sp_test_orchestrator(pc, sp, word);
+                o_not_taken.machine_mut().cpu[0].pstate = pstate_not_taken;
+                assert_eq!(
+                    o_not_taken.step_vcpu(),
+                    StepOutcome::Continue,
+                    "B.{name} not-taken step failed"
+                );
+                assert_eq!(
+                    o_not_taken.machine().cpu[0].pc,
+                    pc + 4,
+                    "B.{name} should fall through to pc+4"
+                );
+            } else {
+                // For AL and NV, test that even with all flags set, they are ALWAYS taken
+                let mut o_all_flags = sp_test_orchestrator(pc, sp, word);
+                o_all_flags.machine_mut().cpu[0].pstate = FLAGS_NZCV_MASK;
+                assert_eq!(
+                    o_all_flags.step_vcpu(),
+                    StepOutcome::Continue,
+                    "B.{name} always-taken step with all flags failed"
+                );
+                assert_eq!(
+                    o_all_flags.machine().cpu[0].pc,
+                    pc + 8,
+                    "B.{name} must be taken even with all flags set"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn f2_b_cond_negative_offset() {
+        let pc = RAM_BASE + 0x2000;
+        let sp = RAM_BASE + 0x3000;
+        // B.NE -20 (-5 instructions, imm19 = 0x7FFFB): 0x54FF_FF61
+        let word = 0x54FF_FF61;
+
+        // Taken (Z=0):
+        let mut o = sp_test_orchestrator(pc, sp, word);
+        o.machine_mut().cpu[0].pstate = 0;
+        assert_eq!(o.step_vcpu(), StepOutcome::Continue);
+        assert_eq!(o.machine().cpu[0].pc, pc - 20);
+
+        // Not taken (Z=1):
+        let mut o = sp_test_orchestrator(pc, sp, word);
+        o.machine_mut().cpu[0].pstate = FLAG_Z;
+        assert_eq!(o.step_vcpu(), StepOutcome::Continue);
+        assert_eq!(o.machine().cpu[0].pc, pc + 4);
+    }
+
+    #[test]
+    fn f2_tbz_tbnz_exhaustive_widths_and_edges() {
+        let pc = RAM_BASE + 0x1000;
+        let sp = RAM_BASE + 0x2000;
+
+        // TBZ W0, #0, +8 (0x3600_0040)
+        let mut o = sp_test_orchestrator(pc, sp, 0x3600_0040);
+        o.machine_mut().cpu[0].regs[0] = 0; // bit 0 == 0 -> taken
+        assert_eq!(o.step_vcpu(), StepOutcome::Continue);
+        assert_eq!(o.machine().cpu[0].pc, pc + 8);
+
+        let mut o = sp_test_orchestrator(pc, sp, 0x3600_0040);
+        o.machine_mut().cpu[0].regs[0] = 1; // bit 0 == 1 -> not taken
+        assert_eq!(o.step_vcpu(), StepOutcome::Continue);
+        assert_eq!(o.machine().cpu[0].pc, pc + 4);
+
+        // TBNZ W0, #31, +8 (0x37F8_0040)
+        let mut o = sp_test_orchestrator(pc, sp, 0x37F8_0040);
+        o.machine_mut().cpu[0].regs[0] = 0x8000_0000; // bit 31 == 1 -> taken
+        assert_eq!(o.step_vcpu(), StepOutcome::Continue);
+        assert_eq!(o.machine().cpu[0].pc, pc + 8);
+
+        let mut o = sp_test_orchestrator(pc, sp, 0x37F8_0040);
+        o.machine_mut().cpu[0].regs[0] = 0x7FFF_FFFF; // bit 31 == 0 -> not taken
+        assert_eq!(o.step_vcpu(), StepOutcome::Continue);
+        assert_eq!(o.machine().cpu[0].pc, pc + 4);
+
+        // TBZ X0, #32, +8 (0xB600_0040, b5=1, b40=0)
+        let mut o = sp_test_orchestrator(pc, sp, 0xB600_0040);
+        o.machine_mut().cpu[0].regs[0] = 0; // bit 32 == 0 -> taken
+        assert_eq!(o.step_vcpu(), StepOutcome::Continue);
+        assert_eq!(o.machine().cpu[0].pc, pc + 8);
+
+        let mut o = sp_test_orchestrator(pc, sp, 0xB600_0040);
+        o.machine_mut().cpu[0].regs[0] = 1 << 32; // bit 32 == 1 -> not taken
+        assert_eq!(o.step_vcpu(), StepOutcome::Continue);
+        assert_eq!(o.machine().cpu[0].pc, pc + 4);
+
+        // TBNZ X0, #63, +8 (0xB7F8_0040, b5=1, b40=31)
+        let mut o = sp_test_orchestrator(pc, sp, 0xB7F8_0040);
+        o.machine_mut().cpu[0].regs[0] = 1 << 63; // bit 63 == 1 -> taken
+        assert_eq!(o.step_vcpu(), StepOutcome::Continue);
+        assert_eq!(o.machine().cpu[0].pc, pc + 8);
+
+        let mut o = sp_test_orchestrator(pc, sp, 0xB7F8_0040);
+        o.machine_mut().cpu[0].regs[0] = 0; // bit 63 == 0 -> not taken
+        assert_eq!(o.step_vcpu(), StepOutcome::Continue);
+        assert_eq!(o.machine().cpu[0].pc, pc + 4);
+
+        // Edge case: Rt = 31 (WZR / XZR)
+        // TBZ WZR, #0, +8 (0x3600_005F) -> always 0 -> taken
+        let mut o = sp_test_orchestrator(pc, sp, 0x3600_005F);
+        assert_eq!(o.step_vcpu(), StepOutcome::Continue);
+        assert_eq!(o.machine().cpu[0].pc, pc + 8);
+
+        // TBNZ WZR, #0, +8 (0x3700_005F) -> always 0 -> not taken
+        let mut o = sp_test_orchestrator(pc, sp, 0x3700_005F);
+        assert_eq!(o.step_vcpu(), StepOutcome::Continue);
+        assert_eq!(o.machine().cpu[0].pc, pc + 4);
+    }
+
+    #[test]
+    fn f2_cbz_cbnz_32_and_64_bit() {
+        let pc = RAM_BASE + 0x1000;
+        let sp = RAM_BASE + 0x2000;
+
+        // 64-bit CBZ X0, +8 (0xB400_0040)
+        let mut o = sp_test_orchestrator(pc, sp, 0xB400_0040);
+        o.machine_mut().cpu[0].regs[0] = 0;
+        assert_eq!(o.step_vcpu(), StepOutcome::Continue);
+        assert_eq!(o.machine().cpu[0].pc, pc + 8);
+
+        let mut o = sp_test_orchestrator(pc, sp, 0xB400_0040);
+        o.machine_mut().cpu[0].regs[0] = 1;
+        assert_eq!(o.step_vcpu(), StepOutcome::Continue);
+        assert_eq!(o.machine().cpu[0].pc, pc + 4);
+
+        // 64-bit CBNZ X0, +8 (0xB500_0040)
+        let mut o = sp_test_orchestrator(pc, sp, 0xB500_0040);
+        o.machine_mut().cpu[0].regs[0] = 1;
+        assert_eq!(o.step_vcpu(), StepOutcome::Continue);
+        assert_eq!(o.machine().cpu[0].pc, pc + 8);
+
+        let mut o = sp_test_orchestrator(pc, sp, 0xB500_0040);
+        o.machine_mut().cpu[0].regs[0] = 0;
+        assert_eq!(o.step_vcpu(), StepOutcome::Continue);
+        assert_eq!(o.machine().cpu[0].pc, pc + 4);
+
+        // 32-bit CBZ W0, +8 (0x3400_0040)
+        // Upper 32 bits non-zero, lower 32 bits zero -> must be taken!
+        let mut o = sp_test_orchestrator(pc, sp, 0x3400_0040);
+        o.machine_mut().cpu[0].regs[0] = 0xDEAD_BEEF_0000_0000;
+        assert_eq!(o.step_vcpu(), StepOutcome::Continue);
+        assert_eq!(o.machine().cpu[0].pc, pc + 8);
+
+        let mut o = sp_test_orchestrator(pc, sp, 0x3400_0040);
+        o.machine_mut().cpu[0].regs[0] = 0x0000_0000_0000_0001;
+        assert_eq!(o.step_vcpu(), StepOutcome::Continue);
+        assert_eq!(o.machine().cpu[0].pc, pc + 4);
+
+        // 32-bit CBNZ W0, +8 (0x3500_0040)
+        // Upper 32 bits non-zero, lower 32 bits non-zero -> taken!
+        let mut o = sp_test_orchestrator(pc, sp, 0x3500_0040);
+        o.machine_mut().cpu[0].regs[0] = 0xDEAD_BEEF_0000_0001;
+        assert_eq!(o.step_vcpu(), StepOutcome::Continue);
+        assert_eq!(o.machine().cpu[0].pc, pc + 8);
+
+        // Upper 32 bits non-zero, lower 32 bits zero -> not taken!
+        let mut o = sp_test_orchestrator(pc, sp, 0x3500_0040);
+        o.machine_mut().cpu[0].regs[0] = 0xDEAD_BEEF_0000_0000;
+        assert_eq!(o.step_vcpu(), StepOutcome::Continue);
+        assert_eq!(o.machine().cpu[0].pc, pc + 4);
+
+        // Rt = 31 (XZR / WZR)
+        // CBZ XZR, +8 (0xB400_005F) -> always 0 -> taken
+        let mut o = sp_test_orchestrator(pc, sp, 0xB400_005F);
+        assert_eq!(o.step_vcpu(), StepOutcome::Continue);
+        assert_eq!(o.machine().cpu[0].pc, pc + 8);
+
+        // CBNZ XZR, +8 (0xB500_005F) -> always 0 -> not taken
+        let mut o = sp_test_orchestrator(pc, sp, 0xB500_005F);
+        assert_eq!(o.step_vcpu(), StepOutcome::Continue);
+        assert_eq!(o.machine().cpu[0].pc, pc + 4);
+    }
+
+    #[test]
+    fn f2_unconditional_b_bl_br_blr_ret() {
+        let pc = RAM_BASE + 0x1000;
+        let sp = RAM_BASE + 0x2000;
+
+        // B +8 (0x1400_0002)
+        let mut o = sp_test_orchestrator(pc, sp, 0x1400_0002);
+        assert_eq!(o.step_vcpu(), StepOutcome::Continue);
+        assert_eq!(o.machine().cpu[0].pc, pc + 8);
+
+        // BL +8 (0x9400_0002)
+        let mut o = sp_test_orchestrator(pc, sp, 0x9400_0002);
+        assert_eq!(o.step_vcpu(), StepOutcome::Continue);
+        assert_eq!(o.machine().cpu[0].pc, pc + 8);
+        assert_eq!(o.machine().cpu[0].regs[30], pc + 4);
+
+        // BR X1 (0xD61F_0020)
+        let target = RAM_BASE + 0x3000;
+        let mut o = sp_test_orchestrator(pc, sp, 0xD61F_0020);
+        o.machine_mut().cpu[0].regs[1] = target;
+        assert_eq!(o.step_vcpu(), StepOutcome::Continue);
+        assert_eq!(o.machine().cpu[0].pc, target);
+
+        // BLR X1 (0xD63F_0020)
+        let mut o = sp_test_orchestrator(pc, sp, 0xD63F_0020);
+        o.machine_mut().cpu[0].regs[1] = target;
+        assert_eq!(o.step_vcpu(), StepOutcome::Continue);
+        assert_eq!(o.machine().cpu[0].pc, target);
+        assert_eq!(o.machine().cpu[0].regs[30], pc + 4);
+
+        // BLR X30 (0xD63F_03C0) — critical hazard: Rn == 30
+        let mut o = sp_test_orchestrator(pc, sp, 0xD63F_03C0);
+        o.machine_mut().cpu[0].regs[30] = target;
+        assert_eq!(o.step_vcpu(), StepOutcome::Continue);
+        assert_eq!(o.machine().cpu[0].pc, target, "BLR X30 must branch to old X30 target");
+        assert_eq!(o.machine().cpu[0].regs[30], pc + 4, "BLR X30 must write link address into X30");
+
+        // RET (X30) (0xD65F_03C0)
+        let ret_target = RAM_BASE + 0x4000;
+        let mut o = sp_test_orchestrator(pc, sp, 0xD65F_03C0);
+        o.machine_mut().cpu[0].regs[30] = ret_target;
+        assert_eq!(o.step_vcpu(), StepOutcome::Continue);
+        assert_eq!(o.machine().cpu[0].pc, ret_target);
+
+        // RET X2 (0xD65F_0040)
+        let mut o = sp_test_orchestrator(pc, sp, 0xD65F_0040);
+        o.machine_mut().cpu[0].regs[2] = ret_target + 0x100;
+        assert_eq!(o.step_vcpu(), StepOutcome::Continue);
+        assert_eq!(o.machine().cpu[0].pc, ret_target + 0x100);
+    }
 }
+
