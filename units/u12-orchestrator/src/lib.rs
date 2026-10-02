@@ -725,9 +725,13 @@ impl Orchestrator {
             let rn = ((word >> 5) & 0x1F) as usize;
             let rd = (word & 0x1F) as usize;
             let imm = (imm12 as u64) << (if sh == 1 { 12 } else { 0 });
-            // Rn=31 means SP for ADD/SUB (both S=0 and S=1).
+            // Rn=31 means SP for ADD/SUB (S=0), XZR for ADDS/SUBS/CMP/CMN (S=1).
             let rn_val = if rn == 31 {
-                self.machine.cpu[0].sp
+                if s == 1 {
+                    0
+                } else {
+                    self.machine.cpu[0].sp
+                }
             } else {
                 self.machine.cpu[0].regs[rn]
             };
@@ -969,8 +973,13 @@ impl Orchestrator {
                         }
                     };
                     let op2 = extended << imm3;
+                    // Rn=31: SP for S=0 (ADD/SUB), XZR for S=1 (ADDS/SUBS/CMP/CMN).
                     let rn_val = if rn == 31 {
-                        self.machine.cpu[0].sp
+                        if s == 1 {
+                            0
+                        } else {
+                            self.machine.cpu[0].sp
+                        }
                     } else {
                         self.machine.cpu[0].regs[rn]
                     };
@@ -1213,9 +1222,9 @@ impl Orchestrator {
         // the condition reads the live NZCV flags from pstate, which the
         // WASM path cannot see, so no U2/U3 lifting is involved
         // (condition_holds is the shared GB-2 cond-eval helper).
-        // op2 == 0b10/0b11 and cond >= 0b1110 are unallocated: fall
-        // through to the U2 DataProc trap rather than executing made-up
-        // semantics.
+        // op2 == 0b10/0b11 is unallocated (cond=AL/NV is legal and
+        // always-true): fall through to the U2 DataProc trap rather
+        // than executing made-up semantics.
         {
             let b30_21 = (word >> 21) & 0x3FF;
             if b30_21 == 0xD4 || b30_21 == 0x2D4 {
@@ -1223,7 +1232,7 @@ impl Orchestrator {
                 let op = (word >> 30) & 1;
                 let op2 = (word >> 10) & 0x3;
                 let cond = ((word >> 12) & 0xF) as u8;
-                if op2 <= 0x1 && cond < 0xE {
+                if op2 <= 0x1 {
                     let rm = ((word >> 16) & 0x1F) as usize;
                     let rn = ((word >> 5) & 0x1F) as usize;
                     let rd = (word & 0x1F) as usize;
@@ -1462,7 +1471,7 @@ impl Orchestrator {
         // 1=CCMP/SUB), bits[23:21] == 0b010, bit11=1, bit10=0, bit4=0.
         // imm5 = bits[20:16], cond = bits[15:12], Rn = bits[9:5],
         // nzcv = bits[3:0]. If cond holds, NZCV = Rn +/- imm5 (discarded);
-        // else NZCV = nzcv. Rn=31 names SP.
+        // else NZCV = nzcv. Rn=31 names XZR (not SP).
         // (Fixed: old mask `(word>>24)&0x7F==0x7A` forced op=1, so CCMN
         // was dead code despite the comment claiming both.)
         if (word >> 24) & 0x3F == 0x3A
@@ -1477,8 +1486,9 @@ impl Orchestrator {
             let rn = ((word >> 5) & 0x1F) as usize;
             let nzcv_imm = (word & 0xF) as u64;
             let new_nzcv = if condition_holds(cond, self.machine.cpu[0].pstate) {
+                // Rn=31 names XZR (not SP) for conditional compare.
                 let rn_val = if rn == 31 {
-                    self.machine.cpu[0].sp
+                    0
                 } else {
                     self.machine.cpu[0].regs[rn]
                 };
@@ -1700,6 +1710,10 @@ impl Orchestrator {
                             (i16::from_le_bytes(self.machine.ram[off..off + 2].try_into().unwrap())
                                 as i64) as u64
                         } // LDRSH X
+                        (2, 0b10) => {
+                            (i32::from_le_bytes(self.machine.ram[off..off + 4].try_into().unwrap())
+                                as i64) as u64
+                        } // LDRSW
                         (2, _) => {
                             u32::from_le_bytes(self.machine.ram[off..off + 4].try_into().unwrap())
                                 as u64
@@ -1793,6 +1807,11 @@ impl Orchestrator {
                                     self.machine.ram[off..off + 2].try_into().unwrap(),
                                 ) as i64) as u64
                             }
+                            (2, 0b10) => {
+                                (i32::from_le_bytes(
+                                    self.machine.ram[off..off + 4].try_into().unwrap(),
+                                ) as i64) as u64
+                            } // LDURSW
                             (2, _) => u32::from_le_bytes(
                                 self.machine.ram[off..off + 4].try_into().unwrap(),
                             ) as u64,
@@ -3586,22 +3605,18 @@ mod tests {
     }
 
     #[test]
-    fn gb15_csel_cond_nv_traps_unsupported() {
-        // CSEL X5, X6, X5, cond=0b1111: unallocated for the
-        // conditional-select group (like AL=0b1110). The fast path does
-        // not claim it; it falls through to U1 (DataProc) and the U2
-        // DataProc trap. GB-26: the old fast-path trap reason is gone.
-        let words = [0x9A85_F0C5];
-        let mut o = Orchestrator::new();
-        o.load_image(&minimal_image(0x4000_0000, &words)).unwrap();
-        let halt = o.run_until_halt(100);
-        assert_eq!(
-            halt,
-            HaltReason::Unsupported {
-                addr: 0x4000_0000,
-                reason: "DataProc: unsupported encoding",
-            }
-        );
+    fn gb15_csel_cond_nv_executes_always() {
+        // CSEL X5, X6, X5, NV (0x9A85F0C5): cond=NV is legal and
+        // always-true per ARM ARM (GB-26 fix: no longer trapped as
+        // unallocated).
+        let pc = RAM_BASE + 0x1000;
+        let sp = RAM_BASE + 0x2000;
+        let mut o = sp_test_orchestrator(pc, sp, 0x9A85_F0C5);
+        o.machine_mut().cpu[0].regs[6] = 0x1234_5678_9ABC_DEF0;
+        o.machine_mut().cpu[0].regs[5] = 0xDEAD_BEEF_DEAD_BEEF;
+        assert!(matches!(o.step_vcpu(), StepOutcome::Continue));
+        assert_eq!(o.machine().cpu[0].regs[5], 0x1234_5678_9ABC_DEF0);
+        assert_eq!(o.machine().cpu[0].pc, pc + 4);
     }
 
     // ---- GB-20: MMU data-access translation in WasmHost ----
@@ -4644,6 +4659,74 @@ mod tests {
         o.machine_mut().cpu[0].pstate = 0; // Z=0 => EQ false
         assert!(matches!(o.step_vcpu(), StepOutcome::Continue));
         assert_eq!(o.machine().cpu[0].pstate & FLAGS_NZCV_MASK, 0);
+        assert_eq!(o.machine().cpu[0].pc, pc + 4);
+    }
+
+    #[test]
+    fn gb26_ccmp_rn31_is_xzr() {
+        // CCMP XZR, #0, #0, EQ (0xFA400BE0): Rn=31 names XZR, not SP.
+        // EQ holds (Z=1): NZCV = XZR - 0 = 0 => N=0,Z=1,C=1,V=0.
+        let pc = RAM_BASE + 0x1000;
+        let sp = RAM_BASE + 0x2000;
+        let mut o = sp_test_orchestrator(pc, sp, 0xFA40_0BE0);
+        o.machine_mut().cpu[0].sp = 0xFFFF_FFFF_FFFF_0000; // nonzero: must not leak in
+        o.machine_mut().cpu[0].pstate = 0x4000_0000; // Z=1 => EQ true
+        assert!(matches!(o.step_vcpu(), StepOutcome::Continue));
+        assert_eq!(o.machine().cpu[0].pstate & FLAGS_NZCV_MASK, 0x6000_0000);
+        assert_eq!(o.machine().cpu[0].pc, pc + 4);
+    }
+
+    #[test]
+    fn gb26_cmp_extended_rn31_is_xzr() {
+        // CMP XZR, WZR, SXTW (0xEB20C3FF): S=1, Rn=31 names XZR, not SP.
+        // 0 - 0 = 0 => N=0,Z=1,C=1,V=0.
+        let pc = RAM_BASE + 0x1000;
+        let sp = RAM_BASE + 0x2000;
+        let mut o = sp_test_orchestrator(pc, sp, 0xEB20_C3FF);
+        o.machine_mut().cpu[0].sp = 0xFFFF_FFFF_FFFF_0000; // nonzero: must not leak in
+        assert!(matches!(o.step_vcpu(), StepOutcome::Continue));
+        assert_eq!(o.machine().cpu[0].pstate & FLAGS_NZCV_MASK, 0x6000_0000);
+        assert_eq!(o.machine().cpu[0].pc, pc + 4);
+    }
+
+    #[test]
+    fn gb26_subs_imm_rn31_is_xzr() {
+        // SUBS XZR, XZR, #0 (0xF10003FF): S=1, Rn=31 names XZR, not SP.
+        // 0 - 0 = 0 => N=0,Z=1,C=1,V=0.
+        let pc = RAM_BASE + 0x1000;
+        let sp = RAM_BASE + 0x2000;
+        let mut o = sp_test_orchestrator(pc, sp, 0xF100_03FF);
+        o.machine_mut().cpu[0].sp = 0xFFFF_FFFF_FFFF_0000; // nonzero: must not leak in
+        assert!(matches!(o.step_vcpu(), StepOutcome::Continue));
+        assert_eq!(o.machine().cpu[0].pstate & FLAGS_NZCV_MASK, 0x6000_0000);
+        assert_eq!(o.machine().cpu[0].pc, pc + 4);
+    }
+
+    #[test]
+    fn gb26_ldrsw_sign_extends() {
+        // LDRSW X5, [SP, #16] (0xB98013E5): must sign-extend 32->64.
+        // 0xFFFFFFFF in memory => X5 = 0xFFFFFFFFFFFFFFFF (not 0xFFFFFFFF).
+        let pc = RAM_BASE + 0x1000;
+        let sp = RAM_BASE + 0x2000;
+        let mut o = sp_test_orchestrator(pc, sp, 0xB980_13E5);
+        let s = (sp + 16 - RAM_BASE) as usize;
+        o.machine_mut().ram[s..s + 4].copy_from_slice(&0xFFFF_FFFFu32.to_le_bytes());
+        assert!(matches!(o.step_vcpu(), StepOutcome::Continue));
+        assert_eq!(o.machine().cpu[0].regs[5], 0xFFFF_FFFF_FFFF_FFFF);
+        assert_eq!(o.machine().cpu[0].pc, pc + 4);
+    }
+
+    #[test]
+    fn gb26_csel_always() {
+        // CSEL X0, X1, X2, AL (0x9A82E020): AL/NV are legal, always-true.
+        let pc = RAM_BASE + 0x1000;
+        let sp = RAM_BASE + 0x2000;
+        let mut o = sp_test_orchestrator(pc, sp, 0x9A82_E020);
+        o.machine_mut().cpu[0].regs[1] = 42;
+        o.machine_mut().cpu[0].regs[2] = 7;
+        o.machine_mut().cpu[0].pstate = 0; // flags irrelevant for AL
+        assert!(matches!(o.step_vcpu(), StepOutcome::Continue));
+        assert_eq!(o.machine().cpu[0].regs[0], 42);
         assert_eq!(o.machine().cpu[0].pc, pc + 4);
     }
 
