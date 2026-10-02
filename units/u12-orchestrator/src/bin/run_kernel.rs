@@ -13,6 +13,7 @@ fn print_help() {
     println!();
     println!("Options:");
     println!("  --kernel <PATH>       Path to ARM64 kernel Image (default: /mnt/sdb1/aosp/Image)");
+    println!("  --dtb <PATH>          Path to device tree blob (optional; x0 set to DTB address if given)");
     println!("  --max-steps <N>       Step budget cap (default: 2000000)");
     println!("  --trace <FILE>        Enable per-step execution tracing to file");
     println!("  --survey              Enable survey mode (discovery only, never progress)");
@@ -21,6 +22,7 @@ fn print_help() {
 
 fn main() {
     let mut kernel_path = "/mnt/sdb1/aosp/Image".to_string();
+    let mut dtb_path: Option<String> = None;
     let mut max_steps: u64 = 2_000_000;
     let mut trace_file: Option<String> = None;
     let mut dump_around: Option<usize> = None;
@@ -39,6 +41,12 @@ fn main() {
                 i += 1;
                 if i < args.len() {
                     kernel_path = args[i].clone();
+                }
+            }
+            "--dtb" => {
+                i += 1;
+                if i < args.len() {
+                    dtb_path = Some(args[i].clone());
                 }
             }
             "--max-steps" => {
@@ -107,6 +115,22 @@ fn main() {
     orch.machine_mut().cpu[0].pc = RAM_BASE;
     orch.machine_mut().cpu[0].sp = RAM_BASE + 0x0800_0000;
     orch.machine_mut().cpu[0].regs = [0; 31];
+
+    // Optional DTB: load at 0x4700_0000 (112MB offset, clear of 23MB kernel
+    // and top-of-RAM stack), set x0 per ARM64 boot protocol.
+    const DTB_LOAD_ADDR: u64 = RAM_BASE + 0x0700_0000;
+    if let Some(ref dtb_p) = dtb_path {
+        let dtb_bytes = fs::read(dtb_p).expect("failed to read DTB");
+        let off = (DTB_LOAD_ADDR - RAM_BASE) as usize;
+        let ram = &mut orch.machine_mut().ram;
+        assert!(off + dtb_bytes.len() <= ram.len(), "DTB does not fit in RAM");
+        ram[off..off + dtb_bytes.len()].copy_from_slice(&dtb_bytes);
+        orch.machine_mut().cpu[0].regs[0] = DTB_LOAD_ADDR;
+        println!(
+            "[boot] Loaded DTB ({} bytes) at {DTB_LOAD_ADDR:#x}, x0 set",
+            dtb_bytes.len()
+        );
+    }
 
     println!(
         "[boot] Loaded {} bytes at {RAM_BASE:#x}. Running up to {max_steps} steps...",
