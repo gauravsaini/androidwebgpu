@@ -739,4 +739,102 @@ mod tests {
             }
         }
     }
+
+    #[test]
+    fn exceptions_and_eret_are_system_or_svc() {
+        assert_eq!(ok_kind(0xD400_0001), InsnKind::Svc); // SVC #0
+        assert_eq!(ok_kind(0xD400_0002), InsnKind::System); // HVC #0
+        assert_eq!(ok_kind(0xD400_0022), InsnKind::System); // HVC #1
+        assert_eq!(ok_kind(0xD400_0003), InsnKind::System); // SMC #0
+        assert_eq!(ok_kind(0xD400_0023), InsnKind::System); // SMC #1
+        assert_eq!(ok_kind(0xD420_0000), InsnKind::System); // BRK #0
+        assert_eq!(ok_kind(0xD422_4680), InsnKind::System); // BRK #0x1234
+        assert_eq!(ok_kind(0xD440_0000), InsnKind::System); // HLT #0
+        assert_eq!(ok_kind(0xD44A_CF00), InsnKind::System); // HLT #0x5678
+        assert_eq!(ok_kind(0xD69F_03E0), InsnKind::System); // ERET
+    }
+
+    #[test]
+    fn pstate_fields_pan_uao_are_system() {
+        assert_eq!(ok_kind(0xD500_419F), InsnKind::System); // MSR PAN, #1
+        assert_eq!(ok_kind(0xD500_409F), InsnKind::System); // MSR PAN, #0
+        assert_eq!(ok_kind(0xD500_417F), InsnKind::System); // MSR UAO, #1
+        assert_eq!(ok_kind(0xD500_407F), InsnKind::System); // MSR UAO, #0
+    }
+
+    #[test]
+    fn high_frequency_sysregs_are_system() {
+        assert_eq!(ok_kind(0xD53C_D040), InsnKind::System); // MRS X0, TPIDR_EL2
+        assert_eq!(ok_kind(0xD539_0020), InsnKind::System); // MRS X0, CLIDR_EL1
+        assert_eq!(ok_kind(0xD53A_0000), InsnKind::System); // MRS X0, CSSELR_EL1
+        assert_eq!(ok_kind(0xD51A_0000), InsnKind::System); // MSR CSSELR_EL1, X0
+        assert_eq!(ok_kind(0xD539_0000), InsnKind::System); // MRS X0, CCSIDR_EL1
+        assert_eq!(ok_kind(0xD53B_E000), InsnKind::System); // MRS X0, CNTFRQ_EL0
+        assert_eq!(ok_kind(0xD53B_E040), InsnKind::System); // MRS X0, CNTVCT_EL0
+        assert_eq!(ok_kind(0xD53B_E020), InsnKind::System); // MRS X0, CNTPCT_EL0
+        assert_eq!(ok_kind(0xD538_5200), InsnKind::System); // MRS X0, ESR_EL1
+        assert_eq!(ok_kind(0xD538_6000), InsnKind::System); // MRS X0, FAR_EL1
+        assert_eq!(ok_kind(0xD538_4020), InsnKind::System); // MRS X0, ELR_EL1
+        assert_eq!(ok_kind(0xD538_4000), InsnKind::System); // MRS X0, SPSR_EL1
+    }
+
+    #[test]
+    fn tlbi_ic_dc_are_system() {
+        assert_eq!(ok_kind(0xD508_871F), InsnKind::System); // TLBI VMALLE1
+        assert_eq!(ok_kind(0xD508_831F), InsnKind::System); // TLBI VMALLE1IS
+        assert_eq!(ok_kind(0xD508_837F), InsnKind::System); // TLBI VAAE1IS
+        assert_eq!(ok_kind(0xD508_7620), InsnKind::System); // DC IVAC, X0
+        assert_eq!(ok_kind(0xD50B_7E20), InsnKind::System); // DC CIVAC, X0
+        assert_eq!(ok_kind(0xD508_751F), InsnKind::System); // IC IALLU
+        assert_eq!(ok_kind(0xD508_711F), InsnKind::System); // IC IALLUIS
+    }
+
+    #[test]
+    fn atomics_and_exclusives_are_load_store() {
+        // SWP variants (32-bit and 64-bit)
+        assert_eq!(ok_kind(0xB820_8041), InsnKind::LoadStore); // SWP W0, W1, [X2]
+        assert_eq!(ok_kind(0xB8A0_8041), InsnKind::LoadStore); // SWPA W0, W1, [X2]
+        assert_eq!(ok_kind(0xB860_8041), InsnKind::LoadStore); // SWPL W0, W1, [X2]
+        assert_eq!(ok_kind(0xB8E0_8041), InsnKind::LoadStore); // SWPAL W0, W1, [X2]
+        assert_eq!(ok_kind(0xF820_8041), InsnKind::LoadStore); // SWP X0, X1, [X2]
+        assert_eq!(ok_kind(0xF8A0_8041), InsnKind::LoadStore); // SWPA X0, X1, [X2]
+        assert_eq!(ok_kind(0xF860_8041), InsnKind::LoadStore); // SWPL X0, X1, [X2]
+        assert_eq!(ok_kind(0xF8E0_8041), InsnKind::LoadStore); // SWPAL X0, X1, [X2]
+        assert_eq!(ok_kind(0x3820_8041), InsnKind::LoadStore); // SWPB W0, W1, [X2]
+
+        // CAS variants (32-bit and 64-bit)
+        assert_eq!(ok_kind(0x88A0_7C41), InsnKind::LoadStore); // CAS W0, W1, [X2]
+        assert_eq!(ok_kind(0x88E0_7C41), InsnKind::LoadStore); // CASA W0, W1, [X2]
+        assert_eq!(ok_kind(0x88A0_FC41), InsnKind::LoadStore); // CASL W0, W1, [X2]
+        assert_eq!(ok_kind(0x88E0_FC41), InsnKind::LoadStore); // CASAL W0, W1, [X2]
+        assert_eq!(ok_kind(0xC8A0_7C41), InsnKind::LoadStore); // CAS X0, X1, [X2]
+        assert_eq!(ok_kind(0xC8E0_7C41), InsnKind::LoadStore); // CASA X0, X1, [X2]
+        assert_eq!(ok_kind(0xC8A0_FC41), InsnKind::LoadStore); // CASL X0, X1, [X2]
+        assert_eq!(ok_kind(0xC8E0_FC41), InsnKind::LoadStore); // CASAL X0, X1, [X2]
+
+        // LDXR / STXR variants
+        assert_eq!(ok_kind(0x885F_7C20), InsnKind::LoadStore); // LDXR W0, [X1]
+        assert_eq!(ok_kind(0x8802_7C20), InsnKind::LoadStore); // STXR W2, W0, [X1]
+        assert_eq!(ok_kind(0xC85F_7C20), InsnKind::LoadStore); // LDXR X0, [X1]
+        assert_eq!(ok_kind(0xC802_7C20), InsnKind::LoadStore); // STXR W2, X0, [X1]
+        assert_eq!(ok_kind(0xC85F_FC20), InsnKind::LoadStore); // LDAXR X0, [X1]
+        assert_eq!(ok_kind(0xC802_FC20), InsnKind::LoadStore); // STLXR W2, X0, [X1]
+
+        // LDAR / STLR / LDAPR variants
+        assert_eq!(ok_kind(0x88DF_FC20), InsnKind::LoadStore); // LDAR W0, [X1]
+        assert_eq!(ok_kind(0x889F_FC20), InsnKind::LoadStore); // STLR W0, [X1]
+        assert_eq!(ok_kind(0xC8DF_FC20), InsnKind::LoadStore); // LDAR X0, [X1]
+        assert_eq!(ok_kind(0xC89F_FC20), InsnKind::LoadStore); // STLR X0, [X1]
+        assert_eq!(ok_kind(0x38BF_C020), InsnKind::LoadStore); // LDAPRB W0, [X1]
+        assert_eq!(ok_kind(0xB8BF_C020), InsnKind::LoadStore); // LDAPR W0, [X1]
+        assert_eq!(ok_kind(0xF8BF_C020), InsnKind::LoadStore); // LDAPR X0, [X1]
+
+        // Arithmetic / bitwise atomics (LDADD, STADD, LDCLR, LDSET, LDEOR)
+        assert_eq!(ok_kind(0xB820_0041), InsnKind::LoadStore); // LDADD W0, W1, [X2]
+        assert_eq!(ok_kind(0xF8E0_0041), InsnKind::LoadStore); // LDADDAL X0, X1, [X2]
+        assert_eq!(ok_kind(0xF820_003F), InsnKind::LoadStore); // STADD X0, [X1]
+        assert_eq!(ok_kind(0xF820_1041), InsnKind::LoadStore); // LDCLR X0, X1, [X2]
+        assert_eq!(ok_kind(0xF820_3041), InsnKind::LoadStore); // LDSET X0, X1, [X2]
+        assert_eq!(ok_kind(0xF820_2041), InsnKind::LoadStore); // LDEOR X0, X1, [X2]
+    }
 }

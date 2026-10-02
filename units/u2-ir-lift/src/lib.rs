@@ -96,8 +96,16 @@ const R_LS_SP: &str =
 /// Phase-2 spike (2026-09-30): SVC recognized by U1 but the exception model
 /// does not exist yet. Public so the orchestrator can map it to the distinct HaltReason::Svc instead of generic Unsupported.
 pub const R_SVC_UNIMPL: &str = "Svc: exception model not yet implemented";
-
-// ---- FP/SIMD trap reasons (fam/fpsimd) ----
+pub const R_BRK: &str = "System: BRK exception";
+pub const R_HLT: &str = "System: HLT exception";
+pub const R_HVC: &str = "System: HVC exception";
+pub const R_SMC: &str = "System: SMC exception";
+pub const R_ERET: &str = "System: ERET exception return not yet implemented";
+pub const R_ATOMIC_CAS: &str =
+    "LoadStore: atomic CAS requires memory arbitration (unsupported in IR)";
+pub const R_EXCLUSIVE: &str =
+    "LoadStore: exclusive monitor requires orchestrator state (unsupported in IR)";
+pub const R_ATOMIC_LSE: &str = "LoadStore: atomic LSE operation (unsupported in IR)";
 pub const R_FP_FMOV: &str = "FloatingPoint: FMOV scalar registers not yet expressible in IrOp";
 pub const R_FP_FADD: &str = "FloatingPoint: FADD scalar arithmetic not yet expressible in IrOp";
 pub const R_FP_FSUB: &str = "FloatingPoint: FSUB scalar arithmetic not yet expressible in IrOp";
@@ -159,6 +167,22 @@ fn lift_pc_rel(insn: &Instruction) -> Vec<IrOp> {
 /// System: WFI, barriers (DMB, DSB, ISB), HINTs (NOP, YIELD), system register
 /// access (MSR, MRS), and system operations (DC, IC, TLBI).
 fn lift_system(word: u32) -> Vec<IrOp> {
+    // Exception generation instructions: bits[31:24] == 0xD4
+    if (word >> 24) == 0xD4 {
+        let opc = (word >> 21) & 0x7;
+        let ll = word & 0x3;
+        return match opc {
+            0b000 if ll == 0b10 => trap(R_HVC),
+            0b000 if ll == 0b11 => trap(R_SMC),
+            0b001 if (word & 0x1F) == 0 => trap(R_BRK),
+            0b010 if (word & 0x1F) == 0 => trap(R_HLT),
+            _ => trap(R_SYSTEM),
+        };
+    }
+    // ERET: 1101 0110 100 11111 0000 00 11111 00000 (0xD69F03E0)
+    if word == 0xD69F_03E0 {
+        return trap(R_ERET);
+    }
     // WFI is HINT #3 with CRm:op2 = 00100:01111: exact word match, no aliases.
     if word == 0xD503_207F {
         return vec![IrOp::Wfi];
@@ -291,6 +315,33 @@ fn lift_system(word: u32) -> Vec<IrOp> {
                         // errata workarounds that poke IMPLEMENTATION DEFINED
                         // registers we don't model.)
                         (3, 0, 0, 0, 0) => 0,
+                        // TPIDR_EL2: Hypervisor Thread ID (4,998 static hits)
+                        (3, 4, 13, 0, 2) => 0,
+                        // CLIDR_EL1: Cache Level ID Register (10 static hits)
+                        // L1 Harvard (separate I/D), L2 unified, LoUIS=1, LoUU=1, LoC=2
+                        (3, 1, 0, 0, 1) => 0x0920_0023,
+                        // CSSELR_EL1: Cache Size Selection Register
+                        (3, 2, 0, 0, 0) => 0,
+                        // CCSIDR_EL1: Cache Size ID Register (64B line, 4-way, 64KB)
+                        (3, 1, 0, 0, 0) => 0x701F_E00A,
+                        // CNTFRQ_EL0: Counter-timer frequency (62.5MHz)
+                        (3, 3, 14, 0, 0) => 0x03B9_ACA0,
+                        // CNTVCT_EL0: Virtual counter count
+                        (3, 3, 14, 0, 2) => 0,
+                        // CNTPCT_EL0: Physical counter count
+                        (3, 3, 14, 0, 1) => 0,
+                        // TPIDRRO_EL0: Thread read-only register (22 static hits)
+                        (3, 3, 13, 0, 3) => 0,
+                        // TPIDR_EL0: Thread ID register EL0 (21 static hits)
+                        (3, 3, 13, 0, 2) => 0,
+                        // Exception status / syndrome registers
+                        (3, 0, 5, 2, 0) => 0, // ESR_EL1
+                        (3, 0, 6, 0, 0) => 0, // FAR_EL1
+                        (3, 0, 4, 0, 1) => 0, // ELR_EL1
+                        (3, 0, 4, 0, 0) => 0, // SPSR_EL1
+                        // Performance monitors
+                        (3, 3, 9, 12, 0) => 0, // PMCR_EL0
+                        (3, 3, 9, 14, 0) => 0, // PMUSERENR_EL0
                         _ => return trap(R_SYSTEM),
                     };
                     vec![IrOp::Mov { dst: rt, imm: val }]
@@ -354,6 +405,14 @@ fn lift_system(word: u32) -> Vec<IrOp> {
                 let clr = daif_imm_mask(imm);
                 return vec![IrOp::DaifRmw { set: 0, clr }];
             }
+            // MSR PAN, #imm: Privileged Access Never (2,653 static hits)
+            (0, 0, 4, _imm, 4) => return vec![],
+            // MSR UAO, #imm: User Access Override (102 static hits)
+            (0, 0, 4, _imm, 3) => return vec![],
+            // MSR DIT / SSBS / TCO, #imm: Speculative & timing hints
+            (0, 3, 4, _imm, 1) => return vec![],
+            (0, 3, 4, _imm, 4) => return vec![],
+            (0, 3, 4, _imm, 5) => return vec![],
             _ => {
                 return {
                     match (op0, op1, crn, crm, op2) {
@@ -362,6 +421,21 @@ fn lift_system(word: u32) -> Vec<IrOp> {
                         // SPSel: accepted no-op (GB-3). DAIFSet/DAIFClr are real
                         // read-modify-write ops now (GB-11); see the arms above.
                         (0, 0, 4, 1, 5) => vec![],
+                        // TPIDRRO_EL0 (29 static hits)
+                        (3, 3, 13, 0, 3) => vec![],
+                        // TPIDR_EL0 (19 static hits)
+                        (3, 3, 13, 0, 2) => vec![],
+                        // CSSELR_EL1: Cache Size Selection
+                        (3, 2, 0, 0, 0) => vec![],
+                        // Exception registers (ESR_EL1, FAR_EL1, ELR_EL1, SPSR_EL1)
+                        (3, 0, 5, 2, 0) => vec![],
+                        (3, 0, 6, 0, 0) => vec![],
+                        (3, 0, 4, 0, 1) => vec![],
+                        (3, 0, 4, 0, 0) => vec![],
+                        // Performance monitors (PMCR_EL0, PMINTENSET_EL1, PMINTENCLR_EL1)
+                        (3, 3, 9, 12, 0) => vec![],
+                        (3, 0, 9, 14, 1) => vec![],
+                        (3, 0, 9, 14, 2) => vec![],
                         _ => return trap(R_SYSTEM),
                     }
                 };
@@ -703,112 +777,6 @@ fn lift_data_proc(word: u32) -> Vec<IrOp> {
         return ops;
     }
     trap(R_DP_UNSUPPORTED)
-}
-
-/// Floating-point and SIMD instruction lifting (fam/fpsimd).
-///
-/// Follows LLD Box Pure Function & Explicit Contract Rule:
-/// Maps decoded FP instruction word -> Option<Vec<IrOp>>.
-/// Honest typed traps naming exact mnemonic reasons until execution backend is wired.
-fn lift_fp(word: u32) -> Option<Vec<IrOp>> {
-    // 1. Conversion between floating-point and integer
-    if (word >> 24) & 0x7F == 0b0011110 && ((word >> 21) & 1) == 1 {
-        let type_bits = (word >> 22) & 0x3;
-        let scale = (word >> 10) & 0x3F;
-        if type_bits <= 1 && scale == 0 {
-            let rmode = (word >> 19) & 0x3;
-            let opcode = (word >> 16) & 0x7;
-            let sf = (word >> 31) & 1;
-            match rmode {
-                0b00 => match opcode {
-                    0b010 => return Some(trap(R_FP_SCVTF)),
-                    0b011 => return Some(trap(R_FP_UCVTF)),
-                    0b110 | 0b111 => {
-                        if sf == type_bits {
-                            return Some(trap(R_FP_FMOV));
-                        }
-                    }
-                    _ => return Some(trap(R_FP_UNSUPPORTED)),
-                },
-                0b11 => match opcode {
-                    0b000 => return Some(trap(R_FP_FCVTZS)),
-                    0b001 => return Some(trap(R_FP_FCVTZU)),
-                    _ => return Some(trap(R_FP_UNSUPPORTED)),
-                },
-                _ => return Some(trap(R_FP_UNSUPPORTED)),
-            }
-        }
-    }
-
-    // 2. Floating-point immediate: FMOV
-    if (word >> 24) == 0x1E
-        && ((word >> 21) & 1) == 1
-        && ((word >> 22) & 0x3) <= 1
-        && ((word >> 10) & 0x7) == 0b100
-        && ((word >> 5) & 0x1F) == 0
-    {
-        return Some(trap(R_FP_FMOV));
-    }
-
-    // 3. Floating-point compare & conditional compare: FCMP / FCCMP
-    if (word >> 24) == 0x1E && ((word >> 21) & 1) == 1 && ((word >> 22) & 0x3) <= 1 {
-        if ((word >> 10) & 0x3F) == 0b001000 && (word & 0x7) == 0 {
-            let is_zero = ((word >> 3) & 1) == 1;
-            let rm = (word >> 16) & 0x1F;
-            if !is_zero || rm == 0 {
-                return Some(trap(R_FP_FCMP));
-            }
-        }
-        if ((word >> 10) & 0x3) == 0b01 && ((word >> 4) & 1) == 0 {
-            return Some(trap(R_FP_FCMP));
-        }
-    }
-
-    // 4. Floating-point conditional select: FCSEL
-    if (word >> 24) == 0x1E
-        && ((word >> 21) & 1) == 1
-        && ((word >> 22) & 0x3) <= 1
-        && ((word >> 10) & 0x3) == 0b11
-    {
-        return Some(trap(R_FP_UNSUPPORTED));
-    }
-
-    // 5. Floating-point data-processing (1 source): FMOV, FRINTA, etc.
-    if (word >> 24) == 0x1E
-        && ((word >> 21) & 1) == 1
-        && ((word >> 22) & 0x3) <= 1
-        && ((word >> 10) & 0x1F) == 0b10000
-    {
-        let opcode = (word >> 15) & 0x3F;
-        return match opcode {
-            0b000000 => Some(trap(R_FP_FMOV)),
-            0b001100 => Some(trap(R_FP_FRINTA)),
-            _ => Some(trap(R_FP_UNSUPPORTED)),
-        };
-    }
-
-    // 6. Floating-point data-processing (2 sources): FADD, FSUB, FMUL, FDIV, etc.
-    if (word >> 24) == 0x1E
-        && ((word >> 21) & 1) == 1
-        && ((word >> 22) & 0x3) <= 1
-        && ((word >> 10) & 0x3) == 0b10
-    {
-        let opcode = (word >> 12) & 0xF;
-        return match opcode {
-            0b0000 => Some(trap(R_FP_FMUL)),
-            0b0001 => Some(trap(R_FP_FDIV)),
-            0b0010 => Some(trap(R_FP_FADD)),
-            0b0011 => Some(trap(R_FP_FSUB)),
-            _ => Some(trap(R_FP_UNSUPPORTED)),
-        };
-    }
-
-    // 7. Floating-point data-processing (3 sources): FMADD, FMSUB, etc.
-    if (word >> 24) == 0x1F && ((word >> 22) & 0x3) <= 1 {
-        return Some(trap(R_FP_UNSUPPORTED));
-    }
-
-    None
 }
 
 /// Loads/stores (GB-1 scope):
@@ -1218,6 +1186,139 @@ fn lift_load_store(insn: &Instruction) -> Vec<IrOp> {
         }
     }
 
+    // 6. Atomic swap (SWP / SWPA / SWPL / SWPAL):
+    // size 111 0 00 A R 1 Rs 1 00000 Rn Rt (bits 29:24 = 0b111000, bit 21 = 1, bit 15 = 1, bits 14:10 = 0)
+    if (word >> 24) & 0x3F == 0b111000
+        && (word >> 21) & 1 == 1
+        && (word >> 15) & 1 == 1
+        && (word >> 10) & 0x1F == 0b00000
+    {
+        let size_bits = (word >> 30) & 0x3;
+        let rs = ((word >> 16) & 0x1F) as u8;
+        let rn = ((word >> 5) & 0x1F) as u8;
+        let rt = (word & 0x1F) as u8;
+
+        if rn == 31 {
+            return trap(R_LS_SP);
+        }
+        if size_bits == 1 {
+            return trap(R_LS_SUBWORD);
+        }
+
+        let size: u8 = 1 << size_bits;
+        let mut ops = vec![
+            IrOp::LoadDyn {
+                dst: SCRATCH,
+                base: rn,
+                off: 0,
+                size,
+            },
+            IrOp::StoreDyn {
+                src: rs,
+                base: rn,
+                off: 0,
+                size,
+            },
+        ];
+        if rt != 31 {
+            ops.push(IrOp::OrrShift {
+                dst: rt,
+                a: 31,
+                b: SCRATCH,
+                shift: 0,
+                amount: 0,
+            });
+        }
+        return ops;
+    }
+
+    // 7. Load-acquire / store-release (LDAR / STLR):
+    // size 001000 1 L 0 11111 1 11111 Rn Rt
+    if (word >> 24) & 0x3F == 0b001000
+        && (word >> 23) & 1 == 1
+        && (word >> 21) & 1 == 0
+        && (word >> 16) & 0x1F == 0b11111
+        && (word >> 15) & 1 == 1
+        && (word >> 10) & 0x1F == 0b11111
+    {
+        let size_bits = (word >> 30) & 0x3;
+        let is_load = (word >> 22) & 1 == 1;
+        let rn = ((word >> 5) & 0x1F) as u8;
+        let rt = (word & 0x1F) as u8;
+
+        if rn == 31 {
+            return trap(R_LS_SP);
+        }
+        if size_bits == 1 {
+            return trap(R_LS_SUBWORD);
+        }
+
+        let size: u8 = 1 << size_bits;
+        if is_load {
+            return vec![IrOp::LoadDyn {
+                dst: rt,
+                base: rn,
+                off: 0,
+                size,
+            }];
+        } else {
+            return vec![IrOp::StoreDyn {
+                src: rt,
+                base: rn,
+                off: 0,
+                size,
+            }];
+        }
+    }
+
+    // 8. Load-acquire RCpc (LDAPR):
+    // size 111 0 00 0 1 1 11111 110000 Rn Rt
+    if (word >> 24) & 0x3F == 0b111000
+        && (word >> 21) & 1 == 1
+        && (word >> 16) & 0x1F == 0b11111
+        && (word >> 10) & 0x3F == 0b110000
+    {
+        let size_bits = (word >> 30) & 0x3;
+        let rn = ((word >> 5) & 0x1F) as u8;
+        let rt = (word & 0x1F) as u8;
+
+        if rn == 31 {
+            return trap(R_LS_SP);
+        }
+        if size_bits == 1 {
+            return trap(R_LS_SUBWORD);
+        }
+
+        let size: u8 = 1 << size_bits;
+        return vec![IrOp::LoadDyn {
+            dst: rt,
+            base: rn,
+            off: 0,
+            size,
+        }];
+    }
+
+    // 9. Compare and swap (CAS / CASA / CASL / CASAL):
+    // size 001000 1 R 1 Rs L 011111 Rn Rt
+    if (word >> 24) & 0x3F == 0b001000
+        && (word >> 23) & 1 == 1
+        && (word >> 21) & 1 == 1
+        && (word >> 10) & 0x1F == 0b11111
+    {
+        return trap(R_ATOMIC_CAS);
+    }
+
+    // 10. Load/store exclusive (LDXR / STXR / LDAXR / STLXR):
+    // size 001000 0 L 0 Rs o0 11111 Rn Rt
+    if (word >> 24) & 0x3F == 0b001000 && (word >> 23) & 1 == 0 && (word >> 10) & 0x1F == 0b11111 {
+        return trap(R_EXCLUSIVE);
+    }
+
+    // 11. Other LSE atomic memory operations (LDADD, STADD, LDCLR, STCLR, etc.):
+    if (word >> 24) & 0x3F == 0b111000 && (word >> 21) & 1 == 1 && (word >> 10) & 0x3 == 0b00 {
+        return trap(R_ATOMIC_LSE);
+    }
+
     trap(R_LS_UNSUPPORTED)
 }
 
@@ -1332,7 +1433,111 @@ fn lift_branch(insn: &Instruction) -> Vec<IrOp> {
     trap(R_BR_UNSUPPORTED)
 }
 
+fn lift_fp(word: u32) -> Option<Vec<IrOp>> {
+    // 1. Conversion between floating-point and integer
+    if (word >> 24) & 0x7F == 0b0011110 && ((word >> 21) & 1) == 1 {
+        let type_bits = (word >> 22) & 0x3;
+        let scale = (word >> 10) & 0x3F;
+        if type_bits <= 1 && scale == 0 {
+            let rmode = (word >> 19) & 0x3;
+            let opcode = (word >> 16) & 0x7;
+            let sf = (word >> 31) & 1;
+            match rmode {
+                0b00 => match opcode {
+                    0b010 => return Some(trap(R_FP_SCVTF)),
+                    0b011 => return Some(trap(R_FP_UCVTF)),
+                    0b110 | 0b111 => {
+                        if sf == type_bits {
+                            return Some(trap(R_FP_FMOV));
+                        }
+                    }
+                    _ => return Some(trap(R_FP_UNSUPPORTED)),
+                },
+                0b11 => match opcode {
+                    0b000 => return Some(trap(R_FP_FCVTZS)),
+                    0b001 => return Some(trap(R_FP_FCVTZU)),
+                    _ => return Some(trap(R_FP_UNSUPPORTED)),
+                },
+                _ => return Some(trap(R_FP_UNSUPPORTED)),
+            }
+        }
+    }
+
+    // 2. Floating-point immediate: FMOV
+    if (word >> 24) == 0x1E
+        && ((word >> 21) & 1) == 1
+        && ((word >> 22) & 0x3) <= 1
+        && ((word >> 10) & 0x7) == 0b100
+        && ((word >> 5) & 0x1F) == 0
+    {
+        return Some(trap(R_FP_FMOV));
+    }
+
+    // 3. Floating-point compare & conditional compare: FCMP / FCCMP
+    if (word >> 24) == 0x1E && ((word >> 21) & 1) == 1 && ((word >> 22) & 0x3) <= 1 {
+        if ((word >> 10) & 0x3F) == 0b001000 && (word & 0x7) == 0 {
+            let is_zero = ((word >> 3) & 1) == 1;
+            let rm = (word >> 16) & 0x1F;
+            if !is_zero || rm == 0 {
+                return Some(trap(R_FP_FCMP));
+            }
+        }
+        if ((word >> 10) & 0x3) == 0b01 && ((word >> 4) & 1) == 0 {
+            return Some(trap(R_FP_FCMP));
+        }
+    }
+
+    // 4. Floating-point conditional select: FCSEL
+    if (word >> 24) == 0x1E
+        && ((word >> 21) & 1) == 1
+        && ((word >> 22) & 0x3) <= 1
+        && ((word >> 10) & 0x3) == 0b11
+    {
+        return Some(trap(R_FP_UNSUPPORTED));
+    }
+
+    // 5. Floating-point data-processing (1 source): FMOV, FRINTA, etc.
+    if (word >> 24) == 0x1E
+        && ((word >> 21) & 1) == 1
+        && ((word >> 22) & 0x3) <= 1
+        && ((word >> 10) & 0x1F) == 0b10000
+    {
+        let opcode = (word >> 15) & 0x3F;
+        return match opcode {
+            0b000000 => Some(trap(R_FP_FMOV)),
+            0b001100 => Some(trap(R_FP_FRINTA)),
+            _ => Some(trap(R_FP_UNSUPPORTED)),
+        };
+    }
+
+    // 6. Floating-point data-processing (2 sources): FADD, FSUB, FMUL, FDIV, etc.
+    if (word >> 24) == 0x1E
+        && ((word >> 21) & 1) == 1
+        && ((word >> 22) & 0x3) <= 1
+        && ((word >> 10) & 0x3) == 0b10
+    {
+        let opcode = (word >> 12) & 0xF;
+        return match opcode {
+            0b0000 => Some(trap(R_FP_FMUL)),
+            0b0001 => Some(trap(R_FP_FDIV)),
+            0b0010 => Some(trap(R_FP_FADD)),
+            0b0011 => Some(trap(R_FP_FSUB)),
+            _ => Some(trap(R_FP_UNSUPPORTED)),
+        };
+    }
+
+    // 7. Floating-point data-processing (3 sources): FMADD, FMSUB, etc.
+    if (word >> 24) == 0x1F && ((word >> 22) & 0x3) <= 1 {
+        return Some(trap(R_FP_UNSUPPORTED));
+    }
+
+    None
+}
+
 #[cfg(test)]
+
+
+
 mod tests {
     use super::*;
 
@@ -3231,5 +3436,373 @@ mod tests {
                 reason: R_FP_FRINTA
             }]
         );
+    }
+
+    #[test]
+    fn exceptions_lift_to_honest_traps() {
+        assert_eq!(
+            lift(&insn(0x4000, 0xD420_0000, InsnKind::System)),
+            vec![IrOp::Trap { reason: R_BRK }]
+        );
+        assert_eq!(
+            lift(&insn(0x4000, 0xD440_0000, InsnKind::System)),
+            vec![IrOp::Trap { reason: R_HLT }]
+        );
+        assert_eq!(
+            lift(&insn(0x4000, 0xD400_0002, InsnKind::System)),
+            vec![IrOp::Trap { reason: R_HVC }]
+        );
+        assert_eq!(
+            lift(&insn(0x4000, 0xD400_0003, InsnKind::System)),
+            vec![IrOp::Trap { reason: R_SMC }]
+        );
+        assert_eq!(
+            lift(&insn(0x4000, 0xD69F_03E0, InsnKind::System)),
+            vec![IrOp::Trap { reason: R_ERET }]
+        );
+    }
+
+    #[test]
+    fn pan_and_uao_lift_to_empty() {
+        assert_eq!(lift(&insn(0x4000, 0xD500_419F, InsnKind::System)), vec![]); // MSR PAN, #1
+        assert_eq!(lift(&insn(0x4000, 0xD500_409F, InsnKind::System)), vec![]); // MSR PAN, #0
+        assert_eq!(lift(&insn(0x4000, 0xD500_417F, InsnKind::System)), vec![]); // MSR UAO, #1
+        assert_eq!(lift(&insn(0x4000, 0xD500_407F, InsnKind::System)), vec![]); // MSR UAO, #0
+    }
+
+    #[test]
+    fn high_frequency_sysregs_lift_correctly() {
+        assert_eq!(
+            lift(&insn(0x4000, 0xD53C_D040, InsnKind::System)),
+            vec![IrOp::Mov { dst: 0, imm: 0 }] // MRS X0, TPIDR_EL2
+        );
+        assert_eq!(
+            lift(&insn(0x4000, 0xD539_0020, InsnKind::System)),
+            vec![IrOp::Mov {
+                dst: 0,
+                imm: 0x0920_0023
+            }] // MRS X0, CLIDR_EL1
+        );
+        assert_eq!(
+            lift(&insn(0x4000, 0xD53A_0000, InsnKind::System)),
+            vec![IrOp::Mov { dst: 0, imm: 0 }] // MRS X0, CSSELR_EL1
+        );
+        assert_eq!(
+            lift(&insn(0x4000, 0xD51A_0000, InsnKind::System)),
+            vec![] // MSR CSSELR_EL1, X0
+        );
+        assert_eq!(
+            lift(&insn(0x4000, 0xD539_0000, InsnKind::System)),
+            vec![IrOp::Mov {
+                dst: 0,
+                imm: 0x701F_E00A
+            }] // MRS X0, CCSIDR_EL1
+        );
+        assert_eq!(
+            lift(&insn(0x4000, 0xD53B_E000, InsnKind::System)),
+            vec![IrOp::Mov {
+                dst: 0,
+                imm: 0x03B9_ACA0
+            }] // MRS X0, CNTFRQ_EL0
+        );
+        assert_eq!(
+            lift(&insn(0x4000, 0xD53B_E040, InsnKind::System)),
+            vec![IrOp::Mov { dst: 0, imm: 0 }] // MRS X0, CNTVCT_EL0
+        );
+        assert_eq!(
+            lift(&insn(0x4000, 0xD53B_E020, InsnKind::System)),
+            vec![IrOp::Mov { dst: 0, imm: 0 }] // MRS X0, CNTPCT_EL0
+        );
+        assert_eq!(
+            lift(&insn(0x4000, 0xD538_5200, InsnKind::System)),
+            vec![IrOp::Mov { dst: 0, imm: 0 }] // MRS X0, ESR_EL1
+        );
+        assert_eq!(
+            lift(&insn(0x4000, 0xD538_6000, InsnKind::System)),
+            vec![IrOp::Mov { dst: 0, imm: 0 }] // MRS X0, FAR_EL1
+        );
+        assert_eq!(
+            lift(&insn(0x4000, 0xD538_4020, InsnKind::System)),
+            vec![IrOp::Mov { dst: 0, imm: 0 }] // MRS X0, ELR_EL1
+        );
+        assert_eq!(
+            lift(&insn(0x4000, 0xD538_4000, InsnKind::System)),
+            vec![IrOp::Mov { dst: 0, imm: 0 }] // MRS X0, SPSR_EL1
+        );
+    }
+
+    #[test]
+    fn cache_and_tlb_maintenance_lift_to_empty() {
+        assert_eq!(lift(&insn(0x4000, 0xD508_871F, InsnKind::System)), vec![]); // TLBI VMALLE1
+        assert_eq!(lift(&insn(0x4000, 0xD508_831F, InsnKind::System)), vec![]); // TLBI VMALLE1IS
+        assert_eq!(lift(&insn(0x4000, 0xD508_837F, InsnKind::System)), vec![]); // TLBI VAAE1IS
+        assert_eq!(lift(&insn(0x4000, 0xD508_7620, InsnKind::System)), vec![]); // DC IVAC, X0
+        assert_eq!(lift(&insn(0x4000, 0xD50B_7E20, InsnKind::System)), vec![]); // DC CIVAC, X0
+        assert_eq!(lift(&insn(0x4000, 0xD508_751F, InsnKind::System)), vec![]); // IC IALLU
+        assert_eq!(lift(&insn(0x4000, 0xD508_711F, InsnKind::System)), vec![]); // IC IALLUIS
+    }
+
+    #[test]
+    fn swp_lifts_to_load_store_and_transfer() {
+        // SWP X0, X1, [X2]
+        assert_eq!(
+            lift(&insn(0x4000, 0xF820_8041, InsnKind::LoadStore)),
+            vec![
+                IrOp::LoadDyn {
+                    dst: SCRATCH,
+                    base: 2,
+                    off: 0,
+                    size: 8,
+                },
+                IrOp::StoreDyn {
+                    src: 0,
+                    base: 2,
+                    off: 0,
+                    size: 8,
+                },
+                IrOp::OrrShift {
+                    dst: 1,
+                    a: 31,
+                    b: SCRATCH,
+                    shift: 0,
+                    amount: 0,
+                },
+            ]
+        );
+        // SWPA X0, X1, [X2]
+        assert_eq!(
+            lift(&insn(0x4000, 0xF8A0_8041, InsnKind::LoadStore)),
+            vec![
+                IrOp::LoadDyn {
+                    dst: SCRATCH,
+                    base: 2,
+                    off: 0,
+                    size: 8,
+                },
+                IrOp::StoreDyn {
+                    src: 0,
+                    base: 2,
+                    off: 0,
+                    size: 8,
+                },
+                IrOp::OrrShift {
+                    dst: 1,
+                    a: 31,
+                    b: SCRATCH,
+                    shift: 0,
+                    amount: 0,
+                },
+            ]
+        );
+        // SWPL X0, X1, [X2]
+        assert_eq!(
+            lift(&insn(0x4000, 0xF860_8041, InsnKind::LoadStore)),
+            vec![
+                IrOp::LoadDyn {
+                    dst: SCRATCH,
+                    base: 2,
+                    off: 0,
+                    size: 8,
+                },
+                IrOp::StoreDyn {
+                    src: 0,
+                    base: 2,
+                    off: 0,
+                    size: 8,
+                },
+                IrOp::OrrShift {
+                    dst: 1,
+                    a: 31,
+                    b: SCRATCH,
+                    shift: 0,
+                    amount: 0,
+                },
+            ]
+        );
+        // SWPAL X0, X1, [X2]
+        assert_eq!(
+            lift(&insn(0x4000, 0xF8E0_8041, InsnKind::LoadStore)),
+            vec![
+                IrOp::LoadDyn {
+                    dst: SCRATCH,
+                    base: 2,
+                    off: 0,
+                    size: 8,
+                },
+                IrOp::StoreDyn {
+                    src: 0,
+                    base: 2,
+                    off: 0,
+                    size: 8,
+                },
+                IrOp::OrrShift {
+                    dst: 1,
+                    a: 31,
+                    b: SCRATCH,
+                    shift: 0,
+                    amount: 0,
+                },
+            ]
+        );
+        // SWP W0, W1, [X2]
+        assert_eq!(
+            lift(&insn(0x4000, 0xB820_8041, InsnKind::LoadStore)),
+            vec![
+                IrOp::LoadDyn {
+                    dst: SCRATCH,
+                    base: 2,
+                    off: 0,
+                    size: 4,
+                },
+                IrOp::StoreDyn {
+                    src: 0,
+                    base: 2,
+                    off: 0,
+                    size: 4,
+                },
+                IrOp::OrrShift {
+                    dst: 1,
+                    a: 31,
+                    b: SCRATCH,
+                    shift: 0,
+                    amount: 0,
+                },
+            ]
+        );
+        // SWPB W0, W1, [X2]
+        assert_eq!(
+            lift(&insn(0x4000, 0x3820_8041, InsnKind::LoadStore)),
+            vec![
+                IrOp::LoadDyn {
+                    dst: SCRATCH,
+                    base: 2,
+                    off: 0,
+                    size: 1,
+                },
+                IrOp::StoreDyn {
+                    src: 0,
+                    base: 2,
+                    off: 0,
+                    size: 1,
+                },
+                IrOp::OrrShift {
+                    dst: 1,
+                    a: 31,
+                    b: SCRATCH,
+                    shift: 0,
+                    amount: 0,
+                },
+            ]
+        );
+    }
+
+    #[test]
+    fn ldar_stlr_ldapr_lift() {
+        // LDAR X0, [X1]
+        assert_eq!(
+            lift(&insn(0x4000, 0xC8DF_FC20, InsnKind::LoadStore)),
+            vec![IrOp::LoadDyn {
+                dst: 0,
+                base: 1,
+                off: 0,
+                size: 8,
+            }]
+        );
+        // STLR X0, [X1]
+        assert_eq!(
+            lift(&insn(0x4000, 0xC89F_FC20, InsnKind::LoadStore)),
+            vec![IrOp::StoreDyn {
+                src: 0,
+                base: 1,
+                off: 0,
+                size: 8,
+            }]
+        );
+        // LDAR W0, [X1]
+        assert_eq!(
+            lift(&insn(0x4000, 0x88DF_FC20, InsnKind::LoadStore)),
+            vec![IrOp::LoadDyn {
+                dst: 0,
+                base: 1,
+                off: 0,
+                size: 4,
+            }]
+        );
+        // STLR W0, [X1]
+        assert_eq!(
+            lift(&insn(0x4000, 0x889F_FC20, InsnKind::LoadStore)),
+            vec![IrOp::StoreDyn {
+                src: 0,
+                base: 1,
+                off: 0,
+                size: 4,
+            }]
+        );
+        // LDAPR X0, [X1]
+        assert_eq!(
+            lift(&insn(0x4000, 0xF8BF_C020, InsnKind::LoadStore)),
+            vec![IrOp::LoadDyn {
+                dst: 0,
+                base: 1,
+                off: 0,
+                size: 8,
+            }]
+        );
+        // LDAPR W0, [X1]
+        assert_eq!(
+            lift(&insn(0x4000, 0xB8BF_C020, InsnKind::LoadStore)),
+            vec![IrOp::LoadDyn {
+                dst: 0,
+                base: 1,
+                off: 0,
+                size: 4,
+            }]
+        );
+    }
+
+    #[test]
+    fn cas_and_exclusives_lift_to_honest_traps() {
+        assert_eq!(
+            lift(&insn(0x4000, 0x88A0_7C41, InsnKind::LoadStore)),
+            vec![IrOp::Trap {
+                reason: R_ATOMIC_CAS,
+            }]
+        ); // CAS W0, W1, [X2]
+        assert_eq!(
+            lift(&insn(0x4000, 0x88E0_7C41, InsnKind::LoadStore)),
+            vec![IrOp::Trap {
+                reason: R_ATOMIC_CAS,
+            }]
+        ); // CASA W0, W1, [X2]
+        assert_eq!(
+            lift(&insn(0x4000, 0x88A0_FC41, InsnKind::LoadStore)),
+            vec![IrOp::Trap {
+                reason: R_ATOMIC_CAS,
+            }]
+        ); // CASL W0, W1, [X2]
+        assert_eq!(
+            lift(&insn(0x4000, 0x88E0_FC41, InsnKind::LoadStore)),
+            vec![IrOp::Trap {
+                reason: R_ATOMIC_CAS,
+            }]
+        ); // CASAL W0, W1, [X2]
+        assert_eq!(
+            lift(&insn(0x4000, 0xC8A0_7C41, InsnKind::LoadStore)),
+            vec![IrOp::Trap {
+                reason: R_ATOMIC_CAS,
+            }]
+        ); // CAS X0, X1, [X2]
+        assert_eq!(
+            lift(&insn(0x4000, 0x885F_7C20, InsnKind::LoadStore)),
+            vec![IrOp::Trap {
+                reason: R_EXCLUSIVE,
+            }]
+        ); // LDXR W0, [X1]
+        assert_eq!(
+            lift(&insn(0x4000, 0x8802_7C20, InsnKind::LoadStore)),
+            vec![IrOp::Trap {
+                reason: R_EXCLUSIVE,
+            }]
+        ); // STXR W2, W0, [X1]
     }
 }

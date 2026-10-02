@@ -444,6 +444,23 @@ pub fn best_effort_classify(word: u32) -> (InsnKind, &'static str) {
     // 5. Loads and Stores
     let top4 = (word >> 25) & 0xF;
     if top4 == 0b0100 || top4 == 0b1100 {
+        if (word >> 24) & 0x3F == 0b001000 {
+            if (word >> 23) & 1 == 1 && (word >> 21) & 1 == 1 {
+                return (InsnKind::LoadStore, "CAS");
+            } else if (word >> 23) & 1 == 1 && (word >> 21) & 1 == 0 {
+                return (InsnKind::LoadStore, "LDAR / STLR");
+            } else if (word >> 23) & 1 == 0 {
+                return (InsnKind::LoadStore, "LDXR / STXR");
+            }
+        } else if (word >> 24) & 0x3F == 0b111000 && (word >> 21) & 1 == 1 {
+            if (word >> 15) & 1 == 1 && (word >> 10) & 0x1F == 0 {
+                return (InsnKind::LoadStore, "SWP");
+            } else if (word >> 16) & 0x1F == 0b11111 && (word >> 10) & 0x3F == 0b110000 {
+                return (InsnKind::LoadStore, "LDAPR");
+            } else if (word >> 10) & 0x3 == 0 {
+                return (InsnKind::LoadStore, "LSE Atomic");
+            }
+        }
         return (InsnKind::LoadStore, "LDR / STR");
     }
 
@@ -3206,6 +3223,14 @@ fn match_static_reason(bytes: &[u8]) -> Option<&'static str> {
         "Branch: 32-bit CBZ/CBNZ width is not expressible in IrOp::CondBranch",
         "Branch: 32-bit ORR width is not expressible in IrOp::OrrShift",
         "System: system and privileged semantics are not lifted",
+        "System: BRK exception",
+        "System: HLT exception",
+        "System: HVC exception",
+        "System: SMC exception",
+        "System: ERET exception return not yet implemented",
+        "LoadStore: atomic CAS requires memory arbitration (unsupported in IR)",
+        "LoadStore: exclusive monitor requires orchestrator state (unsupported in IR)",
+        "LoadStore: atomic LSE operation (unsupported in IR)",
         "Unknown: illegal or unrecognized instruction word",
     ];
     let s = std::str::from_utf8(bytes).ok()?;
