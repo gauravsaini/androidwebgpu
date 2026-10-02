@@ -97,6 +97,20 @@ const R_LS_SP: &str =
 /// does not exist yet. Public so the orchestrator can map it to the distinct HaltReason::Svc instead of generic Unsupported.
 pub const R_SVC_UNIMPL: &str = "Svc: exception model not yet implemented";
 
+// ---- FP/SIMD trap reasons (fam/fpsimd) ----
+pub const R_FP_FMOV: &str = "FloatingPoint: FMOV scalar registers not yet expressible in IrOp";
+pub const R_FP_FADD: &str = "FloatingPoint: FADD scalar arithmetic not yet expressible in IrOp";
+pub const R_FP_FSUB: &str = "FloatingPoint: FSUB scalar arithmetic not yet expressible in IrOp";
+pub const R_FP_FMUL: &str = "FloatingPoint: FMUL scalar arithmetic not yet expressible in IrOp";
+pub const R_FP_FDIV: &str = "FloatingPoint: FDIV scalar arithmetic not yet expressible in IrOp";
+pub const R_FP_FCMP: &str = "FloatingPoint: FCMP scalar compare not yet expressible in IrOp";
+pub const R_FP_SCVTF: &str = "FloatingPoint: SCVTF conversion not yet expressible in IrOp";
+pub const R_FP_UCVTF: &str = "FloatingPoint: UCVTF conversion not yet expressible in IrOp";
+pub const R_FP_FCVTZS: &str = "FloatingPoint: FCVTZS conversion not yet expressible in IrOp";
+pub const R_FP_FCVTZU: &str = "FloatingPoint: FCVTZU conversion not yet expressible in IrOp";
+pub const R_FP_FRINTA: &str = "FloatingPoint: FRINTA rounding not yet expressible in IrOp";
+pub const R_FP_UNSUPPORTED: &str = "FloatingPoint: FP/SIMD operation not yet expressible in IrOp";
+
 fn trap(reason: &'static str) -> Vec<IrOp> {
     vec![IrOp::Trap { reason }]
 }
@@ -280,7 +294,7 @@ fn lift_system(word: u32) -> Vec<IrOp> {
                         _ => return trap(R_SYSTEM),
                     };
                     vec![IrOp::Mov { dst: rt, imm: val }]
-                }
+                };
             }
         };
         return vec![IrOp::ReadSys {
@@ -350,7 +364,7 @@ fn lift_system(word: u32) -> Vec<IrOp> {
                         (0, 0, 4, 1, 5) => vec![],
                         _ => return trap(R_SYSTEM),
                     }
-                }
+                };
             }
         };
         return vec![IrOp::WriteSys {
@@ -685,7 +699,116 @@ fn lift_data_proc(word: u32) -> Vec<IrOp> {
             }];
         }
     }
+    if let Some(ops) = lift_fp(word) {
+        return ops;
+    }
     trap(R_DP_UNSUPPORTED)
+}
+
+/// Floating-point and SIMD instruction lifting (fam/fpsimd).
+///
+/// Follows LLD Box Pure Function & Explicit Contract Rule:
+/// Maps decoded FP instruction word -> Option<Vec<IrOp>>.
+/// Honest typed traps naming exact mnemonic reasons until execution backend is wired.
+fn lift_fp(word: u32) -> Option<Vec<IrOp>> {
+    // 1. Conversion between floating-point and integer
+    if (word >> 24) & 0x7F == 0b0011110 && ((word >> 21) & 1) == 1 {
+        let type_bits = (word >> 22) & 0x3;
+        let scale = (word >> 10) & 0x3F;
+        if type_bits <= 1 && scale == 0 {
+            let rmode = (word >> 19) & 0x3;
+            let opcode = (word >> 16) & 0x7;
+            let sf = (word >> 31) & 1;
+            match rmode {
+                0b00 => match opcode {
+                    0b010 => return Some(trap(R_FP_SCVTF)),
+                    0b011 => return Some(trap(R_FP_UCVTF)),
+                    0b110 | 0b111 => {
+                        if sf == type_bits {
+                            return Some(trap(R_FP_FMOV));
+                        }
+                    }
+                    _ => return Some(trap(R_FP_UNSUPPORTED)),
+                },
+                0b11 => match opcode {
+                    0b000 => return Some(trap(R_FP_FCVTZS)),
+                    0b001 => return Some(trap(R_FP_FCVTZU)),
+                    _ => return Some(trap(R_FP_UNSUPPORTED)),
+                },
+                _ => return Some(trap(R_FP_UNSUPPORTED)),
+            }
+        }
+    }
+
+    // 2. Floating-point immediate: FMOV
+    if (word >> 24) == 0x1E
+        && ((word >> 21) & 1) == 1
+        && ((word >> 22) & 0x3) <= 1
+        && ((word >> 10) & 0x7) == 0b100
+        && ((word >> 5) & 0x1F) == 0
+    {
+        return Some(trap(R_FP_FMOV));
+    }
+
+    // 3. Floating-point compare & conditional compare: FCMP / FCCMP
+    if (word >> 24) == 0x1E && ((word >> 21) & 1) == 1 && ((word >> 22) & 0x3) <= 1 {
+        if ((word >> 10) & 0x3F) == 0b001000 && (word & 0x7) == 0 {
+            let is_zero = ((word >> 3) & 1) == 1;
+            let rm = (word >> 16) & 0x1F;
+            if !is_zero || rm == 0 {
+                return Some(trap(R_FP_FCMP));
+            }
+        }
+        if ((word >> 10) & 0x3) == 0b01 && ((word >> 4) & 1) == 0 {
+            return Some(trap(R_FP_FCMP));
+        }
+    }
+
+    // 4. Floating-point conditional select: FCSEL
+    if (word >> 24) == 0x1E
+        && ((word >> 21) & 1) == 1
+        && ((word >> 22) & 0x3) <= 1
+        && ((word >> 10) & 0x3) == 0b11
+    {
+        return Some(trap(R_FP_UNSUPPORTED));
+    }
+
+    // 5. Floating-point data-processing (1 source): FMOV, FRINTA, etc.
+    if (word >> 24) == 0x1E
+        && ((word >> 21) & 1) == 1
+        && ((word >> 22) & 0x3) <= 1
+        && ((word >> 10) & 0x1F) == 0b10000
+    {
+        let opcode = (word >> 15) & 0x3F;
+        return match opcode {
+            0b000000 => Some(trap(R_FP_FMOV)),
+            0b001100 => Some(trap(R_FP_FRINTA)),
+            _ => Some(trap(R_FP_UNSUPPORTED)),
+        };
+    }
+
+    // 6. Floating-point data-processing (2 sources): FADD, FSUB, FMUL, FDIV, etc.
+    if (word >> 24) == 0x1E
+        && ((word >> 21) & 1) == 1
+        && ((word >> 22) & 0x3) <= 1
+        && ((word >> 10) & 0x3) == 0b10
+    {
+        let opcode = (word >> 12) & 0xF;
+        return match opcode {
+            0b0000 => Some(trap(R_FP_FMUL)),
+            0b0001 => Some(trap(R_FP_FDIV)),
+            0b0010 => Some(trap(R_FP_FADD)),
+            0b0011 => Some(trap(R_FP_FSUB)),
+            _ => Some(trap(R_FP_UNSUPPORTED)),
+        };
+    }
+
+    // 7. Floating-point data-processing (3 sources): FMADD, FMSUB, etc.
+    if (word >> 24) == 0x1F && ((word >> 22) & 0x3) <= 1 {
+        return Some(trap(R_FP_UNSUPPORTED));
+    }
+
+    None
 }
 
 /// Loads/stores (GB-1 scope):
@@ -2897,6 +3020,163 @@ mod tests {
                 b: 3,
                 shift: 0,
                 is_32: false,
+            }]
+        );
+    }
+
+    // ---------- Floating-point & SIMD tests (fam/fpsimd) ----------
+
+    #[test]
+    fn fp_fmov_imm_lifts_to_trap() {
+        // FMOV S0, #1.0 (0x1E2E1000)
+        let ops = lift(&insn(0x4000, 0x1E2E_1000, InsnKind::DataProc));
+        assert_eq!(ops, vec![IrOp::Trap { reason: R_FP_FMOV }]);
+        // FMOV D0, #1.0 (0x1E6E1000)
+        let ops = lift(&insn(0x4000, 0x1E6E_1000, InsnKind::DataProc));
+        assert_eq!(ops, vec![IrOp::Trap { reason: R_FP_FMOV }]);
+    }
+
+    #[test]
+    fn fp_fmov_reg_lifts_to_trap() {
+        // FMOV S0, S1 (0x1E204020)
+        let ops = lift(&insn(0x4000, 0x1E20_4020, InsnKind::DataProc));
+        assert_eq!(ops, vec![IrOp::Trap { reason: R_FP_FMOV }]);
+        // FMOV D0, D1 (0x1E604020)
+        let ops = lift(&insn(0x4000, 0x1E60_4020, InsnKind::DataProc));
+        assert_eq!(ops, vec![IrOp::Trap { reason: R_FP_FMOV }]);
+        // FMOV W0, S1 (0x1E260020)
+        let ops = lift(&insn(0x4000, 0x1E26_0020, InsnKind::DataProc));
+        assert_eq!(ops, vec![IrOp::Trap { reason: R_FP_FMOV }]);
+        // FMOV X0, D1 (0x9E660020)
+        let ops = lift(&insn(0x4000, 0x9E66_0020, InsnKind::DataProc));
+        assert_eq!(ops, vec![IrOp::Trap { reason: R_FP_FMOV }]);
+        // FMOV S0, W1 (0x1E270020)
+        let ops = lift(&insn(0x4000, 0x1E27_0020, InsnKind::DataProc));
+        assert_eq!(ops, vec![IrOp::Trap { reason: R_FP_FMOV }]);
+        // FMOV D0, X1 (0x9E670020)
+        let ops = lift(&insn(0x4000, 0x9E67_0020, InsnKind::DataProc));
+        assert_eq!(ops, vec![IrOp::Trap { reason: R_FP_FMOV }]);
+    }
+
+    #[test]
+    fn fp_fadd_fsub_lifts_to_trap() {
+        // FADD S0, S1, S2 (0x1E222820)
+        let ops = lift(&insn(0x4000, 0x1E22_2820, InsnKind::DataProc));
+        assert_eq!(ops, vec![IrOp::Trap { reason: R_FP_FADD }]);
+        // FADD D0, D1, D2 (0x1E622820)
+        let ops = lift(&insn(0x4000, 0x1E62_2820, InsnKind::DataProc));
+        assert_eq!(ops, vec![IrOp::Trap { reason: R_FP_FADD }]);
+        // FSUB S0, S1, S2 (0x1E223820)
+        let ops = lift(&insn(0x4000, 0x1E22_3820, InsnKind::DataProc));
+        assert_eq!(ops, vec![IrOp::Trap { reason: R_FP_FSUB }]);
+        // FSUB D0, D1, D2 (0x1E623820)
+        let ops = lift(&insn(0x4000, 0x1E62_3820, InsnKind::DataProc));
+        assert_eq!(ops, vec![IrOp::Trap { reason: R_FP_FSUB }]);
+    }
+
+    #[test]
+    fn fp_fmul_fdiv_lifts_to_trap() {
+        // FMUL S0, S1, S2 (0x1E220820)
+        let ops = lift(&insn(0x4000, 0x1E22_0820, InsnKind::DataProc));
+        assert_eq!(ops, vec![IrOp::Trap { reason: R_FP_FMUL }]);
+        // FMUL D0, D1, D2 (0x1E620820)
+        let ops = lift(&insn(0x4000, 0x1E62_0820, InsnKind::DataProc));
+        assert_eq!(ops, vec![IrOp::Trap { reason: R_FP_FMUL }]);
+        // FDIV S0, S1, S2 (0x1E221820)
+        let ops = lift(&insn(0x4000, 0x1E22_1820, InsnKind::DataProc));
+        assert_eq!(ops, vec![IrOp::Trap { reason: R_FP_FDIV }]);
+        // FDIV D0, D1, D2 (0x1E621820)
+        let ops = lift(&insn(0x4000, 0x1E62_1820, InsnKind::DataProc));
+        assert_eq!(ops, vec![IrOp::Trap { reason: R_FP_FDIV }]);
+    }
+
+    #[test]
+    fn fp_fcmp_fccmp_lifts_to_trap() {
+        // FCMP S0, S1 (0x1E212000)
+        let ops = lift(&insn(0x4000, 0x1E21_2000, InsnKind::DataProc));
+        assert_eq!(ops, vec![IrOp::Trap { reason: R_FP_FCMP }]);
+        // FCMP D0, D1 (0x1E612000)
+        let ops = lift(&insn(0x4000, 0x1E61_2000, InsnKind::DataProc));
+        assert_eq!(ops, vec![IrOp::Trap { reason: R_FP_FCMP }]);
+        // FCMP S0, #0.0 (0x1E202008)
+        let ops = lift(&insn(0x4000, 0x1E20_2008, InsnKind::DataProc));
+        assert_eq!(ops, vec![IrOp::Trap { reason: R_FP_FCMP }]);
+        // FCMP D0, #0.0 (0x1E602008)
+        let ops = lift(&insn(0x4000, 0x1E60_2008, InsnKind::DataProc));
+        assert_eq!(ops, vec![IrOp::Trap { reason: R_FP_FCMP }]);
+        // FCCMP S0, S1, #0, EQ (0x1E210400)
+        let ops = lift(&insn(0x4000, 0x1E21_0400, InsnKind::DataProc));
+        assert_eq!(ops, vec![IrOp::Trap { reason: R_FP_FCMP }]);
+    }
+
+    #[test]
+    fn fp_scvtf_ucvtf_lifts_to_trap() {
+        // SCVTF S0, W1 (0x1E220020)
+        let ops = lift(&insn(0x4000, 0x1E22_0020, InsnKind::DataProc));
+        assert_eq!(ops, vec![IrOp::Trap { reason: R_FP_SCVTF }]);
+        // SCVTF D0, X1 (0x9E620020)
+        let ops = lift(&insn(0x4000, 0x9E62_0020, InsnKind::DataProc));
+        assert_eq!(ops, vec![IrOp::Trap { reason: R_FP_SCVTF }]);
+        // UCVTF S0, W1 (0x1E230020)
+        let ops = lift(&insn(0x4000, 0x1E23_0020, InsnKind::DataProc));
+        assert_eq!(ops, vec![IrOp::Trap { reason: R_FP_UCVTF }]);
+        // UCVTF D0, X1 (0x9E630020)
+        let ops = lift(&insn(0x4000, 0x9E63_0020, InsnKind::DataProc));
+        assert_eq!(ops, vec![IrOp::Trap { reason: R_FP_UCVTF }]);
+    }
+
+    #[test]
+    fn fp_fcvtzs_fcvtzu_lifts_to_trap() {
+        // FCVTZS W0, S1 (0x1E380020)
+        let ops = lift(&insn(0x4000, 0x1E38_0020, InsnKind::DataProc));
+        assert_eq!(
+            ops,
+            vec![IrOp::Trap {
+                reason: R_FP_FCVTZS
+            }]
+        );
+        // FCVTZS X0, D1 (0x9E780020)
+        let ops = lift(&insn(0x4000, 0x9E78_0020, InsnKind::DataProc));
+        assert_eq!(
+            ops,
+            vec![IrOp::Trap {
+                reason: R_FP_FCVTZS
+            }]
+        );
+        // FCVTZU W0, S1 (0x1E390020)
+        let ops = lift(&insn(0x4000, 0x1E39_0020, InsnKind::DataProc));
+        assert_eq!(
+            ops,
+            vec![IrOp::Trap {
+                reason: R_FP_FCVTZU
+            }]
+        );
+        // FCVTZU X0, D1 (0x9E790020)
+        let ops = lift(&insn(0x4000, 0x9E79_0020, InsnKind::DataProc));
+        assert_eq!(
+            ops,
+            vec![IrOp::Trap {
+                reason: R_FP_FCVTZU
+            }]
+        );
+    }
+
+    #[test]
+    fn fp_frinta_lifts_to_trap() {
+        // FRINTA S0, S1 (0x1E264020)
+        let ops = lift(&insn(0x4000, 0x1E26_4020, InsnKind::DataProc));
+        assert_eq!(
+            ops,
+            vec![IrOp::Trap {
+                reason: R_FP_FRINTA
+            }]
+        );
+        // FRINTA D0, D1 (0x1E664020)
+        let ops = lift(&insn(0x4000, 0x1E66_4020, InsnKind::DataProc));
+        assert_eq!(
+            ops,
+            vec![IrOp::Trap {
+                reason: R_FP_FRINTA
             }]
         );
     }
