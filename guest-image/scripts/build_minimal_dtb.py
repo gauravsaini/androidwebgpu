@@ -111,7 +111,7 @@ def build() -> bytes:
 
     b.begin_node("memory@40000000")
     b.prop_str("device_type", "memory")
-    b.prop_u64("reg", 0x40000000, 0x8000000)  # 128 MiB
+    b.prop_u64("reg", 0x40000000, 0x40000000)  # 1 GiB, matches QEMU -m 1024
     b.end_node()
 
     b.begin_node("cpus")
