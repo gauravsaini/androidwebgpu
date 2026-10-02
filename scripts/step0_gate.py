@@ -57,19 +57,30 @@ RE_QEMU_PSTATE = re.compile(r"PSTATE=([0-9a-fA-F]+)")
 
 
 def parse_qemu_step0(path):
-    """Extract first CPU record from QEMU -d cpu log."""
-    with open(path) as f:
-        content = f.read(65536)  # First record is enough
-    m = RE_QEMU_PC.search(content)
-    if not m:
-        return None
-    pc, x0, x1, x2, x3 = (int(v, 16) for v in m.groups())
-    sp_m = RE_QEMU_SP.search(content)
-    ps_m = RE_QEMU_PSTATE.search(content)
-    sp = int(sp_m.group(1), 16) if sp_m else 0
-    pstate = int(ps_m.group(1), 16) if ps_m else 0
-    return {"pc": pc, "x0": x0, "x1": x1, "x2": x2, "x3": x3,
-            "sp": sp, "pstate": pstate}
+    """Extract kernel-entry CPU record from QEMU -d cpu log.
+    QEMU starts at reset stub (0x40000000); we want the kernel entry
+    at 0x40080000, which is the 2nd record (step 1)."""
+    with open(path, errors="replace") as f:
+        content = f.read(131072)
+    # Find all PC records, pick the one at 0x40080000 (kernel entry)
+    for m in RE_QEMU_PC.finditer(content):
+        pc = int(m.group(1), 16)
+        if pc == 0x40080000:
+            pc_v, x0, x1, x2, x3 = (int(v, 16) for v in m.groups())
+            # Get X4 and full regs from the surrounding block
+            start = max(0, m.start() - 2000)
+            block = content[start:m.start() + 4000]
+            x4_m = re.search(r"X04=([0-9a-fA-F]+)", block)
+            x4 = int(x4_m.group(1), 16) if x4_m else 0
+            sp_m = RE_QEMU_SP.search(block)
+            ps_m = RE_QEMU_PSTATE.search(block)
+            sp = int(sp_m.group(1), 16) if sp_m else 0
+            pstate = int(ps_m.group(1), 16) if ps_m else 0
+            # NZCV Z flag is bit 30 of PSTATE
+            z_set = bool(pstate & 0x40000000)
+            return {"pc": pc_v, "x0": x0, "x1": x1, "x2": x2, "x3": x3,
+                    "x4": x4, "sp": sp, "pstate": pstate, "z": z_set}
+    return None
 
 
 def parse_emu_step0(path):
@@ -89,6 +100,7 @@ def parse_emu_step0(path):
                     "pc": vals[0],
                     "x0": vals[2], "x1": vals[3],
                     "x2": vals[4], "x3": vals[5],
+                    "x4": vals[6],
                     "sp": vals[2 + 31],  # after x0..x30
                     "pstate": 0,  # nzcv in next field; pstate not directly available
                     "nzcv": vals[2 + 32],
@@ -131,10 +143,18 @@ def main():
             return 2
 
         mismatches = []
-        for reg in ["pc", "x0", "x1", "x2", "x3", "sp"]:
-            if q[reg] != e[reg]:
+        for reg in ["pc", "x0", "x1", "x2", "x3", "x4", "sp"]:
+            qv = q.get(reg, 0)
+            ev = e.get(reg, 0)
+            if qv != ev:
                 mismatches.append(
-                    f"  {reg.upper():4s}: QEMU=0x{q[reg]:016x}  EMU=0x{e[reg]:016x}")
+                    f"  {reg.upper():4s}: QEMU=0x{qv:016x}  EMU=0x{ev:016x}")
+        # Z flag check (bit 30 of PSTATE)
+        qz = q.get("z", False)
+        ez = bool(e.get("pstate", 0) & 0x40000000) or (e.get("nzcv", 0) & 0x4)
+        # Note: emulator trace has nzcv, QEMU has pstate; check Z via respective fields
+        if qz != ez:
+            mismatches.append(f"  ZFLG: QEMU={'set' if qz else 'clear'}  EMU={'set' if ez else 'clear'}")
 
         if mismatches:
             print("STEP0-GATE: FAIL - reset state mismatch")
