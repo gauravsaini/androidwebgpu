@@ -21,6 +21,9 @@ fn print_help() {
     println!("  --save-snapshot <PATH>  Write emulator snapshot to PATH after the run");
     println!("  --save-at <STEP>     With --save-snapshot: save when step counter reaches STEP and exit");
     println!("                        (default: save at end of run)");
+    println!("  --save-every <N>     With --save-snapshot: auto-save every N steps to PATH.<step>");
+    println!("                        (e.g. --save-snapshot snap.bin --save-every 100000)");
+    println!("                        Enables restart from pre-divergence snapshot instead of reset.");
     println!("  --load-snapshot <PATH>  Restore emulator state from PATH instead of fresh boot;");
     println!("                        --max-steps then counts from the snapshot's step count.");
     println!("                        Snapshot files store an 8-byte LE step count header.");
@@ -37,6 +40,7 @@ fn main() {
     let mut survey = false;
     let mut save_snapshot: Option<String> = None;
     let mut save_at: Option<u64> = None;
+    let mut save_every: Option<u64> = None;
     let mut load_snapshot: Option<String> = None;
 
     let args: Vec<String> = env::args().collect();
@@ -98,6 +102,14 @@ fn main() {
                 if i < args.len() {
                     if let Ok(val) = args[i].parse() {
                         save_at = Some(val);
+                    }
+                }
+            }
+            "--save-every" => {
+                i += 1;
+                if i < args.len() {
+                    if let Ok(val) = args[i].parse() {
+                        save_every = Some(val);
                     }
                 }
             }
@@ -218,6 +230,20 @@ fn main() {
             if orch.steps() >= target {
                 saved_at_step = Some(target);
                 break;
+            }
+        }
+        // --save-every: periodic auto-save for fast restart from pre-divergence.
+        if let (Some(ref base), Some(every)) = (&save_snapshot, save_every) {
+            if every > 0 && orch.steps() > 0 && orch.steps() % every == 0 {
+                let path = format!("{}.{}", base, orch.steps());
+                let blob = u11_snapshot::snapshot(orch.machine()).0;
+                let mut out = Vec::with_capacity(8 + blob.len());
+                out.extend_from_slice(&orch.steps().to_le_bytes());
+                out.extend_from_slice(&blob);
+                if fs::write(&path, &out).is_ok() {
+                    println!("[snapshot] Auto-saved {} bytes to {} at step {}",
+                             out.len(), path, orch.steps());
+                }
             }
         }
     }
