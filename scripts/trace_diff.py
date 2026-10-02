@@ -230,6 +230,42 @@ def diff_records(
     return True, f"No divergence found in {steps_compared} steps."
 
 
+def _validate_singlestep(qemu_records: List[CpuRecord]) -> None:
+    """Fail loudly if the QEMU trace looks TB-granular instead of singlestep.
+
+    In -singlestep mode each record is one instruction, so straight-line code
+    shows a PC+4 chain. In TB mode, consecutive records jump by whole blocks.
+    We check the first 500 records: count PC+4 transitions vs larger jumps.
+    A TB-granular trace shows mostly large jumps -> reject.
+    """
+    n = min(500, len(qemu_records) - 1)
+    if n <= 0:
+        print("[oracle] Warning: too few records for singlestep validation")
+        return
+    plus4 = 0
+    jumps = 0
+    for i in range(n):
+        d = qemu_records[i + 1].pc - qemu_records[i].pc
+        if d == 4:
+            plus4 += 1
+        elif d > 4:
+            jumps += 1
+        # d <= 0 (branches/backwards) are neutral — not counted either way.
+    # In singlestep kernel boot, straight-line runs dominate: expect mostly +4.
+    # In TB mode, nearly every transition is a multi-instruction jump.
+    total = plus4 + jumps
+    if total == 0:
+        print("[oracle] Warning: no forward PC transitions in validation window")
+        return
+    frac = plus4 / total
+    print(f"[oracle] Singlestep check: {plus4}/{total} forward transitions are PC+4 ({frac:.0%})")
+    if frac < 0.5:
+        print("[oracle] ERROR: trace looks TB-granular, not -singlestep.")
+        print("[oracle] Re-capture QEMU with: -singlestep -d cpu,nochain")
+        sys.exit(1)
+    print("[oracle] Singlestep cadence OK")
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="Compare Path N execution trace against QEMU -d cpu oracle"
@@ -265,6 +301,19 @@ def main():
         default=None,
         help="Maximum steps to compare",
     )
+    parser.add_argument(
+        "--keep-pc-range",
+        default="0x40080000:0x41000000",
+        help="Keep only QEMU records with PC in [start:end) (kernel range). "
+        "Filters out reset stub (0x40000000) and EL3 firmware. "
+        "Format: 0xSTART:0xEND. Set to empty string to disable.",
+    )
+    parser.add_argument(
+        "--validate-singlestep",
+        action="store_true",
+        help="Validate QEMU trace looks like -singlestep output (PC+4 chain check "
+        "on first 500 records) before diffing. Fails loudly if TB-granular.",
+    )
 
     args = parser.parse_args()
 
@@ -280,6 +329,31 @@ def main():
         print("[oracle] Error: one or both traces are empty")
         sys.exit(1)
 
+    # Singlestep validation: QEMU -d cpu without -singlestep emits TB-granular
+    # records, which are incommensurable with per-instruction emulator traces.
+    # Check PC+4 chain on straight-line code before trusting the diff.
+    if args.validate_singlestep:
+        _validate_singlestep(qemu_records)
+
+    # Firmware-aware filtering: keep only kernel-range PCs.
+    # Drops the reset stub (0x40000000) and EL3 firmware (e.g. 0x41440000).
+    if args.keep_pc_range:
+        try:
+            start_s, end_s = args.keep_pc_range.split(":")
+            kstart, kend = int(start_s, 0), int(end_s, 0)
+        except ValueError:
+            print(f"[oracle] Error: bad --keep-pc-range '{args.keep_pc_range}', want 0xSTART:0xEND")
+            sys.exit(1)
+        before = len(qemu_records)
+        qemu_records = [r for r in qemu_records if kstart <= r.pc < kend]
+        # Re-number steps after filtering so ordinals stay dense.
+        for i, r in enumerate(qemu_records):
+            r.step = i
+        print(f"[oracle] PC-range filter [{kstart:#x}:{kend:#x}): {before} -> {len(qemu_records)} records")
+        if not qemu_records:
+            print("[oracle] Error: no QEMU records in kernel range — is this a -singlestep trace?")
+            sys.exit(1)
+
     # Optional kernel image for fetched-word verification.
     image_words = None
     if args.image:
@@ -291,34 +365,19 @@ def main():
         ]
         print(f"[oracle] Loaded {len(image_words)} image words from {args.image}")
 
-    # Alignment detection:
-    # Path N now starts at 0x40080000 (matches QEMU kernel entry after boot fix).
-    # QEMU step 0 is at 0x40000000 (reset stub), step 1+ is at 0x40080000.
-    # Align: our step 0 <-> QEMU step 1.
+    # Alignment: after PC-range filtering, QEMU record 0 should be the
+    # kernel entry (0x40080000). Path N step 0 is also the kernel entry.
+    # No stub-skip needed anymore — the filter already dropped 0x40000000.
     pc_offset = args.pc_offset
     qemu_start = 0
 
     if pc_offset is None:
-        # Find QEMU's kernel entry (0x40080000) and align our step 0 to it.
-        for idx, qr in enumerate(qemu_records[:20]):
-            if qr.pc == 0x40080000:
-                qemu_start = idx
-                pc_offset = 0  # Both at 0x40080000 now, no offset needed
-                print(
-                    f"[oracle] Aligned: Path N step 0 <-> QEMU step {idx} (PC=0x40080000)"
-                )
-                break
+        pc_offset = 0
+        if qemu_records and qemu_records[0].pc == 0x40080000:
+            print(f"[oracle] Aligned: Path N step 0 <-> QEMU step 0 (PC=0x40080000)")
         else:
-            pc_offset = 0
-            qemu_start = 0
-            print(f"[oracle] Using exact PC matching (pc-offset=0)")
-    else:
-        # Manual offset specified
-        if pc_offset == 0x80000:
-            for idx, qr in enumerate(qemu_records[:20]):
-                if qr.pc == 0x40080000:
-                    qemu_start = idx
-                    break
+            first_pc = qemu_records[0].pc if qemu_records else 0
+            print(f"[oracle] Warning: first filtered QEMU PC is {first_pc:#x}, expected 0x40080000")
 
     ok, msg = diff_records(
         pathn_records,
