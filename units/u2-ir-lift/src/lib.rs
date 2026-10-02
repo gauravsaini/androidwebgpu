@@ -173,10 +173,10 @@ fn lift_pc_rel(insn: &Instruction) -> Vec<IrOp> {
 /// System: WFI, barriers (DMB, DSB, ISB), HINTs (NOP, YIELD), system register
 /// access (MSR, MRS), and system operations (DC, IC, TLBI).
 fn lift_system(word: u32) -> Vec<IrOp> {
-    // Kernel alternatives patch 0x7a441060: patched over a branch loop by
-    // Linux alternatives mechanism (newer ARM extension, unallocated in v8.0).
-    // Treated as NOP to allow progress. See u1-decode for details.
-    if word == 0x7a44_1060 {
+    // Kernel alternatives patches 0x7a441060 / 0x7a432040: patched over branch
+    // loops by Linux alternatives mechanism (newer ARM extension, unallocated
+    // in v8.0). Treated as NOP to allow progress. See u1-decode for details.
+    if word == 0x7a44_1060 || word == 0x7a43_2040 {
         return vec![];
     }
     // Exception generation instructions: bits[31:24] == 0xD4
