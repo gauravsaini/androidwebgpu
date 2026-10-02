@@ -113,6 +113,14 @@ mod tests {
     }
 
     #[test]
+    fn adc_sbc_is_dataproc() {
+        assert_eq!(ok_kind(0x9A02_0020), InsnKind::DataProc); // ADC X0, X1, X2
+        assert_eq!(ok_kind(0xDA02_0020), InsnKind::DataProc); // SBC X0, X1, X2
+        assert_eq!(ok_kind(0xBA02_0020), InsnKind::DataProc); // ADCS X0, X1, X2
+        assert_eq!(ok_kind(0xFA02_0020), InsnKind::DataProc); // SBCS X0, X1, X2
+    }
+
+    #[test]
     fn add_imm_reserved_shift_is_illegal() {
         assert_illegal(0x9180_4420); // sh=0b10 is reserved
     }
@@ -631,6 +639,10 @@ mod tests {
         assert_eq!(ok_kind(0xDA85_84C5), InsnKind::DataProc); // CSNEG
                                                               // 32-bit form classifies too (sf=0: 0x1A...).
         assert_eq!(ok_kind(0x1A85_80C5), InsnKind::DataProc);
+        // cond=AL (0b1110) and NV (0b1111) are LEGAL and always-true per
+        // ARM ARM — never trap as unallocated (GB-26 hard lesson).
+        assert_eq!(ok_kind(0x9A82_E020), InsnKind::DataProc); // CSEL AL
+        assert_eq!(ok_kind(0x9A82_F020), InsnKind::DataProc); // CSEL NV
     }
 
     #[test]

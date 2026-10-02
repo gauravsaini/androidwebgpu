@@ -42,6 +42,12 @@ pub fn decode(word: u32) -> Option<InsnKind> {
         // CLZ only (opcode == 0b000100, S == 0); RBIT/REV*/CLS stay Illegal.
         // The 32-bit form (sf == 0) is recognized and trapped in U2.
         0b11010 => {
+            // ADC/SBC (with carry): sf op S 11010000 Rm 000000 Rn Rd.
+            // bits[28:21] == 0xD0, bits[15:10] == 0. The lifter traps these
+            // with an explicit carry-flag reason (NZCV not in IrOp).
+            if (word >> 21) & 0xFF == 0xD0 && (word >> 10) & 0x3F == 0 {
+                return Some(InsnKind::DataProc);
+            }
             // Conditional select: sf op S 11010100 Rm cond op2 Rn Rd
             // (GB-15, encoding corrected GB-26). bits[30:21] ==
             // 0xD4 (op=0: CSEL/CSINC) or 0x2D4 (op=1: CSINV/CSNEG);
