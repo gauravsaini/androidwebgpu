@@ -102,11 +102,11 @@ def build() -> bytes:
 
     b.begin_node("chosen")
     b.prop_str("bootargs", "console=ttyAMA0,115200 earlycon")
-    b.prop_str("stdout-path", "uart0:115200n8")
+    b.prop_str("stdout-path", "/pl011@9000000")
     b.end_node()
 
     b.begin_node("aliases")
-    b.prop_str("uart0", "/uart@9000000")
+    b.prop_str("uart0", "/pl011@9000000")
     b.end_node()
 
     b.begin_node("memory@40000000")
@@ -118,7 +118,7 @@ def build() -> bytes:
     b.prop_u32("#address-cells", 1)
     b.prop_u32("#size-cells", 0)
     b.begin_node("cpu@0")
-    b.prop_str("compatible", "arm,cortex-a57")
+    b.prop_str("compatible", "arm,cortex-a53")
     b.prop_str("device_type", "cpu")
     b.prop_u32("reg", 0)
     b.prop_str("enable-method", "psci")
@@ -130,7 +130,7 @@ def build() -> bytes:
     b.prop_str("method", "hvc")
     b.end_node()
 
-    b.begin_node("uart@9000000")
+    b.begin_node("pl011@9000000")
     b.prop_str("compatible", "arm,pl011")
     b.prop_u64("reg", 0x9000000, 0x1000)
     b.prop_u32("clock-frequency", 24000000)
