@@ -99,6 +99,18 @@ pub const CONSOLE_SIZE: u64 = 0x1000;
 pub const CONSOLE_TX: u64 = 0x0900_0000;
 /// LDRB here → next input byte, or 0 if none (PLATFORM.md).
 pub const CONSOLE_RX: u64 = 0x0900_0008;
+/// PL011 Flag Register offset within the console window.
+///
+/// A real PL011 driver (Linux `amba-pl011`) polls `FR.TXFF` before every
+/// `DR` write and uses 32-bit `readl`/`writel`. The orchestrator answers
+/// 32-bit reads here with `TXFE|RXFE` (transmit never full, receive always
+/// empty) so such a driver can make progress; all other PL011 registers
+/// read as 0. Added 2026-10-02 (fam/uart-sandbox): without this, a 32-bit
+/// `LDR` from `FR` was rejected as "byte-only" and would halt the guest.
+pub const CONSOLE_PL011_FR: u64 = 0x0900_0018;
+/// PL011 Flag Register value: TXFE (bit 7) | RXFE (bit 4). TXFF (bit 5)
+/// clear → a polling driver never spins; BUSY never asserted.
+pub const CONSOLE_PL011_FR_VALUE: u32 = 0x90;
 
 /// GPU command-stream MMIO base (Track A; PLATFORM.md §GPU port).
 /// The guest STRBs one virtio-gpu control-stream byte per write to
@@ -3128,13 +3140,24 @@ impl HostOps for WasmHost<'_> {
         // translated PA then dispatches to MMIO or RAM as before.
         let pa = self.translate_data(addr as u64, Access::Read)?;
         if (CONSOLE_BASE..CONSOLE_BASE + CONSOLE_SIZE).contains(&pa) {
-            if size != 1 {
-                return Err("mem_load: console MMIO is byte-only".to_string());
+            // PL011 drivers use 32-bit readl/writel; the PLATFORM.md
+            // byte-console used STRB/LDRB. Accept 1/2/4-byte accesses so a
+            // real UART driver can probe this window without halting.
+            // Added 2026-10-02 (fam/uart-sandbox).
+            if !matches!(size, 1 | 2 | 4) {
+                return Err("mem_load: console MMIO size must be 1, 2 or 4".to_string());
             }
             if pa == CONSOLE_RX {
+                // RX is byte-oriented; wider reads return the byte in the
+                // low bits, upper bits zero.
                 return Ok(self.console.read_rx() as i64);
             }
-            // Defined MMIO region, non-RX offset: reads return 0 (PLATFORM.md).
+            if pa == CONSOLE_PL011_FR {
+                // Flag register: TX never full, RX always empty — a
+                // polling PL011 driver proceeds to write DR immediately.
+                return Ok(CONSOLE_PL011_FR_VALUE as i64);
+            }
+            // Defined MMIO region, other offsets: reads return 0.
             return Ok(0);
         }
         if (GPU_BASE..GPU_BASE + GPU_SIZE).contains(&pa) {
@@ -3164,8 +3187,11 @@ impl HostOps for WasmHost<'_> {
         // translated PA then dispatches to MMIO or RAM as before.
         let pa = self.translate_data(addr as u64, Access::Write)?;
         if (CONSOLE_BASE..CONSOLE_BASE + CONSOLE_SIZE).contains(&pa) {
-            if size != 1 {
-                return Err("mem_store: console MMIO is byte-only".to_string());
+            // Accept 1/2/4-byte accesses: a real PL011 driver writes DR
+            // with 32-bit STR. The low byte is the transmitted character.
+            // Added 2026-10-02 (fam/uart-sandbox).
+            if !matches!(size, 1 | 2 | 4) {
+                return Err("mem_store: console MMIO size must be 1, 2 or 4".to_string());
             }
             if pa == CONSOLE_TX {
                 self.console.write_tx(val as u8);
@@ -3399,6 +3425,75 @@ mod tests {
         assert_eq!(o.mmio_read(CONSOLE_RX), Some(0));
         assert_eq!(o.mmio_read(CONSOLE_BASE + 0x200), Some(0));
         assert_eq!(o.mmio_read(RAM_BASE), None);
+    }
+
+    /// 2026-10-02 (fam/uart-sandbox): the WASM host path (`mem_store` /
+    /// `mem_load`) accepts 1/2/4-byte console accesses so a real PL011
+    /// driver (32-bit readl/writel) can use the UART window. TX captures
+    /// the low byte; FR reads report TXFE|RXFE.
+    #[test]
+    fn uart_tx_captures_low_byte_of_word_store() {
+        let mut p = host_parts(SysRegs::default()); // MMU off: identity
+        let r = with_host(&mut p, |h| {
+            h.mem_store(CONSOLE_TX as i64, 4, 0x0000_0041)
+        });
+        assert_eq!(r, Ok(()));
+        assert_eq!(p.console.tx_bytes, vec![b'A']);
+        // Halfword store also captures the low byte.
+        let r = with_host(&mut p, |h| h.mem_store(CONSOLE_TX as i64, 2, 0x4242));
+        assert_eq!(r, Ok(()));
+        assert_eq!(p.console.tx_bytes, vec![b'A', b'B']);
+        // Byte store keeps the original PLATFORM.md behavior.
+        let r = with_host(&mut p, |h| h.mem_store(CONSOLE_TX as i64, 1, b'C' as i64));
+        assert_eq!(r, Ok(()));
+        assert_eq!(p.console.tx_bytes, b"ABC");
+    }
+
+    #[test]
+    fn uart_word_store_to_other_offsets_acknowledged() {
+        let mut p = host_parts(SysRegs::default());
+        // PL011 LCR_H / CR / IBRD writes: acknowledged, no TX bytes.
+        for off in [0x02Cu64, 0x030, 0x024, 0x100] {
+            let r = with_host(&mut p, |h| {
+                h.mem_store((CONSOLE_BASE + off) as i64, 4, 0x70)
+            });
+            assert_eq!(r, Ok(()), "offset {:#x} rejected", off);
+        }
+        assert!(p.console.tx_bytes.is_empty());
+    }
+
+    #[test]
+    fn uart_fr_read_reports_txfe_rxfe() {
+        let mut p = host_parts(SysRegs::default());
+        let got = with_host(&mut p, |h| h.mem_load(CONSOLE_PL011_FR as i64, 4));
+        assert_eq!(got, Ok(0x90));
+        // Byte and halfword reads see the same low bits.
+        let got = with_host(&mut p, |h| h.mem_load(CONSOLE_PL011_FR as i64, 1));
+        assert_eq!(got, Ok(0x90));
+        let got = with_host(&mut p, |h| h.mem_load(CONSOLE_PL011_FR as i64, 2));
+        assert_eq!(got, Ok(0x90));
+        // Other PL011 offsets read as 0.
+        let got = with_host(&mut p, |h| h.mem_load((CONSOLE_BASE + 0xFE0) as i64, 4));
+        assert_eq!(got, Ok(0));
+    }
+
+    #[test]
+    fn uart_rx_still_byte_oriented() {
+        let mut p = host_parts(SysRegs::default());
+        p.console.feed_rx(b"Z");
+        let got = with_host(&mut p, |h| h.mem_load(CONSOLE_RX as i64, 1));
+        assert_eq!(got, Ok(b'Z' as i64));
+        let got = with_host(&mut p, |h| h.mem_load(CONSOLE_RX as i64, 1));
+        assert_eq!(got, Ok(0), "queue drained");
+    }
+
+    #[test]
+    fn uart_rejects_8byte_accesses() {
+        let mut p = host_parts(SysRegs::default());
+        let r = with_host(&mut p, |h| h.mem_store(CONSOLE_TX as i64, 8, 0x41));
+        assert!(r.is_err(), "8-byte console store must still be rejected");
+        let r = with_host(&mut p, |h| h.mem_load(CONSOLE_PL011_FR as i64, 8));
+        assert!(r.is_err(), "8-byte console load must still be rejected");
     }
 
     // ---- timer (U5, injected clock) ----
