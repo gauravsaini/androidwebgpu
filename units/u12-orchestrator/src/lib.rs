@@ -89,8 +89,8 @@ use u15_exec_wasmtime::WasmtimeExecutor;
 
 /// Guest RAM base (PLATFORM.md).
 pub const RAM_BASE: u64 = 0x4000_0000;
-/// Guest RAM size: 128 MiB (PLATFORM.md).
-pub const RAM_SIZE: u64 = 0x0800_0000;
+/// Guest RAM size: 1 GiB, matches QEMU -m 1024 (required for DTB at 0x48000000).
+pub const RAM_SIZE: u64 = 0x4000_0000;
 /// Console MMIO base (PLATFORM.md).
 pub const CONSOLE_BASE: u64 = 0x0900_0000;
 /// Console MMIO size: one page (PLATFORM.md).
