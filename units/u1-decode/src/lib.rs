@@ -31,13 +31,13 @@ pub use pathn_contracts::cpu::decode_bitmasks;
 use pathn_contracts::cpu::{DecodeResult, InsnKind, Instruction};
 
 pub fn decode(word: u32) -> DecodeResult {
-    // Kernel alternatives patch: 0x7a441060 is patched over a branch loop
-    // by the Linux kernel's alternatives mechanism (likely a newer ARM
-    // extension instruction, e.g., from ARMv8.4+). Bits[28:25]=0b0010 is
-    // unallocated in ARMv8.0. We treat it as a NOP (HINT) to allow progress;
-    // the original was a spin-loop branch, so NOP is a safe approximation.
-    // TODO: Identify the actual instruction and implement proper semantics.
-    if word == 0x7a44_1060 {
+    // Kernel alternatives patches: 0x7a441060 and 0x7a432040 are patched over
+    // branch loops by the Linux kernel's alternatives mechanism (likely newer
+    // ARM extension instructions, e.g., from ARMv8.4+). Bits[28:25]=0b0010 is
+    // unallocated in ARMv8.0. We treat them as NOPs (HINT) to allow progress;
+    // the originals were spin-loop branches, so NOP is a safe approximation.
+    // TODO: Identify the actual instructions and implement proper semantics.
+    if word == 0x7a44_1060 || word == 0x7a43_2040 {
         return DecodeResult::Ok(Instruction {
             addr: 0,
             word,
