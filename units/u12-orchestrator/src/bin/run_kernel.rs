@@ -23,6 +23,8 @@ fn main() {
     let mut kernel_path = "/mnt/sdb1/aosp/Image".to_string();
     let mut max_steps: u64 = 2_000_000;
     let mut trace_file: Option<String> = None;
+    let mut dump_around: Option<usize> = None;
+    let mut dump_console = false;
     let mut survey = false;
 
     let args: Vec<String> = env::args().collect();
@@ -52,6 +54,15 @@ fn main() {
                 if i < args.len() {
                     trace_file = Some(args[i].clone());
                 }
+            }
+            "--dump-around" => {
+                i += 1;
+                if i < args.len() {
+                    dump_around = Some(args[i].parse().unwrap_or(8));
+                }
+            }
+            "--dump-console" => {
+                dump_console = true;
             }
             "--survey" => {
                 // HARD RULE: Survey mode is discovery only — it must NEVER be used
@@ -121,6 +132,26 @@ fn main() {
 
     let steps = orch.steps();
     let pc = orch.machine().cpu[0].pc;
+    if let Some(n) = dump_around {
+        println!("[dump] {n} instructions around PC={pc:#018x}:");
+        for (addr, word) in orch.debug_fetch_around(pc.wrapping_sub(16), n + 4) {
+            match word {
+                Ok(w) => println!("  {addr:#018x}: {w:#010x}"),
+                Err(e) => println!("  {addr:#018x}: <fetch failed: {e}>"),
+            }
+        }
+    }
+    if dump_console {
+        let bytes = &orch.console().tx_bytes;
+        println!("[console] {} bytes:", bytes.len());
+        if let Ok(s) = std::str::from_utf8(bytes) {
+            // Print last 2KB to avoid flooding
+            let start = s.len().saturating_sub(2048);
+            println!("{}", &s[start..]);
+        } else {
+            println!("<non-UTF8 output>");
+        }
+    }
     println!("[done] Executed {steps} steps. PC={pc:#018x}");
     match halt_reason {
         Some(reason) => println!("[halt] Reason: {reason:?}"),

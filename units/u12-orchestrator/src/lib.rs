@@ -875,6 +875,17 @@ impl Orchestrator {
         ram_offset_in(&self.machine.ram, pa, len)
     }
 
+    /// Debug: fetch instruction words around a PC for bringup diagnostics.
+    pub fn debug_fetch_around(&self, pc: u64, count: usize) -> Vec<(u64, Result<u32, String>)> {
+        let mut out = Vec::new();
+        for i in 0..count {
+            let addr = pc.wrapping_add((i as u64) * 4);
+            let word = self.fetch_word(addr).map_err(|e| format!("{:?}", e));
+            out.push((addr, word));
+        }
+        out
+    }
+
     fn fetch_word(&self, pc: u64) -> Result<u32, HaltReason> {
         // GB-22: instruction fetch goes through stage-1 translation, same
         // as GB-20's data accesses. MMU off: identity. MMU on: VA -> PA
