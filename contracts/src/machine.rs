@@ -36,6 +36,13 @@ pub struct SysRegs {
     pub tcr_el1: u64,
     pub ttbr0_el1: u64,
     pub ttbr1_el1: u64,
+    // Generic timer (devices track, 2026-10-02): physical counter is synced
+    // from IrqState.timer_count on every tick; control/compare are guest-writable.
+    pub cntpct_el0: u64,
+    pub cntp_ctl_el0: u64,
+    pub cntp_cval_el0: u64,
+    pub cntv_ctl_el0: u64,
+    pub cntv_cval_el0: u64,
 }
 
 impl Default for SysRegs {
@@ -69,6 +76,12 @@ impl Default for SysRegs {
             // Reset value is architecturally UNKNOWN; the kernel always
             // writes TTBR1_EL1 before reading it, so 0 is a safe default.
             ttbr1_el1: 0,
+            // Generic timer: counter starts at 0, control disabled, compare max.
+            cntpct_el0: 0,
+            cntp_ctl_el0: 0,
+            cntp_cval_el0: u64::MAX,
+            cntv_ctl_el0: 0,
+            cntv_cval_el0: u64::MAX,
         }
     }
 }
@@ -92,13 +105,21 @@ impl SysRegs {
             SysReg::TcrEl1 => self.tcr_el1,
             SysReg::Ttbr0El1 => self.ttbr0_el1,
             SysReg::Ttbr1El1 => self.ttbr1_el1,
-            // Timer registers: not yet implemented (devices track). Return 0.
-            SysReg::CntpctEl0
-            | SysReg::CntvctEl0
-            | SysReg::CntpCtlEl0
-            | SysReg::CntpCvalEl0
-            | SysReg::CntvCtlEl0
-            | SysReg::CntvCvalEl0 => 0,
+            // Generic timer (devices track): real counter and control state.
+            // ISTATUS (bit 2) is read-only, computed from counter >= compare.
+            SysReg::CntpctEl0 => self.cntpct_el0,
+            SysReg::CntvctEl0 => self.cntpct_el0.wrapping_sub(self.cntvoff_el2),
+            SysReg::CntpCtlEl0 => {
+                let istatus = if self.cntpct_el0 >= self.cntp_cval_el0 { 0x4 } else { 0 };
+                (self.cntp_ctl_el0 & !0x4) | istatus
+            }
+            SysReg::CntpCvalEl0 => self.cntp_cval_el0,
+            SysReg::CntvCtlEl0 => {
+                let vct = self.cntpct_el0.wrapping_sub(self.cntvoff_el2);
+                let istatus = if vct >= self.cntv_cval_el0 { 0x4 } else { 0 };
+                (self.cntv_ctl_el0 & !0x4) | istatus
+            }
+            SysReg::CntvCvalEl0 => self.cntv_cval_el0,
         }
     }
 
@@ -120,13 +141,13 @@ impl SysRegs {
             SysReg::TcrEl1 => self.tcr_el1 = val,
             SysReg::Ttbr0El1 => self.ttbr0_el1 = val,
             SysReg::Ttbr1El1 => self.ttbr1_el1 = val,
-            // Timer registers: not yet implemented (devices track). Ignore writes.
-            SysReg::CntpctEl0
-            | SysReg::CntvctEl0
-            | SysReg::CntpCtlEl0
-            | SysReg::CntpCvalEl0
-            | SysReg::CntvCtlEl0
-            | SysReg::CntvCvalEl0 => {}
+            // Generic timer: counter is read-only (writes ignored); ISTATUS
+            // bit (2) of CTL is read-only, masked out on write.
+            SysReg::CntpctEl0 | SysReg::CntvctEl0 => {}
+            SysReg::CntpCtlEl0 => self.cntp_ctl_el0 = val & !0x4,
+            SysReg::CntpCvalEl0 => self.cntp_cval_el0 = val,
+            SysReg::CntvCtlEl0 => self.cntv_ctl_el0 = val & !0x4,
+            SysReg::CntvCvalEl0 => self.cntv_cval_el0 = val,
         }
     }
 
@@ -193,7 +214,7 @@ pub const MAX_GUEST_RAM_BYTES: usize = 2 * 1024 * 1024 * 1024;
 pub struct Snapshot(pub Vec<u8>);
 
 /// Current snapshot format version. Bump on any format change.
-pub const SNAPSHOT_VERSION: u32 = 8;
+pub const SNAPSHOT_VERSION: u32 = 9;
 
 /// Snapshot restore failure. Data, not panic — corrupt input never crashes the host.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -276,5 +297,29 @@ mod tests {
         };
         assert_eq!(m.engine, EngineKind::Unity);
         assert_eq!(m.gles_version, (3, 1));
+    }
+
+    #[test]
+    fn timer_sysregs_roundtrip_with_istatus() {
+        let mut s = SysRegs::default();
+        // Counter starts at 0, compare at MAX: ISTATUS clear.
+        assert_eq!(s.load(SysReg::CntpctEl0), 0);
+        assert_eq!(s.load(SysReg::CntpCtlEl0) & 0x4, 0);
+        // Program compare below counter: ISTATUS sets on read.
+        s.cntpct_el0 = 1000;
+        s.store(SysReg::CntpCvalEl0, 500);
+        s.store(SysReg::CntpCtlEl0, 0x1); // ENABLE=1
+        assert_eq!(s.load(SysReg::CntpCtlEl0), 0x5); // ENABLE + ISTATUS
+        assert_eq!(s.load(SysReg::CntpCvalEl0), 500);
+        // ISTATUS is read-only: guest write of bit 2 is masked out.
+        s.store(SysReg::CntpCtlEl0, 0x7);
+        assert_eq!(s.cntp_ctl_el0, 0x3); // bit 2 cleared
+        assert_eq!(s.load(SysReg::CntpCtlEl0), 0x7); // but ISTATUS still set
+        // Counter writes are ignored (read-only).
+        s.store(SysReg::CntpctEl0, 999);
+        assert_eq!(s.load(SysReg::CntpctEl0), 1000);
+        // Virtual counter subtracts the offset.
+        s.cntvoff_el2 = 100;
+        assert_eq!(s.load(SysReg::CntvctEl0), 900);
     }
 }
