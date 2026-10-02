@@ -30,3 +30,5 @@ u15-exec-wasmtime = { path = "../u15-exec-wasmtime" }
 
 [dev-dependencies]
 guest-image = { path = "../../guest-image" }
+serde = { workspace = true }
+serde_json = { workspace = true }

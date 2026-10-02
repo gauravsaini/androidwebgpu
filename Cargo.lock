@@ -1828,6 +1828,8 @@ version = "0.1.0"
 dependencies = [
  "guest-image",
  "pathn-contracts",
+ "serde",
+ "serde_json",
  "sha2",
  "u1-decode",
  "u11-snapshot",
