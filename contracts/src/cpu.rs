@@ -93,6 +93,16 @@ pub enum SysReg {
     /// (op0,op1,crn,crm,op2) = (3,0,2,0,1) = S3_0_C2_C0_1, which is
     /// TTBR1_EL1 (verified against the ARM ARM; Rt = bits[4:0] = X4).
     Ttbr1El1 = 14,
+    /// Added 2026-10-02 (fam/integer-sandbox): Generic Timer registers.
+    /// CNTPCT_EL0: Physical counter, CNTP_CTL_EL0/CNTP_CVAL_EL0: control/compare,
+    /// CNTVCT_EL0/CNTV_CTL_EL0/CNTV_CVAL_EL0: virtual counter equivalents.
+    /// Decode only; actual timer behavior is the devices track's work.
+    CntpctEl0 = 15,
+    CntvctEl0 = 16,
+    CntpCtlEl0 = 17,
+    CntpCvalEl0 = 18,
+    CntvCtlEl0 = 19,
+    CntvCvalEl0 = 20,
 }
 
 /// Single IR operation (SSA-style). The lifter (U2) is the only producer.

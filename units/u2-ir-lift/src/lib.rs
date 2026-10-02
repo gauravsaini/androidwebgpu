@@ -87,6 +87,10 @@ const R_MADD_LONG: &str =
 const R_ADD32_REG: &str = "DataProc: 32-bit ADD register width is not expressible in IrOp::Add";
 const R_ADD_SHIFT: &str =
     "DataProc: shifted or extended ADD register operand is not expressible in IrOp";
+const R_ADC_CARRY: &str =
+    "DataProc: ADC/SBC/ADCS/SBCS need NZCV carry flag, not expressible in IrOp";
+const R_CSEL_COND: &str =
+    "DataProc: CSEL/CSINC/CSINV/CSNEG need NZCV condition, not expressible in IrOp";
 const R_LS_UNSUPPORTED: &str = "LoadStore: unsupported encoding";
 const R_LS_SUBWORD: &str = "LoadStore: sub-word access width is not expressible in IrOp";
 const R_BR_UNSUPPORTED: &str = "Branch: only B/BL/RET/CBZ/CBNZ are lifted";
@@ -226,6 +230,18 @@ fn lift_system(word: u32) -> Vec<IrOp> {
             (3, 0, 4, 1, 0) => SysReg::SpEl0,
             // CNTHCTL_EL2
             (3, 4, 14, 1, 0) => SysReg::CnthctlEl2,
+            // CNTPCT_EL0 (fam/devices): physical counter, live value
+            (3, 3, 14, 0, 1) => SysReg::CntpctEl0,
+            // CNTVCT_EL0 (fam/devices): virtual counter, live value
+            (3, 3, 14, 0, 2) => SysReg::CntvctEl0,
+            // CNTP_CTL_EL0 (fam/devices): physical timer control
+            (3, 3, 14, 2, 1) => SysReg::CntpCtlEl0,
+            // CNTP_CVAL_EL0 (fam/devices): physical timer compare
+            (3, 3, 14, 2, 2) => SysReg::CntpCvalEl0,
+            // CNTV_CTL_EL0 (fam/devices): virtual timer control
+            (3, 3, 14, 3, 1) => SysReg::CntvCtlEl0,
+            // CNTV_CVAL_EL0 (fam/devices): virtual timer compare
+            (3, 3, 14, 3, 2) => SysReg::CntvCvalEl0,
             // SCTLR_EL1, SCTLR_EL2
             (3, 0, 1, 0, 0) => SysReg::SctlrEl1,
             (3, 4, 1, 0, 0) => SysReg::SctlrEl2,
@@ -326,10 +342,9 @@ fn lift_system(word: u32) -> Vec<IrOp> {
                         (3, 1, 0, 0, 0) => 0x701F_E00A,
                         // CNTFRQ_EL0: Counter-timer frequency (62.5MHz)
                         (3, 3, 14, 0, 0) => 0x03B9_ACA0,
-                        // CNTVCT_EL0: Virtual counter count
-                        (3, 3, 14, 0, 2) => 0,
-                        // CNTPCT_EL0: Physical counter count
-                        (3, 3, 14, 0, 1) => 0,
+                        // (fam/devices) CNTVCT_EL0/CNTPCT_EL0 now persistent
+                        // (ReadSys), not constant 0 -- kernel delay loops
+                        // spin forever on a frozen counter.
                         // TPIDRRO_EL0: Thread read-only register (22 static hits)
                         (3, 3, 13, 0, 3) => 0,
                         // TPIDR_EL0: Thread ID register EL0 (21 static hits)
@@ -376,6 +391,14 @@ fn lift_system(word: u32) -> Vec<IrOp> {
             (3, 4, 1, 1, 0) => SysReg::HcrEl2,
             // CNTHCTL_EL2
             (3, 4, 14, 1, 0) => SysReg::CnthctlEl2,
+            // CNTP_CTL_EL0 (fam/devices)
+            (3, 3, 14, 2, 1) => SysReg::CntpCtlEl0,
+            // CNTP_CVAL_EL0 (fam/devices)
+            (3, 3, 14, 2, 2) => SysReg::CntpCvalEl0,
+            // CNTV_CTL_EL0 (fam/devices)
+            (3, 3, 14, 3, 1) => SysReg::CntvCtlEl0,
+            // CNTV_CVAL_EL0 (fam/devices)
+            (3, 3, 14, 3, 2) => SysReg::CntvCvalEl0,
             // CNTVOFF_EL2
             (3, 4, 14, 0, 3) => SysReg::CntvoffEl2,
             // VBAR_EL1
@@ -499,15 +522,35 @@ fn lift_data_proc(word: u32) -> Vec<IrOp> {
     }
     // ADD (immediate): sf 0 0 10001 sh imm12 Rn Rd  (bits 30:24 = 0x11;
     // bit 29 = 0 excludes ADDS, bit 30 = 0 excludes SUB(S)).
+    // 32-bit form: result is masked to 32 bits via AndShift(is_32).
+    // Addition mod 2^32 depends only on low 32 bits, so masking the
+    // 64-bit result is exact (Rn=31/WSP high bits do not affect it).
     if (word >> 24) & 0x7F == 0x11 {
-        if word >> 31 == 0 {
-            return trap(R_ADD32_IMM);
-        }
+        let sf = word >> 31;
         let sh = (word >> 22) & 1;
         let imm12 = (word >> 10) & 0xFFF;
         let rn = ((word >> 5) & 0x1F) as u8;
         let rd = (word & 0x1F) as u8;
         let imm = (imm12 as u64) << (if sh == 1 { 12 } else { 0 });
+        if sf == 0 {
+            return vec![
+                IrOp::Mov { dst: SCRATCH, imm },
+                IrOp::Add {
+                    dst: SCRATCH,
+                    a: rn,
+                    b: SCRATCH,
+                },
+                IrOp::AndShift {
+                    dst: rd,
+                    a: SCRATCH,
+                    b: 31,
+                    shift: 0,
+                    amount: 0,
+                    invert: false,
+                    is_32: true,
+                },
+            ];
+        }
         return vec![
             IrOp::Mov { dst: SCRATCH, imm },
             IrOp::Add {
@@ -519,15 +562,33 @@ fn lift_data_proc(word: u32) -> Vec<IrOp> {
     }
     // SUB (immediate): sf 1 0 10001 sh imm12 Rn Rd  (bits 30:24 = 0x51;
     // bit 29 = 0 excludes SUBS, bit 30 = 1 specifies SUB).
+    // 32-bit form: masked via AndShift(is_32), same reasoning as ADD.
     if (word >> 24) & 0x7F == 0x51 {
-        if word >> 31 == 0 {
-            return trap(R_SUB32_IMM);
-        }
+        let sf = word >> 31;
         let sh = (word >> 22) & 1;
         let imm12 = (word >> 10) & 0xFFF;
         let rn = ((word >> 5) & 0x1F) as u8;
         let rd = (word & 0x1F) as u8;
         let imm = (imm12 as u64) << (if sh == 1 { 12 } else { 0 });
+        if sf == 0 {
+            return vec![
+                IrOp::Mov { dst: SCRATCH, imm },
+                IrOp::Sub {
+                    dst: SCRATCH,
+                    a: rn,
+                    b: SCRATCH,
+                },
+                IrOp::AndShift {
+                    dst: rd,
+                    a: SCRATCH,
+                    b: 31,
+                    shift: 0,
+                    amount: 0,
+                    invert: false,
+                    is_32: true,
+                },
+            ];
+        }
         return vec![
             IrOp::Mov { dst: SCRATCH, imm },
             IrOp::Sub {
@@ -610,11 +671,10 @@ fn lift_data_proc(word: u32) -> Vec<IrOp> {
     }
     // ADD (shifted register): sf 0 01011 00 0 Rm imm6 Rn Rd, LSL #0 only
     // (bits 31:24 = 0x0B/0x8B; S = 1 would be ADDS and never matches).
+    // 32-bit form: masked via AndShift(is_32).
     let top = (word >> 24) & 0xFF;
     if top == 0x0B || top == 0x8B {
-        if word >> 31 == 0 {
-            return trap(R_ADD32_REG);
-        }
+        let sf = word >> 31;
         let shift = (word >> 22) & 0x3;
         let imm6 = (word >> 10) & 0x3F;
         if shift != 0 || imm6 != 0 {
@@ -623,6 +683,24 @@ fn lift_data_proc(word: u32) -> Vec<IrOp> {
         let rm = ((word >> 16) & 0x1F) as u8;
         let rn = ((word >> 5) & 0x1F) as u8;
         let rd = (word & 0x1F) as u8;
+        if sf == 0 {
+            return vec![
+                IrOp::Add {
+                    dst: SCRATCH,
+                    a: rn,
+                    b: rm,
+                },
+                IrOp::AndShift {
+                    dst: rd,
+                    a: SCRATCH,
+                    b: 31,
+                    shift: 0,
+                    amount: 0,
+                    invert: false,
+                    is_32: true,
+                },
+            ];
+        }
         return vec![IrOp::Add {
             dst: rd,
             a: rn,
@@ -631,10 +709,9 @@ fn lift_data_proc(word: u32) -> Vec<IrOp> {
     }
     // SUB (shifted register): sf 1 01011 shift 0 Rm imm6 Rn Rd, LSL #0 only
     // (bits 31:24 = 0x4B/0xCB; S = 1 would be SUBS and never matches) — Track GB-6
+    // 32-bit form: masked via AndShift(is_32).
     if top == 0x4B || top == 0xCB {
-        if word >> 31 == 0 {
-            return trap(R_SUB32_REG);
-        }
+        let sf = word >> 31;
         let shift = (word >> 22) & 0x3;
         let imm6 = (word >> 10) & 0x3F;
         if shift != 0 || imm6 != 0 {
@@ -643,12 +720,42 @@ fn lift_data_proc(word: u32) -> Vec<IrOp> {
         let rm = ((word >> 16) & 0x1F) as u8;
         let rn = ((word >> 5) & 0x1F) as u8;
         let rd = (word & 0x1F) as u8;
+        if sf == 0 {
+            return vec![
+                IrOp::Sub {
+                    dst: SCRATCH,
+                    a: rn,
+                    b: rm,
+                },
+                IrOp::AndShift {
+                    dst: rd,
+                    a: SCRATCH,
+                    b: 31,
+                    shift: 0,
+                    amount: 0,
+                    invert: false,
+                    is_32: true,
+                },
+            ];
+        }
         return vec![IrOp::Sub {
             dst: rd,
             a: rn,
             b: rm,
         }];
     }
+    // ADC/SBC (with carry): sf op S 11010000 Rm 000000 Rn Rd
+    // (bits[28:21] == 0xD0, bits[15:10] == 0). Carry flag (NZCV.C) is not
+    // readable in IrOp, so these trap honestly. Rn=31 is XZR for S=1
+    // (ADCS/SBCS), SP for S=0 (ADC/SBC).
+    {
+        let b28_21 = (word >> 21) & 0xFF;
+        let b15_10 = (word >> 10) & 0x3F;
+        if b28_21 == 0xD0 && b15_10 == 0 {
+            return trap(R_ADC_CARRY);
+        }
+    }
+
     // CLZ (1 source): sf 1 S 11010 110 00000 000100 Rn Rd, S = 0
     // (bits 31:24 = 0xDA/0x5A) — Track GB-7. 64-bit only; the 32-bit form
     // traps: upper-bit zeroing is not expressible in IrOp::Clz.
@@ -771,6 +878,17 @@ fn lift_data_proc(word: u32) -> Vec<IrOp> {
                 shift,
                 is_32: sf == 0,
             }];
+        }
+    }
+    // CSEL family (conditional select): sf op S 11010100 Rm cond op2 Rn Rd
+    // (bits 30:21 = 0xD4 or 0x2D4). Condition codes AL (0b1110) and NV
+    // (0b1111) are legal and always-true per ARM ARM — the decoder accepts
+    // them; the lifter still traps because NZCV is not in IrOp.
+    // CSET/CINC/CINV/CNEG are aliases (Rm=XZR or Rn=XZR with inverted cond).
+    {
+        let b30_21 = (word >> 21) & 0x3FF;
+        if b30_21 == 0xD4 || b30_21 == 0x2D4 {
+            return trap(R_CSEL_COND);
         }
     }
     if let Some(ops) = lift_fp(word) {
@@ -969,8 +1087,6 @@ fn lift_load_store(insn: &Instruction) -> Vec<IrOp> {
     if (word >> 24) & 0x3F == 0b111000 && (word >> 21) & 1 == 1 && (word >> 10) & 0x3 == 0b00 {
         return trap(R_ATOMIC_LSE);
     }
-
-
 
     let word = insn.word;
 
@@ -1586,8 +1702,6 @@ fn lift_fp(word: u32) -> Option<Vec<IrOp>> {
 
 #[cfg(test)]
 
-
-
 mod tests {
     use super::*;
 
@@ -1706,13 +1820,27 @@ mod tests {
 
     #[test]
     fn trap_sub_reg_32bit() {
-        // SUB W1, W1, W0: 32-bit width not expressible
+        // SUB W1, W1, W0: 32-bit sub lifts to Sub + AndShift(is_32) mask.
+        // 0x4b00_0021 = SUB W1, W1, W0 (sf=0, Rm=0, Rn=1, Rd=1).
         let ops = lift(&insn(0x4000, 0x4b00_0021, InsnKind::DataProc));
         assert_eq!(
             ops,
-            vec![IrOp::Trap {
-                reason: R_SUB32_REG
-            }]
+            vec![
+                IrOp::Sub {
+                    dst: SCRATCH,
+                    a: 1,
+                    b: 0,
+                },
+                IrOp::AndShift {
+                    dst: 1,
+                    a: SCRATCH,
+                    b: 31,
+                    shift: 0,
+                    amount: 0,
+                    invert: false,
+                    is_32: true,
+                },
+            ]
         );
     }
 
@@ -2279,27 +2407,85 @@ mod tests {
         assert!(matches!(&ops[0], IrOp::Trap { .. }));
     }
 
+
     #[test]
-    fn trap_add_imm_32bit_width() {
-        // ADD W0, W1, #1: 32-bit zeroing of Xd not expressible in IrOp::Add
-        let ops = lift(&insn(0x4000, 0x1100_0420, InsnKind::DataProc));
+    fn csel_cond_trap() {
+        // CSEL X0, X1, X2, EQ (0x9A820020): NZCV not in IrOp -> honest trap.
+        let ops = lift(&insn(0x4000, 0x9A82_0020, InsnKind::DataProc));
         assert_eq!(
             ops,
             vec![IrOp::Trap {
-                reason: R_ADD32_IMM
+                reason: R_CSEL_COND
+            }]
+        );
+        // CSEL X0, X1, X2, AL (0x9A82E020): AL is legal always-true per ARM ARM,
+        // decoder accepts it, but lifter still traps (no NZCV in IrOp).
+        let ops = lift(&insn(0x4000, 0x9A82_E020, InsnKind::DataProc));
+        assert_eq!(
+            ops,
+            vec![IrOp::Trap {
+                reason: R_CSEL_COND
             }]
         );
     }
 
     #[test]
+    fn trap_add_imm_32bit_width() {
+        // ADD W0, W1, #1: 32-bit add lifts to Mov+Add+AndShift(is_32) mask.
+        // 0x1100_0420 = ADD W0, W1, #1 (sf=0, sh=0, imm12=1, Rn=1, Rd=0).
+        let ops = lift(&insn(0x4000, 0x1100_0420, InsnKind::DataProc));
+        assert_eq!(
+            ops,
+            vec![
+                IrOp::Mov {
+                    dst: SCRATCH,
+                    imm: 1
+                },
+                IrOp::Add {
+                    dst: SCRATCH,
+                    a: 1,
+                    b: SCRATCH,
+                },
+                IrOp::AndShift {
+                    dst: 0,
+                    a: SCRATCH,
+                    b: 31,
+                    shift: 0,
+                    amount: 0,
+                    invert: false,
+                    is_32: true,
+                },
+            ]
+        );
+    }
+
+    #[test]
     fn trap_sub_imm_32bit_width() {
-        // SUB W0, W1, #1: 32-bit zeroing of Xd not expressible in IrOp::Sub
+        // SUB W0, W1, #1: 32-bit sub lifts to Mov+Sub+AndShift(is_32) mask.
+        // 0x5100_0420 = SUB W0, W1, #1 (sf=0, sh=0, imm12=1, Rn=1, Rd=0).
         let ops = lift(&insn(0x4000, 0x5100_0420, InsnKind::DataProc));
         assert_eq!(
             ops,
-            vec![IrOp::Trap {
-                reason: R_SUB32_IMM
-            }]
+            vec![
+                IrOp::Mov {
+                    dst: SCRATCH,
+                    imm: 1
+                },
+                IrOp::Sub {
+                    dst: SCRATCH,
+                    a: 1,
+                    b: SCRATCH,
+                },
+                IrOp::AndShift {
+                    dst: 0,
+                    a: SCRATCH,
+                    b: 31,
+                    shift: 0,
+                    amount: 0,
+                    invert: false,
+                    is_32: true,
+                },
+            ]
         );
     }
 
@@ -3686,11 +3872,17 @@ mod tests {
         );
         assert_eq!(
             lift(&insn(0x4000, 0xD53B_E040, InsnKind::System)),
-            vec![IrOp::Mov { dst: 0, imm: 0 }] // MRS X0, CNTVCT_EL0
+            vec![IrOp::ReadSys {
+                dst: 0,
+                reg: SysReg::CntvctEl0
+            }] // MRS X0, CNTVCT_EL0 (fam/devices: live counter)
         );
         assert_eq!(
             lift(&insn(0x4000, 0xD53B_E020, InsnKind::System)),
-            vec![IrOp::Mov { dst: 0, imm: 0 }] // MRS X0, CNTPCT_EL0
+            vec![IrOp::ReadSys {
+                dst: 0,
+                reg: SysReg::CntpctEl0
+            }] // MRS X0, CNTPCT_EL0 (fam/devices: live counter)
         );
         assert_eq!(
             lift(&insn(0x4000, 0xD538_5200, InsnKind::System)),

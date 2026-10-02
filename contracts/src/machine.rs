@@ -92,6 +92,13 @@ impl SysRegs {
             SysReg::TcrEl1 => self.tcr_el1,
             SysReg::Ttbr0El1 => self.ttbr0_el1,
             SysReg::Ttbr1El1 => self.ttbr1_el1,
+            // Timer registers: not yet implemented (devices track). Return 0.
+            SysReg::CntpctEl0
+            | SysReg::CntvctEl0
+            | SysReg::CntpCtlEl0
+            | SysReg::CntpCvalEl0
+            | SysReg::CntvCtlEl0
+            | SysReg::CntvCvalEl0 => 0,
         }
     }
 
@@ -113,6 +120,13 @@ impl SysRegs {
             SysReg::TcrEl1 => self.tcr_el1 = val,
             SysReg::Ttbr0El1 => self.ttbr0_el1 = val,
             SysReg::Ttbr1El1 => self.ttbr1_el1 = val,
+            // Timer registers: not yet implemented (devices track). Ignore writes.
+            SysReg::CntpctEl0
+            | SysReg::CntvctEl0
+            | SysReg::CntpCtlEl0
+            | SysReg::CntpCvalEl0
+            | SysReg::CntvCtlEl0
+            | SysReg::CntvCvalEl0 => {}
         }
     }
 
