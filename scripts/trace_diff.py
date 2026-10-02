@@ -292,24 +292,23 @@ def main():
         print(f"[oracle] Loaded {len(image_words)} image words from {args.image}")
 
     # Alignment detection:
-    # Path N starts at PC 0x40000000 (raw image load).
-    # QEMU starts with boot stub 0x40000000..0x40000014, then branches to 0x40080000 (step 6).
+    # Path N now starts at 0x40080000 (matches QEMU kernel entry after boot fix).
+    # QEMU step 0 is at 0x40000000 (reset stub), step 1+ is at 0x40080000.
+    # Align: our step 0 <-> QEMU step 1.
     pc_offset = args.pc_offset
     qemu_start = 0
 
     if pc_offset is None:
-        # Check if QEMU has the kernel entry at step 6 (0x40080000)
-        found_kernel_entry = False
+        # Find QEMU's kernel entry (0x40080000) and align our step 0 to it.
         for idx, qr in enumerate(qemu_records[:20]):
             if qr.pc == 0x40080000:
                 qemu_start = idx
-                pc_offset = 0x80000
-                found_kernel_entry = True
+                pc_offset = 0  # Both at 0x40080000 now, no offset needed
                 print(
-                    f"[oracle] Auto-detected QEMU kernel entry at step {idx} (PC=0x40080000), using pc-offset=0x80000"
+                    f"[oracle] Aligned: Path N step 0 <-> QEMU step {idx} (PC=0x40080000)"
                 )
                 break
-        if not found_kernel_entry:
+        else:
             pc_offset = 0
             qemu_start = 0
             print(f"[oracle] Using exact PC matching (pc-offset=0)")
