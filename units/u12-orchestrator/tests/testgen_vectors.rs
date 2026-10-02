@@ -55,7 +55,10 @@ pub fn execute_vector(vector: &TestVector) -> Result<(), String> {
     }
     let ram_offset = (vector.initial_regs.pc - RAM_BASE) as usize;
     if ram_offset + 4 > orchestrator.machine().ram.len() {
-        return Err(format!("PC {:#x} out of RAM bounds", vector.initial_regs.pc));
+        return Err(format!(
+            "PC {:#x} out of RAM bounds",
+            vector.initial_regs.pc
+        ));
     }
     orchestrator.machine_mut().ram[ram_offset..ram_offset + 4]
         .copy_from_slice(&vector.word.to_le_bytes());
@@ -139,8 +142,8 @@ pub fn execute_vector(vector: &TestVector) -> Result<(), String> {
 }
 
 fn run_suite(name: &str, json_str: &str, min_count: usize) {
-    let vectors: Vec<TestVector> =
-        serde_json::from_str(json_str).unwrap_or_else(|e| panic!("Failed to deserialize {name}: {e}"));
+    let vectors: Vec<TestVector> = serde_json::from_str(json_str)
+        .unwrap_or_else(|e| panic!("Failed to deserialize {name}: {e}"));
 
     assert!(
         vectors.len() >= min_count,

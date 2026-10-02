@@ -41,7 +41,6 @@ pub fn decode(word: u32) -> DecodeResult {
     }
 }
 
-
 /// Registration table mapping major bit-pattern groups (bits[28:25]) to family decoders.
 /// One line per family module so future family agents each own exactly one file.
 /// Major-group mapping cross-checked against known encodings:

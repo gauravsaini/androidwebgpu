@@ -681,7 +681,11 @@ impl Orchestrator {
                 kind,
                 mnemonic,
             };
-            if !self.survey_traps.iter().any(|m| m.mnemonic == trap.mnemonic) {
+            if !self
+                .survey_traps
+                .iter()
+                .any(|m| m.mnemonic == trap.mnemonic)
+            {
                 self.survey_traps.push(trap);
             }
         } else {
@@ -5250,8 +5254,8 @@ mod tests {
             (11, FLAG_N, FLAG_N | FLAG_V, "LT"), // N!=V -> taken; N==V -> not taken
             (12, FLAG_N | FLAG_V, FLAG_Z | FLAG_N | FLAG_V, "GT"), // Z=0, N==V -> taken; Z=1 -> not taken
             (13, FLAG_Z, FLAG_N | FLAG_V, "LE"), // Z=1 -> taken; Z=0, N==V -> not taken
-            (14, 0, 0, "AL"), // always taken
-            (15, 0, 0, "NV"), // always taken
+            (14, 0, 0, "AL"),                    // always taken
+            (15, 0, 0, "NV"),                    // always taken
         ];
 
         for (cond, pstate_taken, pstate_not_taken, name) in test_cases {
@@ -5483,8 +5487,16 @@ mod tests {
         let mut o = sp_test_orchestrator(pc, sp, 0xD63F_03C0);
         o.machine_mut().cpu[0].regs[30] = target;
         assert_eq!(o.step_vcpu(), StepOutcome::Continue);
-        assert_eq!(o.machine().cpu[0].pc, target, "BLR X30 must branch to old X30 target");
-        assert_eq!(o.machine().cpu[0].regs[30], pc + 4, "BLR X30 must write link address into X30");
+        assert_eq!(
+            o.machine().cpu[0].pc,
+            target,
+            "BLR X30 must branch to old X30 target"
+        );
+        assert_eq!(
+            o.machine().cpu[0].regs[30],
+            pc + 4,
+            "BLR X30 must write link address into X30"
+        );
 
         // RET (X30) (0xD65F_03C0)
         let ret_target = RAM_BASE + 0x4000;
@@ -5500,4 +5512,3 @@ mod tests {
         assert_eq!(o.machine().cpu[0].pc, ret_target + 0x100);
     }
 }
-

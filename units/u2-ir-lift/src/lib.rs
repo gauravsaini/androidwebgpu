@@ -280,7 +280,7 @@ fn lift_system(word: u32) -> Vec<IrOp> {
                         _ => return trap(R_SYSTEM),
                     };
                     vec![IrOp::Mov { dst: rt, imm: val }]
-                }
+                };
             }
         };
         return vec![IrOp::ReadSys {
@@ -350,7 +350,7 @@ fn lift_system(word: u32) -> Vec<IrOp> {
                         (0, 0, 4, 1, 5) => vec![],
                         _ => return trap(R_SYSTEM),
                     }
-                }
+                };
             }
         };
         return vec![IrOp::WriteSys {
