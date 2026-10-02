@@ -148,6 +148,8 @@ def diff_records(
     qemu_start_idx: int = 0,
     pathn_start_idx: int = 0,
     ignore_boot_regs: bool = False,
+    image_words: Optional[List[int]] = None,
+    image_base: int = 0x40000000,
 ) -> Tuple[bool, Optional[str]]:
     """Compare traces starting from given alignment indices."""
     pn_idx = pathn_start_idx
@@ -171,15 +173,34 @@ def diff_records(
             report_lines.append(f"  Expected QEMU PC: {expected_qemu_pc:#018x} (offset {pc_offset:#x})")
             return False, "\n".join(report_lines)
 
-        # Check Registers
+        # Check fetched word against the kernel image (catches a PC match
+        # where the two sides fetched different opcodes).
         mismatches = []
+        if image_words is not None and pn.word is not None:
+            file_off = pn.pc - image_base
+            if 0 <= file_off < len(image_words) * 4 and file_off % 4 == 0:
+                expected = image_words[file_off // 4]
+                if pn.word != expected:
+                    mismatches.append(
+                        f"  WORD: Path N fetched {pn.word:#010x} != image word "
+                        f"{expected:#010x} at PC={pn.pc:#018x}"
+                    )
+
+        # Check Registers
         for r_idx in range(31):
-            if ignore_boot_regs and r_idx in (0, 21):
-                # X0 (DTB pointer) and X21 (preserved boot args) differ by boot contract
+            if ignore_boot_regs and r_idx in (0, 4, 21):
+                # X0 (DTB pointer), X4 (QEMU stub sets kernel entry 0x40080000,
+                # Path N sets 0), and X21 (preserved boot args) differ by boot contract
                 continue
-            if pn.regs[r_idx] != qm.regs[r_idx]:
+            pn_val = pn.regs[r_idx]
+            qm_val = qm.regs[r_idx]
+            # Kernel addresses differ by exactly pc_offset between the two load
+            # bases (Path N 0x40000000 vs QEMU 0x40080000); values differing by
+            # exactly the offset are a match, not a divergence.
+            addrs_aligned = pc_offset != 0 and abs(qm_val - pn_val) == pc_offset
+            if pn_val != qm_val and not addrs_aligned:
                 mismatches.append(
-                    f"  X{r_idx:02d}: Path N = {pn.regs[r_idx]:#018x} | QEMU = {qm.regs[r_idx]:#018x}"
+                    f"  X{r_idx:02d}: Path N = {pn_val:#018x} | QEMU = {qm_val:#018x}"
                 )
 
         if not ignore_boot_regs and pn.sp != qm.sp:
@@ -224,7 +245,19 @@ def main():
     parser.add_argument(
         "--ignore-boot-regs",
         action="store_true",
-        help="Ignore known boot-contract mismatches (X0=DTB, X21=saved DTB, SP=RAM_TOP, initial PSTATE)",
+        help="Ignore known boot-contract mismatches (X0=DTB, X4=kernel entry, X21=saved DTB, SP=RAM_TOP, initial PSTATE)",
+    )
+    parser.add_argument(
+        "--image",
+        default=None,
+        help="Path to kernel Image; when given, each Path N fetched word is "
+        "checked against the image (catches a PC match with different opcodes)",
+    )
+    parser.add_argument(
+        "--pathn-image-base",
+        type=lambda x: int(x, 0),
+        default=0x40000000,
+        help="Guest-physical base where Path N loaded the image (default 0x40000000)",
     )
     parser.add_argument(
         "--max-steps",
@@ -246,6 +279,17 @@ def main():
     if not pathn_records or not qemu_records:
         print("[oracle] Error: one or both traces are empty")
         sys.exit(1)
+
+    # Optional kernel image for fetched-word verification.
+    image_words = None
+    if args.image:
+        with open(args.image, "rb") as f:
+            data = f.read()
+        image_words = [
+            int.from_bytes(data[i : i + 4], "little")
+            for i in range(0, len(data) - 3, 4)
+        ]
+        print(f"[oracle] Loaded {len(image_words)} image words from {args.image}")
 
     # Alignment detection:
     # Path N starts at PC 0x40000000 (raw image load).
@@ -284,6 +328,8 @@ def main():
         qemu_start_idx=qemu_start,
         pathn_start_idx=0,
         ignore_boot_regs=args.ignore_boot_regs,
+        image_words=image_words,
+        image_base=args.pathn_image_base,
     )
 
     print(msg)

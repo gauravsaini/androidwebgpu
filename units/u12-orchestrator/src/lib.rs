@@ -367,13 +367,16 @@ pub fn best_effort_classify(word: u32) -> (InsnKind, &'static str) {
         };
     }
     if word & 0xFF80_0000 == 0xD400_0000 {
+        // Exception generation: opc = bits[23:21], LL = bits[1:0].
+        // SVC/HVC/SMC share opc=000 and differ by LL; BRK is opc=001, HLT opc=010.
         let opc = (word >> 21) & 0x7;
-        return match opc {
-            0b001 => (InsnKind::Svc, "SVC"),
-            0b010 => (InsnKind::System, "HVC"),
-            0b011 => (InsnKind::System, "SMC"),
-            0b000 => (InsnKind::System, "BRK"),
-            0b100 => (InsnKind::System, "HLT"),
+        let ll = word & 0x3;
+        return match (opc, ll) {
+            (0b000, 0b01) => (InsnKind::Svc, "SVC"),
+            (0b000, 0b10) => (InsnKind::System, "HVC"),
+            (0b000, 0b11) => (InsnKind::System, "SMC"),
+            (0b001, _) => (InsnKind::System, "BRK"),
+            (0b010, _) => (InsnKind::System, "HLT"),
             _ => (InsnKind::System, "Exception"),
         };
     }
@@ -452,6 +455,14 @@ pub fn best_effort_classify(word: u32) -> (InsnKind, &'static str) {
     (InsnKind::Unknown, "Unknown")
 }
 
+/// True for guest exception-generation traps (BRK/HLT) that must NOT be
+/// counted as unimplemented-instruction misses in survey mode.
+/// BRK is opc=001 (0xD420_0000), HLT is opc=010 (0xD440_0000); the mask keeps
+/// bits[31:21] so imm16/op2/LL variants are all recognized as traps.
+pub fn is_guest_trap_word(word: u32) -> bool {
+    matches!(word & 0xFFE0_0000, 0xD420_0000 | 0xD440_0000)
+}
+
 /// The single quarantined coordinator. Owns the machine state and threads it
 /// through every unit. `engine` and `block_cache` are runtime machinery —
 /// explicitly NOT part of the hashed state.
@@ -474,6 +485,10 @@ pub struct Orchestrator {
     pub survey_mode: bool,
     /// First unimplemented/illegal miss per InsnKind seen during survey mode.
     pub survey_first_miss: Vec<SurveyMiss>,
+    /// Guest traps (BRK/HLT) seen during survey mode, first per mnemonic.
+    /// Bucketed separately: a guest trap is guest behavior, NOT an
+    /// unimplemented instruction, and must never inflate the miss list.
+    pub survey_traps: Vec<SurveyMiss>,
     /// Per-queue last-notified used index for EVENT_IDX decisions.
     last_notified: Vec<u16>,
     /// Local exclusive monitor for LDXR/STXR (GB-26). `Some((addr, size))`
@@ -545,6 +560,7 @@ impl Orchestrator {
             trace_writer: None,
             survey_mode: false,
             survey_first_miss: Vec::new(),
+            survey_traps: Vec::new(),
             last_notified: Vec::new(),
             exclusive: None,
             executor: default_executor(),
@@ -595,21 +611,42 @@ impl Orchestrator {
         &self.survey_first_miss
     }
 
+    /// Read the guest-trap summary recorded in survey mode (BRK/HLT).
+    /// Traps are guest behavior, never unimplemented-instruction misses.
+    pub fn survey_trap_summary(&self) -> &[SurveyMiss] {
+        &self.survey_traps
+    }
+
     /// Print the first-miss-per-class summary.
     pub fn print_survey_summary(&self) {
         println!("=== Survey Mode: First-Miss-Per-Class Summary ===");
         if self.survey_first_miss.is_empty() {
             println!("No unimplemented/illegal instructions encountered.");
+        } else {
+            for miss in &self.survey_first_miss {
+                println!(
+                    "{:<12}: first miss at step {:>7}, pc={:#018x}, word={:#010x} ({})",
+                    format!("{:?}", miss.kind),
+                    miss.step,
+                    miss.pc,
+                    miss.word,
+                    miss.mnemonic
+                );
+            }
+        }
+        println!("=== Survey Mode: Guest Traps (BRK/HLT, not unimplemented) ===");
+        if self.survey_traps.is_empty() {
+            println!("No guest traps encountered.");
             return;
         }
-        for miss in &self.survey_first_miss {
+        for trap in &self.survey_traps {
             println!(
-                "{:<12}: first miss at step {:>7}, pc={:#018x}, word={:#010x} ({})",
-                format!("{:?}", miss.kind),
-                miss.step,
-                miss.pc,
-                miss.word,
-                miss.mnemonic
+                "{:<12}: first trap at step {:>7}, pc={:#018x}, word={:#010x} ({})",
+                format!("{:?}", trap.kind),
+                trap.step,
+                trap.pc,
+                trap.word,
+                trap.mnemonic
             );
         }
     }
@@ -622,6 +659,8 @@ impl Orchestrator {
     }
 
     /// Skip an unimplemented/illegal instruction in survey mode, logging and continuing.
+    /// Guest traps (BRK/HLT) are skipped too but bucketed separately — they are
+    /// guest behavior, never unimplemented-instruction misses.
     fn survey_skip_instruction(
         &mut self,
         pc: u64,
@@ -630,17 +669,34 @@ impl Orchestrator {
     ) -> StepOutcome {
         let (best_kind, mnemonic) = best_effort_classify(word);
         let kind = known_kind.unwrap_or(best_kind);
-        println!(
-            "SURVEY [step {}]: pc={:#018x} word={:#010x} kind={:?} ({}) - SKIPPED",
-            self.steps, pc, word, kind, mnemonic
-        );
-        self.record_survey_miss(SurveyMiss {
-            step: self.steps,
-            pc,
-            word,
-            kind,
-            mnemonic,
-        });
+        if is_guest_trap_word(word) {
+            println!(
+                "SURVEY [step {}]: pc={:#018x} word={:#010x} kind={:?} ({}) - TRAP (guest, not unimplemented) - SKIPPED",
+                self.steps, pc, word, kind, mnemonic
+            );
+            let trap = SurveyMiss {
+                step: self.steps,
+                pc,
+                word,
+                kind,
+                mnemonic,
+            };
+            if !self.survey_traps.iter().any(|m| m.mnemonic == trap.mnemonic) {
+                self.survey_traps.push(trap);
+            }
+        } else {
+            println!(
+                "SURVEY [step {}]: pc={:#018x} word={:#010x} kind={:?} ({}) - SKIPPED",
+                self.steps, pc, word, kind, mnemonic
+            );
+            self.record_survey_miss(SurveyMiss {
+                step: self.steps,
+                pc,
+                word,
+                kind,
+                mnemonic,
+            });
+        }
         self.machine.cpu[0].pc = pc.wrapping_add(4);
         self.steps += 1;
         self.tick_clock(TIMER_CYCLES_PER_STEP);
