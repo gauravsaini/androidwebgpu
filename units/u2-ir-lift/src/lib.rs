@@ -278,6 +278,20 @@ fn lift_system(word: u32) -> Vec<IrOp> {
             // (e.g. to check RW/VM bits). S3_4_C1_C1_0. MSR already stored;
             // MRS was trapping (R_SYSTEM).
             (3, 4, 1, 1, 0) => SysReg::HcrEl2,
+            // PAR_EL1 (P2, 2026-10-03): kernel reads the Physical Address
+            // Register after AT address-translate operations.
+            // S3_0_C7_C4_0. Stored as u64, default 0.
+            (3, 0, 7, 4, 0) => SysReg::ParEl1,
+            // ACTLR_EL1 (P2, 2026-10-03): kernel may read the Auxiliary
+            // Control Register during CPU setup. S3_0_C1_C0_1. Returns 0:
+            // honest "no auxiliary features implemented".
+            (3, 0, 1, 0, 1) => SysReg::ActlrEl1,
+            // PMCNTENSET_EL0 (P2, 2026-10-03): kernel probes the PMU
+            // during boot. S3_3_C9_C12_1. Stored as u64, default 0.
+            (3, 3, 9, 12, 1) => SysReg::PmcntensetEl0,
+            // PMSELR_EL0 (P2, 2026-10-03): kernel probes the PMU during
+            // boot. S3_3_C9_C12_5. Stored as u64, default 0.
+            (3, 3, 9, 12, 5) => SysReg::PmselrEl0,
             _ => {
                 return {
                     let val: u64 = match (op0, op1, crn, crm, op2) {
@@ -458,6 +472,17 @@ fn lift_system(word: u32) -> Vec<IrOp> {
             // CONTEXTIDR_EL1 (P0, 2026-10-03): kernel writes on every context
             // switch (MSR CONTEXTIDR_EL1, Xt). S3_0_C13_C0_1. Stored, no behavior.
             (3, 0, 13, 0, 1) => SysReg::ContextidrEl1,
+            // OSLAR_EL1 (P2, 2026-10-03): OS Lock Access Register, EL1.
+            // Write-only; kernel writes during debug setup
+            // (MSR OSLAR_EL1, Xt). S2_0_C1_C0_4. Stored, no behavior.
+            (2, 0, 1, 0, 4) => SysReg::OslarEl1,
+            // PMCNTENSET_EL0 (P2, 2026-10-03): kernel probes the PMU
+            // during boot (MSR PMCNTENSET_EL0, Xt). S3_3_C9_C12_1.
+            // Stored as u64, default 0.
+            (3, 3, 9, 12, 1) => SysReg::PmcntensetEl0,
+            // PMSELR_EL0 (P2, 2026-10-03): kernel probes the PMU during
+            // boot (MSR PMSELR_EL0, Xt). S3_3_C9_C12_5. Stored as u64.
+            (3, 3, 9, 12, 5) => SysReg::PmselrEl0,
             // MSR DAIFSet, #imm (op2=6) / MSR DAIFClr, #imm (op2=7): real
             // read-modify-write of the persistent DAIF (GB-11). Upgrades
             // the GB-3 accepted no-ops to honest state.
@@ -3412,6 +3437,10 @@ mod tests {
             ((3, 0, 2, 0, 1), SysReg::Ttbr1El1),
             ((3, 0, 12, 0, 0), SysReg::VbarEl1),
             ((3, 4, 1, 1, 0), SysReg::HcrEl2),
+            ((3, 0, 7, 4, 0), SysReg::ParEl1),
+            ((3, 0, 1, 0, 1), SysReg::ActlrEl1),
+            ((3, 3, 9, 12, 1), SysReg::PmcntensetEl0),
+            ((3, 3, 9, 12, 5), SysReg::PmselrEl0),
         ];
         for ((op0, op1, crn, crm, op2), reg) in mrs_cases {
             let word = sys_word(op0, op1, crn, crm, op2, 7, true);
@@ -3438,6 +3467,9 @@ mod tests {
             ((3, 0, 2, 0, 2), SysReg::TcrEl1),
             ((3, 0, 2, 0, 0), SysReg::Ttbr0El1),
             ((3, 0, 2, 0, 1), SysReg::Ttbr1El1),
+            ((2, 0, 1, 0, 4), SysReg::OslarEl1),
+            ((3, 3, 9, 12, 1), SysReg::PmcntensetEl0),
+            ((3, 3, 9, 12, 5), SysReg::PmselrEl0),
         ];
         for ((op0, op1, crn, crm, op2), reg) in msr_cases {
             let word = sys_word(op0, op1, crn, crm, op2, 5, false);
