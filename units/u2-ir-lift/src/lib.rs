@@ -270,6 +270,14 @@ fn lift_system(word: u32) -> Vec<IrOp> {
             // CONTEXTIDR_EL1 (P0, 2026-10-03): kernel writes on every context
             // switch (MSR CONTEXTIDR_EL1, Xt). S3_0_C13_C0_1. Stored, no behavior.
             (3, 0, 13, 0, 1) => SysReg::ContextidrEl1,
+            // VBAR_EL1 (P1, 2026-10-03): kernel reads back the vector base
+            // it programmed via MSR VBAR_EL1 (e.g. to verify relocation).
+            // S3_0_C12_C0_0. MSR already stored; MRS was trapping (R_SYSTEM).
+            (3, 0, 12, 0, 0) => SysReg::VbarEl1,
+            // HCR_EL2 (P1, 2026-10-03): kernel reads back hypervisor config
+            // (e.g. to check RW/VM bits). S3_4_C1_C1_0. MSR already stored;
+            // MRS was trapping (R_SYSTEM).
+            (3, 4, 1, 1, 0) => SysReg::HcrEl2,
             _ => {
                 return {
                     let val: u64 = match (op0, op1, crn, crm, op2) {
@@ -3402,6 +3410,8 @@ mod tests {
             ((3, 0, 2, 0, 2), SysReg::TcrEl1),
             ((3, 0, 2, 0, 0), SysReg::Ttbr0El1),
             ((3, 0, 2, 0, 1), SysReg::Ttbr1El1),
+            ((3, 0, 12, 0, 0), SysReg::VbarEl1),
+            ((3, 4, 1, 1, 0), SysReg::HcrEl2),
         ];
         for ((op0, op1, crn, crm, op2), reg) in mrs_cases {
             let word = sys_word(op0, op1, crn, crm, op2, 7, true);
