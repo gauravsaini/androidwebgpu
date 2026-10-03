@@ -1334,10 +1334,13 @@ fn lift_data_proc(word: u32) -> Vec<IrOp> {
                 return vec![IrOp::Smulh { dst: rd, n: rn, m: rm }];
             }
         }
-        // UMULL / SMULL (2026-10-03): 32-bit to 64-bit multiply long.
-        // UMULL: op54=00, op31=101, o0=0. SMULL: op54=00, op31=001, o0=0.
-        // Both require sf=1 and Ra=XZR (31).
-        if op54 == 0 && o0 == 0 && (op31 == 0b101 || op31 == 0b001) {
+        // SMADDL/SMSUBL/UMADDL/UMSUBL + SMULL/UMULL (2026-10-03):
+        // 32-bit to 64-bit multiply long, with optional accumulate.
+        // op31=001 (signed) or 101 (unsigned), o0=0, sf=1.
+        // op54=00 (ADD) or 01 (SUB). Ra=31 (XZR) means no accumulate.
+        // (2026-10-03: SMADDL 0x9B2C2328 at 0xffffff8008355394 halted boot
+        // at 20,555,721 steps; Ra=x8 was trapping as R_DP_UNSUPPORTED.)
+        if o0 == 0 && (op31 == 0b101 || op31 == 0b001) && (op54 == 0 || op54 == 1) {
             if word >> 31 == 0 {
                 return trap(R_DP_UNSUPPORTED);
             }
@@ -1345,16 +1348,33 @@ fn lift_data_proc(word: u32) -> Vec<IrOp> {
             let ra = ((word >> 10) & 0x1F) as u8;
             let rn = ((word >> 5) & 0x1F) as u8;
             let rd = (word & 0x1F) as u8;
-            if ra != 31 {
-                return trap(R_DP_UNSUPPORTED);
+            let is_unsigned = op31 == 0b101;
+            let is_sub = op54 == 1;
+            if ra == 31 {
+                // No accumulate: SMULL/UMULL. SUB with Ra=XZR is unusual; trap.
+                if is_sub {
+                    return trap(R_MADD_LONG);
+                }
+                if is_unsigned {
+                    return vec![IrOp::Umull { dst: rd, n: rn, m: rm }];
+                } else {
+                    return vec![IrOp::Smull { dst: rd, n: rn, m: rm }];
+                }
             }
-            if op31 == 0b101 {
-                return vec![IrOp::Umull { dst: rd, n: rn, m: rm }];
+            // Accumulate from Ra: SMADDL/SMSUBL/UMADDL/UMSUBL.
+            if is_unsigned {
+                if is_sub {
+                    return vec![IrOp::Umsubl { dst: rd, n: rn, m: rm, a: ra }];
+                } else {
+                    return vec![IrOp::Umaddl { dst: rd, n: rn, m: rm, a: ra }];
+                }
+            } else if is_sub {
+                return vec![IrOp::Smsubl { dst: rd, n: rn, m: rm, a: ra }];
             } else {
-                return vec![IrOp::Smull { dst: rd, n: rn, m: rm }];
+                return vec![IrOp::Smaddl { dst: rd, n: rn, m: rm, a: ra }];
             }
         }
-        if op54 == 0b01 || op54 == 0b10 {
+        if op54 == 0b10 {
             return trap(R_MADD_LONG);
         }
         if op54 != 0 || op31 != 0 || o0 != 0 {
@@ -2526,6 +2546,47 @@ mod tests {
         // SMULL X9, W9, W10 (word 0x9B2A7D29). Xd = (i64)Wn * (i64)Wm.
         let ops = lift(&insn(0x4000, 0x9B2A_7D29, InsnKind::DataProc));
         assert_eq!(ops, vec![IrOp::Smull { dst: 9, n: 9, m: 10 }]);
+    }
+
+    #[test]
+    fn smaddl_lift() {
+        // SMADDL X8, W25, W12, X8 (word 0x9B2C2328, kernel halt at
+        // 0xffffff8008355394, boot step 20,555,721). Xd = Xa + (i64)Wn * (i64)Wm.
+        let ops = lift(&insn(0x4000, 0x9B2C_2328, InsnKind::DataProc));
+        assert_eq!(
+            ops,
+            vec![IrOp::Smaddl { dst: 8, n: 25, m: 12, a: 8 }]
+        );
+    }
+
+    #[test]
+    fn smsubl_lift() {
+        // SMSUBL X8, W25, W12, X8 (word 0xBB2C2328). Xd = Xa - (i64)Wn * (i64)Wm.
+        let ops = lift(&insn(0x4000, 0xBB2C_2328, InsnKind::DataProc));
+        assert_eq!(
+            ops,
+            vec![IrOp::Smsubl { dst: 8, n: 25, m: 12, a: 8 }]
+        );
+    }
+
+    #[test]
+    fn umaddl_lift() {
+        // UMADDL X8, W25, W12, X8 (word 0x9BAC2328). Xd = Xa + (u64)Wn * (u64)Wm.
+        let ops = lift(&insn(0x4000, 0x9BAC_2328, InsnKind::DataProc));
+        assert_eq!(
+            ops,
+            vec![IrOp::Umaddl { dst: 8, n: 25, m: 12, a: 8 }]
+        );
+    }
+
+    #[test]
+    fn umsubl_lift() {
+        // UMSUBL X8, W25, W12, X8 (word 0xBBAC2328). Xd = Xa - (u64)Wn * (u64)Wm.
+        let ops = lift(&insn(0x4000, 0xBBAC_2328, InsnKind::DataProc));
+        assert_eq!(
+            ops,
+            vec![IrOp::Umsubl { dst: 8, n: 25, m: 12, a: 8 }]
+        );
     }
 
     #[test]
