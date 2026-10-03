@@ -23,6 +23,10 @@ pub trait HostOps {
     fn sysreg_load(&mut self, reg: u8) -> Result<i64, String>;
     // Write persistent system-register state (GB-sysreg2).
     fn sysreg_store(&mut self, reg: u8, val: i64) -> Result<(), String>;
+    /// PSCI hypervisor call (P0, 2026-10-03). func_id is X0 at HVC entry.
+    /// Returns the PSCI result for X0: version for PSCI_VERSION,
+    /// PSCI_NOT_SUPPORTED (-1) for all other function IDs.
+    fn hvc(&mut self, func_id: i64) -> Result<i64, String>;
 }
 
 /// Executes one U3 block: checkpoint the 31 registers in, call the `run`

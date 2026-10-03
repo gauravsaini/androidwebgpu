@@ -140,6 +140,19 @@ impl BlockExecutor for WasmtimeExecutor {
                 },
             )
             .map_err(|e| format!("link sysreg_store: {e}"))?;
+        linker
+            .func_wrap(
+                "env",
+                "hvc",
+                |mut caller: wasmtime::Caller<'_, TrackingHost>, func_id: i64| {
+                    caller
+                        .data_mut()
+                        .ops
+                        .hvc(func_id)
+                        .map_err(wasmtime::Error::msg)
+                },
+            )
+            .map_err(|e| format!("link hvc: {e}"))?;
         // Register file: checkpointed X0-X30 in, mutated X0-X30 out.
         let mut globals = Vec::with_capacity(31);
         for (i, reg) in regs.iter().enumerate() {

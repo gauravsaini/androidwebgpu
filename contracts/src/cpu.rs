@@ -103,6 +103,10 @@ pub enum SysReg {
     CntpCvalEl0 = 18,
     CntvCtlEl0 = 19,
     CntvCvalEl0 = 20,
+    /// Added 2026-10-03 (P0): Context ID Register, EL1. The kernel writes
+    /// CONTEXTIDR_EL1 on every context switch (MSR CONTEXTIDR_EL1, Xt).
+    /// S3_0_C13_C0_1. Stored as simple u64, no behavior needed.
+    ContextidrEl1 = 21,
 }
 
 /// Single IR operation (SSA-style). The lifter (U2) is the only producer.
@@ -288,6 +292,11 @@ pub enum IrOp {
     /// The execution backend yields the vCPU until an IRQ is pending;
     /// resumable, never an error and never a silent nop.
     Wfi,
+    /// Added 2026-10-03 (P0): Hypervisor call. The execution backend
+    /// dispatches PSCI via the DTB-declared `hvc` method: PSCI_VERSION
+    /// (0x84000000) returns 0x00010000 (v1.0); all other function IDs
+    /// return PSCI_NOT_SUPPORTED (-1) in X0. Honest stub, never silent.
+    Hvc,
     /// Explicit trap for unimplemented/privileged semantics. Never a silent nop.
     Trap {
         reason: &'static str,

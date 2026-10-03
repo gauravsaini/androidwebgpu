@@ -156,6 +156,19 @@ impl BlockExecutor for WasmiExecutor {
                 },
             )
             .map_err(|e| format!("link sysreg_store: {e}"))?;
+        linker
+            .func_wrap(
+                "env",
+                "hvc",
+                |mut caller: Caller<'_, TrackingHost>, func_id: i64| {
+                    caller
+                        .data_mut()
+                        .ops
+                        .hvc(func_id)
+                        .map_err(|e| Error::host(HostMsg(e)))
+                },
+            )
+            .map_err(|e| format!("link hvc: {e}"))?;
         // Register file: checkpointed X0-X30 in, mutated X0-X30 out.
         let mut globals = Vec::with_capacity(31);
         for (i, reg) in regs.iter().enumerate() {
@@ -258,6 +271,16 @@ mod tests {
                 .ok_or_else(|| format!("sysreg_store: bad index {reg}"))?;
             self.sysregs.store(sel, val as u64);
             Ok(())
+        }
+
+        fn hvc(&mut self, func_id: i64) -> Result<i64, String> {
+            // Test stub mirrors the orchestrator's PSCI dispatch.
+            const PSCI_VERSION: u64 = 0x8400_0000;
+            if func_id as u64 == PSCI_VERSION {
+                Ok(0x0001_0000)
+            } else {
+                Ok(-1)
+            }
         }
     }
 

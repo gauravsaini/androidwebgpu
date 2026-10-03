@@ -78,8 +78,10 @@ const FUNC_MEM_STORE: u32 = 1;
 const FUNC_WFI: u32 = 2;
 const FUNC_SYSREG_LOAD: u32 = 3;
 const FUNC_SYSREG_STORE: u32 = 4;
-/// Index of `run` (3 imported functions precede it).
-const FUNC_RUN: u32 = 5;
+/// PSCI hypervisor call (P0, 2026-10-03): dispatched by the host.
+const FUNC_HVC: u32 = 5;
+/// Index of `run` (6 imported functions precede it).
+const FUNC_RUN: u32 = 6;
 
 /// Architectural register 31 (XZR): sources are const 0, dests are dropped.
 const XZR: u8 = 31;
@@ -96,30 +98,34 @@ pub fn compile(block: &IrBlock) -> WasmModule {
     out.extend_from_slice(b"\0asm");
     out.extend_from_slice(&[0x01, 0x00, 0x00, 0x00]);
 
-    // Type section (id 1): five types.
+    // Type section (id 1): six types.
     //   0: () -> (i64)            — run
-    //   1: (i64, i64) -> (i64)    — mem_load
+    //   1: (i64, i64) -> (i64)    — mem_load, sysreg_load
     //   2: (i64, i64, i64) -> ()  — mem_store
     //   3: () -> ()               — wfi
     //   4: (i64, i64) -> ()       — sysreg_store
+    //   5: (i64) -> (i64)         — hvc (P0)
     let mut ty = Vec::new();
-    uleb(5, &mut ty);
+    uleb(6, &mut ty);
     func_type(&[], &[VALTYPE_I64], &mut ty);
     func_type(&[VALTYPE_I64, VALTYPE_I64], &[VALTYPE_I64], &mut ty);
     func_type(&[VALTYPE_I64, VALTYPE_I64, VALTYPE_I64], &[], &mut ty);
     func_type(&[], &[], &mut ty);
     func_type(&[VALTYPE_I64, VALTYPE_I64], &[], &mut ty);
+    func_type(&[VALTYPE_I64], &[VALTYPE_I64], &mut ty);
     section(1, &ty, &mut out);
 
     // Import section (id 2): env.mem_load, env.mem_store, env.wfi,
+    // env.sysreg_load, env.sysreg_store, env.hvc,
     // then env.r0 .. env.r30 as mutable i64 globals. ORDER IS CONTRACT.
     let mut im = Vec::new();
-    uleb(5 + 31, &mut im);
+    uleb(6 + 31, &mut im);
     import_func("mem_load", 1, &mut im);
     import_func("mem_store", 2, &mut im);
     import_func("wfi", 3, &mut im);
     import_func("sysreg_load", 1, &mut im);
     import_func("sysreg_store", 4, &mut im);
+    import_func("hvc", 5, &mut im);
     for i in 0..31u8 {
         import_global(&format!("r{i}"), &mut im);
     }
@@ -630,6 +636,14 @@ pub fn compile(block: &IrBlock) -> WasmModule {
                 uleb(u64::from(FUNC_WFI), &mut body);
                 // Falls through to the exit epilogue; the host records the
                 // WFI and the orchestrator yields the vCPU after return.
+            }
+            // P0 (2026-10-03): HVC/PSCI via host call. Push X0 (function ID),
+            // call host, write result back to X0.
+            IrOp::Hvc => {
+                reg_get(&mut body, 0);
+                body.push(OP_CALL);
+                uleb(u64::from(FUNC_HVC), &mut body);
+                reg_set(&mut body, 0);
             }
             // GB-sysreg2: persistent system-register access via host calls.
             // sysreg_load(reg, _) -> val; sysreg_store(reg, val).
@@ -1575,14 +1589,15 @@ mod tests {
     #[test]
     fn wave4_structural_imports_match_contract_order() {
         let im = imports(&compile(&sample_block()).bytes);
-        // 5 funcs + 31 register globals, in contract declaration order.
-        assert_eq!(im.len(), 36);
+        // 6 funcs + 31 register globals, in contract declaration order.
+        assert_eq!(im.len(), 37);
         assert_eq!(im[0], ("env".to_string(), "mem_load".to_string(), 0x00, 1));
         assert_eq!(im[1], ("env".to_string(), "mem_store".to_string(), 0x00, 2));
         assert_eq!(im[2], ("env".to_string(), "wfi".to_string(), 0x00, 3));
         assert_eq!(im[3], ("env".to_string(), "sysreg_load".to_string(), 0x00, 1));
         assert_eq!(im[4], ("env".to_string(), "sysreg_store".to_string(), 0x00, 4));
-        for (i, entry) in im[5..].iter().enumerate() {
+        assert_eq!(im[5], ("env".to_string(), "hvc".to_string(), 0x00, 5));
+        for (i, entry) in im[6..].iter().enumerate() {
             assert_eq!(
                 entry,
                 &(
@@ -1596,7 +1611,7 @@ mod tests {
     }
 
     #[test]
-    fn wave4_structural_run_export_is_func_5() {
+    fn wave4_structural_run_export_is_func_6() {
         let module = compile(&sample_block());
         let secs = sections(&module.bytes);
         let ex = secs.iter().find(|(id, _)| *id == 7).unwrap().1;
@@ -1607,7 +1622,7 @@ mod tests {
         pos += 3;
         assert_eq!(ex[pos], 0x00); // kind: func
         pos += 1;
-        assert_eq!(read_uleb(ex, &mut pos), 5); // func index 5 (5 imports precede run)
+        assert_eq!(read_uleb(ex, &mut pos), 6); // func index 6 (6 imports precede run)
     }
 
     #[test]

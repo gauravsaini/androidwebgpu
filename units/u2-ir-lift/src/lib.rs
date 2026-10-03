@@ -184,7 +184,9 @@ fn lift_system(word: u32) -> Vec<IrOp> {
         let opc = (word >> 21) & 0x7;
         let ll = word & 0x3;
         return match opc {
-            0b000 if ll == 0b10 => trap(R_HVC),
+            // HVC (P0, 2026-10-03): PSCI via DTB `method="hvc"`. Lifted to
+            // IrOp::Hvc; the backend returns PSCI_VERSION or NOT_SUPPORTED.
+            0b000 if ll == 0b10 => vec![IrOp::Hvc],
             0b000 if ll == 0b11 => trap(R_SMC),
             0b001 if (word & 0x1F) == 0 => trap(R_BRK),
             0b010 if (word & 0x1F) == 0 => trap(R_HLT),
@@ -265,6 +267,9 @@ fn lift_system(word: u32) -> Vec<IrOp> {
             (3, 0, 2, 0, 0) => SysReg::Ttbr0El1,
             // TTBR1_EL1 (GB-19): kernel programs translation table base 1 via MSR TTBR1_EL1
             (3, 0, 2, 0, 1) => SysReg::Ttbr1El1,
+            // CONTEXTIDR_EL1 (P0, 2026-10-03): kernel writes on every context
+            // switch (MSR CONTEXTIDR_EL1, Xt). S3_0_C13_C0_1. Stored, no behavior.
+            (3, 0, 13, 0, 1) => SysReg::ContextidrEl1,
             _ => {
                 return {
                     let val: u64 = match (op0, op1, crn, crm, op2) {
@@ -442,6 +447,9 @@ fn lift_system(word: u32) -> Vec<IrOp> {
             (3, 0, 2, 0, 0) => SysReg::Ttbr0El1,
             // TTBR1_EL1 (GB-19): kernel programs translation table base 1 via MSR TTBR1_EL1
             (3, 0, 2, 0, 1) => SysReg::Ttbr1El1,
+            // CONTEXTIDR_EL1 (P0, 2026-10-03): kernel writes on every context
+            // switch (MSR CONTEXTIDR_EL1, Xt). S3_0_C13_C0_1. Stored, no behavior.
+            (3, 0, 13, 0, 1) => SysReg::ContextidrEl1,
             // MSR DAIFSet, #imm (op2=6) / MSR DAIFClr, #imm (op2=7): real
             // read-modify-write of the persistent DAIF (GB-11). Upgrades
             // the GB-3 accepted no-ops to honest state.
@@ -3964,9 +3972,11 @@ mod tests {
             lift(&insn(0x4000, 0xD440_0000, InsnKind::System)),
             vec![IrOp::Trap { reason: R_HLT }]
         );
+        // HVC (P0, 2026-10-03): now lifts to IrOp::Hvc (PSCI stub),
+        // not a trap. The host returns version or NOT_SUPPORTED in X0.
         assert_eq!(
             lift(&insn(0x4000, 0xD400_0002, InsnKind::System)),
-            vec![IrOp::Trap { reason: R_HVC }]
+            vec![IrOp::Hvc]
         );
         assert_eq!(
             lift(&insn(0x4000, 0xD400_0003, InsnKind::System)),
