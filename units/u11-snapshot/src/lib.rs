@@ -24,8 +24,8 @@ use pathn_contracts::machine::{
     SNAPSHOT_VERSION, SysRegs,
 };
 
-/// Encoded size of one [`CpuState`]: 31 regs + sp + pc + pstate + 15 sysregs, all u64LE.
-const CPU_ENCODED_BYTES: usize = 54 * 8;
+/// Encoded size of one [`CpuState`]: 31 regs + sp + pc + pstate + 16 sysregs, all u64LE.
+const CPU_ENCODED_BYTES: usize = 55 * 8;
 /// Minimum encoded size of one [`DeviceState`]: u8 tag + u64 blob length.
 const DEVICE_MIN_BYTES: usize = 1 + 8;
 

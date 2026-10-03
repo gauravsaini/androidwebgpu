@@ -227,7 +227,7 @@ pub const MAX_GUEST_RAM_BYTES: usize = 2 * 1024 * 1024 * 1024;
 pub struct Snapshot(pub Vec<u8>);
 
 /// Current snapshot format version. Bump on any format change.
-pub const SNAPSHOT_VERSION: u32 = 9;
+pub const SNAPSHOT_VERSION: u32 = 10;
 
 /// Snapshot restore failure. Data, not panic — corrupt input never crashes the host.
 #[derive(Debug, Clone, PartialEq, Eq)]
