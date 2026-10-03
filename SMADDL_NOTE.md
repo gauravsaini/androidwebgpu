@@ -72,8 +72,8 @@ All verified against Rust wrapping arithmetic.
 - u3-wasm-jit: [pending]
 
 ## Boot Remeasure
-[To be filled after harness completes]
-- Steps:
-- PC:
-- Reason:
-- Word:
+- Status: Running (started 2026-10-03 21:18 AEST, PID 50838)
+- Cap: 30,000,000 steps
+- Previous halt: 20,555,721 steps at 0xffffff8008355394 (smaddl)
+- Expected: Boot should progress beyond 20,555,721 steps
+- [Results to be filled on completion]
