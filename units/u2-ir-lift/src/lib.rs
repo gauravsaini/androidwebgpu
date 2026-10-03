@@ -1334,6 +1334,26 @@ fn lift_data_proc(word: u32) -> Vec<IrOp> {
                 return vec![IrOp::Smulh { dst: rd, n: rn, m: rm }];
             }
         }
+        // UMULL / SMULL (2026-10-03): 32-bit to 64-bit multiply long.
+        // UMULL: op54=00, op31=101, o0=0. SMULL: op54=00, op31=001, o0=0.
+        // Both require sf=1 and Ra=XZR (31).
+        if op54 == 0 && o0 == 0 && (op31 == 0b101 || op31 == 0b001) {
+            if word >> 31 == 0 {
+                return trap(R_DP_UNSUPPORTED);
+            }
+            let rm = ((word >> 16) & 0x1F) as u8;
+            let ra = ((word >> 10) & 0x1F) as u8;
+            let rn = ((word >> 5) & 0x1F) as u8;
+            let rd = (word & 0x1F) as u8;
+            if ra != 31 {
+                return trap(R_DP_UNSUPPORTED);
+            }
+            if op31 == 0b101 {
+                return vec![IrOp::Umull { dst: rd, n: rn, m: rm }];
+            } else {
+                return vec![IrOp::Smull { dst: rd, n: rn, m: rm }];
+            }
+        }
         if op54 == 0b01 || op54 == 0b10 {
             return trap(R_MADD_LONG);
         }
@@ -2491,6 +2511,21 @@ mod tests {
         // SMULH X8, X8, X9 (word 0x9B497D08). Xd = (Xn * Xm)[127:64] signed.
         let ops = lift(&insn(0x4000, 0x9B49_7D08, InsnKind::DataProc));
         assert_eq!(ops, vec![IrOp::Smulh { dst: 8, n: 8, m: 9 }]);
+    }
+
+    #[test]
+    fn umull_lift() {
+        // UMULL X9, W9, W10 (word 0x9BAA7D29, kernel halt at 0xffffff800821a430,
+        // boot step 58,603). Xd = (u64)Wn * (u64)Wm.
+        let ops = lift(&insn(0x4000, 0x9BAA_7D29, InsnKind::DataProc));
+        assert_eq!(ops, vec![IrOp::Umull { dst: 9, n: 9, m: 10 }]);
+    }
+
+    #[test]
+    fn smull_lift() {
+        // SMULL X9, W9, W10 (word 0x9B2A7D29). Xd = (i64)Wn * (i64)Wm.
+        let ops = lift(&insn(0x4000, 0x9B2A_7D29, InsnKind::DataProc));
+        assert_eq!(ops, vec![IrOp::Smull { dst: 9, n: 9, m: 10 }]);
     }
 
     #[test]

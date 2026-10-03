@@ -191,6 +191,12 @@ pub fn compile(block: &IrBlock) -> WasmModule {
             IrOp::Smulh { dst, n, m } => {
                 emit_smulh(&mut body, *n, *m, *dst);
             }
+            IrOp::Umull { dst, n, m } => {
+                emit_umull(&mut body, *n, *m, *dst);
+            }
+            IrOp::Smull { dst, n, m } => {
+                emit_smulh_long(&mut body, *n, *m, *dst);
+            }
             IrOp::Mov { dst, imm } => {
                 body.push(OP_I64_CONST);
                 sleb(*imm as i64, &mut body);
@@ -915,6 +921,37 @@ fn emit_smulh(body: &mut Vec<u8>, n: u8, m: u8, dst: u8) {
             reg_set(body, dst);
         }
     }
+}
+
+/// Emit WASM for `Umull { dst, n, m }`: `dst = (n as u32 as u64) * (m as u32 as u64)`.
+/// Masks both operands to 32 bits, then a single `i64.mul`. Uses only the stack.
+fn emit_umull(body: &mut Vec<u8>, n: u8, m: u8, dst: u8) {
+    reg_get(body, n); // [n]
+    body.push(OP_I64_CONST); sleb(0xFFFF_FFFF, body); // [n, mask]
+    body.push(OP_I64_AND); // [n_lo]
+    reg_get(body, m); // [n_lo, m]
+    body.push(OP_I64_CONST); sleb(0xFFFF_FFFF, body); // [n_lo, m, mask]
+    body.push(OP_I64_AND); // [n_lo, m_lo]
+    body.push(OP_I64_MUL); // [product]
+    reg_set(body, dst);
+}
+
+/// Emit WASM for `Smull { dst, n, m }`: `dst = (n as i32 as i64) * (m as i32 as i64)`.
+/// Sign-extends both operands (shl 32 then shr_s 32), then a single `i64.mul`.
+/// Uses only the stack.
+fn emit_smulh_long(body: &mut Vec<u8>, n: u8, m: u8, dst: u8) {
+    reg_get(body, n); // [n]
+    body.push(OP_I64_CONST); sleb(32, body); // [n, 32]
+    body.push(OP_I64_SHL); // [n << 32]
+    body.push(OP_I64_CONST); sleb(32, body); // [n << 32, 32]
+    body.push(OP_I64_SHR_S); // [sext(n)]
+    reg_get(body, m); // [sext(n), m]
+    body.push(OP_I64_CONST); sleb(32, body); // [sext(n), m, 32]
+    body.push(OP_I64_SHL); // [sext(n), m << 32]
+    body.push(OP_I64_CONST); sleb(32, body); // [sext(n), m << 32, 32]
+    body.push(OP_I64_SHR_S); // [sext(n), sext(m)]
+    body.push(OP_I64_MUL); // [product]
+    reg_set(body, dst);
 }
 
 /// Append a `(param*) -> (result*)` function type.
