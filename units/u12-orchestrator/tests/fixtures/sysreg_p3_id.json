@@ -1,0 +1,105 @@
+[
+  {
+    "name": "id_family_completion_all_zero",
+    "steps": [
+      {
+        "word": 3577217280,
+        "disasm": "mrs x0, id_pfr0_el1"
+      },
+      {
+        "word": 3577217313,
+        "disasm": "mrs x1, id_pfr1_el1"
+      },
+      {
+        "word": 3577217346,
+        "disasm": "mrs x2, id_dfr0_el1"
+      },
+      {
+        "word": 3577217411,
+        "disasm": "mrs x3, id_mmfr0_el1"
+      },
+      {
+        "word": 3577217444,
+        "disasm": "mrs x4, id_mmfr1_el1"
+      },
+      {
+        "word": 3577217477,
+        "disasm": "mrs x5, id_mmfr2_el1"
+      },
+      {
+        "word": 3577217510,
+        "disasm": "mrs x6, id_mmfr3_el1"
+      },
+      {
+        "word": 3577217543,
+        "disasm": "mrs x7, id_isar0_el1"
+      },
+      {
+        "word": 3577217576,
+        "disasm": "mrs x8, id_isar1_el1"
+      },
+      {
+        "word": 3577217609,
+        "disasm": "mrs x9, id_isar2_el1"
+      },
+      {
+        "word": 3577217642,
+        "disasm": "mrs x10, id_isar3_el1"
+      },
+      {
+        "word": 3577217675,
+        "disasm": "mrs x11, id_isar4_el1"
+      },
+      {
+        "word": 3577217708,
+        "disasm": "mrs x12, id_isar5_el1"
+      },
+      {
+        "word": 3577217805,
+        "disasm": "mrs x13, mvfr0_el1"
+      },
+      {
+        "word": 3577217838,
+        "disasm": "mrs x14, mvfr1_el1"
+      },
+      {
+        "word": 3577217871,
+        "disasm": "mrs x15, mvfr2_el1"
+      },
+      {
+        "word": 3577217232,
+        "disasm": "mrs x16, revidr_el1"
+      },
+      {
+        "word": 3577218353,
+        "disasm": "mrs x17, id_aa64dfr1_el1"
+      },
+      {
+        "word": 3577218194,
+        "disasm": "mrs x18, id_aa64zfr0_el1"
+      }
+    ],
+    "expected_regs": {
+      "0": 0,
+      "1": 0,
+      "2": 0,
+      "3": 0,
+      "4": 0,
+      "5": 0,
+      "6": 0,
+      "7": 0,
+      "8": 0,
+      "9": 0,
+      "10": 0,
+      "11": 0,
+      "12": 0,
+      "13": 0,
+      "14": 0,
+      "15": 0,
+      "16": 0,
+      "17": 0,
+      "18": 0
+    },
+    "expected_sysregs": {}
+  }
+]

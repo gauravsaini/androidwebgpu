@@ -128,6 +128,70 @@ pub enum SysReg {
     /// S3_0_C1_C0_1. Returns 0: we don't implement auxiliary features,
     /// and 0 is the honest "nothing extra here" answer.
     ActlrEl1 = 26,
+    // ===== P3 (2026-10-03, feat/emu-p3-impl) =====
+    /// GICv3 CPU interface (slice A): Interrupt Controller System Register
+    /// Enable, EL1. Kernel's gicv3 probe reads it to choose the sysreg
+    /// access path. Default 0x1 (SRE=1): honest — our CPU interface is
+    /// modeled as sysreg-accessible, not memory-mapped. Stored, RW.
+    IccSreEl1 = 27,
+    /// GICv3 CPU interface: Interrupt Controller Control Register, EL1.
+    /// Stored u64, default 0.
+    IccCtlrEl1 = 28,
+    /// GICv3 CPU interface: Interrupt Controller Interrupt Group 1
+    /// Enable Register, EL1. Stored u64, default 0.
+    IccIgrpen1El1 = 29,
+    /// GICv3 CPU interface: Interrupt Controller Interrupt Priority Mask
+    /// Register, EL1. Stored u64, default 0 (everything masked: honest —
+    /// we have no GIC model and deliver no interrupts, so the safest
+    /// advertised state is "nothing can preempt").
+    IccPmrEl1 = 30,
+    /// GICv3 CPU interface: Interrupt Controller End Of Interrupt Register
+    /// 1, EL1. WRITE-ONLY: no MRS arm (an MRS would be architecturally
+    /// UNDEFINED and traps with R_SYSTEM). MSR stored, no behavior —
+    /// there is no interrupt state to complete against yet.
+    IccEoir1El1 = 31,
+    /// GICv3 CPU interface: Interrupt Controller Deactivate Interrupt
+    /// Register, EL1. WRITE-ONLY, same treatment as EOIR1.
+    IccDirEl1 = 32,
+    /// PMU (slice C): PMU Counter Enable Clear, EL0. Stored u64, default 0.
+    PmcntEnClrEl0 = 33,
+    /// PMU (slice C): PMU Overflow Flag Status Clear, EL0. Stored u64.
+    PmovsclrEl0 = 34,
+    /// PMU (slice C): PMU Event Type Select, EL0 (indirect event type
+    /// register selected by PMSELR_EL0). Stored u64.
+    PmxevtyperEl0 = 35,
+    /// PMU (slice C): PMU Event Counter (indirect, selected by PMSELR_EL0).
+    /// Stored u64.
+    PmxevcntrEl0 = 36,
+    /// PMU (slice C): PMU User Enable Register, EL0. P2 accepted MSR as a
+    /// no-op; P3 stores it so MSR/MSR reads round-trip (kernel writes xzr,
+    /// reads back 0 = EL0 PMU access disabled — consistent, we never let
+    /// EL0 touch the PMU).
+    PmuserenrEl0 = 37,
+    /// Timers (slice D): Counter-timer Kernel Control, EL1. Stored u64.
+    CntkctlEl1 = 38,
+    /// Timers (slice D): Hypervisor Thread ID, EL2. P2 returned constant 0
+    /// on MRS; P3 stores it so the (hyp, unreachable-at-EL1) MSR/MSR pair
+    /// round-trips honestly instead of disagreeing.
+    TpidrEl2 = 39,
+    /// Timers (slice D): Physical Timer Value, EL0. DERIVED, no backing
+    /// field: read = low 32 bits of (CNTP_CVAL_EL0 − CNTPCT_EL0); write
+    /// sets CNTP_CVAL_EL0 = CNTPCT_EL0 + value[31:0]. This is the honest
+    /// architectural alias, not a stored register.
+    CntpTvalEl0 = 40,
+    /// Timers (slice D): Virtual Timer Value, EL0. DERIVED like the
+    /// physical one: CNTV_CVAL_EL0 − (CNTPCT_EL0 − CNTVOFF_EL2).
+    CntvTvalEl0 = 41,
+    /// FP/SIMD (slice E): Floating-point Control Register. Stored u64
+    /// (architecturally 32-bit; full 64-bit store is fine for save/restore
+    /// — the upper bits are the kernel's own, written back unchanged).
+    Fpcr = 42,
+    /// FP/SIMD (slice E): Floating-point Status Register. Stored u64,
+    /// same treatment as FPCR.
+    Fpsr = 43,
+    /// Debug (slice F): OS Double Lock Register, EL1. WRITE-ONLY: no MRS
+    /// arm (UNDEFINED on read → R_SYSTEM trap). MSR stored, no behavior.
+    OsdlrEl1 = 44,
 }
 
 /// Single IR operation (SSA-style). The lifter (U2) is the only producer.

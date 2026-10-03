@@ -1,0 +1,56 @@
+[
+  {
+    "name": "tval_alias_derives_from_cval",
+    "steps": [
+      {
+        "word": 3533203976,
+        "disasm": "movz x8, #50000"
+      },
+      {
+        "word": 3575374344,
+        "disasm": "msr cntp_tval_el0, x8"
+      },
+      {
+        "word": 3577471497,
+        "disasm": "mrs x9, cntp_tval_el0"
+      },
+      {
+        "word": 3575177480,
+        "disasm": "msr cntkctl_el1, x8"
+      },
+      {
+        "word": 3577274634,
+        "disasm": "mrs x10, cntkctl_el1"
+      },
+      {
+        "word": 3533011367,
+        "disasm": "movz x7, #0xabcd"
+      },
+      {
+        "word": 3575435335,
+        "disasm": "msr tpidr_el2, x7"
+      },
+      {
+        "word": 3577532491,
+        "disasm": "mrs x11, tpidr_el2"
+      },
+      {
+        "word": 3577471756,
+        "disasm": "mrs x12, cntv_tval_el0"
+      }
+    ],
+    "expected_regs": {
+      "10": 50000,
+      "11": 43981
+    },
+    "expected_sysregs": {
+      "cntkctl_el1": 50000,
+      "tpidr_el2": 43981
+    },
+    "tval": {
+      "dst_reg": 9,
+      "written": 50000,
+      "read_after_ticks": 1
+    }
+  }
+]

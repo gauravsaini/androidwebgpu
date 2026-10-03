@@ -1,0 +1,64 @@
+[
+  {
+    "name": "gic_pmr_roundtrip_sre_iar1",
+    "steps": [
+      {
+        "word": 3531612137,
+        "disasm": "movz x9, #0xff"
+      },
+      {
+        "word": 3575137801,
+        "disasm": "msr icc_pmr_el1, x9"
+      },
+      {
+        "word": 3577269418,
+        "disasm": "mrs x10, icc_sre_el1"
+      },
+      {
+        "word": 3577269259,
+        "disasm": "mrs x11, icc_iar1_el1"
+      },
+      {
+        "word": 3531604552,
+        "disasm": "movz x8, #0x12"
+      },
+      {
+        "word": 3575172136,
+        "disasm": "msr icc_eoir1_el1, x8"
+      },
+      {
+        "word": 3575171880,
+        "disasm": "msr icc_dir_el1, x8"
+      },
+      {
+        "word": 3531606697,
+        "disasm": "movz x9, #0x55"
+      },
+      {
+        "word": 3575172233,
+        "disasm": "msr icc_ctlr_el1, x9"
+      },
+      {
+        "word": 3575172329,
+        "disasm": "msr icc_igrpen1_el1, x9"
+      },
+      {
+        "word": 3577269388,
+        "disasm": "mrs x12, icc_ctlr_el1"
+      }
+    ],
+    "expected_regs": {
+      "10": 1,
+      "11": 1023,
+      "12": 85
+    },
+    "expected_sysregs": {
+      "icc_pmr_el1": 255,
+      "icc_eoir1_el1": 18,
+      "icc_dir_el1": 18,
+      "icc_ctlr_el1": 85,
+      "icc_igrpen1_el1": 85,
+      "icc_sre_el1": 1
+    }
+  }
+]

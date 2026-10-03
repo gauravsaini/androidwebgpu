@@ -25,7 +25,7 @@ use pathn_contracts::machine::{
 };
 
 /// Encoded size of one [`CpuState`]: 31 regs + sp + pc + pstate + 26 sysregs, all u64LE.
-const CPU_ENCODED_BYTES: usize = 60 * 8;
+const CPU_ENCODED_BYTES: usize = 76 * 8;
 /// Minimum encoded size of one [`DeviceState`]: u8 tag + u64 blob length.
 const DEVICE_MIN_BYTES: usize = 1 + 8;
 
@@ -108,6 +108,27 @@ impl Writer {
         self.u64(c.sysregs.pmcntenset_el0);
         self.u64(c.sysregs.pmselr_el0);
         self.u64(c.sysregs.actlr_el1);
+        // P3 (2026-10-03): GICv3 CPU interface.
+        self.u64(c.sysregs.icc_sre_el1);
+        self.u64(c.sysregs.icc_ctlr_el1);
+        self.u64(c.sysregs.icc_igrpen1_el1);
+        self.u64(c.sysregs.icc_pmr_el1);
+        self.u64(c.sysregs.icc_eoir1_el1);
+        self.u64(c.sysregs.icc_dir_el1);
+        // P3: PMU remainder.
+        self.u64(c.sysregs.pmcnt_enclr_el0);
+        self.u64(c.sysregs.pmovsclr_el0);
+        self.u64(c.sysregs.pmxevtyper_el0);
+        self.u64(c.sysregs.pmxevcntr_el0);
+        self.u64(c.sysregs.pmuserenr_el0);
+        // P3: timers (TVALs are derived from CVAL — nothing to persist).
+        self.u64(c.sysregs.cntkctl_el1);
+        self.u64(c.sysregs.tpidr_el2);
+        // P3: FP/SIMD.
+        self.u64(c.sysregs.fpcr);
+        self.u64(c.sysregs.fpsr);
+        // P3: debug.
+        self.u64(c.sysregs.osdlr_el1);
     }
 
     fn mmu(&mut self, m: &MmuState) {
@@ -238,6 +259,22 @@ impl<'a> Reader<'a> {
                 pmcntenset_el0: self.u64()?,
                 pmselr_el0: self.u64()?,
                 actlr_el1: self.u64()?,
+                icc_sre_el1: self.u64()?,
+                icc_ctlr_el1: self.u64()?,
+                icc_igrpen1_el1: self.u64()?,
+                icc_pmr_el1: self.u64()?,
+                icc_eoir1_el1: self.u64()?,
+                icc_dir_el1: self.u64()?,
+                pmcnt_enclr_el0: self.u64()?,
+                pmovsclr_el0: self.u64()?,
+                pmxevtyper_el0: self.u64()?,
+                pmxevcntr_el0: self.u64()?,
+                pmuserenr_el0: self.u64()?,
+                cntkctl_el1: self.u64()?,
+                tpidr_el2: self.u64()?,
+                fpcr: self.u64()?,
+                fpsr: self.u64()?,
+                osdlr_el1: self.u64()?,
             },
         })
     }
@@ -363,6 +400,22 @@ mod tests {
                 pmcntenset_el0: seed.wrapping_add(24),
                 pmselr_el0: seed.wrapping_add(25),
                 actlr_el1: seed.wrapping_add(26),
+                icc_sre_el1: seed.wrapping_add(27),
+                icc_ctlr_el1: seed.wrapping_add(28),
+                icc_igrpen1_el1: seed.wrapping_add(29),
+                icc_pmr_el1: seed.wrapping_add(30),
+                icc_eoir1_el1: seed.wrapping_add(31),
+                icc_dir_el1: seed.wrapping_add(32),
+                pmcnt_enclr_el0: seed.wrapping_add(33),
+                pmovsclr_el0: seed.wrapping_add(34),
+                pmxevtyper_el0: seed.wrapping_add(35),
+                pmxevcntr_el0: seed.wrapping_add(36),
+                pmuserenr_el0: seed.wrapping_add(37),
+                cntkctl_el1: seed.wrapping_add(38),
+                tpidr_el2: seed.wrapping_add(39),
+                fpcr: seed.wrapping_add(40),
+                fpsr: seed.wrapping_add(41),
+                osdlr_el1: seed.wrapping_add(42),
             },
         }
     }
@@ -484,6 +537,22 @@ mod tests {
                     pmcntenset_el0: u64::MAX,
                     pmselr_el0: u64::MAX,
                     actlr_el1: u64::MAX,
+                    icc_sre_el1: u64::MAX,
+                    icc_ctlr_el1: u64::MAX,
+                    icc_igrpen1_el1: u64::MAX,
+                    icc_pmr_el1: u64::MAX,
+                    icc_eoir1_el1: u64::MAX,
+                    icc_dir_el1: u64::MAX,
+                    pmcnt_enclr_el0: u64::MAX,
+                    pmovsclr_el0: u64::MAX,
+                    pmxevtyper_el0: u64::MAX,
+                    pmxevcntr_el0: u64::MAX,
+                    pmuserenr_el0: u64::MAX,
+                    cntkctl_el1: u64::MAX,
+                    tpidr_el2: u64::MAX,
+                    fpcr: u64::MAX,
+                    fpsr: u64::MAX,
+                    osdlr_el1: u64::MAX,
                 },
             }],
             mmu: MmuState {

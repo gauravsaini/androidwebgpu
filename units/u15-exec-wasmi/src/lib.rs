@@ -335,6 +335,24 @@ mod tests {
                 IrOp::WriteSys { src: 1, reg: SysReg::TcrEl1 },
                 IrOp::WriteSys { src: 1, reg: SysReg::Ttbr0El1 },
                 IrOp::WriteSys { src: 1, reg: SysReg::Ttbr1El1 },
+                // P3 (2026-10-03): GICv3 CPU interface + PMU + timers +
+                // FP/SIMD + debug round-trip through the host sysregs.
+                IrOp::WriteSys { src: 1, reg: SysReg::IccPmrEl1 },
+                IrOp::WriteSys { src: 1, reg: SysReg::IccCtlrEl1 },
+                IrOp::WriteSys { src: 1, reg: SysReg::IccIgrpen1El1 },
+                IrOp::WriteSys { src: 1, reg: SysReg::IccSreEl1 },
+                IrOp::WriteSys { src: 1, reg: SysReg::IccEoir1El1 },
+                IrOp::WriteSys { src: 1, reg: SysReg::IccDirEl1 },
+                IrOp::WriteSys { src: 1, reg: SysReg::PmcntEnClrEl0 },
+                IrOp::WriteSys { src: 1, reg: SysReg::PmovsclrEl0 },
+                IrOp::WriteSys { src: 1, reg: SysReg::PmxevtyperEl0 },
+                IrOp::WriteSys { src: 1, reg: SysReg::PmxevcntrEl0 },
+                IrOp::WriteSys { src: 1, reg: SysReg::PmuserenrEl0 },
+                IrOp::WriteSys { src: 1, reg: SysReg::CntkctlEl1 },
+                IrOp::WriteSys { src: 1, reg: SysReg::TpidrEl2 },
+                IrOp::WriteSys { src: 1, reg: SysReg::Fpcr },
+                IrOp::WriteSys { src: 1, reg: SysReg::Fpsr },
+                IrOp::WriteSys { src: 1, reg: SysReg::OsdlrEl1 },
                 IrOp::ReadSys { dst: 2, reg: SysReg::SctlrEl1 },
                 IrOp::ReadSys { dst: 3, reg: SysReg::TpidrEl1 },
                 IrOp::ReadSys { dst: 4, reg: SysReg::CnthctlEl2 },
@@ -381,6 +399,89 @@ mod tests {
         // TTBR1_EL1 (GB-19, host-call index 14) round-trips through the host.
         assert_eq!(regs[11], 0xdead);
         assert_eq!(host.sysregs.ttbr1_el1, 0xdead);
+        // P3 (host-call indices 27..=44): the new registers store and read
+        // back through the same host-call path the kernel will use.
+        assert_eq!(host.sysregs.icc_pmr_el1, 0xdead);
+        assert_eq!(host.sysregs.icc_ctlr_el1, 0xdead);
+        assert_eq!(host.sysregs.icc_igrpen1_el1, 0xdead);
+        assert_eq!(host.sysregs.icc_sre_el1, 0xdead);
+        assert_eq!(host.sysregs.icc_eoir1_el1, 0xdead);
+        assert_eq!(host.sysregs.icc_dir_el1, 0xdead);
+        assert_eq!(host.sysregs.pmcnt_enclr_el0, 0xdead);
+        assert_eq!(host.sysregs.pmovsclr_el0, 0xdead);
+        assert_eq!(host.sysregs.pmxevtyper_el0, 0xdead);
+        assert_eq!(host.sysregs.pmxevcntr_el0, 0xdead);
+        assert_eq!(host.sysregs.pmuserenr_el0, 0xdead);
+        assert_eq!(host.sysregs.cntkctl_el1, 0xdead);
+        assert_eq!(host.sysregs.tpidr_el2, 0xdead);
+        assert_eq!(host.sysregs.fpcr, 0xdead);
+        assert_eq!(host.sysregs.fpsr, 0xdead);
+        assert_eq!(host.sysregs.osdlr_el1, 0xdead);
+    }
+
+    #[test]
+    fn backend_p3_tval_derives_from_cval() {
+        // P3 slice D: CNTP_TVAL_EL0 is the honest CVAL alias. Pre-load the
+        // host's compare, then MSR TVAL and read it back through the host
+        // calls the compiled block will use.
+        let mut exe = WasmiExecutor::new();
+        let mut regs = [0u64; 31];
+        let mut host = RamHost::new(0x1000);
+        host.sysregs.cntpct_el0 = 1_000_000;
+        host.sysregs.cntp_cval_el0 = 2_000_000;
+        // Read TVAL: expect 1_000_000 (low 32 bits of 2M − 1M).
+        let wasm = compile(
+            vec![
+                IrOp::ReadSys {
+                    dst: 0,
+                    reg: SysReg::CntpTvalEl0,
+                },
+                IrOp::Branch { target: 0x10 },
+            ],
+            vec![BlockExit::Branch(0x10)],
+        );
+        exe.run_block(&wasm, &mut regs, &mut host).unwrap();
+        assert_eq!(regs[0], 1_000_000);
+        // Write TVAL = 500_000: CVAL becomes counter + 500_000.
+        let wasm = compile(
+            vec![
+                IrOp::Mov { dst: 1, imm: 500_000 },
+                IrOp::WriteSys {
+                    src: 1,
+                    reg: SysReg::CntpTvalEl0,
+                },
+                IrOp::Branch { target: 0x10 },
+            ],
+            vec![BlockExit::Branch(0x10)],
+        );
+        exe.run_block(&wasm, &mut regs, &mut host).unwrap();
+        assert_eq!(host.sysregs.cntp_cval_el0, 1_500_000);
+    }
+
+    #[test]
+    fn backend_p3_gic_defaults() {
+        // P3 slice A: ICC_SRE_EL1 defaults to 1 (sysreg path) and
+        // ICC_PMR_EL1 to 0 (all masked) in a fresh host.
+        let wasm = compile(
+            vec![
+                IrOp::ReadSys {
+                    dst: 0,
+                    reg: SysReg::IccSreEl1,
+                },
+                IrOp::ReadSys {
+                    dst: 1,
+                    reg: SysReg::IccPmrEl1,
+                },
+                IrOp::Branch { target: 0x10 },
+            ],
+            vec![BlockExit::Branch(0x10)],
+        );
+        let mut exe = WasmiExecutor::new();
+        let mut regs = [0u64; 31];
+        let mut host = RamHost::new(0x1000);
+        exe.run_block(&wasm, &mut regs, &mut host).unwrap();
+        assert_eq!(regs[0], 0x1);
+        assert_eq!(regs[1], 0x0);
     }
 
     #[test]

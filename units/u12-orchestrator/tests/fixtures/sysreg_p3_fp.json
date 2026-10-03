@@ -1,0 +1,35 @@
+[
+  {
+    "name": "fpcr_fpsr_roundtrip",
+    "steps": [
+      {
+        "word": 3531753096,
+        "disasm": "movz x8, #0x1234"
+      },
+      {
+        "word": 3575333896,
+        "disasm": "msr fpcr, x8"
+      },
+      {
+        "word": 3577431049,
+        "disasm": "mrs x9, fpcr"
+      },
+      {
+        "word": 3575333928,
+        "disasm": "msr fpsr, x8"
+      },
+      {
+        "word": 3577431082,
+        "disasm": "mrs x10, fpsr"
+      }
+    ],
+    "expected_regs": {
+      "9": 4660,
+      "10": 4660
+    },
+    "expected_sysregs": {
+      "fpcr": 4660,
+      "fpsr": 4660
+    }
+  }
+]

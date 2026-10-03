@@ -56,6 +56,41 @@ pub struct SysRegs {
     pub pmselr_el0: u64,
     /// Auxiliary Control Register, EL1 (P2, 2026-10-03): returns 0.
     pub actlr_el1: u64,
+    // P3 slice A — GICv3 CPU interface (2026-10-03, feat/emu-p3-impl).
+    // No GIC model exists: register-level semantics only, enough for the
+    // kernel's irq-gic-v3 probe and entry.S IRQ path to proceed.
+    /// ICC_SRE_EL1: SRE=1 by default (sysreg path), stored, RW.
+    pub icc_sre_el1: u64,
+    /// ICC_CTLR_EL1: stored u64.
+    pub icc_ctlr_el1: u64,
+    /// ICC_IGRPEN1_EL1: stored u64.
+    pub icc_igrpen1_el1: u64,
+    /// ICC_PMR_EL1: stored u64, default 0 (all masked, honest).
+    pub icc_pmr_el1: u64,
+    /// ICC_EOIR1_EL1: write-only, stored, no behavior.
+    pub icc_eoir1_el1: u64,
+    /// ICC_DIR_EL1: write-only, stored, no behavior.
+    pub icc_dir_el1: u64,
+    // P3 slice C — PMU remainder (2026-10-03).
+    /// PMCNTENCLR_EL0 / PMOVSCLR_EL0 / PMXEVTYPER_EL0 / PMXEVCNTR_EL0 /
+    /// PMUSERENR_EL0: stored u64, no counter behavior.
+    pub pmcnt_enclr_el0: u64,
+    pub pmovsclr_el0: u64,
+    pub pmxevtyper_el0: u64,
+    pub pmxevcntr_el0: u64,
+    pub pmuserenr_el0: u64,
+    // P3 slice D — timers (2026-10-03).
+    /// CNTKCTL_EL1: stored u64.
+    pub cntkctl_el1: u64,
+    /// TPIDR_EL2: stored u64 (hyp code is unreachable at EL1).
+    pub tpidr_el2: u64,
+    // P3 slice E — FP/SIMD (2026-10-03).
+    /// FPCR / FPSR: stored u64 (32-bit registers in 64-bit slots).
+    pub fpcr: u64,
+    pub fpsr: u64,
+    // P3 slice F — debug (2026-10-03).
+    /// OSDLR_EL1: write-only, stored, no behavior.
+    pub osdlr_el1: u64,
 }
 
 impl Default for SysRegs {
@@ -103,6 +138,29 @@ impl Default for SysRegs {
             pmcntenset_el0: 0,
             pmselr_el0: 0,
             actlr_el1: 0,
+            // P3 slice A (GICv3): SRE=1 so the kernel takes the sysreg
+            // path; PMR=0 (all masked — no GIC model, no interrupts).
+            icc_sre_el1: 0x1,
+            icc_ctlr_el1: 0,
+            icc_igrpen1_el1: 0,
+            icc_pmr_el1: 0,
+            icc_eoir1_el1: 0,
+            icc_dir_el1: 0,
+            // P3 slice C (PMU): architecturally UNKNOWN at reset; kernel
+            // always writes before relying on them.
+            pmcnt_enclr_el0: 0,
+            pmovsclr_el0: 0,
+            pmxevtyper_el0: 0,
+            pmxevcntr_el0: 0,
+            pmuserenr_el0: 0,
+            // P3 slice D (timers): UNKNOWN at reset; kernel programs them.
+            cntkctl_el1: 0,
+            tpidr_el2: 0,
+            // P3 slice E (FP/SIMD): UNKNOWN at reset; kernel saves first.
+            fpcr: 0,
+            fpsr: 0,
+            // P3 slice F (debug): write-only, UNKNOWN at reset.
+            osdlr_el1: 0,
         }
     }
 }
@@ -147,6 +205,36 @@ impl SysRegs {
             SysReg::PmcntensetEl0 => self.pmcntenset_el0,
             SysReg::PmselrEl0 => self.pmselr_el0,
             SysReg::ActlrEl1 => self.actlr_el1,
+            // P3 slice A (GICv3 CPU interface).
+            SysReg::IccSreEl1 => self.icc_sre_el1,
+            SysReg::IccCtlrEl1 => self.icc_ctlr_el1,
+            SysReg::IccIgrpen1El1 => self.icc_igrpen1_el1,
+            SysReg::IccPmrEl1 => self.icc_pmr_el1,
+            SysReg::IccEoir1El1 => self.icc_eoir1_el1,
+            SysReg::IccDirEl1 => self.icc_dir_el1,
+            // P3 slice C (PMU).
+            SysReg::PmcntEnClrEl0 => self.pmcnt_enclr_el0,
+            SysReg::PmovsclrEl0 => self.pmovsclr_el0,
+            SysReg::PmxevtyperEl0 => self.pmxevtyper_el0,
+            SysReg::PmxevcntrEl0 => self.pmxevcntr_el0,
+            SysReg::PmuserenrEl0 => self.pmuserenr_el0,
+            // P3 slice D (timers).
+            SysReg::CntkctlEl1 => self.cntkctl_el1,
+            SysReg::TpidrEl2 => self.tpidr_el2,
+            // CNTP_TVAL_EL0 / CNTV_TVAL_EL0 are honest aliases of CVAL:
+            // read = low 32 bits of (compare − counter).
+            SysReg::CntpTvalEl0 => {
+                self.cntp_cval_el0.wrapping_sub(self.cntpct_el0) as u32 as u64
+            }
+            SysReg::CntvTvalEl0 => {
+                let vct = self.cntpct_el0.wrapping_sub(self.cntvoff_el2);
+                self.cntv_cval_el0.wrapping_sub(vct) as u32 as u64
+            }
+            // P3 slice E (FP/SIMD).
+            SysReg::Fpcr => self.fpcr,
+            SysReg::Fpsr => self.fpsr,
+            // P3 slice F (debug).
+            SysReg::OsdlrEl1 => self.osdlr_el1,
         }
     }
 
@@ -181,6 +269,37 @@ impl SysRegs {
             SysReg::PmcntensetEl0 => self.pmcntenset_el0 = val,
             SysReg::PmselrEl0 => self.pmselr_el0 = val,
             SysReg::ActlrEl1 => self.actlr_el1 = val,
+            // P3 slice A (GICv3 CPU interface).
+            SysReg::IccSreEl1 => self.icc_sre_el1 = val,
+            SysReg::IccCtlrEl1 => self.icc_ctlr_el1 = val,
+            SysReg::IccIgrpen1El1 => self.icc_igrpen1_el1 = val,
+            SysReg::IccPmrEl1 => self.icc_pmr_el1 = val,
+            SysReg::IccEoir1El1 => self.icc_eoir1_el1 = val,
+            SysReg::IccDirEl1 => self.icc_dir_el1 = val,
+            // P3 slice C (PMU).
+            SysReg::PmcntEnClrEl0 => self.pmcnt_enclr_el0 = val,
+            SysReg::PmovsclrEl0 => self.pmovsclr_el0 = val,
+            SysReg::PmxevtyperEl0 => self.pmxevtyper_el0 = val,
+            SysReg::PmxevcntrEl0 => self.pmxevcntr_el0 = val,
+            SysReg::PmuserenrEl0 => self.pmuserenr_el0 = val,
+            // P3 slice D (timers).
+            SysReg::CntkctlEl1 => self.cntkctl_el1 = val,
+            SysReg::TpidrEl2 => self.tpidr_el2 = val,
+            // TVAL is an alias view of CVAL: writing TVAL sets
+            // CVAL = counter + value[31:0] (the architectural definition).
+            SysReg::CntpTvalEl0 => {
+                self.cntp_cval_el0 =
+                    self.cntpct_el0.wrapping_add(val & 0xffff_ffff)
+            }
+            SysReg::CntvTvalEl0 => {
+                let vct = self.cntpct_el0.wrapping_sub(self.cntvoff_el2);
+                self.cntv_cval_el0 = vct.wrapping_add(val & 0xffff_ffff)
+            }
+            // P3 slice E (FP/SIMD).
+            SysReg::Fpcr => self.fpcr = val,
+            SysReg::Fpsr => self.fpsr = val,
+            // P3 slice F (debug).
+            SysReg::OsdlrEl1 => self.osdlr_el1 = val,
         }
     }
 
@@ -215,6 +334,26 @@ impl SysRegs {
             24 => Some(SysReg::PmcntensetEl0),
             25 => Some(SysReg::PmselrEl0),
             26 => Some(SysReg::ActlrEl1),
+            // P3 (2026-10-03): GICv3 CPU interface, PMU remainder, timers,
+            // FP/SIMD, debug.
+            27 => Some(SysReg::IccSreEl1),
+            28 => Some(SysReg::IccCtlrEl1),
+            29 => Some(SysReg::IccIgrpen1El1),
+            30 => Some(SysReg::IccPmrEl1),
+            31 => Some(SysReg::IccEoir1El1),
+            32 => Some(SysReg::IccDirEl1),
+            33 => Some(SysReg::PmcntEnClrEl0),
+            34 => Some(SysReg::PmovsclrEl0),
+            35 => Some(SysReg::PmxevtyperEl0),
+            36 => Some(SysReg::PmxevcntrEl0),
+            37 => Some(SysReg::PmuserenrEl0),
+            38 => Some(SysReg::CntkctlEl1),
+            39 => Some(SysReg::TpidrEl2),
+            40 => Some(SysReg::CntpTvalEl0),
+            41 => Some(SysReg::CntvTvalEl0),
+            42 => Some(SysReg::Fpcr),
+            43 => Some(SysReg::Fpsr),
+            44 => Some(SysReg::OsdlrEl1),
             _ => None,
         }
     }
@@ -259,7 +398,7 @@ pub const MAX_GUEST_RAM_BYTES: usize = 2 * 1024 * 1024 * 1024;
 pub struct Snapshot(pub Vec<u8>);
 
 /// Current snapshot format version. Bump on any format change.
-pub const SNAPSHOT_VERSION: u32 = 11;
+pub const SNAPSHOT_VERSION: u32 = 12;
 
 /// Snapshot restore failure. Data, not panic — corrupt input never crashes the host.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -366,5 +505,55 @@ mod tests {
         // Virtual counter subtracts the offset.
         s.cntvoff_el2 = 100;
         assert_eq!(s.load(SysReg::CntvctEl0), 900);
+    }
+
+    #[test]
+    fn p3_tval_aliases_cval_minus_counter() {
+        // P3 slice D: CNTP_TVAL_EL0 is an alias view of CVAL.
+        let mut s = SysRegs::default();
+        s.cntpct_el0 = 1_000_000;
+        // Write TVAL: sets CVAL = counter + value[31:0].
+        s.store(SysReg::CntpTvalEl0, 62_500_000);
+        assert_eq!(s.load(SysReg::CntpCvalEl0), 63_500_000);
+        // Read TVAL: low 32 bits of (CVAL − counter).
+        assert_eq!(s.load(SysReg::CntpTvalEl0), 62_500_000);
+        s.cntpct_el0 = 1_500_000; // counter advances: TVAL shrinks.
+        assert_eq!(s.load(SysReg::CntpTvalEl0), 62_000_000);
+        // Wrapped case: CVAL below counter reads as 32-bit wrap.
+        s.store(SysReg::CntpCvalEl0, 100);
+        s.cntpct_el0 = 200;
+        assert_eq!(s.load(SysReg::CntpTvalEl0), 0xffff_ffff - 99);
+        // Virtual TVAL subtracts the offset from the counter first.
+        s.cntvoff_el2 = 50;
+        s.cntpct_el0 = 1_000;
+        s.store(SysReg::CntvTvalEl0, 5_000);
+        assert_eq!(s.load(SysReg::CntvCvalEl0), 5_950);
+        assert_eq!(s.load(SysReg::CntvTvalEl0), 5_000);
+    }
+
+    #[test]
+    fn p3_gic_defaults_are_boot_sane() {
+        // P3 slice A: SRE=1 so the kernel takes the sysreg GIC path;
+        // PMR=0 (all masked — no GIC model, honest); the rest default 0.
+        let s = SysRegs::default();
+        assert_eq!(s.load(SysReg::IccSreEl1), 0x1);
+        assert_eq!(s.load(SysReg::IccPmrEl1), 0);
+        assert_eq!(s.load(SysReg::IccCtlrEl1), 0);
+        assert_eq!(s.load(SysReg::IccIgrpen1El1), 0);
+        // MSR/MRS round-trip through the host selector.
+        let mut s = s;
+        s.store(SysReg::IccPmrEl1, 0xff);
+        assert_eq!(s.load(SysReg::IccPmrEl1), 0xff);
+        // from_index pins the new discriminants 27..=44.
+        for (idx, reg) in [
+            (27, SysReg::IccSreEl1),
+            (31, SysReg::IccEoir1El1),
+            (40, SysReg::CntpTvalEl0),
+            (42, SysReg::Fpcr),
+            (44, SysReg::OsdlrEl1),
+        ] {
+            assert_eq!(SysRegs::from_index(idx), Some(reg));
+        }
+        assert_eq!(SysRegs::from_index(45), None);
     }
 }

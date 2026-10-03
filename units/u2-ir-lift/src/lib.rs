@@ -292,6 +292,45 @@ fn lift_system(word: u32) -> Vec<IrOp> {
             // PMSELR_EL0 (P2, 2026-10-03): kernel probes the PMU during
             // boot. S3_3_C9_C12_5. Stored as u64, default 0.
             (3, 3, 9, 12, 5) => SysReg::PmselrEl0,
+            // P3 slice A — GICv3 CPU interface (2026-10-03, feat/emu-p3-impl).
+            // ICC_SRE_EL1 S3_0_C12_C12_5: returns SRE=1 (default), the
+            // kernel then takes the sysreg GIC access path.
+            (3, 0, 12, 12, 5) => SysReg::IccSreEl1,
+            // ICC_CTLR_EL1 S3_0_C12_C12_4: stored u64.
+            (3, 0, 12, 12, 4) => SysReg::IccCtlrEl1,
+            // ICC_IGRPEN1_EL1 S3_0_C12_C12_7: stored u64.
+            (3, 0, 12, 12, 7) => SysReg::IccIgrpen1El1,
+            // ICC_PMR_EL1 S3_0_C4_C6_0: stored u64 (default all-masked).
+            (3, 0, 4, 6, 0) => SysReg::IccPmrEl1,
+            // P3 slice C — PMU remainder.
+            // PMCNTENCLR_EL0 S3_3_C9_C12_2, PMOVSCLR_EL0 S3_3_C9_C12_3:
+            // stored u64.
+            (3, 3, 9, 12, 2) => SysReg::PmcntEnClrEl0,
+            (3, 3, 9, 12, 3) => SysReg::PmovsclrEl0,
+            // PMXEVCNTR_EL0 S3_3_C9_C13_2: stored u64.
+            (3, 3, 9, 13, 2) => SysReg::PmxevcntrEl0,
+            // PMXEVTYPER_EL0 S3_3_C9_C13_1: stored u64 (not in the P3
+            // static list, but architecturally RW — MRS must agree with
+            // the MSR).
+            (3, 3, 9, 13, 1) => SysReg::PmxevtyperEl0,
+            // PMUSERENR_EL0 S3_3_C9_C14_0: P2 returned constant 0 on MRS;
+            // P3 stores it so MSR/MRS round-trip (kernel writes xzr).
+            (3, 3, 9, 14, 0) => SysReg::PmuserenrEl0,
+            // P3 slice D — timers.
+            // CNTKCTL_EL1 S3_0_C14_C1_0: stored u64.
+            (3, 0, 14, 1, 0) => SysReg::CntkctlEl1,
+            // TPIDR_EL2 S3_4_C13_C0_2: P2 returned constant 0; P3 stores it
+            // (hyp code is unreachable at EL1, but MSR/MRS now agree).
+            (3, 4, 13, 0, 2) => SysReg::TpidrEl2,
+            // CNTP_TVAL_EL0 S3_3_C14_C2_0: honest alias of CVAL
+            // (read = low 32 bits of CVAL − counter).
+            (3, 3, 14, 2, 0) => SysReg::CntpTvalEl0,
+            // CNTV_TVAL_EL0 S3_3_C14_C3_0: virtual-counter alias.
+            (3, 3, 14, 3, 0) => SysReg::CntvTvalEl0,
+            // P3 slice E — FP/SIMD.
+            // FPCR S3_3_C4_C4_0, FPSR S3_3_C4_C4_1: stored u64.
+            (3, 3, 4, 4, 0) => SysReg::Fpcr,
+            (3, 3, 4, 4, 1) => SysReg::Fpsr,
             _ => {
                 return {
                     let val: u64 = match (op0, op1, crn, crm, op2) {
@@ -383,8 +422,55 @@ fn lift_system(word: u32) -> Vec<IrOp> {
                         // errata workarounds that poke IMPLEMENTATION DEFINED
                         // registers we don't model.)
                         (3, 0, 0, 0, 0) => 0,
-                        // TPIDR_EL2: Hypervisor Thread ID (4,998 static hits)
-                        (3, 4, 13, 0, 2) => 0,
+                        // (P3, 2026-10-03) TPIDR_EL2 graduated to persistent
+                        // (ReadSys); the constant-0 arm moved to the
+                        // persistent match above.
+                        // P3 slice A — GICv3 CPU interface.
+                        // ICC_IAR1_EL1 S3_0_C12_C12_0 (read-only): 0x3ff =
+                        // spurious, "no pending interrupt". Honest while we
+                        // have no GIC model and deliver no interrupts: the
+                        // kernel's entry.S el1_irq path reads this and must
+                        // not see a phantom interrupt number.
+                        (3, 0, 12, 12, 0) => 0x3ff,
+                        // P3 slice B — ID register family completion. All 0:
+                        // the conservative "no optional features advertised"
+                        // answer (GB-14/GB-16 pattern). The kernel's cpuinfo
+                        // block and alternatives framework take the generic
+                        // fallback path instead of patching in optimized
+                        // sequences we can't execute.
+                        // AArch32 ID registers (read by /proc/cpuinfo block).
+                        (3, 0, 0, 1, 0) => 0, // ID_PFR0_EL1
+                        (3, 0, 0, 1, 1) => 0, // ID_PFR1_EL1
+                        (3, 0, 0, 1, 2) => 0, // ID_DFR0_EL1
+                        (3, 0, 0, 1, 4) => 0, // ID_MMFR0_EL1
+                        (3, 0, 0, 1, 5) => 0, // ID_MMFR1_EL1
+                        (3, 0, 0, 1, 6) => 0, // ID_MMFR2_EL1
+                        (3, 0, 0, 1, 7) => 0, // ID_MMFR3_EL1
+                        (3, 0, 0, 2, 0) => 0, // ID_ISAR0_EL1
+                        (3, 0, 0, 2, 1) => 0, // ID_ISAR1_EL1
+                        (3, 0, 0, 2, 2) => 0, // ID_ISAR2_EL1
+                        (3, 0, 0, 2, 3) => 0, // ID_ISAR3_EL1
+                        (3, 0, 0, 2, 4) => 0, // ID_ISAR4_EL1
+                        (3, 0, 0, 2, 5) => 0, // ID_ISAR5_EL1
+                        (3, 0, 0, 3, 0) => 0, // MVFR0_EL1
+                        (3, 0, 0, 3, 1) => 0, // MVFR1_EL1
+                        (3, 0, 0, 3, 2) => 0, // MVFR2_EL1
+                        // AArch64: revision + debug + SVE.
+                        (3, 0, 0, 0, 6) => 0, // REVIDR_EL1
+                        (3, 0, 0, 5, 1) => 0, // ID_AA64DFR1_EL1
+                        (3, 0, 0, 4, 4) => 0, // ID_AA64ZFR0_EL1: 0 = no SVE
+                        // P3 slice C — PMU: 0 = no common events advertised /
+                        // no SPE buffer.
+                        (3, 3, 9, 12, 6) => 0, // PMCEID0_EL0
+                        (3, 3, 9, 12, 7) => 0, // PMCEID1_EL0
+                        (3, 0, 9, 10, 7) => 0, // PMBIDR_EL1
+                        // P3 slice F — debug: OSLSR_EL1 = 0 (OSLK=0, lock
+                        // not implemented). (OSDLR_EL1 is write-only: its
+                        // MRS encoding is UNDEFINED and traps — see
+                        // p3_write_only_sysregs_trap_on_mrs.)
+                        (2, 0, 1, 1, 4) => 0, // OSLSR_EL1
+                        // (P3, 2026-10-03) PMUSERENR_EL0 graduated to
+                        // persistent (ReadSys); constant-0 arm moved above.
                         // CLIDR_EL1: Cache Level ID Register (10 static hits)
                         // L1 Harvard (separate I/D), L2 unified, LoUIS=1, LoUU=1, LoC=2
                         (3, 1, 0, 0, 1) => 0x0920_0023,
@@ -407,8 +493,9 @@ fn lift_system(word: u32) -> Vec<IrOp> {
                         (3, 0, 4, 0, 1) => 0, // ELR_EL1
                         (3, 0, 4, 0, 0) => 0, // SPSR_EL1
                         // Performance monitors
-                        (3, 3, 9, 12, 0) => 0, // PMCR_EL0
-                        (3, 3, 9, 14, 0) => 0, // PMUSERENR_EL0
+                        // PMCR_EL0 (P3: PMUSERENR_EL0 graduated to persistent
+                        // above, so it no longer belongs in this list).
+                        (3, 3, 9, 12, 0) => 0,
                         _ => return trap(R_SYSTEM),
                     };
                     vec![IrOp::Mov { dst: rt, imm: val }]
@@ -483,6 +570,40 @@ fn lift_system(word: u32) -> Vec<IrOp> {
             // PMSELR_EL0 (P2, 2026-10-03): kernel probes the PMU during
             // boot (MSR PMSELR_EL0, Xt). S3_3_C9_C12_5. Stored as u64.
             (3, 3, 9, 12, 5) => SysReg::PmselrEl0,
+            // P3 slice A — GICv3 CPU interface (2026-10-03).
+            // ICC_EOIR1_EL1 S3_0_C12_C12_1: write-only accept (no interrupt
+            // state to complete against yet).
+            (3, 0, 12, 12, 1) => SysReg::IccEoir1El1,
+            // ICC_DIR_EL1 S3_0_C12_C11_1: write-only accept.
+            (3, 0, 12, 11, 1) => SysReg::IccDirEl1,
+            // ICC_SRE_EL1 / ICC_CTLR_EL1 / ICC_IGRPEN1_EL1 / ICC_PMR_EL1:
+            // stored u64.
+            (3, 0, 12, 12, 5) => SysReg::IccSreEl1,
+            (3, 0, 12, 12, 4) => SysReg::IccCtlrEl1,
+            (3, 0, 12, 12, 7) => SysReg::IccIgrpen1El1,
+            (3, 0, 4, 6, 0) => SysReg::IccPmrEl1,
+            // P3 slice C — PMU remainder.
+            // PMCNTENCLR_EL0 / PMOVSCLR_EL0 / PMXEVTYPER_EL0 / PMXEVCNTR_EL0 /
+            // PMUSERENR_EL0: stored u64.
+            (3, 3, 9, 12, 2) => SysReg::PmcntEnClrEl0,
+            (3, 3, 9, 12, 3) => SysReg::PmovsclrEl0,
+            (3, 3, 9, 13, 1) => SysReg::PmxevtyperEl0,
+            (3, 3, 9, 13, 2) => SysReg::PmxevcntrEl0,
+            (3, 3, 9, 14, 0) => SysReg::PmuserenrEl0,
+            // P3 slice D — timers.
+            // CNTKCTL_EL1 S3_0_C14_C1_0: stored u64.
+            (3, 0, 14, 1, 0) => SysReg::CntkctlEl1,
+            // TPIDR_EL2 S3_4_C13_C0_2: stored (hyp code unreachable at EL1).
+            (3, 4, 13, 0, 2) => SysReg::TpidrEl2,
+            // CNTP_TVAL_EL0 / CNTV_TVAL_EL0: write sets CVAL = counter +
+            // value[31:0] (honest alias semantics).
+            (3, 3, 14, 2, 0) => SysReg::CntpTvalEl0,
+            (3, 3, 14, 3, 0) => SysReg::CntvTvalEl0,
+            // P3 slice E — FP/SIMD: FPCR / FPSR stored u64.
+            (3, 3, 4, 4, 0) => SysReg::Fpcr,
+            (3, 3, 4, 4, 1) => SysReg::Fpsr,
+            // P3 slice F — debug: OSDLR_EL1 write-only, stored.
+            (2, 0, 1, 3, 4) => SysReg::OsdlrEl1,
             // MSR DAIFSet, #imm (op2=6) / MSR DAIFClr, #imm (op2=7): real
             // read-modify-write of the persistent DAIF (GB-11). Upgrades
             // the GB-3 accepted no-ops to honest state.
@@ -3441,6 +3562,26 @@ mod tests {
             ((3, 0, 1, 0, 1), SysReg::ActlrEl1),
             ((3, 3, 9, 12, 1), SysReg::PmcntensetEl0),
             ((3, 3, 9, 12, 5), SysReg::PmselrEl0),
+            // P3 slice A (GICv3): SRE/CTLR/IGRPEN1/PMR are persistent.
+            // (IAR1/EOIR1/DIR are WO/RO-accept, not persistent reads.)
+            ((3, 0, 12, 12, 5), SysReg::IccSreEl1),
+            ((3, 0, 12, 12, 4), SysReg::IccCtlrEl1),
+            ((3, 0, 12, 12, 7), SysReg::IccIgrpen1El1),
+            ((3, 0, 4, 6, 0), SysReg::IccPmrEl1),
+            // P3 slice C (PMU remainder).
+            ((3, 3, 9, 12, 2), SysReg::PmcntEnClrEl0),
+            ((3, 3, 9, 12, 3), SysReg::PmovsclrEl0),
+            ((3, 3, 9, 13, 2), SysReg::PmxevcntrEl0),
+            ((3, 3, 9, 13, 1), SysReg::PmxevtyperEl0),
+            ((3, 3, 9, 14, 0), SysReg::PmuserenrEl0),
+            // P3 slice D (timers): CNTKCTL, TPIDR_EL2, TVAL aliases.
+            ((3, 0, 14, 1, 0), SysReg::CntkctlEl1),
+            ((3, 4, 13, 0, 2), SysReg::TpidrEl2),
+            ((3, 3, 14, 2, 0), SysReg::CntpTvalEl0),
+            ((3, 3, 14, 3, 0), SysReg::CntvTvalEl0),
+            // P3 slice E (FP/SIMD): FPCR/FPSR.
+            ((3, 3, 4, 4, 0), SysReg::Fpcr),
+            ((3, 3, 4, 4, 1), SysReg::Fpsr),
         ];
         for ((op0, op1, crn, crm, op2), reg) in mrs_cases {
             let word = sys_word(op0, op1, crn, crm, op2, 7, true);
@@ -3470,6 +3611,29 @@ mod tests {
             ((2, 0, 1, 0, 4), SysReg::OslarEl1),
             ((3, 3, 9, 12, 1), SysReg::PmcntensetEl0),
             ((3, 3, 9, 12, 5), SysReg::PmselrEl0),
+            // P3 slice A (GICv3): EOIR1/DIR WO-accept; SRE/CTLR/IGRPEN1/PMR.
+            ((3, 0, 12, 12, 1), SysReg::IccEoir1El1),
+            ((3, 0, 12, 11, 1), SysReg::IccDirEl1),
+            ((3, 0, 12, 12, 5), SysReg::IccSreEl1),
+            ((3, 0, 12, 12, 4), SysReg::IccCtlrEl1),
+            ((3, 0, 12, 12, 7), SysReg::IccIgrpen1El1),
+            ((3, 0, 4, 6, 0), SysReg::IccPmrEl1),
+            // P3 slice C (PMU remainder).
+            ((3, 3, 9, 12, 2), SysReg::PmcntEnClrEl0),
+            ((3, 3, 9, 12, 3), SysReg::PmovsclrEl0),
+            ((3, 3, 9, 13, 1), SysReg::PmxevtyperEl0),
+            ((3, 3, 9, 13, 2), SysReg::PmxevcntrEl0),
+            ((3, 3, 9, 14, 0), SysReg::PmuserenrEl0),
+            // P3 slice D (timers).
+            ((3, 0, 14, 1, 0), SysReg::CntkctlEl1),
+            ((3, 4, 13, 0, 2), SysReg::TpidrEl2),
+            ((3, 3, 14, 2, 0), SysReg::CntpTvalEl0),
+            ((3, 3, 14, 3, 0), SysReg::CntvTvalEl0),
+            // P3 slice E (FP/SIMD).
+            ((3, 3, 4, 4, 0), SysReg::Fpcr),
+            ((3, 3, 4, 4, 1), SysReg::Fpsr),
+            // P3 slice F (debug): OSDLR_EL1 write-only.
+            ((2, 0, 1, 3, 4), SysReg::OsdlrEl1),
         ];
         for ((op0, op1, crn, crm, op2), reg) in msr_cases {
             let word = sys_word(op0, op1, crn, crm, op2, 5, false);
@@ -3493,6 +3657,85 @@ mod tests {
             lift(&insn(0x4000, w, InsnKind::System)),
             vec![IrOp::Mov { dst: 2, imm: 0x11 }]
         );
+    }
+
+    #[test]
+    fn p3_mrs_constants_lift_to_mov() {
+        // P3 slice A: MRS ICC_IAR1_EL1 (S3_0_C12_C12_0, Rt=X22 in the
+        // kernel's entry.S) -> 0x3ff = spurious, "no pending interrupt".
+        let w = sys_word(3, 0, 12, 12, 0, 22, true);
+        assert_eq!(
+            lift(&insn(0x4000, w, InsnKind::System)),
+            vec![IrOp::Mov { dst: 22, imm: 0x3ff }]
+        );
+        // P3 slice B: ID family completion -> all 0 (conservative).
+        let id_cases = [
+            (3, 0, 0, 1, 0), // ID_PFR0_EL1
+            (3, 0, 0, 1, 1), // ID_PFR1_EL1
+            (3, 0, 0, 1, 2), // ID_DFR0_EL1
+            (3, 0, 0, 1, 4), // ID_MMFR0_EL1
+            (3, 0, 0, 1, 5), // ID_MMFR1_EL1
+            (3, 0, 0, 1, 6), // ID_MMFR2_EL1
+            (3, 0, 0, 1, 7), // ID_MMFR3_EL1
+            (3, 0, 0, 2, 0), // ID_ISAR0_EL1
+            (3, 0, 0, 2, 1), // ID_ISAR1_EL1
+            (3, 0, 0, 2, 2), // ID_ISAR2_EL1
+            (3, 0, 0, 2, 3), // ID_ISAR3_EL1
+            (3, 0, 0, 2, 4), // ID_ISAR4_EL1
+            (3, 0, 0, 2, 5), // ID_ISAR5_EL1
+            (3, 0, 0, 3, 0), // MVFR0_EL1
+            (3, 0, 0, 3, 1), // MVFR1_EL1
+            (3, 0, 0, 3, 2), // MVFR2_EL1
+            (3, 0, 0, 0, 6), // REVIDR_EL1
+            (3, 0, 0, 5, 1), // ID_AA64DFR1_EL1
+            (3, 0, 0, 4, 4), // ID_AA64ZFR0_EL1
+        ];
+        for (op0, op1, crn, crm, op2) in id_cases {
+            let w = sys_word(op0, op1, crn, crm, op2, 8, true);
+            assert_eq!(
+                lift(&insn(0x4000, w, InsnKind::System)),
+                vec![IrOp::Mov { dst: 8, imm: 0 }],
+                "mrs {op0} {op1} {crn} {crm} {op2}"
+            );
+        }
+        // P3 slice C: PMCEID0/1 and PMBIDR -> 0 (no events / no SPE).
+        for (op0, op1, crn, crm, op2) in [
+            (3, 3, 9, 12, 6), // PMCEID0_EL0
+            (3, 3, 9, 12, 7), // PMCEID1_EL0
+            (3, 0, 9, 10, 7), // PMBIDR_EL1
+        ] {
+            let w = sys_word(op0, op1, crn, crm, op2, 4, true);
+            assert_eq!(
+                lift(&insn(0x4000, w, InsnKind::System)),
+                vec![IrOp::Mov { dst: 4, imm: 0 }],
+                "mrs {op0} {op1} {crn} {crm} {op2}"
+            );
+        }
+        // P3 slice F: OSLSR_EL1 -> 0 (OSLK=0).
+        let w = sys_word(2, 0, 1, 1, 4, 10, true);
+        assert_eq!(
+            lift(&insn(0x4000, w, InsnKind::System)),
+            vec![IrOp::Mov { dst: 10, imm: 0 }]
+        );
+    }
+
+    #[test]
+    fn p3_write_only_sysregs_trap_on_mrs() {
+        // ICC_EOIR1_EL1, ICC_DIR_EL1, OSDLR_EL1 are write-only: an MRS
+        // encoding is architecturally UNDEFINED and must trap, not
+        // silently return a value.
+        for (op0, op1, crn, crm, op2) in [
+            (3, 0, 12, 12, 1), // ICC_EOIR1_EL1
+            (3, 0, 12, 11, 1), // ICC_DIR_EL1
+            (2, 0, 1, 3, 4),   // OSDLR_EL1
+        ] {
+            let w = sys_word(op0, op1, crn, crm, op2, 8, true);
+            let ops = lift(&insn(0x4000, w, InsnKind::System));
+            assert!(
+                matches!(ops.as_slice(), [IrOp::Trap { .. }]),
+                "mrs {op0} {op1} {crn} {crm} {op2} must trap, got {ops:?}"
+            );
+        }
     }
 
     #[test]
@@ -4040,9 +4283,14 @@ mod tests {
 
     #[test]
     fn high_frequency_sysregs_lift_correctly() {
+        // P3 (2026-10-03): MRS X0, TPIDR_EL2 is a persistent read now
+        // (P2's constant-0 arm was replaced so MSR/MRS round-trip).
         assert_eq!(
             lift(&insn(0x4000, 0xD53C_D040, InsnKind::System)),
-            vec![IrOp::Mov { dst: 0, imm: 0 }] // MRS X0, TPIDR_EL2
+            vec![IrOp::ReadSys {
+                dst: 0,
+                reg: SysReg::TpidrEl2
+            }] // MRS X0, TPIDR_EL2
         );
         assert_eq!(
             lift(&insn(0x4000, 0xD539_0020, InsnKind::System)),
