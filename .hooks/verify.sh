@@ -9,8 +9,10 @@ fi
 repo_root="$(git rev-parse --show-toplevel)"
 cd "$repo_root"
 
-echo "verify: cargo test --workspace"
-cargo test --workspace --quiet || { echo "verify FAILED: workspace tests" >&2; exit 1; }
+echo "verify: cargo test --workspace (single-threaded: u12 heavy tests allocate"
+echo "verify: ~1GiB Orchestrators; parallel threads OOM the 8GB sandbox)"
+cargo test --workspace --quiet -- --test-threads=1 \
+    || { echo "verify FAILED: workspace tests" >&2; exit 1; }
 
 echo "verify: wasm32 browser-host build"
 cargo build --quiet --target wasm32-unknown-unknown -p web-host \
