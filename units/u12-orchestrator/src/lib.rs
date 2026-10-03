@@ -2030,7 +2030,13 @@ impl Orchestrator {
                     let hi = ((v >> 16) & 0xFFFF).swap_bytes() as u64;
                     lo | (hi << 16)
                 }
-                _ => return None, // RBIT/CLZ/CLS or S=1: not handled here.
+                // RBIT 64-bit: reverse all 64 bits.
+                // (2026-10-03: kernel hits `rbit x9, x9` (0xDAC00129) at
+                // 0xffffff80085c9610, step 20647443.)
+                (1, 0b000000) => rn_val.reverse_bits(),
+                // RBIT 32-bit: reverse low 32 bits, zero-extend.
+                (0, 0b000000) => (rn_val as u32).reverse_bits() as u64,
+                _ => return None, // CLZ/CLS or S=1: not handled here.
             };
             if rd != 31 {
                 self.machine.cpu[0].regs[rd] = result;
@@ -5421,6 +5427,41 @@ mod tests {
             "expected Continue, got: {outcome:?}"
         );
         assert_eq!(o.machine().cpu[0].regs[6], 0x0807_0605_0403_0201);
+        assert_eq!(o.machine().cpu[0].pc, pc + 4);
+    }
+
+    #[test]
+    fn gb27_rbit_64bit() {
+        // Exact kernel word: RBIT X9, X9 (0xDAC00129).
+        // Measured halt at step 20647443 (pc 0xffffff80085c9610).
+        // Reverses all 64 bits.
+        let pc = RAM_BASE + 0x1000;
+        let sp = RAM_BASE + 0x2000;
+        let mut o = sp_test_orchestrator(pc, sp, 0xDAC0_0129);
+        o.machine_mut().cpu[0].regs[9] = 0x8000_0000_0000_0001;
+        let outcome = o.step_vcpu();
+        assert!(
+            matches!(outcome, StepOutcome::Continue),
+            "expected Continue, got: {outcome:?}"
+        );
+        assert_eq!(o.machine().cpu[0].regs[9], 0x8000_0000_0000_0001u64.reverse_bits());
+        assert_eq!(o.machine().cpu[0].pc, pc + 4);
+    }
+
+    #[test]
+    fn gb27_rbit_32bit() {
+        // RBIT W9, W9 (0x5AC00129): reverse low 32 bits, zero-extend.
+        let pc = RAM_BASE + 0x1000;
+        let sp = RAM_BASE + 0x2000;
+        let mut o = sp_test_orchestrator(pc, sp, 0x5AC0_0129);
+        o.machine_mut().cpu[0].regs[9] = 0xFFFF_FFFF_8000_0001;
+        let outcome = o.step_vcpu();
+        assert!(
+            matches!(outcome, StepOutcome::Continue),
+            "expected Continue, got: {outcome:?}"
+        );
+        // Only low 32 bits reversed, upper 32 zeroed.
+        assert_eq!(o.machine().cpu[0].regs[9], 0x8000_0001u32.reverse_bits() as u64);
         assert_eq!(o.machine().cpu[0].pc, pc + 4);
     }
 
