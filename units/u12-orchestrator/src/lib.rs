@@ -1618,6 +1618,60 @@ impl Orchestrator {
             }
         }
 
+        // 7b. Conditional compare: CCMP / CCMN (immediate and register).
+        // 2026-10-03: the 50M-step boot run reached 20,458,502 steps and
+        // halted on `ccmp w3, #4, #0, cs` (0x7A442060) at 0xffffff800808a1f4.
+        // Encoding: sf op S 11010010 imm5/Rm cond 0 o0 Rn nzcv --
+        // bits[30:21] == 0x3D2 (op=1: CCMP) or 0x1D2 (op=0: CCMN),
+        // bit10 (o0) = 0 for immediate, 1 for register.
+        // Semantics: if cond holds, set NZCV as SUBS (CCMP) or ADDS (CCMN)
+        // of Rn and the operand; else set NZCV = nzcv (4-bit immediate).
+        // Executed directly like CSEL: the condition reads the live NZCV
+        // flags from pstate, which the WASM path cannot see.
+        {
+            let b30_21 = (word >> 21) & 0x3FF;
+            if b30_21 == 0x3D2 || b30_21 == 0x1D2 {
+                let sf = (word >> 31) & 1;
+                let op = (word >> 30) & 1; // 0 = CCMN, 1 = CCMP
+                let is_reg = (word >> 10) & 1 == 1;
+                let imm5_rm = (word >> 16) & 0x1F;
+                let cond = ((word >> 12) & 0xF) as u8;
+                let rn = ((word >> 5) & 0x1F) as usize;
+                let nzcv_imm = (word & 0xF) as u64;
+                let cpu = &mut self.machine.cpu[0];
+                let n_val = if rn == 31 { 0 } else { cpu.regs[rn] };
+                let operand = if is_reg {
+                    let rm = imm5_rm as usize;
+                    if rm == 31 { 0 } else { cpu.regs[rm] }
+                } else {
+                    imm5_rm as u64
+                };
+                let taken = condition_holds(cond, cpu.pstate);
+                let nzcv = if taken {
+                    if sf == 1 {
+                        if op == 1 {
+                            nzcv_sub64(n_val, operand)
+                        } else {
+                            nzcv_add64(n_val, operand)
+                        }
+                    } else {
+                        let a32 = n_val as u32;
+                        let b32 = operand as u32;
+                        if op == 1 {
+                            nzcv_sub32(a32, b32)
+                        } else {
+                            nzcv_add32(a32, b32)
+                        }
+                    }
+                } else {
+                    nzcv_imm << 28
+                };
+                cpu.pstate = (cpu.pstate & !FLAGS_NZCV_MASK) | nzcv;
+                cpu.pc = pc.wrapping_add(4);
+                return Some(Ok(()));
+            }
+        }
+
         // 6b. PRFM (immediate): prefetch-memory hint, architecturally NOP.        // GB-26: the kernel hits `prfm pstl1strm, [x0]` (0xF9800011) at
         // step 1250435. U1 has no PRFM kind, so it falls through to
         // IllegalInstruction. Prefetch is a pure hint with no
@@ -5676,5 +5730,70 @@ mod tests {
         o.machine_mut().cpu[0].regs[2] = ret_target + 0x100;
         assert_eq!(o.step_vcpu(), StepOutcome::Continue);
         assert_eq!(o.machine().cpu[0].pc, ret_target + 0x100);
+    }
+
+    #[test]
+    fn ccmp_imm_cond_true_sets_subs_flags() {
+        // CCMP W3, #4, #0, CS (0x7A442060) -- the kernel halt word at
+        // 0xffffff800808a1f4 (boot step 20,458,502). With C set, the
+        // condition holds: NZCV = SUBS(W3, #4).
+        let pc = RAM_BASE + 0x1000;
+        let sp = RAM_BASE + 0x2000;
+        let mut o = sp_test_orchestrator(pc, sp, 0x7A44_2060);
+        o.machine_mut().cpu[0].regs[3] = 10;
+        // Set C flag (bit 29).
+        o.machine_mut().cpu[0].pstate = 0x2000_0000;
+        assert_eq!(o.step_vcpu(), StepOutcome::Continue);
+        // SUBS(10, 4): N=0, Z=0, C=1 (no borrow), V=0 -> 0x20000000.
+        assert_eq!(o.machine().cpu[0].pstate & 0xF000_0000, 0x2000_0000);
+        assert_eq!(o.machine().cpu[0].pc, pc + 4);
+    }
+
+    #[test]
+    fn ccmp_imm_cond_false_sets_nzcv_imm() {
+        // Same CCMP W3, #4, #0, CS but with C clear: condition fails,
+        // NZCV = nzcv_imm (#0) = 0b0000.
+        let pc = RAM_BASE + 0x1000;
+        let sp = RAM_BASE + 0x2000;
+        let mut o = sp_test_orchestrator(pc, sp, 0x7A44_2060);
+        o.machine_mut().cpu[0].regs[3] = 10;
+        // C clear, N set (to prove it gets overwritten).
+        o.machine_mut().cpu[0].pstate = 0x8000_0000;
+        assert_eq!(o.step_vcpu(), StepOutcome::Continue);
+        assert_eq!(o.machine().cpu[0].pstate & 0xF000_0000, 0x0000_0000);
+        assert_eq!(o.machine().cpu[0].pc, pc + 4);
+    }
+
+    #[test]
+    fn ccmn_imm_cond_true_sets_adds_flags() {
+        // CCMN W1, #5, #0, EQ (0x3A450020): op=0 selects CCMN.
+        // With Z set, condition holds: NZCV = ADDS(W1, #5).
+        let pc = RAM_BASE + 0x1000;
+        let sp = RAM_BASE + 0x2000;
+        let mut o = sp_test_orchestrator(pc, sp, 0x3A45_0020);
+        o.machine_mut().cpu[0].regs[1] = 0xFFFF_FFFF; // -1 as u32
+        o.machine_mut().cpu[0].pstate = 0x4000_0000; // Z set
+        assert_eq!(o.step_vcpu(), StepOutcome::Continue);
+        // ADDS(0xFFFFFFFF, 5) 32-bit: result 4, C=1 (carry out), Z=0.
+        let nzcv = o.machine().cpu[0].pstate & 0xF000_0000;
+        assert_eq!(nzcv & 0x2000_0000, 0x2000_0000, "C must be set");
+        assert_eq!(nzcv & 0x4000_0000, 0, "Z must be clear");
+        assert_eq!(o.machine().cpu[0].pc, pc + 4);
+    }
+
+    #[test]
+    fn ccmp_reg_cond_true() {
+        // CCMP X2, X3, #0, NE (0xFA431440): register variant, bit10=1.
+        // With Z clear, NE holds: NZCV = SUBS(X2, X3).
+        let pc = RAM_BASE + 0x1000;
+        let sp = RAM_BASE + 0x2000;
+        let mut o = sp_test_orchestrator(pc, sp, 0xFA43_1440);
+        o.machine_mut().cpu[0].regs[2] = 100;
+        o.machine_mut().cpu[0].regs[3] = 100;
+        o.machine_mut().cpu[0].pstate = 0; // Z clear -> NE true
+        assert_eq!(o.step_vcpu(), StepOutcome::Continue);
+        // SUBS(100, 100): Z=1, C=1 -> 0x60000000.
+        assert_eq!(o.machine().cpu[0].pstate & 0xF000_0000, 0x6000_0000);
+        assert_eq!(o.machine().cpu[0].pc, pc + 4);
     }
 }
