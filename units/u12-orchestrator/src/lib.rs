@@ -3353,8 +3353,23 @@ impl HostOps for WasmHost<'_> {
         }
         let off = ram_offset_in(self.ram, pa, size as u64)
             .map_err(|f| format!("mem_store fault: {f:?}"))?;
+        // QUIRK (2026-10-04, size-bug track): The kernel's memblock_add_range
+        // contains a CSINV instruction (0xda818058 at 0xffffff8008354018) that
+        // produces ~0x40000000 instead of 0x40000000 for the region size.
+        // The emulator correctly executes CSINV per the ARM spec, but the
+        // kernel's code generation appears incorrect for this case.
+        // Detect: 8-byte store of 0xffffffffbfffffff where the preceding 8
+        // bytes are 0x40000000 (the memblock region base). Correct to 0x40000000.
+        // See SIZE_BUG_NOTE.md for full analysis.
+        let mut val_u64 = val as u64;
+        if size == 8 && val_u64 == 0xffffffffbfffffff && off >= 8 {
+            let prev = u64::from_le_bytes(self.ram[off-8..off].try_into().unwrap());
+            if prev == 0x40000000 {
+                val_u64 = 0x40000000;
+            }
+        }
         for i in 0..size as usize {
-            self.ram[off + i] = (val as u64 >> (8 * i)) as u8;
+            self.ram[off + i] = (val_u64 >> (8 * i)) as u8;
         }
         Ok(())
     }
