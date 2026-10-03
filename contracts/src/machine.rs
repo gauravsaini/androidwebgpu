@@ -46,6 +46,16 @@ pub struct SysRegs {
     /// Context ID Register, EL1 (P0, 2026-10-03): written on every context
     /// switch, no behavior needed.
     pub contextidr_el1: u64,
+    /// Physical Address Register, EL1 (P2, 2026-10-03): read after AT ops.
+    pub par_el1: u64,
+    /// OS Lock Access Register, EL1 (P2, 2026-10-03): write-only, no behavior.
+    pub oslar_el1: u64,
+    /// PMU Counter Enable Set, EL0 (P2, 2026-10-03): PMU probe storage.
+    pub pmcntenset_el0: u64,
+    /// PMU Event Counter Selection, EL0 (P2, 2026-10-03): PMU probe storage.
+    pub pmselr_el0: u64,
+    /// Auxiliary Control Register, EL1 (P2, 2026-10-03): returns 0.
+    pub actlr_el1: u64,
 }
 
 impl Default for SysRegs {
@@ -86,6 +96,13 @@ impl Default for SysRegs {
             cntv_ctl_el0: 0,
             cntv_cval_el0: u64::MAX,
             contextidr_el1: 0,
+            // P2 misc sysregs: all architecturally UNKNOWN at reset; the
+            // kernel always writes (or tolerates zero) before relying on them.
+            par_el1: 0,
+            oslar_el1: 0,
+            pmcntenset_el0: 0,
+            pmselr_el0: 0,
+            actlr_el1: 0,
         }
     }
 }
@@ -125,6 +142,11 @@ impl SysRegs {
             }
             SysReg::CntvCvalEl0 => self.cntv_cval_el0,
             SysReg::ContextidrEl1 => self.contextidr_el1,
+            SysReg::ParEl1 => self.par_el1,
+            SysReg::OslarEl1 => self.oslar_el1,
+            SysReg::PmcntensetEl0 => self.pmcntenset_el0,
+            SysReg::PmselrEl0 => self.pmselr_el0,
+            SysReg::ActlrEl1 => self.actlr_el1,
         }
     }
 
@@ -154,6 +176,11 @@ impl SysRegs {
             SysReg::CntvCtlEl0 => self.cntv_ctl_el0 = val & !0x4,
             SysReg::CntvCvalEl0 => self.cntv_cval_el0 = val,
             SysReg::ContextidrEl1 => self.contextidr_el1 = val,
+            SysReg::ParEl1 => self.par_el1 = val,
+            SysReg::OslarEl1 => self.oslar_el1 = val,
+            SysReg::PmcntensetEl0 => self.pmcntenset_el0 = val,
+            SysReg::PmselrEl0 => self.pmselr_el0 = val,
+            SysReg::ActlrEl1 => self.actlr_el1 = val,
         }
     }
 
@@ -183,6 +210,11 @@ impl SysRegs {
             19 => Some(SysReg::CntvCtlEl0),
             20 => Some(SysReg::CntvCvalEl0),
             21 => Some(SysReg::ContextidrEl1),
+            22 => Some(SysReg::ParEl1),
+            23 => Some(SysReg::OslarEl1),
+            24 => Some(SysReg::PmcntensetEl0),
+            25 => Some(SysReg::PmselrEl0),
+            26 => Some(SysReg::ActlrEl1),
             _ => None,
         }
     }
@@ -227,7 +259,7 @@ pub const MAX_GUEST_RAM_BYTES: usize = 2 * 1024 * 1024 * 1024;
 pub struct Snapshot(pub Vec<u8>);
 
 /// Current snapshot format version. Bump on any format change.
-pub const SNAPSHOT_VERSION: u32 = 10;
+pub const SNAPSHOT_VERSION: u32 = 11;
 
 /// Snapshot restore failure. Data, not panic — corrupt input never crashes the host.
 #[derive(Debug, Clone, PartialEq, Eq)]

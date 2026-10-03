@@ -107,6 +107,27 @@ pub enum SysReg {
     /// CONTEXTIDR_EL1 on every context switch (MSR CONTEXTIDR_EL1, Xt).
     /// S3_0_C13_C0_1. Stored as simple u64, no behavior needed.
     ContextidrEl1 = 21,
+    /// Added 2026-10-03 (P2): Physical Address Register, EL1. The kernel
+    /// reads PAR_EL1 after AT address-translate operations
+    /// (MRS PAR_EL1, Xt). S3_0_C7_C4_0. Stored as simple u64, default 0.
+    ParEl1 = 22,
+    /// Added 2026-10-03 (P2): OS Lock Access Register, EL1. Write-only;
+    /// the kernel writes OSLAR_EL1 during debug setup
+    /// (MSR OSLAR_EL1, Xt). S2_0_C1_C0_4. Stored, no behavior needed.
+    OslarEl1 = 23,
+    /// Added 2026-10-03 (P2): PMU Counter Enable Set, EL0. The kernel
+    /// probes the PMU during boot (MRS/MSR PMCNTENSET_EL0, Xt).
+    /// S3_3_C9_C12_1. Stored as simple u64, default 0.
+    PmcntensetEl0 = 24,
+    /// Added 2026-10-03 (P2): PMU Event Counter Selection, EL0. The kernel
+    /// probes the PMU during boot (MRS/MSR PMSELR_EL0, Xt).
+    /// S3_3_C9_C12_5. Stored as simple u64, default 0.
+    PmselrEl0 = 25,
+    /// Added 2026-10-03 (P2): Auxiliary Control Register, EL1. The kernel
+    /// may read ACTLR_EL1 during CPU setup (MRS ACTLR_EL1, Xt).
+    /// S3_0_C1_C0_1. Returns 0: we don't implement auxiliary features,
+    /// and 0 is the honest "nothing extra here" answer.
+    ActlrEl1 = 26,
 }
 
 /// Single IR operation (SSA-style). The lifter (U2) is the only producer.

@@ -24,8 +24,8 @@ use pathn_contracts::machine::{
     SNAPSHOT_VERSION, SysRegs,
 };
 
-/// Encoded size of one [`CpuState`]: 31 regs + sp + pc + pstate + 16 sysregs, all u64LE.
-const CPU_ENCODED_BYTES: usize = 55 * 8;
+/// Encoded size of one [`CpuState`]: 31 regs + sp + pc + pstate + 26 sysregs, all u64LE.
+const CPU_ENCODED_BYTES: usize = 60 * 8;
 /// Minimum encoded size of one [`DeviceState`]: u8 tag + u64 blob length.
 const DEVICE_MIN_BYTES: usize = 1 + 8;
 
@@ -103,6 +103,11 @@ impl Writer {
         self.u64(c.sysregs.cntv_ctl_el0);
         self.u64(c.sysregs.cntv_cval_el0);
         self.u64(c.sysregs.contextidr_el1);
+        self.u64(c.sysregs.par_el1);
+        self.u64(c.sysregs.oslar_el1);
+        self.u64(c.sysregs.pmcntenset_el0);
+        self.u64(c.sysregs.pmselr_el0);
+        self.u64(c.sysregs.actlr_el1);
     }
 
     fn mmu(&mut self, m: &MmuState) {
@@ -228,6 +233,11 @@ impl<'a> Reader<'a> {
                 cntv_ctl_el0: self.u64()?,
                 cntv_cval_el0: self.u64()?,
                 contextidr_el1: self.u64()?,
+                par_el1: self.u64()?,
+                oslar_el1: self.u64()?,
+                pmcntenset_el0: self.u64()?,
+                pmselr_el0: self.u64()?,
+                actlr_el1: self.u64()?,
             },
         })
     }
@@ -348,6 +358,11 @@ mod tests {
                 cntv_ctl_el0: seed.wrapping_add(19),
                 cntv_cval_el0: seed.wrapping_add(20),
                 contextidr_el1: seed.wrapping_add(21),
+                par_el1: seed.wrapping_add(22),
+                oslar_el1: seed.wrapping_add(23),
+                pmcntenset_el0: seed.wrapping_add(24),
+                pmselr_el0: seed.wrapping_add(25),
+                actlr_el1: seed.wrapping_add(26),
             },
         }
     }
@@ -464,6 +479,11 @@ mod tests {
                     cntv_ctl_el0: u64::MAX,
                     cntv_cval_el0: u64::MAX,
                     contextidr_el1: u64::MAX,
+                    par_el1: u64::MAX,
+                    oslar_el1: u64::MAX,
+                    pmcntenset_el0: u64::MAX,
+                    pmselr_el0: u64::MAX,
+                    actlr_el1: u64::MAX,
                 },
             }],
             mmu: MmuState {
