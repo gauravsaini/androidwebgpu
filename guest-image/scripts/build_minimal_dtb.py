@@ -11,7 +11,9 @@ Layout mirrors a minimal QEMU -M virt device tree:
   / { compatible = "arm,virt"; #address-cells = <2>; #size-cells = <2>; }
     chosen { bootargs, stdout-path }
     aliases { uart0 = "/uart@9000000"; }
-    memory@40000000 { device_type = "memory"; reg = <0x40000000 0x8000000>; }
+    memory@0 { device_type = "memory"; reg = <0x40000000 0x40000000>; }
+      NOTE: node named "memory@0" (not "memory@40000000") due to kernel
+      early_init_dt_scan_memory() fallback quirk (2026-10-04).
     cpus { #address-cells = <1>; #size-cells = <0>;
       cpu@0 { compatible = "arm,cortex-a57"; device_type = "cpu"; reg = <0>; }; }
     psci { compatible = "arm,psci-1.0"; method = "hvc"; }
@@ -109,7 +111,14 @@ def build() -> bytes:
     b.prop_str("uart0", "/pl011@9000000")
     b.end_node()
 
-    b.begin_node("memory@40000000")
+    b.begin_node("memory@0")
+    # NOTE (2026-10-04, memblock track): The node MUST be named "memory@0",
+    # not "memory@40000000". The kernel's early_init_dt_scan_memory() has a
+    # fallback for DTBs without device_type: it looks for a node literally
+    # named "memory@0". Our emulator's OF layer does not return the
+    # device_type property correctly via of_get_flat_dt_prop(), so the
+    # fallback is the only path that works. The reg property still specifies
+    # the correct address (0x40000000).
     b.prop_str("device_type", "memory")
     b.prop_u64("reg", 0x40000000, 0x40000000)  # 1 GiB, matches QEMU -m 1024
     b.end_node()
