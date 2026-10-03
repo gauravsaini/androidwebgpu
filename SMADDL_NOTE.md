@@ -72,8 +72,14 @@ All verified against Rust wrapping arithmetic.
 - u3-wasm-jit: [pending]
 
 ## Boot Remeasure
-- Status: Running (started 2026-10-03 21:18 AEST, PID 50838)
+- Status: Completed 2026-10-03 ~21:45 AEST
 - Cap: 30,000,000 steps
-- Previous halt: 20,555,721 steps at 0xffffff8008355394 (smaddl)
-- Expected: Boot should progress beyond 20,555,721 steps
-- [Results to be filled on completion]
+- **Steps executed: 20,647,443** (up from 20,555,721 — **+91,722 steps**)
+- **Final PC: 0xffffff80085c9610**
+- **Halt reason: IllegalInstruction** { addr: 18446743524094023184, word: 3670016297 }
+- **Word: 0xDAC00129** (3670016297) — system instruction group (top byte 0xDA)
+- Elapsed: 752.7s (27,432 steps/s)
+- Outcome: Halted (not cap-reached)
+
+**Verdict: SMADDL fix works.** The boot progressed 91,722 steps past the SMADDL halt.
+The new halt is a different instruction (system group), not a regression.
