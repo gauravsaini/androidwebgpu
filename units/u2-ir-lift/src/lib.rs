@@ -331,6 +331,139 @@ fn lift_system(word: u32) -> Vec<IrOp> {
             // FPCR S3_3_C4_C4_0, FPSR S3_3_C4_C4_1: stored u64.
             (3, 3, 4, 4, 0) => SysReg::Fpcr,
             (3, 3, 4, 4, 1) => SysReg::Fpsr,
+            // P4 (2026-10-03): SVE control, EL2 SRE, PMU cycle counter.
+            (3, 0, 1, 2, 0) => SysReg::ZcrEl1,
+            (3, 4, 12, 9, 5) => SysReg::IccSreEl2,
+            (3, 3, 9, 13, 0) => SysReg::PmccntrEl0,
+            // P4 debug: (2,0,0,n,op2) -> indexed variants (MRS side).
+            // Dbgbvr0: S2_0_C0_C0_4.
+            // Dbgbvr1: S2_0_C0_C1_4.
+            // Dbgbvr2: S2_0_C0_C2_4.
+            // Dbgbvr3: S2_0_C0_C3_4.
+            // Dbgbvr4: S2_0_C0_C4_4.
+            // Dbgbvr5: S2_0_C0_C5_4.
+            // Dbgbvr6: S2_0_C0_C6_4.
+            // Dbgbvr7: S2_0_C0_C7_4.
+            // Dbgbvr8: S2_0_C0_C8_4.
+            // Dbgbvr9: S2_0_C0_C9_4.
+            // Dbgbvr10: S2_0_C0_C10_4.
+            // Dbgbvr11: S2_0_C0_C11_4.
+            // Dbgbvr12: S2_0_C0_C12_4.
+            // Dbgbvr13: S2_0_C0_C13_4.
+            // Dbgbvr14: S2_0_C0_C14_4.
+            // Dbgbvr15: S2_0_C0_C15_4.
+            // Dbgbcr0: S2_0_C0_C0_5.
+            // Dbgbcr1: S2_0_C0_C1_5.
+            // Dbgbcr2: S2_0_C0_C2_5.
+            // Dbgbcr3: S2_0_C0_C3_5.
+            // Dbgbcr4: S2_0_C0_C4_5.
+            // Dbgbcr5: S2_0_C0_C5_5.
+            // Dbgbcr6: S2_0_C0_C6_5.
+            // Dbgbcr7: S2_0_C0_C7_5.
+            // Dbgbcr8: S2_0_C0_C8_5.
+            // Dbgbcr9: S2_0_C0_C9_5.
+            // Dbgbcr10: S2_0_C0_C10_5.
+            // Dbgbcr11: S2_0_C0_C11_5.
+            // Dbgbcr12: S2_0_C0_C12_5.
+            // Dbgbcr13: S2_0_C0_C13_5.
+            // Dbgbcr14: S2_0_C0_C14_5.
+            // Dbgbcr15: S2_0_C0_C15_5.
+            // Dbgwvr0: S2_0_C0_C0_6.
+            // Dbgwvr1: S2_0_C0_C1_6.
+            // Dbgwvr2: S2_0_C0_C2_6.
+            // Dbgwvr3: S2_0_C0_C3_6.
+            // Dbgwvr4: S2_0_C0_C4_6.
+            // Dbgwvr5: S2_0_C0_C5_6.
+            // Dbgwvr6: S2_0_C0_C6_6.
+            // Dbgwvr7: S2_0_C0_C7_6.
+            // Dbgwvr8: S2_0_C0_C8_6.
+            // Dbgwvr9: S2_0_C0_C9_6.
+            // Dbgwvr10: S2_0_C0_C10_6.
+            // Dbgwvr11: S2_0_C0_C11_6.
+            // Dbgwvr12: S2_0_C0_C12_6.
+            // Dbgwvr13: S2_0_C0_C13_6.
+            // Dbgwvr14: S2_0_C0_C14_6.
+            // Dbgwvr15: S2_0_C0_C15_6.
+            // Dbgwcr0: S2_0_C0_C0_7.
+            // Dbgwcr1: S2_0_C0_C1_7.
+            // Dbgwcr2: S2_0_C0_C2_7.
+            // Dbgwcr3: S2_0_C0_C3_7.
+            // Dbgwcr4: S2_0_C0_C4_7.
+            // Dbgwcr5: S2_0_C0_C5_7.
+            // Dbgwcr6: S2_0_C0_C6_7.
+            // Dbgwcr7: S2_0_C0_C7_7.
+            // Dbgwcr8: S2_0_C0_C8_7.
+            // Dbgwcr9: S2_0_C0_C9_7.
+            // Dbgwcr10: S2_0_C0_C10_7.
+            // Dbgwcr11: S2_0_C0_C11_7.
+            // Dbgwcr12: S2_0_C0_C12_7.
+            // Dbgwcr13: S2_0_C0_C13_7.
+            // Dbgwcr14: S2_0_C0_C14_7.
+            // Dbgwcr15: S2_0_C0_C15_7.
+            (2, 0, 0, 0, 4) => SysReg::Dbgbvr0,
+            (2, 0, 0, 1, 4) => SysReg::Dbgbvr1,
+            (2, 0, 0, 2, 4) => SysReg::Dbgbvr2,
+            (2, 0, 0, 3, 4) => SysReg::Dbgbvr3,
+            (2, 0, 0, 4, 4) => SysReg::Dbgbvr4,
+            (2, 0, 0, 5, 4) => SysReg::Dbgbvr5,
+            (2, 0, 0, 6, 4) => SysReg::Dbgbvr6,
+            (2, 0, 0, 7, 4) => SysReg::Dbgbvr7,
+            (2, 0, 0, 8, 4) => SysReg::Dbgbvr8,
+            (2, 0, 0, 9, 4) => SysReg::Dbgbvr9,
+            (2, 0, 0, 10, 4) => SysReg::Dbgbvr10,
+            (2, 0, 0, 11, 4) => SysReg::Dbgbvr11,
+            (2, 0, 0, 12, 4) => SysReg::Dbgbvr12,
+            (2, 0, 0, 13, 4) => SysReg::Dbgbvr13,
+            (2, 0, 0, 14, 4) => SysReg::Dbgbvr14,
+            (2, 0, 0, 15, 4) => SysReg::Dbgbvr15,
+            (2, 0, 0, 0, 5) => SysReg::Dbgbcr0,
+            (2, 0, 0, 1, 5) => SysReg::Dbgbcr1,
+            (2, 0, 0, 2, 5) => SysReg::Dbgbcr2,
+            (2, 0, 0, 3, 5) => SysReg::Dbgbcr3,
+            (2, 0, 0, 4, 5) => SysReg::Dbgbcr4,
+            (2, 0, 0, 5, 5) => SysReg::Dbgbcr5,
+            (2, 0, 0, 6, 5) => SysReg::Dbgbcr6,
+            (2, 0, 0, 7, 5) => SysReg::Dbgbcr7,
+            (2, 0, 0, 8, 5) => SysReg::Dbgbcr8,
+            (2, 0, 0, 9, 5) => SysReg::Dbgbcr9,
+            (2, 0, 0, 10, 5) => SysReg::Dbgbcr10,
+            (2, 0, 0, 11, 5) => SysReg::Dbgbcr11,
+            (2, 0, 0, 12, 5) => SysReg::Dbgbcr12,
+            (2, 0, 0, 13, 5) => SysReg::Dbgbcr13,
+            (2, 0, 0, 14, 5) => SysReg::Dbgbcr14,
+            (2, 0, 0, 15, 5) => SysReg::Dbgbcr15,
+            (2, 0, 0, 0, 6) => SysReg::Dbgwvr0,
+            (2, 0, 0, 1, 6) => SysReg::Dbgwvr1,
+            (2, 0, 0, 2, 6) => SysReg::Dbgwvr2,
+            (2, 0, 0, 3, 6) => SysReg::Dbgwvr3,
+            (2, 0, 0, 4, 6) => SysReg::Dbgwvr4,
+            (2, 0, 0, 5, 6) => SysReg::Dbgwvr5,
+            (2, 0, 0, 6, 6) => SysReg::Dbgwvr6,
+            (2, 0, 0, 7, 6) => SysReg::Dbgwvr7,
+            (2, 0, 0, 8, 6) => SysReg::Dbgwvr8,
+            (2, 0, 0, 9, 6) => SysReg::Dbgwvr9,
+            (2, 0, 0, 10, 6) => SysReg::Dbgwvr10,
+            (2, 0, 0, 11, 6) => SysReg::Dbgwvr11,
+            (2, 0, 0, 12, 6) => SysReg::Dbgwvr12,
+            (2, 0, 0, 13, 6) => SysReg::Dbgwvr13,
+            (2, 0, 0, 14, 6) => SysReg::Dbgwvr14,
+            (2, 0, 0, 15, 6) => SysReg::Dbgwvr15,
+            (2, 0, 0, 0, 7) => SysReg::Dbgwcr0,
+            (2, 0, 0, 1, 7) => SysReg::Dbgwcr1,
+            (2, 0, 0, 2, 7) => SysReg::Dbgwcr2,
+            (2, 0, 0, 3, 7) => SysReg::Dbgwcr3,
+            (2, 0, 0, 4, 7) => SysReg::Dbgwcr4,
+            (2, 0, 0, 5, 7) => SysReg::Dbgwcr5,
+            (2, 0, 0, 6, 7) => SysReg::Dbgwcr6,
+            (2, 0, 0, 7, 7) => SysReg::Dbgwcr7,
+            (2, 0, 0, 8, 7) => SysReg::Dbgwcr8,
+            (2, 0, 0, 9, 7) => SysReg::Dbgwcr9,
+            (2, 0, 0, 10, 7) => SysReg::Dbgwcr10,
+            (2, 0, 0, 11, 7) => SysReg::Dbgwcr11,
+            (2, 0, 0, 12, 7) => SysReg::Dbgwcr12,
+            (2, 0, 0, 13, 7) => SysReg::Dbgwcr13,
+            (2, 0, 0, 14, 7) => SysReg::Dbgwcr14,
+            (2, 0, 0, 15, 7) => SysReg::Dbgwcr15,
             _ => {
                 return {
                     let val: u64 = match (op0, op1, crn, crm, op2) {
@@ -469,6 +602,23 @@ fn lift_system(word: u32) -> Vec<IrOp> {
                         // MRS encoding is UNDEFINED and traps — see
                         // p3_write_only_sysregs_trap_on_mrs.)
                         (2, 0, 1, 1, 4) => 0, // OSLSR_EL1
+                        // P4 (2026-10-03): IMPDEF/reserved MRS -> 0 ("feature absent").
+                        (0, 0, 6, 11, 5) => 0, // s0_0_c6_c11_5: op0=0 IMPLEMENTATION DEFINED; 0 = no vendor feature.
+                        (1, 6, 11, 8, 3) => 0, // s1_6_c11_c8_3 (sysl x10, #6, c11, c8, #3): op0=1 reserved space.
+                        (2, 6, 0, 8, 4) => 0, // s2_6_c0_c8_4: debug-space IMPLEMENTATION DEFINED.
+                        (3, 0, 5, 0, 3) => 0, // s3_0_c5_c0_3: CRn=5 IMPLEMENTATION DEFINED.
+                        (0, 0, 13, 5, 0) => 0, // s0_0_c13_c5_0: errata-probe cluster (0x41302344); IMPDEF.
+                        (0, 2, 13, 5, 1) => 0, // s0_2_c13_c5_1: errata-probe cluster; IMPDEF.
+                        (0, 4, 13, 5, 1) => 0, // s0_4_c13_c5_1: errata-probe cluster; IMPDEF.
+                        (0, 6, 13, 5, 1) => 0, // s0_6_c13_c5_1: errata-probe cluster; IMPDEF.
+                        (1, 0, 13, 5, 1) => 0, // s1_0_c13_c5_1 (sysl x7, #0, c13, c5, #1): errata-probe cluster.
+                        (1, 2, 13, 5, 1) => 0, // s1_2_c13_c5_1 (sysl x9, #2, c13, c5, #1): errata-probe cluster.
+                        (1, 4, 13, 5, 1) => 0, // s1_4_c13_c5_1 (sysl x11, #4, c13, c5, #1): errata-probe cluster.
+                        (1, 6, 13, 5, 1) => 0, // s1_6_c13_c5_1 (sysl x13, #6, c13, c5, #1): errata-probe cluster.
+                        (2, 0, 13, 5, 1) => 0, // s2_0_c13_c5_1: errata-probe cluster; IMPDEF.
+                        (2, 2, 13, 5, 1) => 0, // s2_2_c13_c5_1: errata-probe cluster; IMPDEF.
+                        (2, 4, 13, 5, 1) => 0, // s2_4_c13_c5_1: errata-probe cluster; IMPDEF.
+                        (2, 6, 13, 5, 1) => 0, // s2_6_c13_c5_1: errata-probe cluster; IMPDEF.
                         // (P3, 2026-10-03) PMUSERENR_EL0 graduated to
                         // persistent (ReadSys); constant-0 arm moved above.
                         // CLIDR_EL1: Cache Level ID Register (10 static hits)
@@ -604,6 +754,101 @@ fn lift_system(word: u32) -> Vec<IrOp> {
             (3, 3, 4, 4, 1) => SysReg::Fpsr,
             // P3 slice F — debug: OSDLR_EL1 write-only, stored.
             (2, 0, 1, 3, 4) => SysReg::OsdlrEl1,
+            // P4 (2026-10-03): SVE control, EL2, GIC, PMU cycle counter, misc.
+            (3, 4, 0, 0, 0) => SysReg::VpidrEl2,
+            (3, 4, 0, 0, 5) => SysReg::VmpidrEl2,
+            (3, 4, 1, 1, 2) => SysReg::CptrEl2,
+            (3, 4, 1, 1, 1) => SysReg::MdcrEl2,
+            (3, 4, 1, 1, 3) => SysReg::HstrEl2,
+            (3, 4, 1, 2, 0) => SysReg::ZcrEl2,
+            (3, 4, 12, 0, 0) => SysReg::VbarEl2,
+            (3, 4, 12, 11, 0) => SysReg::IchHcrEl2,
+            (3, 4, 2, 1, 0) => SysReg::VttbrEl2,
+            (3, 4, 4, 0, 0) => SysReg::SpsrEl2,
+            (3, 4, 4, 0, 1) => SysReg::ElrEl2,
+            (3, 4, 9, 9, 0) => SysReg::PmscrEl2,
+            (3, 4, 12, 9, 5) => SysReg::IccSreEl2,
+            (3, 0, 12, 12, 3) => SysReg::IccBpr1El1,
+            (3, 0, 12, 8, 4) => SysReg::IccAp0r0El1,
+            (3, 0, 12, 8, 5) => SysReg::IccAp0r1El1,
+            (3, 0, 12, 8, 6) => SysReg::IccAp0r2El1,
+            (3, 0, 12, 8, 7) => SysReg::IccAp0r3El1,
+            (3, 0, 12, 9, 0) => SysReg::IccAp1r0El1,
+            (3, 0, 12, 9, 1) => SysReg::IccAp1r1El1,
+            (3, 0, 12, 9, 2) => SysReg::IccAp1r2El1,
+            (3, 0, 12, 9, 3) => SysReg::IccAp1r3El1,
+            (3, 0, 12, 11, 5) => SysReg::IccSgi1rEl1,
+            (3, 0, 12, 1, 1) => SysReg::DisrEl1,
+            (3, 0, 10, 4, 3) => SysReg::LorcEl1,
+            (3, 3, 9, 13, 0) => SysReg::PmccntrEl0,
+            (3, 0, 1, 2, 0) => SysReg::ZcrEl1,
+            // P4 debug: (2,0,0,n,op2) -> indexed variants (MSR side).
+            (2, 0, 0, 0, 4) => SysReg::Dbgbvr0,
+            (2, 0, 0, 1, 4) => SysReg::Dbgbvr1,
+            (2, 0, 0, 2, 4) => SysReg::Dbgbvr2,
+            (2, 0, 0, 3, 4) => SysReg::Dbgbvr3,
+            (2, 0, 0, 4, 4) => SysReg::Dbgbvr4,
+            (2, 0, 0, 5, 4) => SysReg::Dbgbvr5,
+            (2, 0, 0, 6, 4) => SysReg::Dbgbvr6,
+            (2, 0, 0, 7, 4) => SysReg::Dbgbvr7,
+            (2, 0, 0, 8, 4) => SysReg::Dbgbvr8,
+            (2, 0, 0, 9, 4) => SysReg::Dbgbvr9,
+            (2, 0, 0, 10, 4) => SysReg::Dbgbvr10,
+            (2, 0, 0, 11, 4) => SysReg::Dbgbvr11,
+            (2, 0, 0, 12, 4) => SysReg::Dbgbvr12,
+            (2, 0, 0, 13, 4) => SysReg::Dbgbvr13,
+            (2, 0, 0, 14, 4) => SysReg::Dbgbvr14,
+            (2, 0, 0, 15, 4) => SysReg::Dbgbvr15,
+            (2, 0, 0, 0, 5) => SysReg::Dbgbcr0,
+            (2, 0, 0, 1, 5) => SysReg::Dbgbcr1,
+            (2, 0, 0, 2, 5) => SysReg::Dbgbcr2,
+            (2, 0, 0, 3, 5) => SysReg::Dbgbcr3,
+            (2, 0, 0, 4, 5) => SysReg::Dbgbcr4,
+            (2, 0, 0, 5, 5) => SysReg::Dbgbcr5,
+            (2, 0, 0, 6, 5) => SysReg::Dbgbcr6,
+            (2, 0, 0, 7, 5) => SysReg::Dbgbcr7,
+            (2, 0, 0, 8, 5) => SysReg::Dbgbcr8,
+            (2, 0, 0, 9, 5) => SysReg::Dbgbcr9,
+            (2, 0, 0, 10, 5) => SysReg::Dbgbcr10,
+            (2, 0, 0, 11, 5) => SysReg::Dbgbcr11,
+            (2, 0, 0, 12, 5) => SysReg::Dbgbcr12,
+            (2, 0, 0, 13, 5) => SysReg::Dbgbcr13,
+            (2, 0, 0, 14, 5) => SysReg::Dbgbcr14,
+            (2, 0, 0, 15, 5) => SysReg::Dbgbcr15,
+            (2, 0, 0, 0, 6) => SysReg::Dbgwvr0,
+            (2, 0, 0, 1, 6) => SysReg::Dbgwvr1,
+            (2, 0, 0, 2, 6) => SysReg::Dbgwvr2,
+            (2, 0, 0, 3, 6) => SysReg::Dbgwvr3,
+            (2, 0, 0, 4, 6) => SysReg::Dbgwvr4,
+            (2, 0, 0, 5, 6) => SysReg::Dbgwvr5,
+            (2, 0, 0, 6, 6) => SysReg::Dbgwvr6,
+            (2, 0, 0, 7, 6) => SysReg::Dbgwvr7,
+            (2, 0, 0, 8, 6) => SysReg::Dbgwvr8,
+            (2, 0, 0, 9, 6) => SysReg::Dbgwvr9,
+            (2, 0, 0, 10, 6) => SysReg::Dbgwvr10,
+            (2, 0, 0, 11, 6) => SysReg::Dbgwvr11,
+            (2, 0, 0, 12, 6) => SysReg::Dbgwvr12,
+            (2, 0, 0, 13, 6) => SysReg::Dbgwvr13,
+            (2, 0, 0, 14, 6) => SysReg::Dbgwvr14,
+            (2, 0, 0, 15, 6) => SysReg::Dbgwvr15,
+            (2, 0, 0, 0, 7) => SysReg::Dbgwcr0,
+            (2, 0, 0, 1, 7) => SysReg::Dbgwcr1,
+            (2, 0, 0, 2, 7) => SysReg::Dbgwcr2,
+            (2, 0, 0, 3, 7) => SysReg::Dbgwcr3,
+            (2, 0, 0, 4, 7) => SysReg::Dbgwcr4,
+            (2, 0, 0, 5, 7) => SysReg::Dbgwcr5,
+            (2, 0, 0, 6, 7) => SysReg::Dbgwcr6,
+            (2, 0, 0, 7, 7) => SysReg::Dbgwcr7,
+            (2, 0, 0, 8, 7) => SysReg::Dbgwcr8,
+            (2, 0, 0, 9, 7) => SysReg::Dbgwcr9,
+            (2, 0, 0, 10, 7) => SysReg::Dbgwcr10,
+            (2, 0, 0, 11, 7) => SysReg::Dbgwcr11,
+            (2, 0, 0, 12, 7) => SysReg::Dbgwcr12,
+            (2, 0, 0, 13, 7) => SysReg::Dbgwcr13,
+            (2, 0, 0, 14, 7) => SysReg::Dbgwcr14,
+            (2, 0, 0, 15, 7) => SysReg::Dbgwcr15,
+            (3, 3, 14, 2, 0) => SysReg::CntpTvalEl0, // P4: CNTP_TVAL_EL0 MSR: write sets CVAL = counter + value[31:0].
+            (3, 3, 14, 3, 0) => SysReg::CntvTvalEl0, // P4: CNTV_TVAL_EL0 MSR: virtual-counter alias of CVAL.
             // MSR DAIFSet, #imm (op2=6) / MSR DAIFClr, #imm (op2=7): real
             // read-modify-write of the persistent DAIF (GB-11). Upgrades
             // the GB-3 accepted no-ops to honest state.
@@ -646,6 +891,17 @@ fn lift_system(word: u32) -> Vec<IrOp> {
                         (3, 3, 9, 12, 0) => vec![],
                         (3, 0, 9, 14, 1) => vec![],
                         (3, 0, 9, 14, 2) => vec![],
+                        // P4 (2026-10-03): IMPDEF/reserved MSR writes are honest no-ops.
+                        (0, 0, 0, 0, 0) => vec![], // s0_0_c0_c0_0: op0=0 IMPLEMENTATION DEFINED write; ignored.
+                        (0, 7, 13, 5, 0) => vec![], // s0_7_c13_c5_0: errata-probe cluster MSR; ignored.
+                        (2, 1, 13, 5, 0) => vec![], // s2_1_c13_c5_0: errata-probe cluster MSR; ignored.
+                        (2, 3, 13, 5, 0) => vec![], // s2_3_c13_c5_0: errata-probe cluster MSR; ignored.
+                        (3, 0, 13, 5, 0) => vec![], // s3_0_c13_c5_0: errata-probe cluster MSR; ignored.
+                        (3, 2, 13, 5, 0) => vec![], // s3_2_c13_c5_0: errata-probe cluster MSR; ignored.
+                        (3, 4, 13, 5, 0) => vec![], // s3_4_c13_c5_0: errata-probe cluster MSR; ignored.
+                        (3, 6, 0, 0, 0) => vec![], // s3_6_c0_c0_0: op1=6 reserved space; ignored.
+                        (3, 7, 10, 2, 1) => vec![], // s3_7_c10_c2_1: op1=7 IMPLEMENTATION DEFINED; ignored.
+                        (2, 6, 9, 14, 2) => vec![], // s2_6_c9_c14_2: debug-space IMPLEMENTATION DEFINED; ignored.
                         _ => return trap(R_SYSTEM),
                     }
                 };
@@ -3734,6 +3990,128 @@ mod tests {
             assert!(
                 matches!(ops.as_slice(), [IrOp::Trap { .. }]),
                 "mrs {op0} {op1} {crn} {crm} {op2} must trap, got {ops:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn p4_write_only_sgi1r_traps_on_mrs() {
+        // ICC_SGI1R_EL1 is write-only: an MRS encoding is architecturally
+        // UNDEFINED and must trap, not silently return a value (same
+        // treatment as EOIR1/DIR in P3).
+        let w = sys_word(3, 0, 12, 11, 5, 8, true);
+        let ops = lift(&insn(0x4000, w, InsnKind::System));
+        assert!(
+            matches!(ops.as_slice(), [IrOp::Trap { .. }]),
+            "mrs icc_sgi1r_el1 must trap, got {ops:?}"
+        );
+        // The MSR side is an honest write-only accept.
+        let w = sys_word(3, 0, 12, 11, 5, 8, false);
+        assert_eq!(
+            lift(&insn(0x4000, w, InsnKind::System)),
+            vec![IrOp::WriteSys {
+                src: 8,
+                reg: SysReg::IccSgi1rEl1
+            }]
+        );
+    }
+
+    #[test]
+    fn p4_new_persistent_regs_lift_to_sysops() {
+        // (enc, variant): each P4 MRS+MSR encoding must decode to the
+        // intended ReadSys/WriteSys IrOp.
+        let rw: &[((u32, u32, u32, u32, u32), SysReg)] = &[
+            ((3, 0, 1, 2, 0), SysReg::ZcrEl1),
+            ((3, 4, 12, 9, 5), SysReg::IccSreEl2),
+            ((3, 3, 9, 13, 0), SysReg::PmccntrEl0),
+            ((2, 0, 0, 0, 4), SysReg::Dbgbvr0),
+            ((2, 0, 0, 7, 4), SysReg::Dbgbvr7),
+            ((2, 0, 0, 15, 5), SysReg::Dbgbcr15),
+            ((2, 0, 0, 3, 6), SysReg::Dbgwvr3),
+            ((2, 0, 0, 15, 7), SysReg::Dbgwcr15),
+            ((3, 3, 14, 2, 0), SysReg::CntpTvalEl0),
+            ((3, 3, 14, 3, 0), SysReg::CntvTvalEl0),
+        ];
+        for ((op0, op1, crn, crm, op2), reg) in rw {
+            let w = sys_word(*op0, *op1, *crn, *crm, *op2, 5, true);
+            assert_eq!(
+                lift(&insn(0x4000, w, InsnKind::System)),
+                vec![IrOp::ReadSys { dst: 5, reg: *reg }],
+                "mrs {op0} {op1} {crn} {crm} {op2}"
+            );
+            let w = sys_word(*op0, *op1, *crn, *crm, *op2, 6, false);
+            // TVAL MSRs are derived aliases; the rest are stored. Both lift
+            // to WriteSys on the same variant.
+            assert_eq!(
+                lift(&insn(0x4000, w, InsnKind::System)),
+                vec![IrOp::WriteSys { src: 6, reg: *reg }],
+                "msr {op0} {op1} {crn} {crm} {op2}"
+            );
+        }
+        // MSR-only encodings: the MSR lifts to WriteSys; the MRS has no
+        // arm (not in the P4 static scan) and traps loudly instead of
+        // silently returning a value.
+        let wo: &[((u32, u32, u32, u32, u32), SysReg)] = &[
+            ((3, 4, 0, 0, 0), SysReg::VpidrEl2),
+            ((3, 4, 1, 1, 2), SysReg::CptrEl2),
+            ((3, 4, 12, 0, 0), SysReg::VbarEl2),
+            ((3, 4, 2, 1, 0), SysReg::VttbrEl2),
+            ((3, 4, 4, 0, 1), SysReg::ElrEl2),
+            ((3, 0, 12, 12, 3), SysReg::IccBpr1El1),
+            ((3, 0, 12, 8, 4), SysReg::IccAp0r0El1),
+            ((3, 0, 12, 8, 7), SysReg::IccAp0r3El1),
+            ((3, 0, 12, 9, 0), SysReg::IccAp1r0El1),
+            ((3, 0, 12, 9, 3), SysReg::IccAp1r3El1),
+            ((3, 0, 12, 1, 1), SysReg::DisrEl1),
+            ((3, 0, 10, 4, 3), SysReg::LorcEl1),
+        ];
+        for ((op0, op1, crn, crm, op2), reg) in wo {
+            let w = sys_word(*op0, *op1, *crn, *crm, *op2, 6, false);
+            assert_eq!(
+                lift(&insn(0x4000, w, InsnKind::System)),
+                vec![IrOp::WriteSys { src: 6, reg: *reg }],
+                "msr {op0} {op1} {crn} {crm} {op2}"
+            );
+            let w = sys_word(*op0, *op1, *crn, *crm, *op2, 5, true);
+            let ops = lift(&insn(0x4000, w, InsnKind::System));
+            assert!(
+                matches!(ops.as_slice(), [IrOp::Trap { .. }]),
+                "mrs {op0} {op1} {crn} {crm} {op2} (MSR-only) must trap, got {ops:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn p4_impdef_constants_and_nops_lift() {
+        // IMPDEF/reserved MRS encodings read 0 ("feature absent").
+        for (op0, op1, crn, crm, op2) in [
+            (0, 0, 6, 11, 5),
+            (1, 6, 11, 8, 3),
+            (2, 6, 0, 8, 4),
+            (3, 0, 5, 0, 3),
+            (0, 0, 13, 5, 0),
+            (2, 6, 13, 5, 1),
+        ] {
+            let w = sys_word(op0, op1, crn, crm, op2, 2, true);
+            assert_eq!(
+                lift(&insn(0x4000, w, InsnKind::System)),
+                vec![IrOp::Mov { dst: 2, imm: 0 }],
+                "mrs {op0} {op1} {crn} {crm} {op2}"
+            );
+        }
+        // IMPDEF/reserved MSR writes are honest no-ops.
+        for (op0, op1, crn, crm, op2) in [
+            (0, 0, 0, 0, 0),
+            (3, 4, 13, 5, 0),
+            (3, 6, 0, 0, 0),
+            (3, 7, 10, 2, 1),
+            (2, 6, 9, 14, 2),
+        ] {
+            let w = sys_word(op0, op1, crn, crm, op2, 9, false);
+            assert_eq!(
+                lift(&insn(0x4000, w, InsnKind::System)),
+                vec![],
+                "msr {op0} {op1} {crn} {crm} {op2}"
             );
         }
     }

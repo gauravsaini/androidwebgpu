@@ -24,8 +24,9 @@ use pathn_contracts::machine::{
     SNAPSHOT_VERSION, SysRegs,
 };
 
-/// Encoded size of one [`CpuState`]: 31 regs + sp + pc + pstate + 26 sysregs, all u64LE.
-const CPU_ENCODED_BYTES: usize = 76 * 8;
+/// Encoded size of one [`CpuState`]: 31 regs + sp + pc + pstate + 133 sysregs,
+/// all u64LE. (P4, 2026-10-03: 76 + 91 new P4 sysregs = 167.)
+const CPU_ENCODED_BYTES: usize = 167 * 8;
 /// Minimum encoded size of one [`DeviceState`]: u8 tag + u64 blob length.
 const DEVICE_MIN_BYTES: usize = 1 + 8;
 
@@ -129,6 +130,35 @@ impl Writer {
         self.u64(c.sysregs.fpsr);
         // P3: debug.
         self.u64(c.sysregs.osdlr_el1);
+        // P4 (2026-10-03): debug registers.
+        for v in c.sysregs.dbg_bvr { self.u64(v); }
+        for v in c.sysregs.dbg_bcr { self.u64(v); }
+        for v in c.sysregs.dbg_wvr { self.u64(v); }
+        for v in c.sysregs.dbg_wcr { self.u64(v); }
+        // P4: EL2.
+        self.u64(c.sysregs.vpidr_el2);
+        self.u64(c.sysregs.vmpidr_el2);
+        self.u64(c.sysregs.cptr_el2);
+        self.u64(c.sysregs.mdcr_el2);
+        self.u64(c.sysregs.hstr_el2);
+        self.u64(c.sysregs.zcr_el2);
+        self.u64(c.sysregs.vbar_el2);
+        self.u64(c.sysregs.ich_hcr_el2);
+        self.u64(c.sysregs.icc_sre_el2);
+        self.u64(c.sysregs.vttbr_el2);
+        self.u64(c.sysregs.spsr_el2);
+        self.u64(c.sysregs.elr_el2);
+        self.u64(c.sysregs.pmscr_el2);
+        // P4: GIC.
+        self.u64(c.sysregs.icc_bpr1_el1);
+        for v in c.sysregs.icc_ap0r { self.u64(v); }
+        for v in c.sysregs.icc_ap1r { self.u64(v); }
+        self.u64(c.sysregs.icc_sgi1r_el1);
+        // P4: misc.
+        self.u64(c.sysregs.disr_el1);
+        self.u64(c.sysregs.lorc_el1);
+        self.u64(c.sysregs.pmccntr_el0);
+        self.u64(c.sysregs.zcr_el1);
     }
 
     fn mmu(&mut self, m: &MmuState) {
@@ -211,6 +241,23 @@ impl<'a> Reader<'a> {
         Ok(u64::from_le_bytes(a))
     }
 
+    /// P4 (2026-10-03): read 16 (debug arrays) or 4 (AP0R/AP1R) u64s.
+    fn u64x16(&mut self) -> Result<[u64; 16], SnapshotError> {
+        let mut a = [0u64; 16];
+        for x in a.iter_mut() {
+            *x = self.u64()?;
+        }
+        Ok(a)
+    }
+
+    fn u64x4(&mut self) -> Result<[u64; 4], SnapshotError> {
+        let mut a = [0u64; 4];
+        for x in a.iter_mut() {
+            *x = self.u64()?;
+        }
+        Ok(a)
+    }
+
     /// Validate a u64 length prefix, then read that many bytes. A declared
     /// length past the 2 GiB contract cap is [`SnapshotError::TooLarge`]; a
     /// length that claims more bytes than are present is
@@ -275,6 +322,35 @@ impl<'a> Reader<'a> {
                 fpcr: self.u64()?,
                 fpsr: self.u64()?,
                 osdlr_el1: self.u64()?,
+                // P4 (2026-10-03): debug registers.
+                dbg_bvr: self.u64x16()?,
+                dbg_bcr: self.u64x16()?,
+                dbg_wvr: self.u64x16()?,
+                dbg_wcr: self.u64x16()?,
+                // P4: EL2.
+                vpidr_el2: self.u64()?,
+                vmpidr_el2: self.u64()?,
+                cptr_el2: self.u64()?,
+                mdcr_el2: self.u64()?,
+                hstr_el2: self.u64()?,
+                zcr_el2: self.u64()?,
+                vbar_el2: self.u64()?,
+                ich_hcr_el2: self.u64()?,
+                icc_sre_el2: self.u64()?,
+                vttbr_el2: self.u64()?,
+                spsr_el2: self.u64()?,
+                elr_el2: self.u64()?,
+                pmscr_el2: self.u64()?,
+                // P4: GIC.
+                icc_bpr1_el1: self.u64()?,
+                icc_ap0r: self.u64x4()?,
+                icc_ap1r: self.u64x4()?,
+                icc_sgi1r_el1: self.u64()?,
+                // P4: misc.
+                disr_el1: self.u64()?,
+                lorc_el1: self.u64()?,
+                pmccntr_el0: self.u64()?,
+                zcr_el1: self.u64()?,
             },
         })
     }
@@ -361,6 +437,24 @@ pub fn restore(blob: &[u8]) -> Result<MachineState, SnapshotError> {
 mod tests {
     use super::*;
 
+    /// P4 (2026-10-03): deterministic 16-lane seed for debug arrays.
+    /// P4 (2026-10-03): deterministic 4-lane seed for AP0R/AP1R arrays.
+    fn seed4(seed: u64, base: u64) -> [u64; 4] {
+        let mut a = [0u64; 4];
+        for (i, x) in a.iter_mut().enumerate() {
+            *x = seed.wrapping_add(base).wrapping_add(i as u64);
+        }
+        a
+    }
+
+    fn seed16(seed: u64, base: u64) -> [u64; 16] {
+        let mut a = [0u64; 16];
+        for (i, x) in a.iter_mut().enumerate() {
+            *x = seed.wrapping_add(base).wrapping_add(i as u64);
+        }
+        a
+    }
+
     fn cpu_state(seed: u64) -> CpuState {
         let mut regs = [0u64; 31];
         for (i, reg) in regs.iter_mut().enumerate() {
@@ -416,6 +510,32 @@ mod tests {
                 fpcr: seed.wrapping_add(40),
                 fpsr: seed.wrapping_add(41),
                 osdlr_el1: seed.wrapping_add(42),
+                // P4 (2026-10-03).
+                dbg_bvr: seed16(seed, 43),
+                dbg_bcr: seed16(seed, 44),
+                dbg_wvr: seed16(seed, 45),
+                dbg_wcr: seed16(seed, 46),
+                vpidr_el2: seed.wrapping_add(47),
+                vmpidr_el2: seed.wrapping_add(48),
+                cptr_el2: seed.wrapping_add(49),
+                mdcr_el2: seed.wrapping_add(50),
+                hstr_el2: seed.wrapping_add(51),
+                zcr_el2: seed.wrapping_add(52),
+                vbar_el2: seed.wrapping_add(53),
+                ich_hcr_el2: seed.wrapping_add(54),
+                icc_sre_el2: seed.wrapping_add(55),
+                vttbr_el2: seed.wrapping_add(56),
+                spsr_el2: seed.wrapping_add(57),
+                elr_el2: seed.wrapping_add(58),
+                pmscr_el2: seed.wrapping_add(59),
+                icc_bpr1_el1: seed.wrapping_add(60),
+                icc_ap0r: seed4(seed, 61),
+                icc_ap1r: seed4(seed, 62),
+                icc_sgi1r_el1: seed.wrapping_add(63),
+                disr_el1: seed.wrapping_add(64),
+                lorc_el1: seed.wrapping_add(65),
+                pmccntr_el0: seed.wrapping_add(66),
+                zcr_el1: seed.wrapping_add(67),
             },
         }
     }
@@ -553,6 +673,32 @@ mod tests {
                     fpcr: u64::MAX,
                     fpsr: u64::MAX,
                     osdlr_el1: u64::MAX,
+                    // P4 (2026-10-03).
+                    dbg_bvr: [u64::MAX; 16],
+                    dbg_bcr: [u64::MAX; 16],
+                    dbg_wvr: [u64::MAX; 16],
+                    dbg_wcr: [u64::MAX; 16],
+                    vpidr_el2: u64::MAX,
+                    vmpidr_el2: u64::MAX,
+                    cptr_el2: u64::MAX,
+                    mdcr_el2: u64::MAX,
+                    hstr_el2: u64::MAX,
+                    zcr_el2: u64::MAX,
+                    vbar_el2: u64::MAX,
+                    ich_hcr_el2: u64::MAX,
+                    icc_sre_el2: u64::MAX,
+                    vttbr_el2: u64::MAX,
+                    spsr_el2: u64::MAX,
+                    elr_el2: u64::MAX,
+                    pmscr_el2: u64::MAX,
+                    icc_bpr1_el1: u64::MAX,
+                    icc_ap0r: [u64::MAX; 4],
+                    icc_ap1r: [u64::MAX; 4],
+                    icc_sgi1r_el1: u64::MAX,
+                    disr_el1: u64::MAX,
+                    lorc_el1: u64::MAX,
+                    pmccntr_el0: u64::MAX,
+                    zcr_el1: u64::MAX,
                 },
             }],
             mmu: MmuState {
