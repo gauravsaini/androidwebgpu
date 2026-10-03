@@ -102,6 +102,7 @@ impl Writer {
         self.u64(c.sysregs.cntp_cval_el0);
         self.u64(c.sysregs.cntv_ctl_el0);
         self.u64(c.sysregs.cntv_cval_el0);
+        self.u64(c.sysregs.contextidr_el1);
     }
 
     fn mmu(&mut self, m: &MmuState) {
@@ -226,6 +227,7 @@ impl<'a> Reader<'a> {
                 cntp_cval_el0: self.u64()?,
                 cntv_ctl_el0: self.u64()?,
                 cntv_cval_el0: self.u64()?,
+                contextidr_el1: self.u64()?,
             },
         })
     }
@@ -345,6 +347,7 @@ mod tests {
                 cntp_cval_el0: seed.wrapping_add(18),
                 cntv_ctl_el0: seed.wrapping_add(19),
                 cntv_cval_el0: seed.wrapping_add(20),
+                contextidr_el1: seed.wrapping_add(21),
             },
         }
     }
@@ -460,6 +463,7 @@ mod tests {
                     cntp_cval_el0: u64::MAX,
                     cntv_ctl_el0: u64::MAX,
                     cntv_cval_el0: u64::MAX,
+                    contextidr_el1: u64::MAX,
                 },
             }],
             mmu: MmuState {

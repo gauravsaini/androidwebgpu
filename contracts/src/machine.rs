@@ -43,6 +43,9 @@ pub struct SysRegs {
     pub cntp_cval_el0: u64,
     pub cntv_ctl_el0: u64,
     pub cntv_cval_el0: u64,
+    /// Context ID Register, EL1 (P0, 2026-10-03): written on every context
+    /// switch, no behavior needed.
+    pub contextidr_el1: u64,
 }
 
 impl Default for SysRegs {
@@ -82,6 +85,7 @@ impl Default for SysRegs {
             cntp_cval_el0: u64::MAX,
             cntv_ctl_el0: 0,
             cntv_cval_el0: u64::MAX,
+            contextidr_el1: 0,
         }
     }
 }
@@ -120,6 +124,7 @@ impl SysRegs {
                 (self.cntv_ctl_el0 & !0x4) | istatus
             }
             SysReg::CntvCvalEl0 => self.cntv_cval_el0,
+            SysReg::ContextidrEl1 => self.contextidr_el1,
         }
     }
 
@@ -148,6 +153,7 @@ impl SysRegs {
             SysReg::CntpCvalEl0 => self.cntp_cval_el0 = val,
             SysReg::CntvCtlEl0 => self.cntv_ctl_el0 = val & !0x4,
             SysReg::CntvCvalEl0 => self.cntv_cval_el0 = val,
+            SysReg::ContextidrEl1 => self.contextidr_el1 = val,
         }
     }
 
@@ -170,6 +176,13 @@ impl SysRegs {
             12 => Some(SysReg::TcrEl1),
             13 => Some(SysReg::Ttbr0El1),
             14 => Some(SysReg::Ttbr1El1),
+            15 => Some(SysReg::CntpctEl0),
+            16 => Some(SysReg::CntvctEl0),
+            17 => Some(SysReg::CntpCtlEl0),
+            18 => Some(SysReg::CntpCvalEl0),
+            19 => Some(SysReg::CntvCtlEl0),
+            20 => Some(SysReg::CntvCvalEl0),
+            21 => Some(SysReg::ContextidrEl1),
             _ => None,
         }
     }

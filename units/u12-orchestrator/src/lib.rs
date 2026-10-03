@@ -863,10 +863,11 @@ impl Orchestrator {
         }
         self.machine.ram[..blob_size]
             .copy_from_slice(&image[IMAGE_HEADER_LEN..IMAGE_HEADER_LEN + blob_size]);
-        // Entry contract (PLATFORM.md): pc = entry, sp = RAM top, regs = 0.
+        // Entry contract (corrected AOSP boot): pc = entry, sp = 0, regs = 0.
+        // SP=0 at kernel entry per the QEMU-observed boot state (step0_gate.py).
         let cpu = &mut self.machine.cpu[0];
         cpu.pc = entry;
-        cpu.sp = RAM_BASE + RAM_SIZE;
+        cpu.sp = 0;
         cpu.regs = [0; 31];
         cpu.pstate = 0;
         self.invalidate_code_cache();
@@ -3237,6 +3238,24 @@ impl HostOps for WasmHost<'_> {
         self.sysregs.store(sel, val as u64);
         Ok(())
     }
+
+    /// PSCI hypervisor call dispatcher (P0, 2026-10-03).
+    /// The DTB declares `method="hvc"`, so the kernel uses HVC for PSCI.
+    /// - PSCI_VERSION (0x84000000): return 0x00010000 (PSCI v1.0)
+    /// - All other function IDs: return PSCI_NOT_SUPPORTED (-1) in X0.
+    /// Honest stub: unknown calls fail loudly via the return value,
+    /// never silently succeed.
+    fn hvc(&mut self, func_id: i64) -> Result<i64, String> {
+        const PSCI_VERSION: u64 = 0x8400_0000;
+        const PSCI_VERSION_1_0: i64 = 0x0001_0000;
+        const PSCI_NOT_SUPPORTED: i64 = -1;
+        let fid = func_id as u64;
+        if fid == PSCI_VERSION {
+            Ok(PSCI_VERSION_1_0)
+        } else {
+            Ok(PSCI_NOT_SUPPORTED)
+        }
+    }
 }
 
 /// Read `avail_event` from a used ring (EVENT_IDX layout): flags u16 @0,
@@ -3547,7 +3566,8 @@ mod tests {
             .unwrap();
         let cpu = &o.machine.cpu[0];
         assert_eq!(cpu.pc, 0x4000_0000);
-        assert_eq!(cpu.sp, 0x4800_0000);
+        // Corrected AOSP boot contract: SP=0 at kernel entry (was RAM top).
+        assert_eq!(cpu.sp, 0);
         assert_eq!(cpu.regs, [0; 31]);
         assert_eq!(cpu.pstate, 0);
         assert_eq!(o.machine.ram[0..4], [0xA1, 0x00, 0x80, 0xD2]);
