@@ -847,8 +847,6 @@ fn lift_system(word: u32) -> Vec<IrOp> {
             (2, 0, 0, 13, 7) => SysReg::Dbgwcr13,
             (2, 0, 0, 14, 7) => SysReg::Dbgwcr14,
             (2, 0, 0, 15, 7) => SysReg::Dbgwcr15,
-            (3, 3, 14, 2, 0) => SysReg::CntpTvalEl0, // P4: CNTP_TVAL_EL0 MSR: write sets CVAL = counter + value[31:0].
-            (3, 3, 14, 3, 0) => SysReg::CntvTvalEl0, // P4: CNTV_TVAL_EL0 MSR: virtual-counter alias of CVAL.
             // MSR DAIFSet, #imm (op2=6) / MSR DAIFClr, #imm (op2=7): real
             // read-modify-write of the persistent DAIF (GB-11). Upgrades
             // the GB-3 accepted no-ops to honest state.
