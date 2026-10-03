@@ -442,6 +442,128 @@ mod tests {
     }
 
     #[test]
+    fn backend_smaddl_values() {
+        // SMADDL: dst = a + (n as i32 as i64) * (m as i32 as i64).
+        let cases: &[(u64, u64, u64)] = &[
+            (0, 0, 0),
+            (10, 3, 4),       // 10 + 3*4 = 22
+            (0, 0xFFFF_FFFF, 0xFFFF_FFFF), // 0 + (-1)*(-1) = 1
+            (5, 0x8000_0000, 2), // 5 + (-2^31)*2 = 5 - 2^32
+            (0xFFFF_FFFF_FFFF_FFFF, 1, 1), // -1 + 1 = 0 (wrapping)
+        ];
+        for &(acc, n, m) in cases {
+            let wasm = compile(
+                vec![
+                    IrOp::Mov { dst: 0, imm: n },
+                    IrOp::Mov { dst: 1, imm: m },
+                    IrOp::Mov { dst: 3, imm: acc },
+                    IrOp::Smaddl { dst: 2, n: 0, m: 1, a: 3 },
+                    IrOp::Branch { target: 0x100 },
+                ],
+                vec![BlockExit::Branch(0x100)],
+            );
+            let mut exe = WasmiExecutor::new();
+            let mut regs = [0u64; 31];
+            let mut host = RamHost::new(0x1000);
+            exe.run_block(&wasm, &mut regs, &mut host).unwrap();
+            let expected = acc.wrapping_add(
+                (n as u32 as i32 as i64).wrapping_mul(m as u32 as i32 as i64) as u64
+            );
+            assert_eq!(regs[2], expected, "smaddl({acc:#x}, {n:#x}, {m:#x})");
+        }
+    }
+
+    #[test]
+    fn backend_smsubl_values() {
+        // SMSUBL: dst = a - (n as i32 as i64) * (m as i32 as i64).
+        let cases: &[(u64, u64, u64)] = &[
+            (0, 0, 0),
+            (10, 3, 4),       // 10 - 3*4 = -2 (wrapping)
+            (0, 0xFFFF_FFFF, 0xFFFF_FFFF), // 0 - (-1)*(-1) = -1 (wrapping)
+        ];
+        for &(acc, n, m) in cases {
+            let wasm = compile(
+                vec![
+                    IrOp::Mov { dst: 0, imm: n },
+                    IrOp::Mov { dst: 1, imm: m },
+                    IrOp::Mov { dst: 3, imm: acc },
+                    IrOp::Smsubl { dst: 2, n: 0, m: 1, a: 3 },
+                    IrOp::Branch { target: 0x100 },
+                ],
+                vec![BlockExit::Branch(0x100)],
+            );
+            let mut exe = WasmiExecutor::new();
+            let mut regs = [0u64; 31];
+            let mut host = RamHost::new(0x1000);
+            exe.run_block(&wasm, &mut regs, &mut host).unwrap();
+            let expected = acc.wrapping_sub(
+                (n as u32 as i32 as i64).wrapping_mul(m as u32 as i32 as i64) as u64
+            );
+            assert_eq!(regs[2], expected, "smsubl({acc:#x}, {n:#x}, {m:#x})");
+        }
+    }
+
+    #[test]
+    fn backend_umaddl_values() {
+        // UMADDL: dst = a + (n as u32 as u64) * (m as u32 as u64).
+        let cases: &[(u64, u64, u64)] = &[
+            (0, 0, 0),
+            (10, 3, 4),       // 10 + 12 = 22
+            (0, 0xFFFF_FFFF, 0xFFFF_FFFF), // (2^32-1)^2
+            (1, 0xFFFF_FFFF, 2), // 1 + 2*(2^32-1)
+        ];
+        for &(acc, n, m) in cases {
+            let wasm = compile(
+                vec![
+                    IrOp::Mov { dst: 0, imm: n },
+                    IrOp::Mov { dst: 1, imm: m },
+                    IrOp::Mov { dst: 3, imm: acc },
+                    IrOp::Umaddl { dst: 2, n: 0, m: 1, a: 3 },
+                    IrOp::Branch { target: 0x100 },
+                ],
+                vec![BlockExit::Branch(0x100)],
+            );
+            let mut exe = WasmiExecutor::new();
+            let mut regs = [0u64; 31];
+            let mut host = RamHost::new(0x1000);
+            exe.run_block(&wasm, &mut regs, &mut host).unwrap();
+            let expected = acc.wrapping_add(
+                (n as u32 as u64).wrapping_mul(m as u32 as u64)
+            );
+            assert_eq!(regs[2], expected, "umaddl({acc:#x}, {n:#x}, {m:#x})");
+        }
+    }
+
+    #[test]
+    fn backend_umsubl_values() {
+        // UMSUBL: dst = a - (n as u32 as u64) * (m as u32 as u64).
+        let cases: &[(u64, u64, u64)] = &[
+            (100, 3, 4),      // 100 - 12 = 88
+            (0, 1, 1),         // 0 - 1 = MAX (wrapping)
+        ];
+        for &(acc, n, m) in cases {
+            let wasm = compile(
+                vec![
+                    IrOp::Mov { dst: 0, imm: n },
+                    IrOp::Mov { dst: 1, imm: m },
+                    IrOp::Mov { dst: 3, imm: acc },
+                    IrOp::Umsubl { dst: 2, n: 0, m: 1, a: 3 },
+                    IrOp::Branch { target: 0x100 },
+                ],
+                vec![BlockExit::Branch(0x100)],
+            );
+            let mut exe = WasmiExecutor::new();
+            let mut regs = [0u64; 31];
+            let mut host = RamHost::new(0x1000);
+            exe.run_block(&wasm, &mut regs, &mut host).unwrap();
+            let expected = acc.wrapping_sub(
+                (n as u32 as u64).wrapping_mul(m as u32 as u64)
+            );
+            assert_eq!(regs[2], expected, "umsubl({acc:#x}, {n:#x}, {m:#x})");
+        }
+    }
+
+    #[test]
     fn backend_sysreg_roundtrip() {
         // MSR then MRS across SCTLR_EL1, TPIDR_EL1, DAIF, CNTHCTL_EL2.
         let wasm = compile(

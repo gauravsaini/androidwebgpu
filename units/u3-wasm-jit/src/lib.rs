@@ -197,6 +197,18 @@ pub fn compile(block: &IrBlock) -> WasmModule {
             IrOp::Smull { dst, n, m } => {
                 emit_smulh_long(&mut body, *n, *m, *dst);
             }
+            IrOp::Smaddl { dst, n, m, a } => {
+                emit_smaddl(&mut body, *n, *m, *a, *dst);
+            }
+            IrOp::Smsubl { dst, n, m, a } => {
+                emit_smsubl(&mut body, *n, *m, *a, *dst);
+            }
+            IrOp::Umaddl { dst, n, m, a } => {
+                emit_umaddl(&mut body, *n, *m, *a, *dst);
+            }
+            IrOp::Umsubl { dst, n, m, a } => {
+                emit_umsubl(&mut body, *n, *m, *a, *dst);
+            }
             IrOp::Mov { dst, imm } => {
                 body.push(OP_I64_CONST);
                 sleb(*imm as i64, &mut body);
@@ -952,6 +964,64 @@ fn emit_smulh_long(body: &mut Vec<u8>, n: u8, m: u8, dst: u8) {
     body.push(OP_I64_SHR_S); // [sext(n), sext(m)]
     body.push(OP_I64_MUL); // [product]
     reg_set(body, dst);
+}
+
+/// Emit WASM for `Smaddl { dst, n, m, a }`: `dst = a + sext(n) * sext(m)`.
+fn emit_smaddl(body: &mut Vec<u8>, n: u8, m: u8, a: u8, dst: u8) {
+    emit_smulh_long_no_store(body, n, m); // [product]
+    reg_get(body, a); // [product, a]
+    body.push(OP_I64_ADD); // [product + a]
+    reg_set(body, dst);
+}
+
+/// Emit WASM for `Smsubl { dst, n, m, a }`: `dst = a - sext(n) * sext(m)`.
+fn emit_smsubl(body: &mut Vec<u8>, n: u8, m: u8, a: u8, dst: u8) {
+    reg_get(body, a); // [a]
+    emit_smulh_long_no_store(body, n, m); // [a, product]
+    body.push(OP_I64_SUB); // [a - product]
+    reg_set(body, dst);
+}
+
+/// Emit WASM for `Umaddl { dst, n, m, a }`: `dst = a + (n as u32 as u64) * (m as u32 as u64)`.
+fn emit_umaddl(body: &mut Vec<u8>, n: u8, m: u8, a: u8, dst: u8) {
+    emit_umull_no_store(body, n, m); // [product]
+    reg_get(body, a); // [product, a]
+    body.push(OP_I64_ADD); // [product + a]
+    reg_set(body, dst);
+}
+
+/// Emit WASM for `Umsubl { dst, n, m, a }`: `dst = a - (n as u32 as u64) * (m as u32 as u64)`.
+fn emit_umsubl(body: &mut Vec<u8>, n: u8, m: u8, a: u8, dst: u8) {
+    reg_get(body, a); // [a]
+    emit_umull_no_store(body, n, m); // [a, product]
+    body.push(OP_I64_SUB); // [a - product]
+    reg_set(body, dst);
+}
+
+/// Helper: `Umull` product without the final store. Leaves [product] on stack.
+fn emit_umull_no_store(body: &mut Vec<u8>, n: u8, m: u8) {
+    reg_get(body, n); // [n]
+    body.push(OP_I64_CONST); sleb(0xFFFF_FFFF, body); // [n, mask]
+    body.push(OP_I64_AND); // [n_lo]
+    reg_get(body, m); // [n_lo, m]
+    body.push(OP_I64_CONST); sleb(0xFFFF_FFFF, body); // [n_lo, m, mask]
+    body.push(OP_I64_AND); // [n_lo, m_lo]
+    body.push(OP_I64_MUL); // [product]
+}
+
+/// Helper: `Smull` product without the final store. Leaves [product] on stack.
+fn emit_smulh_long_no_store(body: &mut Vec<u8>, n: u8, m: u8) {
+    reg_get(body, n); // [n]
+    body.push(OP_I64_CONST); sleb(32, body); // [n, 32]
+    body.push(OP_I64_SHL); // [n << 32]
+    body.push(OP_I64_CONST); sleb(32, body); // [n << 32, 32]
+    body.push(OP_I64_SHR_S); // [sext(n)]
+    reg_get(body, m); // [sext(n), m]
+    body.push(OP_I64_CONST); sleb(32, body); // [sext(n), m, 32]
+    body.push(OP_I64_SHL); // [sext(n), m << 32]
+    body.push(OP_I64_CONST); sleb(32, body); // [sext(n), m << 32, 32]
+    body.push(OP_I64_SHR_S); // [sext(n), sext(m)]
+    body.push(OP_I64_MUL); // [product]
 }
 
 /// Append a `(param*) -> (result*)` function type.

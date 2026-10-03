@@ -573,6 +573,22 @@ pub enum IrOp {
     /// `dst = (regs[n] as i32 as i64 as u64) * (regs[m] as i32 as i64 as u64)`
     /// (32-bit signed multiply, 64-bit result). Register 31 reads as 0.
     Smull { dst: u8, n: u8, m: u8 },
+    /// Added 2026-10-03: Signed multiply-add long (SMADDL).
+    /// `dst = regs[a] + (regs[n] as i32 as i64) * (regs[m] as i32 as i64)`
+    /// (wrapping 64-bit add). Register 31 reads as 0.
+    Smaddl { dst: u8, n: u8, m: u8, a: u8 },
+    /// Added 2026-10-03: Signed multiply-sub long (SMSUBL).
+    /// `dst = regs[a] - (regs[n] as i32 as i64) * (regs[m] as i32 as i64)`
+    /// (wrapping 64-bit sub). Register 31 reads as 0.
+    Smsubl { dst: u8, n: u8, m: u8, a: u8 },
+    /// Added 2026-10-03: Unsigned multiply-add long (UMADDL).
+    /// `dst = regs[a] + (regs[n] as u32 as u64) * (regs[m] as u32 as u64)`
+    /// (wrapping 64-bit add). Register 31 reads as 0.
+    Umaddl { dst: u8, n: u8, m: u8, a: u8 },
+    /// Added 2026-10-03: Unsigned multiply-sub long (UMSUBL).
+    /// `dst = regs[a] - (regs[n] as u32 as u64) * (regs[m] as u32 as u64)`
+    /// (wrapping 64-bit sub). Register 31 reads as 0.
+    Umsubl { dst: u8, n: u8, m: u8, a: u8 },
     /// Added 2026-09-27 (Wave 4 amendment U2-G1): wait-for-interrupt marker.
     /// The execution backend yields the vCPU until an IRQ is pending;
     /// resumable, never an error and never a silent nop.
