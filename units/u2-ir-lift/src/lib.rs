@@ -1314,6 +1314,26 @@ fn lift_data_proc(word: u32) -> Vec<IrOp> {
         if op54 == 0 && op31 == 0 && o0 == 1 {
             return trap(R_MSUB);
         }
+        // UMULH / SMULH (2026-10-03): 64-bit multiply high.
+        // UMULH: op54=00, op31=110, o0=0. SMULH: op54=00, op31=010, o0=0.
+        // Both require sf=1 and Ra=XZR (31).
+        if op54 == 0 && o0 == 0 && (op31 == 0b110 || op31 == 0b010) {
+            if word >> 31 == 0 {
+                return trap(R_DP_UNSUPPORTED);
+            }
+            let rm = ((word >> 16) & 0x1F) as u8;
+            let ra = ((word >> 10) & 0x1F) as u8;
+            let rn = ((word >> 5) & 0x1F) as u8;
+            let rd = (word & 0x1F) as u8;
+            if ra != 31 {
+                return trap(R_DP_UNSUPPORTED);
+            }
+            if op31 == 0b110 {
+                return vec![IrOp::Umulh { dst: rd, n: rn, m: rm }];
+            } else {
+                return vec![IrOp::Smulh { dst: rd, n: rn, m: rm }];
+            }
+        }
         if op54 == 0b01 || op54 == 0b10 {
             return trap(R_MADD_LONG);
         }
@@ -2456,6 +2476,21 @@ mod tests {
                 a: 31
             },]
         );
+    }
+
+    #[test]
+    fn umulh_lift() {
+        // UMULH X8, X8, X9 (word 0x9BC97D08, kernel halt at 0xffffff8008217f40,
+        // boot step 57,995). Xd = (Xn * Xm)[127:64] unsigned.
+        let ops = lift(&insn(0x4000, 0x9BC9_7D08, InsnKind::DataProc));
+        assert_eq!(ops, vec![IrOp::Umulh { dst: 8, n: 8, m: 9 }]);
+    }
+
+    #[test]
+    fn smulh_lift() {
+        // SMULH X8, X8, X9 (word 0x9B497D08). Xd = (Xn * Xm)[127:64] signed.
+        let ops = lift(&insn(0x4000, 0x9B49_7D08, InsnKind::DataProc));
+        assert_eq!(ops, vec![IrOp::Smulh { dst: 8, n: 8, m: 9 }]);
     }
 
     #[test]

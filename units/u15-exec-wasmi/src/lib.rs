@@ -319,6 +319,69 @@ mod tests {
     }
 
     #[test]
+    fn backend_umulh_values() {
+        // UMULH: dst = ((n as u128 * m as u128) >> 64) as u64.
+        // Verified against Rust u128 across edge cases.
+        let cases: &[(u64, u64)] = &[
+            (0, 0),
+            (1, 1),
+            (u64::MAX, 1),
+            (u64::MAX, u64::MAX),
+            (0xFFFFFFFFFFFFFFFF, 0xFFFFFFFFFFFFFFFF),
+            (0x123456789ABCDEF0, 0xFEDCBA9876543210),
+            (1 << 63, 2),
+            (1 << 32, 1 << 32),
+        ];
+        for &(a, b) in cases {
+            let wasm = compile(
+                vec![
+                    IrOp::Mov { dst: 0, imm: a },
+                    IrOp::Mov { dst: 1, imm: b },
+                    IrOp::Umulh { dst: 2, n: 0, m: 1 },
+                    IrOp::Branch { target: 0x100 },
+                ],
+                vec![BlockExit::Branch(0x100)],
+            );
+            let mut exe = WasmiExecutor::new();
+            let mut regs = [0u64; 31];
+            let mut host = RamHost::new(0x1000);
+            exe.run_block(&wasm, &mut regs, &mut host).unwrap();
+            let expected = ((a as u128 * b as u128) >> 64) as u64;
+            assert_eq!(regs[2], expected, "umulh({a:#x}, {b:#x})");
+        }
+    }
+
+    #[test]
+    fn backend_smulh_values() {
+        // SMULH: dst = ((n as i128 * m as i128) >> 64) as u64 (arithmetic).
+        let cases: &[(u64, u64)] = &[
+            (0, 0),
+            (1, 1),
+            (u64::MAX, 1), // -1 * 1 = -1 -> high = all 1s
+            (u64::MAX, u64::MAX), // (-1)*(-1) = 1 -> high = 0
+            (1 << 63, 1 << 63), // (-2^63)*(-2^63) = 2^126 -> high = 2^62
+            (0x8000000000000000, 2), // (-2^63)*2 = -2^64 -> high = -1
+        ];
+        for &(a, b) in cases {
+            let wasm = compile(
+                vec![
+                    IrOp::Mov { dst: 0, imm: a },
+                    IrOp::Mov { dst: 1, imm: b },
+                    IrOp::Smulh { dst: 2, n: 0, m: 1 },
+                    IrOp::Branch { target: 0x100 },
+                ],
+                vec![BlockExit::Branch(0x100)],
+            );
+            let mut exe = WasmiExecutor::new();
+            let mut regs = [0u64; 31];
+            let mut host = RamHost::new(0x1000);
+            exe.run_block(&wasm, &mut regs, &mut host).unwrap();
+            let expected = ((a as i64 as i128 * b as i64 as i128) >> 64) as u64;
+            assert_eq!(regs[2], expected, "smulh({a:#x}, {b:#x})");
+        }
+    }
+
+    #[test]
     fn backend_sysreg_roundtrip() {
         // MSR then MRS across SCTLR_EL1, TPIDR_EL1, DAIF, CNTHCTL_EL2.
         let wasm = compile(
