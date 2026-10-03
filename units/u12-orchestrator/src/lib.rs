@@ -1272,7 +1272,7 @@ impl Orchestrator {
             let sf = (word >> 31) & 1;
             let op = (word >> 30) & 1; // 0 = ADD, 1 = SUB
             let s = (word >> 29) & 1;
-            // 64-bit only; 32-bit falls through to U2.
+            // 64-bit form below; 32-bit form in 4c (added 2026-10-03).
             if sf == 1 {
                 let rm = ((word >> 16) & 0x1F) as usize;
                 let option = (word >> 13) & 0x7;
@@ -1351,6 +1351,81 @@ impl Orchestrator {
                             self.machine.cpu[0].sp = res;
                         } else {
                             self.machine.cpu[0].regs[rd] = res;
+                        }
+                    }
+                    self.machine.cpu[0].pc = pc.wrapping_add(4);
+                    return Some(Ok(()));
+                }
+            }
+            // 4c. Add/subtract (extended register), 32-bit.
+            // 2026-10-03: the kernel hits `subs wzr, w8, w1, uxtb`
+            // (0x6B21011F) at step 20473766. The 64-bit form (4b) was
+            // already handled; the 32-bit form fell through to U2.
+            // Encoding: sf=0, op, S, 01011, opt=1, Rm, option, imm3, Rn, Rd.
+            // For 32-bit, valid options are UXTB/UXTH/UXTW/SXTB/SXTH/SXTW
+            // (000/001/010/100/101/110); UXTX/SXTX (011/111) are UNDEFINED.
+            if sf == 0 {
+                let rm = ((word >> 16) & 0x1F) as usize;
+                let option = (word >> 13) & 0x7;
+                let imm3 = (word >> 10) & 0x7;
+                let rn = ((word >> 5) & 0x1F) as usize;
+                let rd = (word & 0x1F) as usize;
+                let valid_option =
+                    matches!(option, 0b000 | 0b001 | 0b010 | 0b100 | 0b101 | 0b110);
+                if imm3 <= 4 && valid_option {
+                    let w = if rm == 31 {
+                        0u32
+                    } else {
+                        self.machine.cpu[0].regs[rm] as u32
+                    };
+                    let extended: u32 = match option {
+                        0b000 => w as u8 as u32,   // UXTB
+                        0b001 => w as u16 as u32,  // UXTH
+                        0b010 => w,                // UXTW
+                        0b100 => (w as i8) as i32 as u32,   // SXTB
+                        0b101 => (w as i16) as i32 as u32,  // SXTH
+                        _ => (w as i32) as u32,             // SXTW (0b110)
+                    };
+                    let op2 = extended << imm3;
+                    // Rn=31: WSP for S=0 (ADD/SUB), WZR for S=1 (CMP/CMN).
+                    let rn_val: u32 = if rn == 31 {
+                        if s == 1 {
+                            0
+                        } else {
+                            self.machine.cpu[0].sp as u32
+                        }
+                    } else {
+                        self.machine.cpu[0].regs[rn] as u32
+                    };
+                    if s == 1 {
+                        // ADDS/SUBS/CMP/CMN: Rd=31 discards, NZCV updates.
+                        // 32-bit result zero-extends into the register.
+                        let nzcv = if op == 0 {
+                            let res = rn_val.wrapping_add(op2);
+                            if rd != 31 {
+                                self.machine.cpu[0].regs[rd] = res as u64;
+                            }
+                            nzcv_add32(rn_val, op2)
+                        } else {
+                            let res = rn_val.wrapping_sub(op2);
+                            if rd != 31 {
+                                self.machine.cpu[0].regs[rd] = res as u64;
+                            }
+                            nzcv_sub32(rn_val, op2)
+                        };
+                        self.machine.cpu[0].pstate =
+                            (self.machine.cpu[0].pstate & !FLAGS_NZCV_MASK) | nzcv;
+                    } else {
+                        let res = if op == 0 {
+                            rn_val.wrapping_add(op2)
+                        } else {
+                            rn_val.wrapping_sub(op2)
+                        };
+                        // 32-bit form zero-extends (also into SP).
+                        if rd == 31 {
+                            self.machine.cpu[0].sp = res as u64;
+                        } else {
+                            self.machine.cpu[0].regs[rd] = res as u64;
                         }
                     }
                     self.machine.cpu[0].pc = pc.wrapping_add(4);
@@ -5242,6 +5317,51 @@ mod tests {
         o.machine_mut().cpu[0].sp = 0xFFFF_FFFF_FFFF_0000; // nonzero: must not leak in
         assert!(matches!(o.step_vcpu(), StepOutcome::Continue));
         assert_eq!(o.machine().cpu[0].pstate & FLAGS_NZCV_MASK, 0x6000_0000);
+        assert_eq!(o.machine().cpu[0].pc, pc + 4);
+    }
+
+    #[test]
+    fn gb27_subs_extended_uxtb_32() {
+        // Exact kernel word: SUBS WZR, W8, W1, UXTB (0x6B21011F).
+        // Measured halt at step 20473766 (pc 0xffffff8008c736cc).
+        // W8 - UXTB(W1); Rd=31 discards; NZCV set; 32-bit.
+        let pc = RAM_BASE + 0x1000;
+        let sp = RAM_BASE + 0x2000;
+        let mut o = sp_test_orchestrator(pc, sp, 0x6B21_011F);
+        o.machine_mut().cpu[0].regs[8] = 0x100; // W8 = 0x100
+        o.machine_mut().cpu[0].regs[1] = 0xFF; // W1 = 0xFF, UXTB = 0xFF
+        assert!(matches!(o.step_vcpu(), StepOutcome::Continue));
+        // 0x100 - 0xFF = 1 => N=0,Z=0,C=1,V=0.
+        assert_eq!(o.machine().cpu[0].pstate & FLAGS_NZCV_MASK, 0x2000_0000);
+        assert_eq!(o.machine().cpu[0].pc, pc + 4);
+    }
+
+    #[test]
+    fn gb27_add_extended_sxtb_32() {
+        // ADD W2, W3, W4, SXTB #1 (0x0B248462): S=0, 32-bit.
+        // W2 = W3 + (SignExtend(W4[7:0]) << 1).
+        let pc = RAM_BASE + 0x1000;
+        let sp = RAM_BASE + 0x2000;
+        let mut o = sp_test_orchestrator(pc, sp, 0x0B24_8462);
+        o.machine_mut().cpu[0].regs[3] = 0x1000; // W3
+        o.machine_mut().cpu[0].regs[4] = 0xFB; // W4[7:0] = 0xFB = -5
+        assert!(matches!(o.step_vcpu(), StepOutcome::Continue));
+        // 0x1000 + (-5 << 1) = 0x1000 - 10 = 0xFF6.
+        assert_eq!(o.machine().cpu[0].regs[2], 0xFF6);
+        assert_eq!(o.machine().cpu[0].pc, pc + 4);
+    }
+
+    #[test]
+    fn gb27_sub_extended_uxtw_32_zero_extends() {
+        // SUB W5, W6, W7, UXTW (0x4B2740C5): S=0, 32-bit result zero-extends.
+        let pc = RAM_BASE + 0x1000;
+        let sp = RAM_BASE + 0x2000;
+        let mut o = sp_test_orchestrator(pc, sp, 0x4B27_40C5);
+        o.machine_mut().cpu[0].regs[6] = 0xFFFF_FFFF_0000_0005; // W6 = 5
+        o.machine_mut().cpu[0].regs[7] = 0xFFFF_FFFF_0000_0003; // W7 = 3
+        assert!(matches!(o.step_vcpu(), StepOutcome::Continue));
+        // 5 - 3 = 2, zero-extended to 64 bits.
+        assert_eq!(o.machine().cpu[0].regs[5], 2);
         assert_eq!(o.machine().cpu[0].pc, pc + 4);
     }
 
