@@ -1,0 +1,134 @@
+[
+  {
+    "name": "impdef_constants_and_nops",
+    "steps": [
+      {
+        "word": 3575671712,
+        "disasm": "mrs x0, s0_0_c6_c11_5"
+      },
+      {
+        "word": 3576608865,
+        "disasm": "mrs x1, s1_6_c11_c8_3"
+      },
+      {
+        "word": 3577088130,
+        "disasm": "mrs x2, s2_6_c0_c8_4"
+      },
+      {
+        "word": 3577237603,
+        "disasm": "mrs x3, s3_0_c5_c0_3"
+      },
+      {
+        "word": 3575698692,
+        "disasm": "mrs x4, s0_0_c13_c5_0"
+      },
+      {
+        "word": 3575829797,
+        "disasm": "mrs x5, s0_2_c13_c5_1"
+      },
+      {
+        "word": 3575960870,
+        "disasm": "mrs x6, s0_4_c13_c5_1"
+      },
+      {
+        "word": 3576091943,
+        "disasm": "mrs x7, s0_6_c13_c5_1"
+      },
+      {
+        "word": 3576223016,
+        "disasm": "mrs x8, s1_0_c13_c5_1"
+      },
+      {
+        "word": 3576354089,
+        "disasm": "mrs x9, s1_2_c13_c5_1"
+      },
+      {
+        "word": 3576485162,
+        "disasm": "mrs x10, s1_4_c13_c5_1"
+      },
+      {
+        "word": 3576616235,
+        "disasm": "mrs x11, s1_6_c13_c5_1"
+      },
+      {
+        "word": 3576747308,
+        "disasm": "mrs x12, s2_0_c13_c5_1"
+      },
+      {
+        "word": 3576878381,
+        "disasm": "mrs x13, s2_2_c13_c5_1"
+      },
+      {
+        "word": 3577009454,
+        "disasm": "mrs x14, s2_4_c13_c5_1"
+      },
+      {
+        "word": 3577140527,
+        "disasm": "mrs x15, s2_6_c13_c5_1"
+      },
+      {
+        "word": 3575698719,
+        "disasm": "mrs xzr, s0_0_c13_c5_0"
+      },
+      {
+        "word": 3573547014,
+        "disasm": "msr s0_0_c0_c0_0, x6"
+      },
+      {
+        "word": 3574060294,
+        "disasm": "msr s0_7_c13_c5_0, x6"
+      },
+      {
+        "word": 3574715654,
+        "disasm": "msr s2_1_c13_c5_0, x6"
+      },
+      {
+        "word": 3574846726,
+        "disasm": "msr s2_3_c13_c5_0, x6"
+      },
+      {
+        "word": 3575174406,
+        "disasm": "msr s3_0_c13_c5_0, x6"
+      },
+      {
+        "word": 3575305478,
+        "disasm": "msr s3_2_c13_c5_0, x6"
+      },
+      {
+        "word": 3575436550,
+        "disasm": "msr s3_4_c13_c5_0, x6"
+      },
+      {
+        "word": 3575513094,
+        "disasm": "msr s3_6_c0_c0_0, x6"
+      },
+      {
+        "word": 3575620134,
+        "disasm": "msr s3_7_c10_c2_1, x6"
+      },
+      {
+        "word": 3575029318,
+        "disasm": "msr s2_6_c9_c14_2, x6"
+      }
+    ],
+    "expected_regs": {
+      "0": 0,
+      "1": 0,
+      "2": 0,
+      "3": 0,
+      "4": 0,
+      "5": 0,
+      "6": 0,
+      "7": 0,
+      "8": 0,
+      "9": 0,
+      "10": 0,
+      "11": 0,
+      "12": 0,
+      "13": 0,
+      "14": 0,
+      "15": 0
+    },
+    "expected_sysregs": {}
+  }
+]

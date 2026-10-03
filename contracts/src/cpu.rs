@@ -192,6 +192,189 @@ pub enum SysReg {
     /// Debug (slice F): OS Double Lock Register, EL1. WRITE-ONLY: no MRS
     /// arm (UNDEFINED on read → R_SYSTEM trap). MSR stored, no behavior.
     OsdlrEl1 = 44,
+    // ===== P4 (2026-10-03, feat/emu-p4-impl) =====
+    /// P4 (2026-10-03): DBGBVR0_EL1. Stored u64, no behavior (no debug hardware model).
+    Dbgbvr0 = 45,
+    /// P4 (2026-10-03): DBGBVR1_EL1. Stored u64, no behavior (no debug hardware model).
+    Dbgbvr1 = 46,
+    /// P4 (2026-10-03): DBGBVR2_EL1. Stored u64, no behavior (no debug hardware model).
+    Dbgbvr2 = 47,
+    /// P4 (2026-10-03): DBGBVR3_EL1. Stored u64, no behavior (no debug hardware model).
+    Dbgbvr3 = 48,
+    /// P4 (2026-10-03): DBGBVR4_EL1. Stored u64, no behavior (no debug hardware model).
+    Dbgbvr4 = 49,
+    /// P4 (2026-10-03): DBGBVR5_EL1. Stored u64, no behavior (no debug hardware model).
+    Dbgbvr5 = 50,
+    /// P4 (2026-10-03): DBGBVR6_EL1. Stored u64, no behavior (no debug hardware model).
+    Dbgbvr6 = 51,
+    /// P4 (2026-10-03): DBGBVR7_EL1. Stored u64, no behavior (no debug hardware model).
+    Dbgbvr7 = 52,
+    /// P4 (2026-10-03): DBGBVR8_EL1. Stored u64, no behavior (no debug hardware model).
+    Dbgbvr8 = 53,
+    /// P4 (2026-10-03): DBGBVR9_EL1. Stored u64, no behavior (no debug hardware model).
+    Dbgbvr9 = 54,
+    /// P4 (2026-10-03): DBGBVR10_EL1. Stored u64, no behavior (no debug hardware model).
+    Dbgbvr10 = 55,
+    /// P4 (2026-10-03): DBGBVR11_EL1. Stored u64, no behavior (no debug hardware model).
+    Dbgbvr11 = 56,
+    /// P4 (2026-10-03): DBGBVR12_EL1. Stored u64, no behavior (no debug hardware model).
+    Dbgbvr12 = 57,
+    /// P4 (2026-10-03): DBGBVR13_EL1. Stored u64, no behavior (no debug hardware model).
+    Dbgbvr13 = 58,
+    /// P4 (2026-10-03): DBGBVR14_EL1. Stored u64, no behavior (no debug hardware model).
+    Dbgbvr14 = 59,
+    /// P4 (2026-10-03): DBGBVR15_EL1. Stored u64, no behavior (no debug hardware model).
+    Dbgbvr15 = 60,
+    /// P4 (2026-10-03): DBGBCR0_EL1. Stored u64, no behavior (no debug hardware model).
+    Dbgbcr0 = 61,
+    /// P4 (2026-10-03): DBGBCR1_EL1. Stored u64, no behavior (no debug hardware model).
+    Dbgbcr1 = 62,
+    /// P4 (2026-10-03): DBGBCR2_EL1. Stored u64, no behavior (no debug hardware model).
+    Dbgbcr2 = 63,
+    /// P4 (2026-10-03): DBGBCR3_EL1. Stored u64, no behavior (no debug hardware model).
+    Dbgbcr3 = 64,
+    /// P4 (2026-10-03): DBGBCR4_EL1. Stored u64, no behavior (no debug hardware model).
+    Dbgbcr4 = 65,
+    /// P4 (2026-10-03): DBGBCR5_EL1. Stored u64, no behavior (no debug hardware model).
+    Dbgbcr5 = 66,
+    /// P4 (2026-10-03): DBGBCR6_EL1. Stored u64, no behavior (no debug hardware model).
+    Dbgbcr6 = 67,
+    /// P4 (2026-10-03): DBGBCR7_EL1. Stored u64, no behavior (no debug hardware model).
+    Dbgbcr7 = 68,
+    /// P4 (2026-10-03): DBGBCR8_EL1. Stored u64, no behavior (no debug hardware model).
+    Dbgbcr8 = 69,
+    /// P4 (2026-10-03): DBGBCR9_EL1. Stored u64, no behavior (no debug hardware model).
+    Dbgbcr9 = 70,
+    /// P4 (2026-10-03): DBGBCR10_EL1. Stored u64, no behavior (no debug hardware model).
+    Dbgbcr10 = 71,
+    /// P4 (2026-10-03): DBGBCR11_EL1. Stored u64, no behavior (no debug hardware model).
+    Dbgbcr11 = 72,
+    /// P4 (2026-10-03): DBGBCR12_EL1. Stored u64, no behavior (no debug hardware model).
+    Dbgbcr12 = 73,
+    /// P4 (2026-10-03): DBGBCR13_EL1. Stored u64, no behavior (no debug hardware model).
+    Dbgbcr13 = 74,
+    /// P4 (2026-10-03): DBGBCR14_EL1. Stored u64, no behavior (no debug hardware model).
+    Dbgbcr14 = 75,
+    /// P4 (2026-10-03): DBGBCR15_EL1. Stored u64, no behavior (no debug hardware model).
+    Dbgbcr15 = 76,
+    /// P4 (2026-10-03): DBGWVR0_EL1. Stored u64, no behavior (no debug hardware model).
+    Dbgwvr0 = 77,
+    /// P4 (2026-10-03): DBGWVR1_EL1. Stored u64, no behavior (no debug hardware model).
+    Dbgwvr1 = 78,
+    /// P4 (2026-10-03): DBGWVR2_EL1. Stored u64, no behavior (no debug hardware model).
+    Dbgwvr2 = 79,
+    /// P4 (2026-10-03): DBGWVR3_EL1. Stored u64, no behavior (no debug hardware model).
+    Dbgwvr3 = 80,
+    /// P4 (2026-10-03): DBGWVR4_EL1. Stored u64, no behavior (no debug hardware model).
+    Dbgwvr4 = 81,
+    /// P4 (2026-10-03): DBGWVR5_EL1. Stored u64, no behavior (no debug hardware model).
+    Dbgwvr5 = 82,
+    /// P4 (2026-10-03): DBGWVR6_EL1. Stored u64, no behavior (no debug hardware model).
+    Dbgwvr6 = 83,
+    /// P4 (2026-10-03): DBGWVR7_EL1. Stored u64, no behavior (no debug hardware model).
+    Dbgwvr7 = 84,
+    /// P4 (2026-10-03): DBGWVR8_EL1. Stored u64, no behavior (no debug hardware model).
+    Dbgwvr8 = 85,
+    /// P4 (2026-10-03): DBGWVR9_EL1. Stored u64, no behavior (no debug hardware model).
+    Dbgwvr9 = 86,
+    /// P4 (2026-10-03): DBGWVR10_EL1. Stored u64, no behavior (no debug hardware model).
+    Dbgwvr10 = 87,
+    /// P4 (2026-10-03): DBGWVR11_EL1. Stored u64, no behavior (no debug hardware model).
+    Dbgwvr11 = 88,
+    /// P4 (2026-10-03): DBGWVR12_EL1. Stored u64, no behavior (no debug hardware model).
+    Dbgwvr12 = 89,
+    /// P4 (2026-10-03): DBGWVR13_EL1. Stored u64, no behavior (no debug hardware model).
+    Dbgwvr13 = 90,
+    /// P4 (2026-10-03): DBGWVR14_EL1. Stored u64, no behavior (no debug hardware model).
+    Dbgwvr14 = 91,
+    /// P4 (2026-10-03): DBGWVR15_EL1. Stored u64, no behavior (no debug hardware model).
+    Dbgwvr15 = 92,
+    /// P4 (2026-10-03): DBGWCR0_EL1. Stored u64, no behavior (no debug hardware model).
+    Dbgwcr0 = 93,
+    /// P4 (2026-10-03): DBGWCR1_EL1. Stored u64, no behavior (no debug hardware model).
+    Dbgwcr1 = 94,
+    /// P4 (2026-10-03): DBGWCR2_EL1. Stored u64, no behavior (no debug hardware model).
+    Dbgwcr2 = 95,
+    /// P4 (2026-10-03): DBGWCR3_EL1. Stored u64, no behavior (no debug hardware model).
+    Dbgwcr3 = 96,
+    /// P4 (2026-10-03): DBGWCR4_EL1. Stored u64, no behavior (no debug hardware model).
+    Dbgwcr4 = 97,
+    /// P4 (2026-10-03): DBGWCR5_EL1. Stored u64, no behavior (no debug hardware model).
+    Dbgwcr5 = 98,
+    /// P4 (2026-10-03): DBGWCR6_EL1. Stored u64, no behavior (no debug hardware model).
+    Dbgwcr6 = 99,
+    /// P4 (2026-10-03): DBGWCR7_EL1. Stored u64, no behavior (no debug hardware model).
+    Dbgwcr7 = 100,
+    /// P4 (2026-10-03): DBGWCR8_EL1. Stored u64, no behavior (no debug hardware model).
+    Dbgwcr8 = 101,
+    /// P4 (2026-10-03): DBGWCR9_EL1. Stored u64, no behavior (no debug hardware model).
+    Dbgwcr9 = 102,
+    /// P4 (2026-10-03): DBGWCR10_EL1. Stored u64, no behavior (no debug hardware model).
+    Dbgwcr10 = 103,
+    /// P4 (2026-10-03): DBGWCR11_EL1. Stored u64, no behavior (no debug hardware model).
+    Dbgwcr11 = 104,
+    /// P4 (2026-10-03): DBGWCR12_EL1. Stored u64, no behavior (no debug hardware model).
+    Dbgwcr12 = 105,
+    /// P4 (2026-10-03): DBGWCR13_EL1. Stored u64, no behavior (no debug hardware model).
+    Dbgwcr13 = 106,
+    /// P4 (2026-10-03): DBGWCR14_EL1. Stored u64, no behavior (no debug hardware model).
+    Dbgwcr14 = 107,
+    /// P4 (2026-10-03): DBGWCR15_EL1. Stored u64, no behavior (no debug hardware model).
+    Dbgwcr15 = 108,
+    /// P4 (2026-10-03): Virtualization Processor ID Register, EL2. MSR-only in the P4 scan; stored u64, no behavior.
+    VpidrEl2 = 109,
+    /// P4 (2026-10-03): Virtualization Multiprocessor ID Register, EL2. MSR-only in the P4 scan; stored u64, no behavior.
+    VmpidrEl2 = 110,
+    /// P4 (2026-10-03): Architectural Feature Trap Register, EL2. MSR-only in the P4 scan; stored u64, no behavior.
+    CptrEl2 = 111,
+    /// P4 (2026-10-03): Monitor Debug Configuration Register, EL2. MSR-only in the P4 scan; stored u64, no behavior.
+    MdcrEl2 = 112,
+    /// P4 (2026-10-03): Hypervisor System Trap Register, EL2. MSR-only in the P4 scan; stored u64, no behavior.
+    HstrEl2 = 113,
+    /// P4 (2026-10-03): SVE Control Register, EL2. MSR-only in the P4 scan; stored u64, no behavior.
+    ZcrEl2 = 114,
+    /// P4 (2026-10-03): Vector Base Address Register, EL2. MSR-only in the P4 scan; stored u64, no behavior.
+    VbarEl2 = 115,
+    /// P4 (2026-10-03): Interrupt Controller Hyp Control Register, EL2. MSR-only in the P4 scan; stored u64, no behavior.
+    IchHcrEl2 = 116,
+    /// P4 (2026-10-03): Virtualization Translation Table Base Register, EL2. MSR-only in the P4 scan; stored u64, no behavior.
+    VttbrEl2 = 117,
+    /// P4 (2026-10-03): Saved Program Status Register, EL2. MSR-only in the P4 scan; stored u64, no behavior.
+    SpsrEl2 = 118,
+    /// P4 (2026-10-03): Exception Link Register, EL2. MSR-only in the P4 scan; stored u64, no behavior.
+    ElrEl2 = 119,
+    /// P4 (2026-10-03): Statistical Profiling Control Register, EL2. MSR-only in the P4 scan; stored u64, no behavior.
+    PmscrEl2 = 120,
+    /// P4 (2026-10-03): ICC_SRE_EL2: Interrupt Controller System Register Enable, EL2. Default 0x1 (SRE=1), mirroring the EL1 default: our CPU interface is sysreg-accessible. Stored, RW.
+    IccSreEl2 = 121,
+    /// P4 (2026-10-03): ICC_BPR1_EL1: Interrupt Controller Binary Point Register 1, EL1. Stored u64.
+    IccBpr1El1 = 122,
+    /// P4 (2026-10-03): ICC_AP0R0_EL1: Interrupt Controller Active Priority Register 0.0, EL1. Written by gicv3_cpu_sys_reg_init to clear active priorities. Stored u64.
+    IccAp0r0El1 = 123,
+    /// P4 (2026-10-03): ICC_AP0R1_EL1: Interrupt Controller Active Priority Register 0.1, EL1. Written by gicv3_cpu_sys_reg_init to clear active priorities. Stored u64.
+    IccAp0r1El1 = 124,
+    /// P4 (2026-10-03): ICC_AP0R2_EL1: Interrupt Controller Active Priority Register 0.2, EL1. Written by gicv3_cpu_sys_reg_init to clear active priorities. Stored u64.
+    IccAp0r2El1 = 125,
+    /// P4 (2026-10-03): ICC_AP0R3_EL1: Interrupt Controller Active Priority Register 0.3, EL1. Written by gicv3_cpu_sys_reg_init to clear active priorities. Stored u64.
+    IccAp0r3El1 = 126,
+    /// P4 (2026-10-03): ICC_AP1R0_EL1: Interrupt Controller Active Priority Register 1.0, EL1. Stored u64.
+    IccAp1r0El1 = 127,
+    /// P4 (2026-10-03): ICC_AP1R1_EL1: Interrupt Controller Active Priority Register 1.1, EL1. Stored u64.
+    IccAp1r1El1 = 128,
+    /// P4 (2026-10-03): ICC_AP1R2_EL1: Interrupt Controller Active Priority Register 1.2, EL1. Stored u64.
+    IccAp1r2El1 = 129,
+    /// P4 (2026-10-03): ICC_AP1R3_EL1: Interrupt Controller Active Priority Register 1.3, EL1. Stored u64.
+    IccAp1r3El1 = 130,
+    /// P4 (2026-10-03): ICC_SGI1R_EL1: Interrupt Controller Software Generated Interrupt Register, EL1. WRITE-ONLY: no MRS arm (architecturally UNDEFINED on read -> R_SYSTEM trap). MSR stored, no behavior (no GIC model, no IPI delivery).
+    IccSgi1rEl1 = 131,
+    /// P4 (2026-10-03): DISR_EL1: Deferred Interrupt Status Register, EL1. Stored u64, no behavior.
+    DisrEl1 = 132,
+    /// P4 (2026-10-03): LORC_EL1: LORegion Control Register, EL1. Stored u64 (LORegions not modeled).
+    LorcEl1 = 133,
+    /// P4 (2026-10-03): PMCCNTR_EL0: Performance Monitors Cycle Count Register, EL0. Stored u64, default 0 (no PMU model: the counter never advances; honest flat zero).
+    PmccntrEl0 = 134,
+    /// P4 (2026-10-03): ZCR_EL1: SVE Control Register, EL1. Written/read by the kernel's SVE probe (mrs x3, zcr_el1 @ 0x4008474c). Stored u64, default 0. ID_AA64ZFR0_EL1 reads 0 (no SVE), so the probe must see a consistent stored value, not a trap.
+    ZcrEl1 = 135,
 }
 
 /// Single IR operation (SSA-style). The lifter (U2) is the only producer.

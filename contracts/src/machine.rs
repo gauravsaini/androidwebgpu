@@ -91,6 +91,37 @@ pub struct SysRegs {
     // P3 slice F — debug (2026-10-03).
     /// OSDLR_EL1: write-only, stored, no behavior.
     pub osdlr_el1: u64,
+    // P4 debug (2026-10-03): breakpoint/watchpoint value+control registers.
+    // No debug hardware model exists: stored u64, no behavior.
+    pub dbg_bvr: [u64; 16],
+    pub dbg_bcr: [u64; 16],
+    pub dbg_wvr: [u64; 16],
+    pub dbg_wcr: [u64; 16],
+    // P4 EL2 (2026-10-03): hyp-init writes (0x40c83000 region); unreachable
+    // at EL1. Stored u64, no behavior.
+    pub vpidr_el2: u64,
+    pub vmpidr_el2: u64,
+    pub cptr_el2: u64,
+    pub mdcr_el2: u64,
+    pub hstr_el2: u64,
+    pub zcr_el2: u64,
+    pub vbar_el2: u64,
+    pub ich_hcr_el2: u64,
+    pub icc_sre_el2: u64,
+    pub vttbr_el2: u64,
+    pub spsr_el2: u64,
+    pub elr_el2: u64,
+    pub pmscr_el2: u64,
+    // P4 GICv3 CPU interface MSRs (2026-10-03): no GIC model; stored, no behavior.
+    pub icc_bpr1_el1: u64,
+    pub icc_ap0r: [u64; 4],
+    pub icc_ap1r: [u64; 4],
+    pub icc_sgi1r_el1: u64,
+    // P4 misc (2026-10-03).
+    pub disr_el1: u64,
+    pub lorc_el1: u64,
+    pub pmccntr_el0: u64,
+    pub zcr_el1: u64,
 }
 
 impl Default for SysRegs {
@@ -161,6 +192,36 @@ impl Default for SysRegs {
             fpsr: 0,
             // P3 slice F (debug): write-only, UNKNOWN at reset.
             osdlr_el1: 0,
+            // P4 (2026-10-03): debug regs UNKNOWN at reset; kernel saves first.
+            dbg_bvr: [0; 16],
+            dbg_bcr: [0; 16],
+            dbg_wvr: [0; 16],
+            dbg_wcr: [0; 16],
+            // P4 EL2: UNKNOWN at reset; hyp init always writes first.
+            vpidr_el2: 0,
+            vmpidr_el2: 0,
+            cptr_el2: 0,
+            mdcr_el2: 0,
+            hstr_el2: 0,
+            zcr_el2: 0,
+            vbar_el2: 0,
+            ich_hcr_el2: 0,
+            // P4: ICC_SRE_EL2 mirrors the EL1 default (SRE=1: sysreg path).
+            icc_sre_el2: 0x1,
+            vttbr_el2: 0,
+            spsr_el2: 0,
+            elr_el2: 0,
+            pmscr_el2: 0,
+            // P4 GIC: UNKNOWN at reset; gicv3_cpu_sys_reg_init writes first.
+            icc_bpr1_el1: 0,
+            icc_ap0r: [0; 4],
+            icc_ap1r: [0; 4],
+            icc_sgi1r_el1: 0,
+            // P4 misc: UNKNOWN at reset.
+            disr_el1: 0,
+            lorc_el1: 0,
+            pmccntr_el0: 0,
+            zcr_el1: 0,
         }
     }
 }
@@ -235,6 +296,98 @@ impl SysRegs {
             SysReg::Fpsr => self.fpsr,
             // P3 slice F (debug).
             SysReg::OsdlrEl1 => self.osdlr_el1,
+            // P4 (2026-10-03): debug / EL2 / GIC / misc.
+            SysReg::Dbgbvr0 => self.dbg_bvr[0],
+            SysReg::Dbgbvr1 => self.dbg_bvr[1],
+            SysReg::Dbgbvr2 => self.dbg_bvr[2],
+            SysReg::Dbgbvr3 => self.dbg_bvr[3],
+            SysReg::Dbgbvr4 => self.dbg_bvr[4],
+            SysReg::Dbgbvr5 => self.dbg_bvr[5],
+            SysReg::Dbgbvr6 => self.dbg_bvr[6],
+            SysReg::Dbgbvr7 => self.dbg_bvr[7],
+            SysReg::Dbgbvr8 => self.dbg_bvr[8],
+            SysReg::Dbgbvr9 => self.dbg_bvr[9],
+            SysReg::Dbgbvr10 => self.dbg_bvr[10],
+            SysReg::Dbgbvr11 => self.dbg_bvr[11],
+            SysReg::Dbgbvr12 => self.dbg_bvr[12],
+            SysReg::Dbgbvr13 => self.dbg_bvr[13],
+            SysReg::Dbgbvr14 => self.dbg_bvr[14],
+            SysReg::Dbgbvr15 => self.dbg_bvr[15],
+            SysReg::Dbgbcr0 => self.dbg_bcr[0],
+            SysReg::Dbgbcr1 => self.dbg_bcr[1],
+            SysReg::Dbgbcr2 => self.dbg_bcr[2],
+            SysReg::Dbgbcr3 => self.dbg_bcr[3],
+            SysReg::Dbgbcr4 => self.dbg_bcr[4],
+            SysReg::Dbgbcr5 => self.dbg_bcr[5],
+            SysReg::Dbgbcr6 => self.dbg_bcr[6],
+            SysReg::Dbgbcr7 => self.dbg_bcr[7],
+            SysReg::Dbgbcr8 => self.dbg_bcr[8],
+            SysReg::Dbgbcr9 => self.dbg_bcr[9],
+            SysReg::Dbgbcr10 => self.dbg_bcr[10],
+            SysReg::Dbgbcr11 => self.dbg_bcr[11],
+            SysReg::Dbgbcr12 => self.dbg_bcr[12],
+            SysReg::Dbgbcr13 => self.dbg_bcr[13],
+            SysReg::Dbgbcr14 => self.dbg_bcr[14],
+            SysReg::Dbgbcr15 => self.dbg_bcr[15],
+            SysReg::Dbgwvr0 => self.dbg_wvr[0],
+            SysReg::Dbgwvr1 => self.dbg_wvr[1],
+            SysReg::Dbgwvr2 => self.dbg_wvr[2],
+            SysReg::Dbgwvr3 => self.dbg_wvr[3],
+            SysReg::Dbgwvr4 => self.dbg_wvr[4],
+            SysReg::Dbgwvr5 => self.dbg_wvr[5],
+            SysReg::Dbgwvr6 => self.dbg_wvr[6],
+            SysReg::Dbgwvr7 => self.dbg_wvr[7],
+            SysReg::Dbgwvr8 => self.dbg_wvr[8],
+            SysReg::Dbgwvr9 => self.dbg_wvr[9],
+            SysReg::Dbgwvr10 => self.dbg_wvr[10],
+            SysReg::Dbgwvr11 => self.dbg_wvr[11],
+            SysReg::Dbgwvr12 => self.dbg_wvr[12],
+            SysReg::Dbgwvr13 => self.dbg_wvr[13],
+            SysReg::Dbgwvr14 => self.dbg_wvr[14],
+            SysReg::Dbgwvr15 => self.dbg_wvr[15],
+            SysReg::Dbgwcr0 => self.dbg_wcr[0],
+            SysReg::Dbgwcr1 => self.dbg_wcr[1],
+            SysReg::Dbgwcr2 => self.dbg_wcr[2],
+            SysReg::Dbgwcr3 => self.dbg_wcr[3],
+            SysReg::Dbgwcr4 => self.dbg_wcr[4],
+            SysReg::Dbgwcr5 => self.dbg_wcr[5],
+            SysReg::Dbgwcr6 => self.dbg_wcr[6],
+            SysReg::Dbgwcr7 => self.dbg_wcr[7],
+            SysReg::Dbgwcr8 => self.dbg_wcr[8],
+            SysReg::Dbgwcr9 => self.dbg_wcr[9],
+            SysReg::Dbgwcr10 => self.dbg_wcr[10],
+            SysReg::Dbgwcr11 => self.dbg_wcr[11],
+            SysReg::Dbgwcr12 => self.dbg_wcr[12],
+            SysReg::Dbgwcr13 => self.dbg_wcr[13],
+            SysReg::Dbgwcr14 => self.dbg_wcr[14],
+            SysReg::Dbgwcr15 => self.dbg_wcr[15],
+            SysReg::VpidrEl2 => self.vpidr_el2,
+            SysReg::VmpidrEl2 => self.vmpidr_el2,
+            SysReg::CptrEl2 => self.cptr_el2,
+            SysReg::MdcrEl2 => self.mdcr_el2,
+            SysReg::HstrEl2 => self.hstr_el2,
+            SysReg::ZcrEl2 => self.zcr_el2,
+            SysReg::VbarEl2 => self.vbar_el2,
+            SysReg::IchHcrEl2 => self.ich_hcr_el2,
+            SysReg::VttbrEl2 => self.vttbr_el2,
+            SysReg::SpsrEl2 => self.spsr_el2,
+            SysReg::ElrEl2 => self.elr_el2,
+            SysReg::PmscrEl2 => self.pmscr_el2,
+            SysReg::IccSreEl2 => self.icc_sre_el2,
+            SysReg::IccBpr1El1 => self.icc_bpr1_el1,
+            SysReg::IccAp0r0El1 => self.icc_ap0r[0],
+            SysReg::IccAp0r1El1 => self.icc_ap0r[1],
+            SysReg::IccAp0r2El1 => self.icc_ap0r[2],
+            SysReg::IccAp0r3El1 => self.icc_ap0r[3],
+            SysReg::IccAp1r0El1 => self.icc_ap1r[0],
+            SysReg::IccAp1r1El1 => self.icc_ap1r[1],
+            SysReg::IccAp1r2El1 => self.icc_ap1r[2],
+            SysReg::IccAp1r3El1 => self.icc_ap1r[3],
+            SysReg::IccSgi1rEl1 => self.icc_sgi1r_el1,
+            SysReg::DisrEl1 => self.disr_el1,
+            SysReg::LorcEl1 => self.lorc_el1,
+            SysReg::PmccntrEl0 => self.pmccntr_el0,
+            SysReg::ZcrEl1 => self.zcr_el1,
         }
     }
 
@@ -300,6 +453,98 @@ impl SysRegs {
             SysReg::Fpsr => self.fpsr = val,
             // P3 slice F (debug).
             SysReg::OsdlrEl1 => self.osdlr_el1 = val,
+            // P4 (2026-10-03): debug / EL2 / GIC / misc.
+            SysReg::Dbgbvr0 => self.dbg_bvr[0] = val,
+            SysReg::Dbgbvr1 => self.dbg_bvr[1] = val,
+            SysReg::Dbgbvr2 => self.dbg_bvr[2] = val,
+            SysReg::Dbgbvr3 => self.dbg_bvr[3] = val,
+            SysReg::Dbgbvr4 => self.dbg_bvr[4] = val,
+            SysReg::Dbgbvr5 => self.dbg_bvr[5] = val,
+            SysReg::Dbgbvr6 => self.dbg_bvr[6] = val,
+            SysReg::Dbgbvr7 => self.dbg_bvr[7] = val,
+            SysReg::Dbgbvr8 => self.dbg_bvr[8] = val,
+            SysReg::Dbgbvr9 => self.dbg_bvr[9] = val,
+            SysReg::Dbgbvr10 => self.dbg_bvr[10] = val,
+            SysReg::Dbgbvr11 => self.dbg_bvr[11] = val,
+            SysReg::Dbgbvr12 => self.dbg_bvr[12] = val,
+            SysReg::Dbgbvr13 => self.dbg_bvr[13] = val,
+            SysReg::Dbgbvr14 => self.dbg_bvr[14] = val,
+            SysReg::Dbgbvr15 => self.dbg_bvr[15] = val,
+            SysReg::Dbgbcr0 => self.dbg_bcr[0] = val,
+            SysReg::Dbgbcr1 => self.dbg_bcr[1] = val,
+            SysReg::Dbgbcr2 => self.dbg_bcr[2] = val,
+            SysReg::Dbgbcr3 => self.dbg_bcr[3] = val,
+            SysReg::Dbgbcr4 => self.dbg_bcr[4] = val,
+            SysReg::Dbgbcr5 => self.dbg_bcr[5] = val,
+            SysReg::Dbgbcr6 => self.dbg_bcr[6] = val,
+            SysReg::Dbgbcr7 => self.dbg_bcr[7] = val,
+            SysReg::Dbgbcr8 => self.dbg_bcr[8] = val,
+            SysReg::Dbgbcr9 => self.dbg_bcr[9] = val,
+            SysReg::Dbgbcr10 => self.dbg_bcr[10] = val,
+            SysReg::Dbgbcr11 => self.dbg_bcr[11] = val,
+            SysReg::Dbgbcr12 => self.dbg_bcr[12] = val,
+            SysReg::Dbgbcr13 => self.dbg_bcr[13] = val,
+            SysReg::Dbgbcr14 => self.dbg_bcr[14] = val,
+            SysReg::Dbgbcr15 => self.dbg_bcr[15] = val,
+            SysReg::Dbgwvr0 => self.dbg_wvr[0] = val,
+            SysReg::Dbgwvr1 => self.dbg_wvr[1] = val,
+            SysReg::Dbgwvr2 => self.dbg_wvr[2] = val,
+            SysReg::Dbgwvr3 => self.dbg_wvr[3] = val,
+            SysReg::Dbgwvr4 => self.dbg_wvr[4] = val,
+            SysReg::Dbgwvr5 => self.dbg_wvr[5] = val,
+            SysReg::Dbgwvr6 => self.dbg_wvr[6] = val,
+            SysReg::Dbgwvr7 => self.dbg_wvr[7] = val,
+            SysReg::Dbgwvr8 => self.dbg_wvr[8] = val,
+            SysReg::Dbgwvr9 => self.dbg_wvr[9] = val,
+            SysReg::Dbgwvr10 => self.dbg_wvr[10] = val,
+            SysReg::Dbgwvr11 => self.dbg_wvr[11] = val,
+            SysReg::Dbgwvr12 => self.dbg_wvr[12] = val,
+            SysReg::Dbgwvr13 => self.dbg_wvr[13] = val,
+            SysReg::Dbgwvr14 => self.dbg_wvr[14] = val,
+            SysReg::Dbgwvr15 => self.dbg_wvr[15] = val,
+            SysReg::Dbgwcr0 => self.dbg_wcr[0] = val,
+            SysReg::Dbgwcr1 => self.dbg_wcr[1] = val,
+            SysReg::Dbgwcr2 => self.dbg_wcr[2] = val,
+            SysReg::Dbgwcr3 => self.dbg_wcr[3] = val,
+            SysReg::Dbgwcr4 => self.dbg_wcr[4] = val,
+            SysReg::Dbgwcr5 => self.dbg_wcr[5] = val,
+            SysReg::Dbgwcr6 => self.dbg_wcr[6] = val,
+            SysReg::Dbgwcr7 => self.dbg_wcr[7] = val,
+            SysReg::Dbgwcr8 => self.dbg_wcr[8] = val,
+            SysReg::Dbgwcr9 => self.dbg_wcr[9] = val,
+            SysReg::Dbgwcr10 => self.dbg_wcr[10] = val,
+            SysReg::Dbgwcr11 => self.dbg_wcr[11] = val,
+            SysReg::Dbgwcr12 => self.dbg_wcr[12] = val,
+            SysReg::Dbgwcr13 => self.dbg_wcr[13] = val,
+            SysReg::Dbgwcr14 => self.dbg_wcr[14] = val,
+            SysReg::Dbgwcr15 => self.dbg_wcr[15] = val,
+            SysReg::VpidrEl2 => self.vpidr_el2 = val,
+            SysReg::VmpidrEl2 => self.vmpidr_el2 = val,
+            SysReg::CptrEl2 => self.cptr_el2 = val,
+            SysReg::MdcrEl2 => self.mdcr_el2 = val,
+            SysReg::HstrEl2 => self.hstr_el2 = val,
+            SysReg::ZcrEl2 => self.zcr_el2 = val,
+            SysReg::VbarEl2 => self.vbar_el2 = val,
+            SysReg::IchHcrEl2 => self.ich_hcr_el2 = val,
+            SysReg::VttbrEl2 => self.vttbr_el2 = val,
+            SysReg::SpsrEl2 => self.spsr_el2 = val,
+            SysReg::ElrEl2 => self.elr_el2 = val,
+            SysReg::PmscrEl2 => self.pmscr_el2 = val,
+            SysReg::IccSreEl2 => self.icc_sre_el2 = val,
+            SysReg::IccBpr1El1 => self.icc_bpr1_el1 = val,
+            SysReg::IccAp0r0El1 => self.icc_ap0r[0] = val,
+            SysReg::IccAp0r1El1 => self.icc_ap0r[1] = val,
+            SysReg::IccAp0r2El1 => self.icc_ap0r[2] = val,
+            SysReg::IccAp0r3El1 => self.icc_ap0r[3] = val,
+            SysReg::IccAp1r0El1 => self.icc_ap1r[0] = val,
+            SysReg::IccAp1r1El1 => self.icc_ap1r[1] = val,
+            SysReg::IccAp1r2El1 => self.icc_ap1r[2] = val,
+            SysReg::IccAp1r3El1 => self.icc_ap1r[3] = val,
+            SysReg::IccSgi1rEl1 => self.icc_sgi1r_el1 = val,
+            SysReg::DisrEl1 => self.disr_el1 = val,
+            SysReg::LorcEl1 => self.lorc_el1 = val,
+            SysReg::PmccntrEl0 => self.pmccntr_el0 = val,
+            SysReg::ZcrEl1 => self.zcr_el1 = val,
         }
     }
 
@@ -354,6 +599,98 @@ impl SysRegs {
             42 => Some(SysReg::Fpcr),
             43 => Some(SysReg::Fpsr),
             44 => Some(SysReg::OsdlrEl1),
+            // P4 (2026-10-03): debug (45-108), EL2 (109-121), GIC (122-131), misc (132-135).
+            45 => Some(SysReg::Dbgbvr0),
+            46 => Some(SysReg::Dbgbvr1),
+            47 => Some(SysReg::Dbgbvr2),
+            48 => Some(SysReg::Dbgbvr3),
+            49 => Some(SysReg::Dbgbvr4),
+            50 => Some(SysReg::Dbgbvr5),
+            51 => Some(SysReg::Dbgbvr6),
+            52 => Some(SysReg::Dbgbvr7),
+            53 => Some(SysReg::Dbgbvr8),
+            54 => Some(SysReg::Dbgbvr9),
+            55 => Some(SysReg::Dbgbvr10),
+            56 => Some(SysReg::Dbgbvr11),
+            57 => Some(SysReg::Dbgbvr12),
+            58 => Some(SysReg::Dbgbvr13),
+            59 => Some(SysReg::Dbgbvr14),
+            60 => Some(SysReg::Dbgbvr15),
+            61 => Some(SysReg::Dbgbcr0),
+            62 => Some(SysReg::Dbgbcr1),
+            63 => Some(SysReg::Dbgbcr2),
+            64 => Some(SysReg::Dbgbcr3),
+            65 => Some(SysReg::Dbgbcr4),
+            66 => Some(SysReg::Dbgbcr5),
+            67 => Some(SysReg::Dbgbcr6),
+            68 => Some(SysReg::Dbgbcr7),
+            69 => Some(SysReg::Dbgbcr8),
+            70 => Some(SysReg::Dbgbcr9),
+            71 => Some(SysReg::Dbgbcr10),
+            72 => Some(SysReg::Dbgbcr11),
+            73 => Some(SysReg::Dbgbcr12),
+            74 => Some(SysReg::Dbgbcr13),
+            75 => Some(SysReg::Dbgbcr14),
+            76 => Some(SysReg::Dbgbcr15),
+            77 => Some(SysReg::Dbgwvr0),
+            78 => Some(SysReg::Dbgwvr1),
+            79 => Some(SysReg::Dbgwvr2),
+            80 => Some(SysReg::Dbgwvr3),
+            81 => Some(SysReg::Dbgwvr4),
+            82 => Some(SysReg::Dbgwvr5),
+            83 => Some(SysReg::Dbgwvr6),
+            84 => Some(SysReg::Dbgwvr7),
+            85 => Some(SysReg::Dbgwvr8),
+            86 => Some(SysReg::Dbgwvr9),
+            87 => Some(SysReg::Dbgwvr10),
+            88 => Some(SysReg::Dbgwvr11),
+            89 => Some(SysReg::Dbgwvr12),
+            90 => Some(SysReg::Dbgwvr13),
+            91 => Some(SysReg::Dbgwvr14),
+            92 => Some(SysReg::Dbgwvr15),
+            93 => Some(SysReg::Dbgwcr0),
+            94 => Some(SysReg::Dbgwcr1),
+            95 => Some(SysReg::Dbgwcr2),
+            96 => Some(SysReg::Dbgwcr3),
+            97 => Some(SysReg::Dbgwcr4),
+            98 => Some(SysReg::Dbgwcr5),
+            99 => Some(SysReg::Dbgwcr6),
+            100 => Some(SysReg::Dbgwcr7),
+            101 => Some(SysReg::Dbgwcr8),
+            102 => Some(SysReg::Dbgwcr9),
+            103 => Some(SysReg::Dbgwcr10),
+            104 => Some(SysReg::Dbgwcr11),
+            105 => Some(SysReg::Dbgwcr12),
+            106 => Some(SysReg::Dbgwcr13),
+            107 => Some(SysReg::Dbgwcr14),
+            108 => Some(SysReg::Dbgwcr15),
+            109 => Some(SysReg::VpidrEl2),
+            110 => Some(SysReg::VmpidrEl2),
+            111 => Some(SysReg::CptrEl2),
+            112 => Some(SysReg::MdcrEl2),
+            113 => Some(SysReg::HstrEl2),
+            114 => Some(SysReg::ZcrEl2),
+            115 => Some(SysReg::VbarEl2),
+            116 => Some(SysReg::IchHcrEl2),
+            117 => Some(SysReg::VttbrEl2),
+            118 => Some(SysReg::SpsrEl2),
+            119 => Some(SysReg::ElrEl2),
+            120 => Some(SysReg::PmscrEl2),
+            121 => Some(SysReg::IccSreEl2),
+            122 => Some(SysReg::IccBpr1El1),
+            123 => Some(SysReg::IccAp0r0El1),
+            124 => Some(SysReg::IccAp0r1El1),
+            125 => Some(SysReg::IccAp0r2El1),
+            126 => Some(SysReg::IccAp0r3El1),
+            127 => Some(SysReg::IccAp1r0El1),
+            128 => Some(SysReg::IccAp1r1El1),
+            129 => Some(SysReg::IccAp1r2El1),
+            130 => Some(SysReg::IccAp1r3El1),
+            131 => Some(SysReg::IccSgi1rEl1),
+            132 => Some(SysReg::DisrEl1),
+            133 => Some(SysReg::LorcEl1),
+            134 => Some(SysReg::PmccntrEl0),
+            135 => Some(SysReg::ZcrEl1),
             _ => None,
         }
     }
@@ -398,7 +735,9 @@ pub const MAX_GUEST_RAM_BYTES: usize = 2 * 1024 * 1024 * 1024;
 pub struct Snapshot(pub Vec<u8>);
 
 /// Current snapshot format version. Bump on any format change.
-pub const SNAPSHOT_VERSION: u32 = 12;
+pub const SNAPSHOT_VERSION: u32 = 13;
+/// P4 (2026-10-03): v13 adds the 91 P4 system registers (64 debug,
+/// 13 EL2, 10 GIC CPU-interface, 4 misc) to the per-CPU sysreg area.
 
 /// Snapshot restore failure. Data, not panic — corrupt input never crashes the host.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -554,6 +893,62 @@ mod tests {
         ] {
             assert_eq!(SysRegs::from_index(idx), Some(reg));
         }
-        assert_eq!(SysRegs::from_index(45), None);
+        assert_eq!(SysRegs::from_index(136), None);
+    }
+
+    #[test]
+    fn p4_defaults_and_discriminants() {
+        // P4 (2026-10-03, feat/emu-p4-impl): ICC_SRE_EL2 mirrors the EL1
+        // default (SRE=1, sysreg path); everything else defaults to 0.
+        let s = SysRegs::default();
+        assert_eq!(s.load(SysReg::IccSreEl2), 0x1);
+        assert_eq!(s.load(SysReg::ZcrEl1), 0);
+        assert_eq!(s.load(SysReg::PmccntrEl0), 0);
+        assert_eq!(s.load(SysReg::Dbgbvr0), 0);
+        assert_eq!(s.load(SysReg::Dbgwcr15), 0);
+        assert_eq!(s.load(SysReg::VbarEl2), 0);
+        assert_eq!(s.load(SysReg::IccBpr1El1), 0);
+        assert_eq!(s.load(SysReg::DisrEl1), 0);
+        assert_eq!(s.load(SysReg::LorcEl1), 0);
+        // MSR/MRS round-trip through the host selector, including the
+        // indexed debug and AP0R/AP1R arrays.
+        let mut s = s;
+        s.store(SysReg::Dbgbvr7, 0xdead_beef);
+        s.store(SysReg::Dbgwcr15, 0x1234);
+        s.store(SysReg::IccAp0r2El1, 0xaaaa);
+        s.store(SysReg::IccAp1r3El1, 0xbbbb);
+        s.store(SysReg::ZcrEl1, 0x700);
+        s.store(SysReg::IccSgi1rEl1, 0x1); // WO accept: stored, no behavior
+        assert_eq!(s.load(SysReg::Dbgbvr7), 0xdead_beef);
+        assert_eq!(s.load(SysReg::Dbgwcr15), 0x1234);
+        assert_eq!(s.load(SysReg::Dbgbvr6), 0); // neighbor untouched
+        assert_eq!(s.load(SysReg::IccAp0r2El1), 0xaaaa);
+        assert_eq!(s.load(SysReg::IccAp1r3El1), 0xbbbb);
+        assert_eq!(s.load(SysReg::IccAp0r1El1), 0);
+        assert_eq!(s.load(SysReg::ZcrEl1), 0x700);
+        assert_eq!(s.load(SysReg::IccSgi1rEl1), 0x1);
+        // from_index pins the new discriminants 45..=135.
+        for (idx, reg) in [
+            (45, SysReg::Dbgbvr0),
+            (60, SysReg::Dbgbvr15),
+            (61, SysReg::Dbgbcr0),
+            (77, SysReg::Dbgwvr0),
+            (93, SysReg::Dbgwcr0),
+            (108, SysReg::Dbgwcr15),
+            (109, SysReg::VpidrEl2),
+            (117, SysReg::VttbrEl2),
+            (121, SysReg::IccSreEl2),
+            (122, SysReg::IccBpr1El1),
+            (123, SysReg::IccAp0r0El1),
+            (130, SysReg::IccAp1r3El1),
+            (131, SysReg::IccSgi1rEl1),
+            (132, SysReg::DisrEl1),
+            (133, SysReg::LorcEl1),
+            (134, SysReg::PmccntrEl0),
+            (135, SysReg::ZcrEl1),
+        ] {
+            assert_eq!(SysRegs::from_index(idx), Some(reg));
+        }
+        assert_eq!(SysRegs::from_index(136), None);
     }
 }

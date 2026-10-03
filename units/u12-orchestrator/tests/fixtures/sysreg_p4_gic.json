@@ -1,0 +1,100 @@
+[
+  {
+    "name": "gic_cpu_msrs_accept",
+    "steps": [
+      {
+        "word": 3531997193,
+        "disasm": "movz x9, #0x3000"
+      },
+      {
+        "word": 3575172201,
+        "disasm": "msr icc_bpr1_el1, x9"
+      },
+      {
+        "word": 3531997225,
+        "disasm": "movz x9, #0x3001"
+      },
+      {
+        "word": 3575171209,
+        "disasm": "msr icc_ap0r0_el1, x9"
+      },
+      {
+        "word": 3531997257,
+        "disasm": "movz x9, #0x3002"
+      },
+      {
+        "word": 3575171241,
+        "disasm": "msr icc_ap0r1_el1, x9"
+      },
+      {
+        "word": 3531997289,
+        "disasm": "movz x9, #0x3003"
+      },
+      {
+        "word": 3575171273,
+        "disasm": "msr icc_ap0r2_el1, x9"
+      },
+      {
+        "word": 3531997321,
+        "disasm": "movz x9, #0x3004"
+      },
+      {
+        "word": 3575171305,
+        "disasm": "msr icc_ap0r3_el1, x9"
+      },
+      {
+        "word": 3531997353,
+        "disasm": "movz x9, #0x3005"
+      },
+      {
+        "word": 3575171337,
+        "disasm": "msr icc_ap1r0_el1, x9"
+      },
+      {
+        "word": 3531997385,
+        "disasm": "movz x9, #0x3006"
+      },
+      {
+        "word": 3575171369,
+        "disasm": "msr icc_ap1r1_el1, x9"
+      },
+      {
+        "word": 3531997417,
+        "disasm": "movz x9, #0x3007"
+      },
+      {
+        "word": 3575171401,
+        "disasm": "msr icc_ap1r2_el1, x9"
+      },
+      {
+        "word": 3531997449,
+        "disasm": "movz x9, #0x3008"
+      },
+      {
+        "word": 3575171433,
+        "disasm": "msr icc_ap1r3_el1, x9"
+      },
+      {
+        "word": 3531997481,
+        "disasm": "movz x9, #0x3009"
+      },
+      {
+        "word": 3575172009,
+        "disasm": "msr icc_sgi1r_el1, x9"
+      }
+    ],
+    "expected_regs": {},
+    "expected_sysregs": {
+      "icc_bpr1_el1": 12288,
+      "icc_ap0r0_el1": 12289,
+      "icc_ap0r1_el1": 12290,
+      "icc_ap0r2_el1": 12291,
+      "icc_ap0r3_el1": 12292,
+      "icc_ap1r0_el1": 12293,
+      "icc_ap1r1_el1": 12294,
+      "icc_ap1r2_el1": 12295,
+      "icc_ap1r3_el1": 12296,
+      "icc_sgi1r_el1": 12297
+    }
+  }
+]

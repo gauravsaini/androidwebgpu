@@ -1,0 +1,133 @@
+[
+  {
+    "name": "el2_msr_all_and_sre_mrs",
+    "steps": [
+      {
+        "word": 3531866112,
+        "disasm": "movz x0, #0x2000"
+      },
+      {
+        "word": 3575382016,
+        "disasm": "msr vpidr_el2, x0"
+      },
+      {
+        "word": 3531866144,
+        "disasm": "movz x0, #0x2001"
+      },
+      {
+        "word": 3575382176,
+        "disasm": "msr vmpidr_el2, x0"
+      },
+      {
+        "word": 3531866176,
+        "disasm": "movz x0, #0x2002"
+      },
+      {
+        "word": 3575386432,
+        "disasm": "msr cptr_el2, x0"
+      },
+      {
+        "word": 3531866208,
+        "disasm": "movz x0, #0x2003"
+      },
+      {
+        "word": 3575386400,
+        "disasm": "msr mdcr_el2, x0"
+      },
+      {
+        "word": 3531866240,
+        "disasm": "movz x0, #0x2004"
+      },
+      {
+        "word": 3575386464,
+        "disasm": "msr hstr_el2, x0"
+      },
+      {
+        "word": 3531866272,
+        "disasm": "movz x0, #0x2005"
+      },
+      {
+        "word": 3575386624,
+        "disasm": "msr zcr_el2, x0"
+      },
+      {
+        "word": 3531866304,
+        "disasm": "movz x0, #0x2006"
+      },
+      {
+        "word": 3575431168,
+        "disasm": "msr vbar_el2, x0"
+      },
+      {
+        "word": 3531866336,
+        "disasm": "movz x0, #0x2007"
+      },
+      {
+        "word": 3575433984,
+        "disasm": "msr ich_hcr_el2, x0"
+      },
+      {
+        "word": 3531866368,
+        "disasm": "movz x0, #0x2008"
+      },
+      {
+        "word": 3575390464,
+        "disasm": "msr vttbr_el2, x0"
+      },
+      {
+        "word": 3531866400,
+        "disasm": "movz x0, #0x2009"
+      },
+      {
+        "word": 3575398400,
+        "disasm": "msr spsr_el2, x0"
+      },
+      {
+        "word": 3531866432,
+        "disasm": "movz x0, #0x200a"
+      },
+      {
+        "word": 3575398432,
+        "disasm": "msr elr_el2, x0"
+      },
+      {
+        "word": 3531866464,
+        "disasm": "movz x0, #0x200b"
+      },
+      {
+        "word": 3575421184,
+        "disasm": "msr pmscr_el2, x0"
+      },
+      {
+        "word": 3531866496,
+        "disasm": "movz x0, #0x200c"
+      },
+      {
+        "word": 3575433632,
+        "disasm": "msr icc_sre_el2, x0"
+      },
+      {
+        "word": 3577530785,
+        "disasm": "mrs x1, icc_sre_el2"
+      }
+    ],
+    "expected_regs": {
+      "1": 8204
+    },
+    "expected_sysregs": {
+      "vpidr_el2": 8192,
+      "vmpidr_el2": 8193,
+      "cptr_el2": 8194,
+      "mdcr_el2": 8195,
+      "hstr_el2": 8196,
+      "zcr_el2": 8197,
+      "vbar_el2": 8198,
+      "ich_hcr_el2": 8199,
+      "vttbr_el2": 8200,
+      "spsr_el2": 8201,
+      "elr_el2": 8202,
+      "pmscr_el2": 8203,
+      "icc_sre_el2": 8204
+    }
+  }
+]

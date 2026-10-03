@@ -1,0 +1,934 @@
+[
+  {
+    "name": "debug_bvr_roundtrip_all16",
+    "steps": [
+      {
+        "word": 3531612162,
+        "disasm": "movz x2, #0x100"
+      },
+      {
+        "word": 3574595714,
+        "disasm": "msr dbgbvr0_el1, x2"
+      },
+      {
+        "word": 3531620354,
+        "disasm": "movz x2, #0x200"
+      },
+      {
+        "word": 3574595970,
+        "disasm": "msr dbgbvr1_el1, x2"
+      },
+      {
+        "word": 3531628546,
+        "disasm": "movz x2, #0x300"
+      },
+      {
+        "word": 3574596226,
+        "disasm": "msr dbgbvr2_el1, x2"
+      },
+      {
+        "word": 3531636738,
+        "disasm": "movz x2, #0x400"
+      },
+      {
+        "word": 3574596482,
+        "disasm": "msr dbgbvr3_el1, x2"
+      },
+      {
+        "word": 3531644930,
+        "disasm": "movz x2, #0x500"
+      },
+      {
+        "word": 3574596738,
+        "disasm": "msr dbgbvr4_el1, x2"
+      },
+      {
+        "word": 3531653122,
+        "disasm": "movz x2, #0x600"
+      },
+      {
+        "word": 3574596994,
+        "disasm": "msr dbgbvr5_el1, x2"
+      },
+      {
+        "word": 3531661314,
+        "disasm": "movz x2, #0x700"
+      },
+      {
+        "word": 3574597250,
+        "disasm": "msr dbgbvr6_el1, x2"
+      },
+      {
+        "word": 3531669506,
+        "disasm": "movz x2, #0x800"
+      },
+      {
+        "word": 3574597506,
+        "disasm": "msr dbgbvr7_el1, x2"
+      },
+      {
+        "word": 3531677698,
+        "disasm": "movz x2, #0x900"
+      },
+      {
+        "word": 3574597762,
+        "disasm": "msr dbgbvr8_el1, x2"
+      },
+      {
+        "word": 3531685890,
+        "disasm": "movz x2, #0xa00"
+      },
+      {
+        "word": 3574598018,
+        "disasm": "msr dbgbvr9_el1, x2"
+      },
+      {
+        "word": 3531694082,
+        "disasm": "movz x2, #0xb00"
+      },
+      {
+        "word": 3574598274,
+        "disasm": "msr dbgbvr10_el1, x2"
+      },
+      {
+        "word": 3531702274,
+        "disasm": "movz x2, #0xc00"
+      },
+      {
+        "word": 3574598530,
+        "disasm": "msr dbgbvr11_el1, x2"
+      },
+      {
+        "word": 3531710466,
+        "disasm": "movz x2, #0xd00"
+      },
+      {
+        "word": 3574598786,
+        "disasm": "msr dbgbvr12_el1, x2"
+      },
+      {
+        "word": 3531718658,
+        "disasm": "movz x2, #0xe00"
+      },
+      {
+        "word": 3574599042,
+        "disasm": "msr dbgbvr13_el1, x2"
+      },
+      {
+        "word": 3531726850,
+        "disasm": "movz x2, #0xf00"
+      },
+      {
+        "word": 3574599298,
+        "disasm": "msr dbgbvr14_el1, x2"
+      },
+      {
+        "word": 3531735042,
+        "disasm": "movz x2, #0x1000"
+      },
+      {
+        "word": 3574599554,
+        "disasm": "msr dbgbvr15_el1, x2"
+      },
+      {
+        "word": 3576692864,
+        "disasm": "mrs x0, dbgbvr0_el1"
+      },
+      {
+        "word": 3576693121,
+        "disasm": "mrs x1, dbgbvr1_el1"
+      },
+      {
+        "word": 3576693378,
+        "disasm": "mrs x2, dbgbvr2_el1"
+      },
+      {
+        "word": 3576693635,
+        "disasm": "mrs x3, dbgbvr3_el1"
+      },
+      {
+        "word": 3576693892,
+        "disasm": "mrs x4, dbgbvr4_el1"
+      },
+      {
+        "word": 3576694149,
+        "disasm": "mrs x5, dbgbvr5_el1"
+      },
+      {
+        "word": 3576694406,
+        "disasm": "mrs x6, dbgbvr6_el1"
+      },
+      {
+        "word": 3576694663,
+        "disasm": "mrs x7, dbgbvr7_el1"
+      },
+      {
+        "word": 3576694920,
+        "disasm": "mrs x8, dbgbvr8_el1"
+      },
+      {
+        "word": 3576695177,
+        "disasm": "mrs x9, dbgbvr9_el1"
+      },
+      {
+        "word": 3576695434,
+        "disasm": "mrs x10, dbgbvr10_el1"
+      },
+      {
+        "word": 3576695691,
+        "disasm": "mrs x11, dbgbvr11_el1"
+      },
+      {
+        "word": 3576695948,
+        "disasm": "mrs x12, dbgbvr12_el1"
+      },
+      {
+        "word": 3576696205,
+        "disasm": "mrs x13, dbgbvr13_el1"
+      },
+      {
+        "word": 3576696462,
+        "disasm": "mrs x14, dbgbvr14_el1"
+      },
+      {
+        "word": 3576696719,
+        "disasm": "mrs x15, dbgbvr15_el1"
+      }
+    ],
+    "expected_regs": {
+      "0": 256,
+      "1": 512,
+      "2": 768,
+      "3": 1024,
+      "4": 1280,
+      "5": 1536,
+      "6": 1792,
+      "7": 2048,
+      "8": 2304,
+      "9": 2560,
+      "10": 2816,
+      "11": 3072,
+      "12": 3328,
+      "13": 3584,
+      "14": 3840,
+      "15": 4096
+    },
+    "expected_sysregs": {
+      "dbgbvr0_el1": 256,
+      "dbgbvr1_el1": 512,
+      "dbgbvr2_el1": 768,
+      "dbgbvr3_el1": 1024,
+      "dbgbvr4_el1": 1280,
+      "dbgbvr5_el1": 1536,
+      "dbgbvr6_el1": 1792,
+      "dbgbvr7_el1": 2048,
+      "dbgbvr8_el1": 2304,
+      "dbgbvr9_el1": 2560,
+      "dbgbvr10_el1": 2816,
+      "dbgbvr11_el1": 3072,
+      "dbgbvr12_el1": 3328,
+      "dbgbvr13_el1": 3584,
+      "dbgbvr14_el1": 3840,
+      "dbgbvr15_el1": 4096
+    }
+  },
+  {
+    "name": "debug_bcr_roundtrip_all16",
+    "steps": [
+      {
+        "word": 3531612194,
+        "disasm": "movz x2, #0x101"
+      },
+      {
+        "word": 3574595746,
+        "disasm": "msr dbgbcr0_el1, x2"
+      },
+      {
+        "word": 3531620386,
+        "disasm": "movz x2, #0x201"
+      },
+      {
+        "word": 3574596002,
+        "disasm": "msr dbgbcr1_el1, x2"
+      },
+      {
+        "word": 3531628578,
+        "disasm": "movz x2, #0x301"
+      },
+      {
+        "word": 3574596258,
+        "disasm": "msr dbgbcr2_el1, x2"
+      },
+      {
+        "word": 3531636770,
+        "disasm": "movz x2, #0x401"
+      },
+      {
+        "word": 3574596514,
+        "disasm": "msr dbgbcr3_el1, x2"
+      },
+      {
+        "word": 3531644962,
+        "disasm": "movz x2, #0x501"
+      },
+      {
+        "word": 3574596770,
+        "disasm": "msr dbgbcr4_el1, x2"
+      },
+      {
+        "word": 3531653154,
+        "disasm": "movz x2, #0x601"
+      },
+      {
+        "word": 3574597026,
+        "disasm": "msr dbgbcr5_el1, x2"
+      },
+      {
+        "word": 3531661346,
+        "disasm": "movz x2, #0x701"
+      },
+      {
+        "word": 3574597282,
+        "disasm": "msr dbgbcr6_el1, x2"
+      },
+      {
+        "word": 3531669538,
+        "disasm": "movz x2, #0x801"
+      },
+      {
+        "word": 3574597538,
+        "disasm": "msr dbgbcr7_el1, x2"
+      },
+      {
+        "word": 3531677730,
+        "disasm": "movz x2, #0x901"
+      },
+      {
+        "word": 3574597794,
+        "disasm": "msr dbgbcr8_el1, x2"
+      },
+      {
+        "word": 3531685922,
+        "disasm": "movz x2, #0xa01"
+      },
+      {
+        "word": 3574598050,
+        "disasm": "msr dbgbcr9_el1, x2"
+      },
+      {
+        "word": 3531694114,
+        "disasm": "movz x2, #0xb01"
+      },
+      {
+        "word": 3574598306,
+        "disasm": "msr dbgbcr10_el1, x2"
+      },
+      {
+        "word": 3531702306,
+        "disasm": "movz x2, #0xc01"
+      },
+      {
+        "word": 3574598562,
+        "disasm": "msr dbgbcr11_el1, x2"
+      },
+      {
+        "word": 3531710498,
+        "disasm": "movz x2, #0xd01"
+      },
+      {
+        "word": 3574598818,
+        "disasm": "msr dbgbcr12_el1, x2"
+      },
+      {
+        "word": 3531718690,
+        "disasm": "movz x2, #0xe01"
+      },
+      {
+        "word": 3574599074,
+        "disasm": "msr dbgbcr13_el1, x2"
+      },
+      {
+        "word": 3531726882,
+        "disasm": "movz x2, #0xf01"
+      },
+      {
+        "word": 3574599330,
+        "disasm": "msr dbgbcr14_el1, x2"
+      },
+      {
+        "word": 3531735074,
+        "disasm": "movz x2, #0x1001"
+      },
+      {
+        "word": 3574599586,
+        "disasm": "msr dbgbcr15_el1, x2"
+      },
+      {
+        "word": 3576692896,
+        "disasm": "mrs x0, dbgbcr0_el1"
+      },
+      {
+        "word": 3576693153,
+        "disasm": "mrs x1, dbgbcr1_el1"
+      },
+      {
+        "word": 3576693410,
+        "disasm": "mrs x2, dbgbcr2_el1"
+      },
+      {
+        "word": 3576693667,
+        "disasm": "mrs x3, dbgbcr3_el1"
+      },
+      {
+        "word": 3576693924,
+        "disasm": "mrs x4, dbgbcr4_el1"
+      },
+      {
+        "word": 3576694181,
+        "disasm": "mrs x5, dbgbcr5_el1"
+      },
+      {
+        "word": 3576694438,
+        "disasm": "mrs x6, dbgbcr6_el1"
+      },
+      {
+        "word": 3576694695,
+        "disasm": "mrs x7, dbgbcr7_el1"
+      },
+      {
+        "word": 3576694952,
+        "disasm": "mrs x8, dbgbcr8_el1"
+      },
+      {
+        "word": 3576695209,
+        "disasm": "mrs x9, dbgbcr9_el1"
+      },
+      {
+        "word": 3576695466,
+        "disasm": "mrs x10, dbgbcr10_el1"
+      },
+      {
+        "word": 3576695723,
+        "disasm": "mrs x11, dbgbcr11_el1"
+      },
+      {
+        "word": 3576695980,
+        "disasm": "mrs x12, dbgbcr12_el1"
+      },
+      {
+        "word": 3576696237,
+        "disasm": "mrs x13, dbgbcr13_el1"
+      },
+      {
+        "word": 3576696494,
+        "disasm": "mrs x14, dbgbcr14_el1"
+      },
+      {
+        "word": 3576696751,
+        "disasm": "mrs x15, dbgbcr15_el1"
+      }
+    ],
+    "expected_regs": {
+      "0": 257,
+      "1": 513,
+      "2": 769,
+      "3": 1025,
+      "4": 1281,
+      "5": 1537,
+      "6": 1793,
+      "7": 2049,
+      "8": 2305,
+      "9": 2561,
+      "10": 2817,
+      "11": 3073,
+      "12": 3329,
+      "13": 3585,
+      "14": 3841,
+      "15": 4097
+    },
+    "expected_sysregs": {
+      "dbgbcr0_el1": 257,
+      "dbgbcr1_el1": 513,
+      "dbgbcr2_el1": 769,
+      "dbgbcr3_el1": 1025,
+      "dbgbcr4_el1": 1281,
+      "dbgbcr5_el1": 1537,
+      "dbgbcr6_el1": 1793,
+      "dbgbcr7_el1": 2049,
+      "dbgbcr8_el1": 2305,
+      "dbgbcr9_el1": 2561,
+      "dbgbcr10_el1": 2817,
+      "dbgbcr11_el1": 3073,
+      "dbgbcr12_el1": 3329,
+      "dbgbcr13_el1": 3585,
+      "dbgbcr14_el1": 3841,
+      "dbgbcr15_el1": 4097
+    }
+  },
+  {
+    "name": "debug_wvr_roundtrip_all16",
+    "steps": [
+      {
+        "word": 3531612226,
+        "disasm": "movz x2, #0x102"
+      },
+      {
+        "word": 3574595778,
+        "disasm": "msr dbgwvr0_el1, x2"
+      },
+      {
+        "word": 3531620418,
+        "disasm": "movz x2, #0x202"
+      },
+      {
+        "word": 3574596034,
+        "disasm": "msr dbgwvr1_el1, x2"
+      },
+      {
+        "word": 3531628610,
+        "disasm": "movz x2, #0x302"
+      },
+      {
+        "word": 3574596290,
+        "disasm": "msr dbgwvr2_el1, x2"
+      },
+      {
+        "word": 3531636802,
+        "disasm": "movz x2, #0x402"
+      },
+      {
+        "word": 3574596546,
+        "disasm": "msr dbgwvr3_el1, x2"
+      },
+      {
+        "word": 3531644994,
+        "disasm": "movz x2, #0x502"
+      },
+      {
+        "word": 3574596802,
+        "disasm": "msr dbgwvr4_el1, x2"
+      },
+      {
+        "word": 3531653186,
+        "disasm": "movz x2, #0x602"
+      },
+      {
+        "word": 3574597058,
+        "disasm": "msr dbgwvr5_el1, x2"
+      },
+      {
+        "word": 3531661378,
+        "disasm": "movz x2, #0x702"
+      },
+      {
+        "word": 3574597314,
+        "disasm": "msr dbgwvr6_el1, x2"
+      },
+      {
+        "word": 3531669570,
+        "disasm": "movz x2, #0x802"
+      },
+      {
+        "word": 3574597570,
+        "disasm": "msr dbgwvr7_el1, x2"
+      },
+      {
+        "word": 3531677762,
+        "disasm": "movz x2, #0x902"
+      },
+      {
+        "word": 3574597826,
+        "disasm": "msr dbgwvr8_el1, x2"
+      },
+      {
+        "word": 3531685954,
+        "disasm": "movz x2, #0xa02"
+      },
+      {
+        "word": 3574598082,
+        "disasm": "msr dbgwvr9_el1, x2"
+      },
+      {
+        "word": 3531694146,
+        "disasm": "movz x2, #0xb02"
+      },
+      {
+        "word": 3574598338,
+        "disasm": "msr dbgwvr10_el1, x2"
+      },
+      {
+        "word": 3531702338,
+        "disasm": "movz x2, #0xc02"
+      },
+      {
+        "word": 3574598594,
+        "disasm": "msr dbgwvr11_el1, x2"
+      },
+      {
+        "word": 3531710530,
+        "disasm": "movz x2, #0xd02"
+      },
+      {
+        "word": 3574598850,
+        "disasm": "msr dbgwvr12_el1, x2"
+      },
+      {
+        "word": 3531718722,
+        "disasm": "movz x2, #0xe02"
+      },
+      {
+        "word": 3574599106,
+        "disasm": "msr dbgwvr13_el1, x2"
+      },
+      {
+        "word": 3531726914,
+        "disasm": "movz x2, #0xf02"
+      },
+      {
+        "word": 3574599362,
+        "disasm": "msr dbgwvr14_el1, x2"
+      },
+      {
+        "word": 3531735106,
+        "disasm": "movz x2, #0x1002"
+      },
+      {
+        "word": 3574599618,
+        "disasm": "msr dbgwvr15_el1, x2"
+      },
+      {
+        "word": 3576692928,
+        "disasm": "mrs x0, dbgwvr0_el1"
+      },
+      {
+        "word": 3576693185,
+        "disasm": "mrs x1, dbgwvr1_el1"
+      },
+      {
+        "word": 3576693442,
+        "disasm": "mrs x2, dbgwvr2_el1"
+      },
+      {
+        "word": 3576693699,
+        "disasm": "mrs x3, dbgwvr3_el1"
+      },
+      {
+        "word": 3576693956,
+        "disasm": "mrs x4, dbgwvr4_el1"
+      },
+      {
+        "word": 3576694213,
+        "disasm": "mrs x5, dbgwvr5_el1"
+      },
+      {
+        "word": 3576694470,
+        "disasm": "mrs x6, dbgwvr6_el1"
+      },
+      {
+        "word": 3576694727,
+        "disasm": "mrs x7, dbgwvr7_el1"
+      },
+      {
+        "word": 3576694984,
+        "disasm": "mrs x8, dbgwvr8_el1"
+      },
+      {
+        "word": 3576695241,
+        "disasm": "mrs x9, dbgwvr9_el1"
+      },
+      {
+        "word": 3576695498,
+        "disasm": "mrs x10, dbgwvr10_el1"
+      },
+      {
+        "word": 3576695755,
+        "disasm": "mrs x11, dbgwvr11_el1"
+      },
+      {
+        "word": 3576696012,
+        "disasm": "mrs x12, dbgwvr12_el1"
+      },
+      {
+        "word": 3576696269,
+        "disasm": "mrs x13, dbgwvr13_el1"
+      },
+      {
+        "word": 3576696526,
+        "disasm": "mrs x14, dbgwvr14_el1"
+      },
+      {
+        "word": 3576696783,
+        "disasm": "mrs x15, dbgwvr15_el1"
+      }
+    ],
+    "expected_regs": {
+      "0": 258,
+      "1": 514,
+      "2": 770,
+      "3": 1026,
+      "4": 1282,
+      "5": 1538,
+      "6": 1794,
+      "7": 2050,
+      "8": 2306,
+      "9": 2562,
+      "10": 2818,
+      "11": 3074,
+      "12": 3330,
+      "13": 3586,
+      "14": 3842,
+      "15": 4098
+    },
+    "expected_sysregs": {
+      "dbgwvr0_el1": 258,
+      "dbgwvr1_el1": 514,
+      "dbgwvr2_el1": 770,
+      "dbgwvr3_el1": 1026,
+      "dbgwvr4_el1": 1282,
+      "dbgwvr5_el1": 1538,
+      "dbgwvr6_el1": 1794,
+      "dbgwvr7_el1": 2050,
+      "dbgwvr8_el1": 2306,
+      "dbgwvr9_el1": 2562,
+      "dbgwvr10_el1": 2818,
+      "dbgwvr11_el1": 3074,
+      "dbgwvr12_el1": 3330,
+      "dbgwvr13_el1": 3586,
+      "dbgwvr14_el1": 3842,
+      "dbgwvr15_el1": 4098
+    }
+  },
+  {
+    "name": "debug_wcr_roundtrip_all16",
+    "steps": [
+      {
+        "word": 3531612258,
+        "disasm": "movz x2, #0x103"
+      },
+      {
+        "word": 3574595810,
+        "disasm": "msr dbgwcr0_el1, x2"
+      },
+      {
+        "word": 3531620450,
+        "disasm": "movz x2, #0x203"
+      },
+      {
+        "word": 3574596066,
+        "disasm": "msr dbgwcr1_el1, x2"
+      },
+      {
+        "word": 3531628642,
+        "disasm": "movz x2, #0x303"
+      },
+      {
+        "word": 3574596322,
+        "disasm": "msr dbgwcr2_el1, x2"
+      },
+      {
+        "word": 3531636834,
+        "disasm": "movz x2, #0x403"
+      },
+      {
+        "word": 3574596578,
+        "disasm": "msr dbgwcr3_el1, x2"
+      },
+      {
+        "word": 3531645026,
+        "disasm": "movz x2, #0x503"
+      },
+      {
+        "word": 3574596834,
+        "disasm": "msr dbgwcr4_el1, x2"
+      },
+      {
+        "word": 3531653218,
+        "disasm": "movz x2, #0x603"
+      },
+      {
+        "word": 3574597090,
+        "disasm": "msr dbgwcr5_el1, x2"
+      },
+      {
+        "word": 3531661410,
+        "disasm": "movz x2, #0x703"
+      },
+      {
+        "word": 3574597346,
+        "disasm": "msr dbgwcr6_el1, x2"
+      },
+      {
+        "word": 3531669602,
+        "disasm": "movz x2, #0x803"
+      },
+      {
+        "word": 3574597602,
+        "disasm": "msr dbgwcr7_el1, x2"
+      },
+      {
+        "word": 3531677794,
+        "disasm": "movz x2, #0x903"
+      },
+      {
+        "word": 3574597858,
+        "disasm": "msr dbgwcr8_el1, x2"
+      },
+      {
+        "word": 3531685986,
+        "disasm": "movz x2, #0xa03"
+      },
+      {
+        "word": 3574598114,
+        "disasm": "msr dbgwcr9_el1, x2"
+      },
+      {
+        "word": 3531694178,
+        "disasm": "movz x2, #0xb03"
+      },
+      {
+        "word": 3574598370,
+        "disasm": "msr dbgwcr10_el1, x2"
+      },
+      {
+        "word": 3531702370,
+        "disasm": "movz x2, #0xc03"
+      },
+      {
+        "word": 3574598626,
+        "disasm": "msr dbgwcr11_el1, x2"
+      },
+      {
+        "word": 3531710562,
+        "disasm": "movz x2, #0xd03"
+      },
+      {
+        "word": 3574598882,
+        "disasm": "msr dbgwcr12_el1, x2"
+      },
+      {
+        "word": 3531718754,
+        "disasm": "movz x2, #0xe03"
+      },
+      {
+        "word": 3574599138,
+        "disasm": "msr dbgwcr13_el1, x2"
+      },
+      {
+        "word": 3531726946,
+        "disasm": "movz x2, #0xf03"
+      },
+      {
+        "word": 3574599394,
+        "disasm": "msr dbgwcr14_el1, x2"
+      },
+      {
+        "word": 3531735138,
+        "disasm": "movz x2, #0x1003"
+      },
+      {
+        "word": 3574599650,
+        "disasm": "msr dbgwcr15_el1, x2"
+      },
+      {
+        "word": 3576692960,
+        "disasm": "mrs x0, dbgwcr0_el1"
+      },
+      {
+        "word": 3576693217,
+        "disasm": "mrs x1, dbgwcr1_el1"
+      },
+      {
+        "word": 3576693474,
+        "disasm": "mrs x2, dbgwcr2_el1"
+      },
+      {
+        "word": 3576693731,
+        "disasm": "mrs x3, dbgwcr3_el1"
+      },
+      {
+        "word": 3576693988,
+        "disasm": "mrs x4, dbgwcr4_el1"
+      },
+      {
+        "word": 3576694245,
+        "disasm": "mrs x5, dbgwcr5_el1"
+      },
+      {
+        "word": 3576694502,
+        "disasm": "mrs x6, dbgwcr6_el1"
+      },
+      {
+        "word": 3576694759,
+        "disasm": "mrs x7, dbgwcr7_el1"
+      },
+      {
+        "word": 3576695016,
+        "disasm": "mrs x8, dbgwcr8_el1"
+      },
+      {
+        "word": 3576695273,
+        "disasm": "mrs x9, dbgwcr9_el1"
+      },
+      {
+        "word": 3576695530,
+        "disasm": "mrs x10, dbgwcr10_el1"
+      },
+      {
+        "word": 3576695787,
+        "disasm": "mrs x11, dbgwcr11_el1"
+      },
+      {
+        "word": 3576696044,
+        "disasm": "mrs x12, dbgwcr12_el1"
+      },
+      {
+        "word": 3576696301,
+        "disasm": "mrs x13, dbgwcr13_el1"
+      },
+      {
+        "word": 3576696558,
+        "disasm": "mrs x14, dbgwcr14_el1"
+      },
+      {
+        "word": 3576696815,
+        "disasm": "mrs x15, dbgwcr15_el1"
+      }
+    ],
+    "expected_regs": {
+      "0": 259,
+      "1": 515,
+      "2": 771,
+      "3": 1027,
+      "4": 1283,
+      "5": 1539,
+      "6": 1795,
+      "7": 2051,
+      "8": 2307,
+      "9": 2563,
+      "10": 2819,
+      "11": 3075,
+      "12": 3331,
+      "13": 3587,
+      "14": 3843,
+      "15": 4099
+    },
+    "expected_sysregs": {
+      "dbgwcr0_el1": 259,
+      "dbgwcr1_el1": 515,
+      "dbgwcr2_el1": 771,
+      "dbgwcr3_el1": 1027,
+      "dbgwcr4_el1": 1283,
+      "dbgwcr5_el1": 1539,
+      "dbgwcr6_el1": 1795,
+      "dbgwcr7_el1": 2051,
+      "dbgwcr8_el1": 2307,
+      "dbgwcr9_el1": 2563,
+      "dbgwcr10_el1": 2819,
+      "dbgwcr11_el1": 3075,
+      "dbgwcr12_el1": 3331,
+      "dbgwcr13_el1": 3587,
+      "dbgwcr14_el1": 3843,
+      "dbgwcr15_el1": 4099
+    }
+  }
+]
