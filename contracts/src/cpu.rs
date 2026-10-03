@@ -556,6 +556,15 @@ pub enum IrOp {
     /// traps in the lifter (upper-bit zeroing is not expressible).
     /// Register 31 reads as 0 (XZR), so with `a = 31` this is a plain multiply.
     Madd { dst: u8, n: u8, m: u8, a: u8 },
+    /// Added 2026-10-03: Unsigned multiply high (UMULH).
+    /// `dst = ((regs[n] as u128 * regs[m] as u128) >> 64) as u64`
+    /// (128-bit unsigned product, high 64 bits). Register 31 reads as 0.
+    Umulh { dst: u8, n: u8, m: u8 },
+    /// Added 2026-10-03: Signed multiply high (SMULH).
+    /// `dst = ((regs[n] as i128 * regs[m] as i128) >> 64) as u64`
+    /// (128-bit signed product, high 64 bits, arithmetic shift).
+    /// Register 31 reads as 0.
+    Smulh { dst: u8, n: u8, m: u8 },
     /// Added 2026-09-27 (Wave 4 amendment U2-G1): wait-for-interrupt marker.
     /// The execution backend yields the vCPU until an IRQ is pending;
     /// resumable, never an error and never a silent nop.

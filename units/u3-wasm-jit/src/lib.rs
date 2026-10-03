@@ -57,6 +57,7 @@ const OP_GLOBAL_GET: u8 = 0x23;
 const OP_GLOBAL_SET: u8 = 0x24;
 const OP_I64_CONST: u8 = 0x42;
 const OP_I64_EQZ: u8 = 0x50;
+const OP_I64_LT_U: u8 = 0x54;
 const OP_I64_ADD: u8 = 0x7C;
 const OP_I64_SUB: u8 = 0x7D;
 const OP_I64_CLZ: u8 = 0x79;
@@ -68,6 +69,7 @@ const OP_I64_SHL: u8 = 0x86;
 const OP_I64_SHR_S: u8 = 0x87;
 const OP_I64_SHR_U: u8 = 0x88;
 const OP_I64_ROTR: u8 = 0x8A;
+const OP_I64_EXTEND_I32_U: u8 = 0xAD;
 
 const VALTYPE_I64: u8 = 0x7E;
 
@@ -146,10 +148,11 @@ pub fn compile(block: &IrBlock) -> WasmModule {
     uleb(u64::from(FUNC_RUN), &mut ex);
     section(7, &ex, &mut out);
 
-    // Code section (id 10): one body, one i64 local (U2 SCRATCH).
+    // Code section (id 10): one body, 12 i64 locals (local 0 = U2 SCRATCH;
+    // locals 1-11 are temporaries for Umulh/Smulh).
     let mut body = Vec::new();
-    uleb(1, &mut body); // one local entry: 1 x i64
-    uleb(1, &mut body);
+    uleb(1, &mut body); // one local entry: 12 x i64
+    uleb(12, &mut body);
     body.push(VALTYPE_I64);
 
     let mut branched = false;
@@ -181,6 +184,12 @@ pub fn compile(block: &IrBlock) -> WasmModule {
                 body.push(OP_I64_MUL);
                 body.push(OP_I64_ADD);
                 reg_set(&mut body, *dst);
+            }
+            IrOp::Umulh { dst, n, m } => {
+                emit_umulh(&mut body, *n, *m, *dst);
+            }
+            IrOp::Smulh { dst, n, m } => {
+                emit_smulh(&mut body, *n, *m, *dst);
             }
             IrOp::Mov { dst, imm } => {
                 body.push(OP_I64_CONST);
@@ -777,6 +786,134 @@ fn reg_set(body: &mut Vec<u8>, r: u8) {
             uleb(u64::from(r), body);
         }
         _ => body.push(OP_UNREACHABLE),
+    }
+}
+
+/// Emit WASM for `Umulh { dst, n, m }`: `dst = ((n as u128 * m as u128) >> 64) as u64`.
+/// Uses locals 1-10 as temporaries (local 0 is SCRATCH).
+/// Algorithm: 32-bit split with explicit carry (Hacker's Delight, "High-order product").
+///   a_lo = a & 0xFFFFFFFF; a_hi = a >> 32; (same for b)
+///   p00 = a_lo*b_lo; p01 = a_lo*b_hi; p10 = a_hi*b_lo; p11 = a_hi*b_hi
+///   sum = p01 + p10; ov = (sum < p01)  // 1 if p01+p10 overflowed
+///   hi = p11 + (sum >> 32) + (ov ? 2^32 : 0)
+///   t = (sum & 0xFFFFFFFF) << 32
+///   carry = ((t + p00) < t)  // 1 if t+p00 overflowed
+///   dst = hi + carry
+fn emit_umulh(body: &mut Vec<u8>, n: u8, m: u8, dst: u8) {
+    // Locals: 1=a_lo, 2=a_hi, 3=b_lo, 4=b_hi, 5=p00, 6=p01, 7=p10, 8=p11, 9=sum, 10=t
+    // Split a
+    reg_get(body, n); // [a]
+    body.push(OP_I64_CONST); sleb(0xFFFF_FFFF, body); // [a, mask]
+    body.push(OP_I64_AND); // [a_lo]
+    body.push(OP_LOCAL_SET); uleb(1, body); // L1 = a_lo
+    reg_get(body, n); // [a]
+    body.push(OP_I64_CONST); sleb(32, body); // [a, 32]
+    body.push(OP_I64_SHR_U); // [a_hi]
+    body.push(OP_LOCAL_SET); uleb(2, body); // L2 = a_hi
+    // Split b
+    reg_get(body, m); // [b]
+    body.push(OP_I64_CONST); sleb(0xFFFF_FFFF, body);
+    body.push(OP_I64_AND); // [b_lo]
+    body.push(OP_LOCAL_SET); uleb(3, body); // L3 = b_lo
+    reg_get(body, m); // [b]
+    body.push(OP_I64_CONST); sleb(32, body);
+    body.push(OP_I64_SHR_U); // [b_hi]
+    body.push(OP_LOCAL_SET); uleb(4, body); // L4 = b_hi
+    // p00 = a_lo * b_lo -> L5
+    body.push(OP_LOCAL_GET); uleb(1, body);
+    body.push(OP_LOCAL_GET); uleb(3, body);
+    body.push(OP_I64_MUL);
+    body.push(OP_LOCAL_SET); uleb(5, body);
+    // p01 = a_lo * b_hi -> L6
+    body.push(OP_LOCAL_GET); uleb(1, body);
+    body.push(OP_LOCAL_GET); uleb(4, body);
+    body.push(OP_I64_MUL);
+    body.push(OP_LOCAL_SET); uleb(6, body);
+    // p10 = a_hi * b_lo -> L7
+    body.push(OP_LOCAL_GET); uleb(2, body);
+    body.push(OP_LOCAL_GET); uleb(3, body);
+    body.push(OP_I64_MUL);
+    body.push(OP_LOCAL_SET); uleb(7, body);
+    // p11 = a_hi * b_hi -> L8
+    body.push(OP_LOCAL_GET); uleb(2, body);
+    body.push(OP_LOCAL_GET); uleb(4, body);
+    body.push(OP_I64_MUL);
+    body.push(OP_LOCAL_SET); uleb(8, body);
+    // sum = p01 + p10 -> L9
+    body.push(OP_LOCAL_GET); uleb(6, body);
+    body.push(OP_LOCAL_GET); uleb(7, body);
+    body.push(OP_I64_ADD);
+    body.push(OP_LOCAL_SET); uleb(9, body);
+    // hi = p11 + (sum >> 32)
+    body.push(OP_LOCAL_GET); uleb(8, body); // [p11]
+    body.push(OP_LOCAL_GET); uleb(9, body); // [p11, sum]
+    body.push(OP_I64_CONST); sleb(32, body); // [p11, sum, 32]
+    body.push(OP_I64_SHR_U); // [p11, sum>>32]
+    body.push(OP_I64_ADD); // [p11 + (sum>>32)]
+    // ov = (sum < p01) ? 2^32 : 0; hi += ov
+    body.push(OP_LOCAL_GET); uleb(9, body); // [hi, sum]
+    body.push(OP_LOCAL_GET); uleb(6, body); // [hi, sum, p01]
+    body.push(OP_I64_LT_U); // [hi, ov_i32]
+    body.push(OP_I64_EXTEND_I32_U); // [hi, ov_i64]
+    body.push(OP_I64_CONST); sleb(32, body); // [hi, ov, 32]
+    body.push(OP_I64_SHL); // [hi, ov<<32]
+    body.push(OP_I64_ADD); // [hi + (ov<<32)]
+    // t = (sum & 0xFFFFFFFF) << 32
+    body.push(OP_LOCAL_GET); uleb(9, body); // [hi, sum]
+    body.push(OP_I64_CONST); sleb(0xFFFF_FFFF, body); // [hi, sum, mask]
+    body.push(OP_I64_AND); // [hi, sum_lo]
+    body.push(OP_I64_CONST); sleb(32, body); // [hi, sum_lo, 32]
+    body.push(OP_I64_SHL); // [hi, t]
+    // carry = ((t + p00) < t) ? 1 : 0
+    body.push(OP_LOCAL_SET); uleb(10, body); // [hi] ; L10 = t
+    body.push(OP_LOCAL_GET); uleb(10, body); // [hi, t]
+    body.push(OP_LOCAL_GET); uleb(5, body); // [hi, t, p00]
+    body.push(OP_I64_ADD); // [hi, t+p00]
+    body.push(OP_LOCAL_GET); uleb(10, body); // [hi, t+p00, t]
+    body.push(OP_I64_LT_U); // [hi, carry_i32]
+    body.push(OP_I64_EXTEND_I32_U); // [hi, carry_i64]
+    body.push(OP_I64_ADD); // [hi + carry]
+    reg_set(body, dst);
+}
+
+/// Emit WASM for `Smulh { dst, n, m }`: `dst = ((n as i128 * m as i128) >> 64) as u64`.
+/// Uses the identity: smulh(a,b) = umulh(a,b) - (a<0 ? b : 0) - (b<0 ? a : 0).
+/// (Locals 1-10 are used by emit_umulh; the adjustments below use only the stack.)
+fn emit_smulh(body: &mut Vec<u8>, n: u8, m: u8, dst: u8) {
+    // Compute u = umulh(n, m) into local 1
+    // (emit_umulh uses locals 1-9; we'll save its result from dst to L1)
+    // To avoid clobbering, emit umulh to dst first, then move to L1 if needed.
+    // Simpler: emit umulh directly, then adjust.
+    emit_umulh(body, n, m, dst);
+    // u is now in dst (register). Move to stack for adjustments.
+    // We need: u - (a<0 ? b : 0) - (b<0 ? a : 0)
+    // mask_a = (a as i64 >> 63) as u64  // all 1s if a<0 else 0
+    // mask_b = (b as i64 >> 63) as u64
+    // u -= (mask_a & b); u -= (mask_b & a)
+    match dst {
+        XZR => {
+            // dst is XZR: result is dropped; still need to consume stack correctly.
+            // emit_umulh already did reg_set(dst) which dropped. Nothing to adjust.
+        }
+        _ => {
+            // Get u back onto stack
+            reg_get(body, dst); // [u]
+            // Compute mask_a & b
+            reg_get(body, n); // [u, a]
+            body.push(OP_I64_CONST); sleb(63, body); // [u, a, 63]
+            body.push(OP_I64_SHR_S); // [u, mask_a]
+            reg_get(body, m); // [u, mask_a, b]
+            body.push(OP_I64_AND); // [u, mask_a & b]
+            body.push(OP_I64_SUB); // [u - (mask_a & b)]
+            // Compute mask_b & a
+            reg_get(body, m); // [u', b]
+            body.push(OP_I64_CONST); sleb(63, body);
+            body.push(OP_I64_SHR_S); // [u', mask_b]
+            reg_get(body, n); // [u', mask_b, a]
+            body.push(OP_I64_AND); // [u', mask_b & a]
+            body.push(OP_I64_SUB); // [u' - (mask_b & a)]
+            reg_set(body, dst);
+        }
     }
 }
 
@@ -1635,7 +1772,9 @@ mod tests {
         let body_size = read_uleb(code, &mut pos) as usize;
         let body_end = pos + body_size;
         assert_eq!(read_uleb(code, &mut pos), 1); // one local entry
-        assert_eq!(read_uleb(code, &mut pos), 1); // one local
+        // 12 locals: local 0 = SCRATCH, locals 1-11 = Umulh/Smulh temporaries
+        // (2026-10-03: was 1, expanded for multiply-high).
+        assert_eq!(read_uleb(code, &mut pos), 12); // twelve locals
         assert_eq!(code[pos], VALTYPE_I64);
         assert!(body_end <= code.len());
     }
