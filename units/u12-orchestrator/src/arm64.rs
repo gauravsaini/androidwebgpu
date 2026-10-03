@@ -116,15 +116,13 @@ pub fn eval_shift32(val: u32, shift: u8, amount: u8) -> u32 {
 
 /// Decode AArch64 logical bitmask immediate (DecodeBitMasks per ARM ARM).
 pub fn decode_logical_immediate(sf: u8, n: u8, immr: u8, imms: u8) -> Option<u64> {
-    let len: u32 = match (n, imms) {
-        (1, _) => 6,
-        (0, s) if s & 0b111110 == 0b111100 => 5,
-        (0, s) if s & 0b111100 == 0b111000 => 4,
-        (0, s) if s & 0b111000 == 0b110000 => 3,
-        (0, s) if s & 0b110000 == 0b100000 => 2,
-        (0, s) if s & 0b100000 == 0b000000 => 1,
-        _ => return None,
-    };
+    // ARM ARM DecodeBitMasks: len = HighestSetBit((N : NOT(imms))).
+    // N:NOT(imms) is a 7-bit value; no set bit means a reserved encoding.
+    let combined: u8 = ((n & 1) << 6) | ((!imms) & 0x3f);
+    if combined == 0 {
+        return None;
+    }
+    let len: u32 = 7 - combined.leading_zeros();
     if sf == 0 && len == 6 {
         return None;
     }
@@ -168,7 +166,57 @@ pub fn decode_logical_immediate(sf: u8, n: u8, immr: u8, imms: u8) -> Option<u64
 mod tests {
     use super::*;
 
+    /// Differential test: our decoder must agree with the reference
+    /// `pathn_contracts::cpu::decode_bitmasks` on every (sf, n, imms, immr).
+    /// (2026-10-03: the old len match arms were inverted for 4 of 5 N=0
+    /// cases, mis-decoding e.g. `tst w1, #0x80000003` as 0xAAAAAAAA and
+    /// stalling the kernel boot at 70,582 steps.)
     #[test]
+    fn decode_logical_immediate_matches_reference() {
+        for sf in 0..=1u8 {
+            for n in 0..=1u8 {
+                for imms in 0..=63u8 {
+                    for immr in 0..=63u8 {
+                        let ours = decode_logical_immediate(sf, n, immr, imms);
+                        let reference =
+                            pathn_contracts::cpu::decode_bitmasks(n, imms, immr, sf == 1);
+                        assert_eq!(
+                            ours, reference,
+                            "mismatch at sf={sf} n={n} imms={imms:#08b} immr={immr:#08b}"
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn decode_logical_immediate_n0_ranges() {
+        // Spot-check the four N=0 imms ranges the old inverted arms got wrong.
+        // Values verified against pathn_contracts::cpu::decode_bitmasks.
+        assert_eq!(
+            decode_logical_immediate(0, 0, 0, 0b000010),
+            pathn_contracts::cpu::decode_bitmasks(0, 0b000010, 0, false)
+        );
+        assert_eq!(
+            decode_logical_immediate(0, 0, 0, 0b100010),
+            pathn_contracts::cpu::decode_bitmasks(0, 0b100010, 0, false)
+        );
+        assert_eq!(
+            decode_logical_immediate(0, 0, 0, 0b111000),
+            pathn_contracts::cpu::decode_bitmasks(0, 0b111000, 0, false)
+        );
+        assert_eq!(
+            decode_logical_immediate(0, 0, 0, 0b111100),
+            pathn_contracts::cpu::decode_bitmasks(0, 0b111100, 0, false)
+        );
+        // And the previously-correct range still works.
+        assert_eq!(
+            decode_logical_immediate(0, 0, 0, 0b110010),
+            pathn_contracts::cpu::decode_bitmasks(0, 0b110010, 0, false)
+        );
+    }
+
     fn test_condition_codes_eq_ne() {
         assert!(condition_holds(0b0000, FLAG_Z)); // EQ with Z=1
         assert!(!condition_holds(0b0000, 0)); // EQ with Z=0
