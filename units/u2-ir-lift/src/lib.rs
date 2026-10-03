@@ -1927,8 +1927,11 @@ fn lift_load_store(insn: &Instruction) -> Vec<IrOp> {
         let size: u8 = 1 << size_bits;
         let shift_amt: u8 = if s == 1 { size_bits as u8 } else { 0 };
 
-        // option 011 = 64-bit register offset (LSL), 010 = 32-bit UXTW (zero-extended)
-        if option == 0b011 || option == 0b010 {
+        // option 011 = 64-bit register offset (LSL), 010 = 32-bit UXTW (zero-extended),
+        // 110 = 32-bit SXTW (sign-extended), 111 = 64-bit SXTX (sign-extend no-op).
+        // (2026-10-03: SXTW/SXTX were missing; the kernel uses LDR X9,[X10,W9,SXTW #3]
+        // at 0xffffff8008217d80, word 0xF869D949, halting boot at 50,953 steps.)
+        if option == 0b011 || option == 0b010 || option == 0b110 || option == 0b111 {
             let mut ops = Vec::new();
             if option == 0b010 {
                 // UXTW: zero-extend Wm to 64-bit into SCRATCH
@@ -1940,6 +1943,46 @@ fn lift_load_store(insn: &Instruction) -> Vec<IrOp> {
                     amount: 0,
                     invert: false,
                     is_32: true,
+                });
+                if shift_amt > 0 {
+                    ops.push(IrOp::OrrShift {
+                        dst: SCRATCH,
+                        a: 31,
+                        b: SCRATCH,
+                        shift: 0,
+                        amount: shift_amt,
+                    });
+                }
+                ops.push(IrOp::Add {
+                    dst: SCRATCH,
+                    a: rn,
+                    b: SCRATCH,
+                });
+            } else if option == 0b110 {
+                // SXTW: sign-extend Wm to 64-bit into SCRATCH.
+                // Wm & Wm (32-bit) zero-extends Wm; LSL#32 then ASR#32 sign-extends.
+                ops.push(IrOp::AndShift {
+                    dst: SCRATCH,
+                    a: rm,
+                    b: rm,
+                    shift: 0,
+                    amount: 0,
+                    invert: false,
+                    is_32: true,
+                });
+                ops.push(IrOp::OrrShift {
+                    dst: SCRATCH,
+                    a: 31,
+                    b: SCRATCH,
+                    shift: 0,
+                    amount: 32,
+                });
+                ops.push(IrOp::OrrShift {
+                    dst: SCRATCH,
+                    a: 31,
+                    b: SCRATCH,
+                    shift: 2,
+                    amount: 32,
                 });
                 if shift_amt > 0 {
                     ops.push(IrOp::OrrShift {
@@ -2887,10 +2930,62 @@ mod tests {
     }
 
     #[test]
+    fn ldr_reg_offset_sxtw() {
+        // ldr x9, [x10, w9, sxtw #3] — word 0xF869D949, the kernel halt at
+        // 0xffffff8008217d80 (boot step 50,953). SXTW sign-extends W9.
+        let ops = lift(&insn(0x4000, 0xF869_D949, InsnKind::LoadStore));
+        assert_eq!(
+            ops,
+            vec![
+                IrOp::AndShift {
+                    dst: SCRATCH,
+                    a: 9,
+                    b: 9,
+                    shift: 0,
+                    amount: 0,
+                    invert: false,
+                    is_32: true,
+                },
+                IrOp::OrrShift {
+                    dst: SCRATCH,
+                    a: 31,
+                    b: SCRATCH,
+                    shift: 0,
+                    amount: 32
+                },
+                IrOp::OrrShift {
+                    dst: SCRATCH,
+                    a: 31,
+                    b: SCRATCH,
+                    shift: 2,
+                    amount: 32
+                },
+                IrOp::OrrShift {
+                    dst: SCRATCH,
+                    a: 31,
+                    b: SCRATCH,
+                    shift: 0,
+                    amount: 3
+                },
+                IrOp::Add {
+                    dst: SCRATCH,
+                    a: 10,
+                    b: SCRATCH
+                },
+                IrOp::LoadDyn {
+                    dst: 9,
+                    base: SCRATCH,
+                    off: 0,
+                    size: 8
+                },
+            ]
+        );
+    }
+
+    #[test]
     fn golden_b_forward() {
         // B +0x100 at 0x4000 -> explicit exit to 0x4100
-        let ops = lift(&insn(0x4000, 0x1400_0040, InsnKind::Branch));
-        assert_eq!(ops, vec![IrOp::Branch { target: 0x4100 }]);
+        let ops = lift(&insn(0x4000, 0x1400_0040, InsnKind::Branch));        assert_eq!(ops, vec![IrOp::Branch { target: 0x4100 }]);
     }
 
     #[test]
