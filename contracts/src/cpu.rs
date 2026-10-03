@@ -565,6 +565,14 @@ pub enum IrOp {
     /// (128-bit signed product, high 64 bits, arithmetic shift).
     /// Register 31 reads as 0.
     Smulh { dst: u8, n: u8, m: u8 },
+    /// Added 2026-10-03: Unsigned multiply long (UMULL).
+    /// `dst = (regs[n] as u32 as u64) * (regs[m] as u32 as u64)`
+    /// (32-bit unsigned multiply, 64-bit result). Register 31 reads as 0.
+    Umull { dst: u8, n: u8, m: u8 },
+    /// Added 2026-10-03: Signed multiply long (SMULL).
+    /// `dst = (regs[n] as i32 as i64 as u64) * (regs[m] as i32 as i64 as u64)`
+    /// (32-bit signed multiply, 64-bit result). Register 31 reads as 0.
+    Smull { dst: u8, n: u8, m: u8 },
     /// Added 2026-09-27 (Wave 4 amendment U2-G1): wait-for-interrupt marker.
     /// The execution backend yields the vCPU until an IRQ is pending;
     /// resumable, never an error and never a silent nop.
