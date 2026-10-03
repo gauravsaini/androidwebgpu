@@ -1,0 +1,25 @@
+[
+  {
+    "name": "zcr_el1_roundtrip",
+    "steps": [
+      {
+        "word": 3531661316,
+        "disasm": "movz x4, #0x700"
+      },
+      {
+        "word": 3575124484,
+        "disasm": "msr zcr_el1, x4"
+      },
+      {
+        "word": 3577221635,
+        "disasm": "mrs x3, zcr_el1"
+      }
+    ],
+    "expected_regs": {
+      "3": 1792
+    },
+    "expected_sysregs": {
+      "zcr_el1": 1792
+    }
+  }
+]

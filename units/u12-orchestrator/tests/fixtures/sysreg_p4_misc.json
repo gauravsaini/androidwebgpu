@@ -1,0 +1,77 @@
+[
+  {
+    "name": "misc_disr_lorc_pmccntr_tval",
+    "steps": [
+      {
+        "word": 3531604072,
+        "disasm": "movz x8, #0x3"
+      },
+      {
+        "word": 3575169320,
+        "disasm": "msr disr_el1, x8"
+      },
+      {
+        "word": 3575161983,
+        "disasm": "msr lorc_el1, xzr"
+      },
+      {
+        "word": 3531606696,
+        "disasm": "movz x8, #0x55"
+      },
+      {
+        "word": 3575356680,
+        "disasm": "msr pmccntr_el0, x8"
+      },
+      {
+        "word": 3577453843,
+        "disasm": "mrs x19, pmccntr_el0"
+      },
+      {
+        "word": 3532627977,
+        "disasm": "movz x9, #0x7d00"
+      },
+      {
+        "word": 3575374345,
+        "disasm": "msr cntp_tval_el0, x9"
+      },
+      {
+        "word": 3577471498,
+        "disasm": "mrs x10, cntp_tval_el0"
+      },
+      {
+        "word": 3532627977,
+        "disasm": "movz x9, #0x7d00"
+      },
+      {
+        "word": 3575374601,
+        "disasm": "msr cntv_tval_el0, x9"
+      },
+      {
+        "word": 3577471755,
+        "disasm": "mrs x11, cntv_tval_el0"
+      }
+    ],
+    "expected_regs": {
+      "19": 85
+    },
+    "expected_sysregs": {
+      "disr_el1": 3,
+      "lorc_el1": 0,
+      "pmccntr_el0": 85
+    },
+    "tvals": [
+      {
+        "msr_step": 7,
+        "mrs_step": 8,
+        "dst_reg": 10,
+        "written": 32000
+      },
+      {
+        "msr_step": 10,
+        "mrs_step": 11,
+        "dst_reg": 11,
+        "written": 32000
+      }
+    ]
+  }
+]
