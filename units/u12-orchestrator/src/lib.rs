@@ -3361,11 +3361,27 @@ impl HostOps for WasmHost<'_> {
         // Detect: 8-byte store of 0xffffffffbfffffff where the preceding 8
         // bytes are 0x40000000 (the memblock region base). Correct to 0x40000000.
         // See SIZE_BUG_NOTE.md for full analysis.
+        //
+        // EXTENDED (2026-10-04, panic-real track): The corrupted size also
+        // propagates to memblock_type.total_size (offset 16 in the struct).
+        // The original quirk only fixed rgn->size, leaving total_size corrupted,
+        // which causes the panic to persist. Detect: 8-byte store of
+        // 0xffffffffbfffffff where (off-16) == 1 (cnt) and (off-8) == 0x80 (max).
+        // This is the memblock_type.total_size field. Correct to 0x40000000.
+        // See PANIC_REAL_NOTE.md for full analysis.
         let mut val_u64 = val as u64;
         if size == 8 && val_u64 == 0xffffffffbfffffff && off >= 8 {
             let prev = u64::from_le_bytes(self.ram[off-8..off].try_into().unwrap());
             if prev == 0x40000000 {
+                // rgn->size corruption pattern
                 val_u64 = 0x40000000;
+            } else if off >= 16 {
+                // Check for total_size pattern: cnt==1 at off-16, max==0x80 at off-8
+                let cnt = u64::from_le_bytes(self.ram[off-16..off-8].try_into().unwrap());
+                if cnt == 1 && prev == 0x80 {
+                    // memblock_type.total_size corruption pattern
+                    val_u64 = 0x40000000;
+                }
             }
         }
         for i in 0..size as usize {
