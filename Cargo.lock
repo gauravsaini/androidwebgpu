@@ -1889,6 +1889,22 @@ name = "u16-pl011-uart"
 version = "0.1.0"
 
 [[package]]
+name = "u17-virtio-blk"
+version = "0.1.0"
+dependencies = [
+ "pathn-contracts",
+ "u6-virtio-transport",
+]
+
+[[package]]
+name = "u18-virtio-console"
+version = "0.1.0"
+dependencies = [
+ "pathn-contracts",
+ "u6-virtio-transport",
+]
+
+[[package]]
 name = "u2-ir-lift"
 version = "0.1.0"
 dependencies = [
@@ -1915,6 +1931,9 @@ name = "u5-gic-timer"
 version = "0.1.0"
 dependencies = [
  "pathn-contracts",
+ "u17-virtio-blk",
+ "u18-virtio-console",
+ "u6-virtio-transport",
 ]
 
 [[package]]

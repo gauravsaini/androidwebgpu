@@ -31,6 +31,12 @@
 //! (comparison is on the wrapped value). This is documented, not silent: the
 //! counter itself still wraps correctly via `wrapping_add` (never panics).
 
+pub mod gic;
+pub mod timer;
+
+pub use gic::{Gic, GICC_BASE, GICC_SIZE, GICD_BASE, GICD_SIZE};
+pub use timer::GenericTimer;
+
 use pathn_contracts::cpu::{Irq, IrqState};
 
 /// Generic-timer interrupt number: ARM virtual timer PPI → INTID 27.

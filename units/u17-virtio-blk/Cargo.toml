@@ -1,0 +1,8 @@
+[package]
+name = "u17-virtio-blk"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+pathn-contracts = { path = "../../contracts" }
+u6-virtio-transport = { path = "../u6-virtio-transport" }

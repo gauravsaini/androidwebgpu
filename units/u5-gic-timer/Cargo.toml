@@ -9,3 +9,8 @@ path = "src/lib.rs"
 
 [dependencies]
 pathn-contracts = { path = "../../contracts" }
+
+[dev-dependencies]
+u17-virtio-blk = { path = "../u17-virtio-blk" }
+u18-virtio-console = { path = "../u18-virtio-console" }
+u6-virtio-transport = { path = "../u6-virtio-transport" }
