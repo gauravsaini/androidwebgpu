@@ -17,13 +17,17 @@
 //!
 //! Documented model (vs the ARM ARM VMSA):
 //! - Stage 1 only. `Access` carries no exception level, so the model is
-//!   EL1-equivalent data access: `AP[7:6]` of `0b00`/`0b01` allows read+write,
-//!   `0b10`/`0b11` is read-only. `UXN` (bit 54) and `PXN` (bit 53) both deny
-//!   `Access::Execute`.
+//!   EL1-equivalent: `AP[7:6]` of `0b00`/`0b01` allows read+write,
+//!   `0b10`/`0b11` is read-only. `PXN` (bit 53) denies `Access::Execute`;
+//!   `UXN` (bit 54) does NOT deny execute here because it only restricts
+//!   EL0, which this model has no concept of (AArch64 Linux maps all
+//!   kernel text `UXN=1,PXN=0`; treating UXN as EL1 execute-never
+//!   faulted every kernel fetch once the final page tables were live).
 //! - Table-descriptor hierarchical controls accumulate down the walk:
-//!   `XNTable`/`UXNTable`/`PXNTable` OR into an execute-never flag,
-//!   `APTable[1]` accumulates a no-write flag. (`APTable[0]` only restricts
-//!   EL0, which this model has no concept of.)
+//!   `PXNTable` (bit 59) ORs into the execute-never flag; `UXNTable`/
+//!   `XNTable` (bit 60) is ignored for the same EL0-only reason.
+//!   (`APTable[1]` accumulates a no-write flag. `APTable[0]` only
+//!   restricts EL0, which this model has no concept of.)
 //! - `SCTLR.M == 0` means the MMU is off: translation is the identity map.
 //! - Granule comes from `TCR.TG0`/`TCR.TG1`; input address size from
 //!   `TCR.T0SZ`/`TCR.T1SZ` (`IA = 64 - TxSZ`, capped at 48 bits — 52-bit LVA
@@ -235,7 +239,8 @@ fn translate_impl(
                 if desc & (granule.bytes() - 1) != 0b11 {
                     return Err(MemFault::TranslationFault { va });
                 }
-                no_exec |= desc & (1u64 << 60) != 0; // XNTable / UXNTable
+                // PXNTable (bit 59) denies EL1 execute below. UXNTable/XNTable
+                // (bit 60) only restricts EL0: ignored in this EL1-only model.
                 no_exec |= desc & (1u64 << 59) != 0; // PXNTable
                 no_write |= desc & (1u64 << 61) != 0; // APTable[1]: no writes below
                 table_base = desc & addr_mask;
@@ -261,13 +266,14 @@ fn finish_block(
 ) -> Result<u64, MemFault> {
     let ap = (desc >> 6) & 0b11;
     let read_only = ap == 0b10 || ap == 0b11;
-    let xn = desc & (1u64 << 54) != 0; // UXN
+    // PXN (bit 53) denies EL1 execute. UXN (bit 54) only restricts EL0 and
+    // is ignored: the kernel maps its own text UXN=1,PXN=0.
     let pxn = desc & (1u64 << 53) != 0; // PXN
     match access {
         Access::Write if read_only || no_write => {
             return Err(MemFault::PermissionFault { va });
         }
-        Access::Execute if xn || pxn || no_exec => {
+        Access::Execute if pxn || no_exec => {
             return Err(MemFault::PermissionFault { va });
         }
         _ => {}
@@ -352,15 +358,45 @@ mod tests {
     }
 
     #[test]
-    fn golden_permission_fault_execute_xn_page() {
+    fn golden_execute_allowed_on_uxn_page() {
+        // UXN (bit 54) only restricts EL0: in this EL1-equivalent model a
+        // UXN=1,PXN=0 page (how Linux maps kernel text) is executable.
+        // Regression test for the FetchFault at 0xffffff8009456158.
         let (mut ram, leaf) = chain4k();
         w64(&mut ram, leaf, page(0x800000, 0b00) | (1u64 << 54)); // UXN
         assert_eq!(
             translate(&st4k(0x1000), &ram, 0x401234, Access::Execute),
-            Err(MemFault::PermissionFault { va: 0x401234 })
+            Ok(0x800234)
         );
         assert_eq!(
             translate(&st4k(0x1000), &ram, 0x401234, Access::Read),
+            Ok(0x800234)
+        );
+    }
+
+    #[test]
+    fn golden_permission_fault_execute_pxn_page() {
+        // PXN (bit 53) denies EL1 execute.
+        let (mut ram, leaf) = chain4k();
+        w64(&mut ram, leaf, page(0x800000, 0b00) | (1u64 << 53)); // PXN
+        assert_eq!(
+            translate(&st4k(0x1000), &ram, 0x401234, Access::Execute),
+            Err(MemFault::PermissionFault { va: 0x401234 })
+        );
+        // Data accesses are unaffected by PXN.
+        assert_eq!(
+            translate(&st4k(0x1000), &ram, 0x401234, Access::Read),
+            Ok(0x800234)
+        );
+    }
+
+    #[test]
+    fn golden_uxntable_does_not_deny_execute() {
+        // UXNTable (bit 60) only restricts EL0: must not deny EL1 execute.
+        let (mut ram, _) = chain4k();
+        w64(&mut ram, 0x2000, table(0x3000) | (1u64 << 60));
+        assert_eq!(
+            translate(&st4k(0x1000), &ram, 0x401234, Access::Execute),
             Ok(0x800234)
         );
     }
