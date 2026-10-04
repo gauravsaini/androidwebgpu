@@ -188,6 +188,67 @@ fn test_b_cond_qemu_vectors() {
     run_suite("B.cond", include_str!("fixtures/b_cond.json"), 50);
 }
 
+// 2026-10-04: Regression test for the memblock panic root cause.
+// ADD/SUB (shifted register), S=0, with Rn=31/Rd=31 must use XZR, not SP.
+// The kernel's `sub x23, xzr, x23` (0xcb1703f7, NEG idiom) was mis-executed
+// as `sub x23, sp, x23`, corrupting the alignment mask and causing the
+// "Failed to allocate 0x1000 bytes below 0x0" panic.
+// NOTE: This uses the direct Orchestrator API (not JSON fixtures) because
+// the JSON harness does not set up the MMU state needed for the fast path.
+#[test]
+fn test_addsub_shifted_reg_rn31_is_xzr() {
+    use u12_orchestrator::{Orchestrator, StepOutcome, RAM_BASE};
+
+    // Test 1: sub x23, xzr, x23 (0xcb1703f7) — the exact failing instruction.
+    // x23=0x1000 should become 0xfffffffffffff000 (not sp-0x1000).
+    {
+        let mut o = Orchestrator::new();
+        o.machine_mut().cpu[0].pc = RAM_BASE;
+        o.machine_mut().cpu[0].regs[23] = 0x1000;
+        o.machine_mut().cpu[0].sp = 0xffffff8009543e50;
+        o.machine_mut().ram[0..4].copy_from_slice(&0xcb1703f7u32.to_le_bytes());
+        assert_eq!(o.step_vcpu(), StepOutcome::Continue);
+        assert_eq!(
+            o.machine().cpu[0].regs[23],
+            0xfffffffffffff000,
+            "sub x23, xzr, x23: Rn=31 must be XZR, not SP"
+        );
+        assert_eq!(
+            o.machine().cpu[0].sp, 0xffffff8009543e50,
+            "SP must be unchanged"
+        );
+    }
+
+    // Test 2: add x0, xzr, x1 — Rn=31 as XZR source.
+    {
+        let mut o = Orchestrator::new();
+        o.machine_mut().cpu[0].pc = RAM_BASE;
+        o.machine_mut().cpu[0].regs[1] = 0x1234;
+        o.machine_mut().cpu[0].sp = 0xffffff8009543e50;
+        // add x0, xzr, x1 = 0x8b0103e0
+        o.machine_mut().ram[0..4].copy_from_slice(&0x8b0103e0u32.to_le_bytes());
+        assert_eq!(o.step_vcpu(), StepOutcome::Continue);
+        assert_eq!(o.machine().cpu[0].regs[0], 0x1234);
+        assert_eq!(o.machine().cpu[0].sp, 0xffffff8009543e50);
+    }
+
+    // Test 3: sub xzr, x0, x1 — Rd=31 discards (does not write SP).
+    {
+        let mut o = Orchestrator::new();
+        o.machine_mut().cpu[0].pc = RAM_BASE;
+        o.machine_mut().cpu[0].regs[0] = 100;
+        o.machine_mut().cpu[0].regs[1] = 30;
+        o.machine_mut().cpu[0].sp = 0xffffff8009543e50;
+        // sub xzr, x0, x1 = 0xcb01001f
+        o.machine_mut().ram[0..4].copy_from_slice(&0xcb01001fu32.to_le_bytes());
+        assert_eq!(o.step_vcpu(), StepOutcome::Continue);
+        assert_eq!(
+            o.machine().cpu[0].sp, 0xffffff8009543e50,
+            "Rd=31 must discard to XZR, not write SP"
+        );
+    }
+}
+
 #[test]
 fn test_cbz_qemu_vectors() {
     run_suite("CBZ", include_str!("fixtures/cbz.json"), 50);
