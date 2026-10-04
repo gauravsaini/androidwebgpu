@@ -33,3 +33,11 @@
     - Gate 3: Compositor & HUD (PASSED)
     - Gate 4: Real APK Flight Stream (PASSED)
   - Captured verified visual artifact screenshot and generated `walkthrough.md`.
+
+## UPDATED ON : 2026-10-05
+
+### feat (2026-10-05) — Track E Device Models & Bare-Metal Verification
+
+1. **Track E Devices**: Implemented GICv2 interrupt controller (`Gic`), ARM Generic Timer IRQ (`GenericTimer`), OASIS VirtIO Console (`VirtioConsole`), and OASIS VirtIO Block (`VirtioBlk`) explicit-state models with complete MMIO register sets, virtqueue processing, and interrupt lines.
+2. **Tests** (before → after): 11 passed (u5 baseline) → 32 passed (23 u5-gic-timer, 4 u17-virtio-blk, 4 u18-virtio-console, 1 baremetal_system_integration). All bare-metal unit and system tests 100% passing.
+3. **Files changed**: `Cargo.toml`, `units/u5-gic-timer/src/gic.rs`, `units/u5-gic-timer/src/timer.rs`, `units/u17-virtio-blk/src/lib.rs`, `units/u18-virtio-console/src/lib.rs`, `units/u5-gic-timer/tests/baremetal_system_integration.rs`
