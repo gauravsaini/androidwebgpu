@@ -25,7 +25,7 @@ const KERNEL_PATH: &str = "/home/hatch/workspace/.cache-aosp/Image";
 const DTB_PATH: &str = "/home/hatch/workspace/androidwebgpu/guest-image/minimal-virt.dtb";
 
 const KERNEL_LOAD_PA: u64 = 0x4008_0000;
-const DTB_PA: u64 = 0x4800_0000;
+const DTB_PA: u64 = 0x4820_0000;
 const RAM_BASE: u64 = 0x4000_0000;
 const FLAG_Z: u64 = 0x4000_0000;
 

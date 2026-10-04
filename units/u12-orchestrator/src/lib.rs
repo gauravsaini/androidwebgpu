@@ -89,7 +89,7 @@ use u15_exec_wasmtime::WasmtimeExecutor;
 
 /// Guest RAM base (PLATFORM.md).
 pub const RAM_BASE: u64 = 0x4000_0000;
-/// Guest RAM size: 1 GiB, matches QEMU -m 1024 (required for DTB at 0x48000000).
+/// Guest RAM size: 1 GiB, matches QEMU -m 1024 (required for initrd at 0x48000000, DTB at 0x48200000).
 pub const RAM_SIZE: u64 = 0x4000_0000;
 /// vmemmap backing pool: 32MB above guest RAM (PAs 0x80000000-0x82000000).
 /// The kernel's memblock only knows about [RAM_BASE, RAM_BASE+RAM_SIZE),
@@ -562,7 +562,9 @@ impl Orchestrator {
             machine: MachineState {
                 cpu: vec![CpuState {
                     regs: [0; 31],
-                    sp: 0x4800_0000,
+                    // Shelf Job 2 (2026-10-05): SP moved from 0x4800_0000 to
+                    // 0x4830_0000 to avoid initrd (0x4800_0000) and DTB (0x4820_0000).
+                    sp: 0x4830_0000,
                     pc: 0x4000_0000,
                     pstate: 0,
                     sysregs: SysRegs::default(),

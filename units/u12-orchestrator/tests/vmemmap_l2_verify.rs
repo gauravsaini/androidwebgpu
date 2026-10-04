@@ -37,7 +37,7 @@ const DTB_CANDIDATES: &[&str] = &[
 ];
 
 const KERNEL_LOAD_PA: u64 = 0x4008_0000;
-const DTB_PA: u64 = 0x4800_0000;
+const DTB_PA: u64 = 0x4820_0000;
 const FLAG_Z: u64 = 0x4000_0000;
 
 // Step at which the kernel halted on the L1 descriptor gap before the fix.
