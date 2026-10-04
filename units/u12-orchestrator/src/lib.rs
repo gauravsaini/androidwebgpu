@@ -3279,6 +3279,7 @@ impl Orchestrator {
     /// Wave-4 work, stated here, not faked.
     pub fn tick_clock(&mut self, cycles: u64) {
         self.clock_cycles = self.clock_cycles.wrapping_add(cycles);
+
         // Sync guest timer programming into irq state before ticking:
         // ENABLE bit from CNTP_CTL_EL0, compare from CNTP_CVAL_EL0.
         {
@@ -3295,6 +3296,7 @@ impl Orchestrator {
         self.machine.irq = next_irq;
         // Sync the free-running counter back so MRS CNTPCT_EL0 sees it.
         self.machine.cpu[0].sysregs.cntpct_el0 = self.machine.irq.timer_count;
+
     }
 
     /// Currently asserted interrupt lines (INTIDs with pending bits set).

@@ -36,13 +36,16 @@ pub struct SysRegs {
     pub tcr_el1: u64,
     pub ttbr0_el1: u64,
     pub ttbr1_el1: u64,
+
     // Generic timer (devices track, 2026-10-02): physical counter is synced
     // from IrqState.timer_count on every tick; control/compare are guest-writable.
     pub cntpct_el0: u64,
+
     pub cntp_ctl_el0: u64,
     pub cntp_cval_el0: u64,
     pub cntv_ctl_el0: u64,
     pub cntv_cval_el0: u64,
+
     /// Context ID Register, EL1 (P0, 2026-10-03): written on every context
     /// switch, no behavior needed.
     pub contextidr_el1: u64,
@@ -122,6 +125,7 @@ pub struct SysRegs {
     pub lorc_el1: u64,
     pub pmccntr_el0: u64,
     pub zcr_el1: u64,
+
 }
 
 impl Default for SysRegs {
@@ -155,6 +159,7 @@ impl Default for SysRegs {
             // Reset value is architecturally UNKNOWN; the kernel always
             // writes TTBR1_EL1 before reading it, so 0 is a safe default.
             ttbr1_el1: 0,
+
             // Generic timer: counter starts at 0, control disabled, compare max.
             cntpct_el0: 0,
             cntp_ctl_el0: 0,
@@ -222,6 +227,7 @@ impl Default for SysRegs {
             lorc_el1: 0,
             pmccntr_el0: 0,
             zcr_el1: 0,
+
         }
     }
 }
@@ -245,6 +251,7 @@ impl SysRegs {
             SysReg::TcrEl1 => self.tcr_el1,
             SysReg::Ttbr0El1 => self.ttbr0_el1,
             SysReg::Ttbr1El1 => self.ttbr1_el1,
+
             // Generic timer (devices track): real counter and control state.
             // ISTATUS (bit 2) is read-only, computed from counter >= compare.
             SysReg::CntpctEl0 => self.cntpct_el0,
@@ -388,6 +395,7 @@ impl SysRegs {
             SysReg::LorcEl1 => self.lorc_el1,
             SysReg::PmccntrEl0 => self.pmccntr_el0,
             SysReg::ZcrEl1 => self.zcr_el1,
+
         }
     }
 
@@ -409,6 +417,7 @@ impl SysRegs {
             SysReg::TcrEl1 => self.tcr_el1 = val,
             SysReg::Ttbr0El1 => self.ttbr0_el1 = val,
             SysReg::Ttbr1El1 => self.ttbr1_el1 = val,
+
             // Generic timer: counter is read-only (writes ignored); ISTATUS
             // bit (2) of CTL is read-only, masked out on write.
             SysReg::CntpctEl0 | SysReg::CntvctEl0 => {}
@@ -545,6 +554,7 @@ impl SysRegs {
             SysReg::LorcEl1 => self.lorc_el1 = val,
             SysReg::PmccntrEl0 => self.pmccntr_el0 = val,
             SysReg::ZcrEl1 => self.zcr_el1 = val,
+
         }
     }
 
@@ -573,6 +583,7 @@ impl SysRegs {
             18 => Some(SysReg::CntpCvalEl0),
             19 => Some(SysReg::CntvCtlEl0),
             20 => Some(SysReg::CntvCvalEl0),
+
             21 => Some(SysReg::ContextidrEl1),
             22 => Some(SysReg::ParEl1),
             23 => Some(SysReg::OslarEl1),
@@ -691,6 +702,7 @@ impl SysRegs {
             133 => Some(SysReg::LorcEl1),
             134 => Some(SysReg::PmccntrEl0),
             135 => Some(SysReg::ZcrEl1),
+
             _ => None,
         }
     }
