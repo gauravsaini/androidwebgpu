@@ -2314,8 +2314,11 @@ impl Orchestrator {
             // mix of pre-index stores and signed-offset loads, missed e.g.
             // STP signed-offset (op10 0x2A4 -- the GB-26 kernel halt word
             // 0xa9017bfd), and silently dropped pre-index writeback.
-            //   opc = bits[31:30]: 00 = 32-bit pair, 10 = 64-bit pair
-            //     (01 = LDPSW: not handled here, falls through to U2)
+            //   opc = bits[31:30]: 00 = 32-bit pair, 01 = LDPSW (load-only),
+            //     10 = 64-bit pair
+            //     (GB-27: LDPSW was excluded and fell through to U2, which
+            //     traps all SP-relative pairs -- the kernel hits
+            //     `ldpsw x9, x10, [sp]` (0x69402BE9) at step 20610084.)
             //   bits[29:25] = 0b10100 pins the pair class; bit26 V = 0
             //     selects integer registers (this arm)
             //   idx = bits[24:23]: 00/10 = signed offset (00 is STNP/LDNP;
@@ -2324,11 +2327,13 @@ impl Orchestrator {
             //     11 = pre-index
             //   bit22 L: 0 = store (STP), 1 = load (LDP)
             let opc = (word >> 30) & 0x3;
+            let is_load = (word >> 22) & 1 == 1;
             let is_sp_pair = (word >> 25) & 0x1F == 0b10100
                 && (word >> 26) & 1 == 0
-                && (opc == 0b00 || opc == 0b10);
+                && (opc == 0b00 || opc == 0b10 || (opc == 0b01 && is_load));
             if is_sp_pair {
-                let is_store = (word >> 22) & 1 == 0;
+                let is_store = !is_load;
+                let is_ldpsw = opc == 0b01;
                 let is64 = opc == 0b10;
                 let scale: i64 = if is64 { 8 } else { 4 };
                 let idx_mode = (word >> 23) & 0x3;
@@ -2399,6 +2404,21 @@ impl Orchestrator {
                     let v1 = u64::from_le_bytes(self.machine.ram[off..off + 8].try_into().unwrap());
                     let v2 =
                         u64::from_le_bytes(self.machine.ram[off2..off2 + 8].try_into().unwrap());
+                    if rt1 != 31 {
+                        self.machine.cpu[0].regs[rt1] = v1;
+                    }
+                    if rt2 != 31 {
+                        self.machine.cpu[0].regs[rt2] = v2;
+                    }
+                } else if is_ldpsw {
+                    // GB-27: LDPSW sign-extends each 32-bit word to 64 bits
+                    // (plain LDP zero-extends).
+                    let v1 = i32::from_le_bytes(
+                        self.machine.ram[off..off + 4].try_into().unwrap(),
+                    ) as i64 as u64;
+                    let v2 = i32::from_le_bytes(
+                        self.machine.ram[off2..off2 + 4].try_into().unwrap(),
+                    ) as i64 as u64;
                     if rt1 != 31 {
                         self.machine.cpu[0].regs[rt1] = v1;
                     }
@@ -4733,6 +4753,50 @@ mod tests {
         b.copy_from_slice(&o.machine().ram[s + 4..s + 8]);
         assert_eq!(u32::from_le_bytes(b), 0xBBBB_BBBB);
         assert_eq!(o.machine().cpu[0].sp, sp);
+        assert_eq!(o.machine().cpu[0].pc, pc + 4);
+    }
+
+    #[test]
+    fn gb27_sp_ldpsw_sign_extends() {
+        // GB-27: LDPSW X9, X10, [SP] (signed-offset 0) sign-extends each
+        // 32-bit word to 64 bits. Word 0x69402BE9 (capstone-verified) is
+        // the exact kernel halt word at step 20610084 -- previously fell
+        // through to U2 and trapped "SP-relative not expressible".
+        let pc = RAM_BASE + 0x1000;
+        let sp = RAM_BASE + 0x2000;
+        let mut o = sp_test_orchestrator(pc, sp, 0x6940_2BE9);
+        let s = (sp - RAM_BASE) as usize;
+        o.machine_mut().ram[s..s + 4].copy_from_slice(&0xFFFF_FFFFu32.to_le_bytes()); // -1
+        o.machine_mut().ram[s + 4..s + 8].copy_from_slice(&0x7FFF_FFFFu32.to_le_bytes()); // max+
+        let outcome = o.step_vcpu();
+        assert!(
+            matches!(outcome, StepOutcome::Continue),
+            "expected Continue, got: {outcome:?}"
+        );
+        assert_eq!(o.machine().cpu[0].regs[9], 0xFFFF_FFFF_FFFF_FFFF); // sign-extended -1
+        assert_eq!(o.machine().cpu[0].regs[10], 0x0000_0000_7FFF_FFFF); // positive stays
+        assert_eq!(o.machine().cpu[0].sp, sp);
+        assert_eq!(o.machine().cpu[0].pc, pc + 4);
+    }
+
+    #[test]
+    fn gb27_sp_ldpsw_preindex_writeback() {
+        // GB-27: LDPSW X0, X1, [SP, #-16]! pre-index decrements SP and
+        // loads from the new SP. Word 0x69FE07E0 (capstone-verified).
+        let pc = RAM_BASE + 0x1000;
+        let sp = RAM_BASE + 0x2000;
+        let mut o = sp_test_orchestrator(pc, sp, 0x69FE_07E0);
+        let s = (sp - 16 - RAM_BASE) as usize;
+        o.machine_mut().ram[s..s + 4].copy_from_slice(&0x8000_0000u32.to_le_bytes()); // min-
+        o.machine_mut().ram[s + 4..s + 8].copy_from_slice(&0x0000_0001u32.to_le_bytes());
+        let outcome = o.step_vcpu();
+        assert!(
+            matches!(outcome, StepOutcome::Continue),
+            "expected Continue, got: {outcome:?}"
+        );
+        assert_eq!(o.machine().cpu[0].regs[0], 0xFFFF_FFFF_8000_0000); // sign-extended
+        assert_eq!(o.machine().cpu[0].regs[1], 0x0000_0000_0000_0001);
+        assert_eq!(o.machine().cpu[0].sp, sp - 16);
         assert_eq!(o.machine().cpu[0].pc, pc + 4);
     }
 
