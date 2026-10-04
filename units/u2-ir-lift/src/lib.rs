@@ -1746,60 +1746,120 @@ fn lift_load_store(insn: &Instruction) -> Vec<IrOp> {
         if is_load {
             if is_signed {
                 // LDPSW: load signed words into 64-bit registers
-                ops.push(IrOp::LoadDyn {
-                    dst: SCRATCH,
-                    base: rn,
-                    off: base_off as u64,
-                    size: 4,
-                });
-                ops.push(IrOp::OrrShift {
-                    dst: SCRATCH,
-                    a: 31,
-                    b: SCRATCH,
-                    shift: 0,
-                    amount: 32,
-                });
-                ops.push(IrOp::OrrShift {
-                    dst: rt,
-                    a: 31,
-                    b: SCRATCH,
-                    shift: 2,
-                    amount: 32,
-                });
+                if rn == rt {
+                    ops.push(IrOp::LoadDyn {
+                        dst: SCRATCH,
+                        base: rn,
+                        off: (base_off + 4) as u64,
+                        size: 4,
+                    });
+                    ops.push(IrOp::OrrShift {
+                        dst: SCRATCH,
+                        a: 31,
+                        b: SCRATCH,
+                        shift: 0,
+                        amount: 32,
+                    });
+                    ops.push(IrOp::OrrShift {
+                        dst: rt2,
+                        a: 31,
+                        b: SCRATCH,
+                        shift: 2,
+                        amount: 32,
+                    });
 
-                ops.push(IrOp::LoadDyn {
-                    dst: SCRATCH,
-                    base: rn,
-                    off: (base_off + 4) as u64,
-                    size: 4,
-                });
-                ops.push(IrOp::OrrShift {
-                    dst: SCRATCH,
-                    a: 31,
-                    b: SCRATCH,
-                    shift: 0,
-                    amount: 32,
-                });
-                ops.push(IrOp::OrrShift {
-                    dst: rt2,
-                    a: 31,
-                    b: SCRATCH,
-                    shift: 2,
-                    amount: 32,
-                });
+                    ops.push(IrOp::LoadDyn {
+                        dst: SCRATCH,
+                        base: rn,
+                        off: base_off as u64,
+                        size: 4,
+                    });
+                    ops.push(IrOp::OrrShift {
+                        dst: SCRATCH,
+                        a: 31,
+                        b: SCRATCH,
+                        shift: 0,
+                        amount: 32,
+                    });
+                    ops.push(IrOp::OrrShift {
+                        dst: rt,
+                        a: 31,
+                        b: SCRATCH,
+                        shift: 2,
+                        amount: 32,
+                    });
+                } else {
+                    ops.push(IrOp::LoadDyn {
+                        dst: SCRATCH,
+                        base: rn,
+                        off: base_off as u64,
+                        size: 4,
+                    });
+                    ops.push(IrOp::OrrShift {
+                        dst: SCRATCH,
+                        a: 31,
+                        b: SCRATCH,
+                        shift: 0,
+                        amount: 32,
+                    });
+                    ops.push(IrOp::OrrShift {
+                        dst: rt,
+                        a: 31,
+                        b: SCRATCH,
+                        shift: 2,
+                        amount: 32,
+                    });
+
+                    ops.push(IrOp::LoadDyn {
+                        dst: SCRATCH,
+                        base: rn,
+                        off: (base_off + 4) as u64,
+                        size: 4,
+                    });
+                    ops.push(IrOp::OrrShift {
+                        dst: SCRATCH,
+                        a: 31,
+                        b: SCRATCH,
+                        shift: 0,
+                        amount: 32,
+                    });
+                    ops.push(IrOp::OrrShift {
+                        dst: rt2,
+                        a: 31,
+                        b: SCRATCH,
+                        shift: 2,
+                        amount: 32,
+                    });
+                }
             } else {
-                ops.push(IrOp::LoadDyn {
-                    dst: rt,
-                    base: rn,
-                    off: base_off as u64,
-                    size,
-                });
-                ops.push(IrOp::LoadDyn {
-                    dst: rt2,
-                    base: rn,
-                    off: (base_off + size as i64) as u64,
-                    size,
-                });
+                if rn == rt {
+                    // rt2 first to avoid clobbering base register rn
+                    ops.push(IrOp::LoadDyn {
+                        dst: rt2,
+                        base: rn,
+                        off: (base_off + size as i64) as u64,
+                        size,
+                    });
+                    ops.push(IrOp::LoadDyn {
+                        dst: rt,
+                        base: rn,
+                        off: base_off as u64,
+                        size,
+                    });
+                } else {
+                    ops.push(IrOp::LoadDyn {
+                        dst: rt,
+                        base: rn,
+                        off: base_off as u64,
+                        size,
+                    });
+                    ops.push(IrOp::LoadDyn {
+                        dst: rt2,
+                        base: rn,
+                        off: (base_off + size as i64) as u64,
+                        size,
+                    });
+                }
             }
         } else {
             ops.push(IrOp::StoreDyn {
@@ -2838,6 +2898,32 @@ mod tests {
                     dst: 3,
                     base: 0,
                     off: 12,
+                    size: 4
+                },
+            ]
+        );
+    }
+
+    #[test]
+    fn ldp_base_equals_first_dst_loads_second_first() {
+        // LDP W22, W23, [X22, #0x18] (0x29435ED6):
+        // Kernel instruction at step 48,826,451 at PC 0xffffff800835e058.
+        // Base register X22 equals first destination W22.
+        // Loading rt2 (W23) first prevents clobbering base X22 before the second load.
+        let ops = lift(&insn(0x4000, 0x2943_5ED6, InsnKind::LoadStore));
+        assert_eq!(
+            ops,
+            vec![
+                IrOp::LoadDyn {
+                    dst: 23,
+                    base: 22,
+                    off: 28,
+                    size: 4
+                },
+                IrOp::LoadDyn {
+                    dst: 22,
+                    base: 22,
+                    off: 24,
                     size: 4
                 },
             ]

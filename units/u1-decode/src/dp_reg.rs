@@ -75,7 +75,11 @@ pub fn decode(word: u32) -> Option<InsnKind> {
             let bit29 = (word >> 29) & 1;
             let bit21 = (word >> 21) & 1;
             let opcode2 = (word >> 10) & 0x3F;
-            if bit30 == 0 && bit29 == 0 && bit21 == 0 && ((opcode2 >> 2) == 0b0010) {
+            if bit30 == 0
+                && bit29 == 0
+                && bit21 == 0
+                && ((opcode2 >> 2) == 0b0010 || opcode2 == 0b000010 || opcode2 == 0b000011)
+            {
                 Some(InsnKind::DataProc)
             } else if bit30 == 1
                 && bit29 == 0
