@@ -137,7 +137,24 @@ All tests are diagnostic and should NOT be merged to integration.
 
 **FIX IMPLEMENTED:** Extended quirk corrects both `rgn->size` and `type->total_size`.
 
-**VERIFICATION PENDING:** Full 21M-step boot with RAM search for panic message.
-Per MANDATORY RULE: no "fixed" claim until RAM search confirms absence.
+**VERIFICATION RESULT:** Full 21M-step boot with RAM search:
+- Region size: CORRECT (0x40000000)
+- total_size: CORRECT (0x40000000) at 200k steps
+- **Panic message: STILL PRESENT at PA 0x4168c2c0**
 
-**Percentage:** TBD pending verification. If verified, 74% → 76%.
+**CONCLUSION:** The size/total_size corruption was a REAL issue, and fixing it was
+necessary, but it is NOT sufficient. There is an ADDITIONAL root cause that
+prevents the kernel from allocating even with correct memblock data.
+
+**Percentage:** 74% (unchanged). The panic is NOT fixed.
+
+## Next Steps (for future tracks)
+
+1. The memblock data structures are now correct (verified via PA reads).
+2. The kernel still cannot allocate. Possible causes:
+   - VA→PA translation issue: kernel reads different values than PA measurements
+   - Emulator bug in `memblock_find_in_range` execution (specific instructions)
+   - Another corrupted field not yet identified (nid? flags? regions pointer?)
+   - The panic message is stale/from a different boot phase
+3. Recommended: Trace the actual `memblock_find_in_range` execution to see
+   why it returns 0 despite correct data.
