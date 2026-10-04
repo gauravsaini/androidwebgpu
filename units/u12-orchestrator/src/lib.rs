@@ -91,6 +91,14 @@ use u15_exec_wasmtime::WasmtimeExecutor;
 pub const RAM_BASE: u64 = 0x4000_0000;
 /// Guest RAM size: 1 GiB, matches QEMU -m 1024 (required for DTB at 0x48000000).
 pub const RAM_SIZE: u64 = 0x4000_0000;
+/// vmemmap backing pool: 32MB above guest RAM (PAs 0x80000000-0x82000000).
+/// The kernel's memblock only knows about [RAM_BASE, RAM_BASE+RAM_SIZE),
+/// so it can never allocate these PAs — unlike the old top-of-RAM bump
+/// allocator, which collided with the kernel's own page tables (the kernel
+/// put an L2 table at 0x7effe000; our allocator zeroed it at step ~96.2M,
+/// causing a FetchFault on kernel text). 1GB RAM needs ~16.8MB of vmemmap.
+pub const VMEMMAP_POOL_SIZE: u64 = 32 * 1024 * 1024;
+pub const VMEMMAP_POOL_BASE: u64 = RAM_BASE + RAM_SIZE;
 /// Console MMIO base (PLATFORM.md).
 pub const CONSOLE_BASE: u64 = 0x0900_0000;
 /// Console MMIO size: one page (PLATFORM.md).
@@ -571,7 +579,7 @@ impl Orchestrator {
                     timer_count: 0,
                     timer_compare: 0,
                 },
-                ram: vec![0; RAM_SIZE as usize],
+                ram: vec![0; (RAM_SIZE + VMEMMAP_POOL_SIZE) as usize],
                 devices: vec![],
             },
             transport: TransportState {
@@ -1080,15 +1088,23 @@ impl Orchestrator {
         true
     }
 
-    /// Allocate a zeroed 4K page for vmemmap backing, from the top of RAM.
-    /// Returns the guest-physical address, or None if the pool is exhausted.
+    /// Allocate a zeroed 4K page for vmemmap backing, from the dedicated
+    /// pool above guest RAM (VMEMMAP_POOL_BASE). Returns the guest-physical
+    /// address, or None if the pool is exhausted.
+    ///
+    /// The pool lives at PAs [0x80000000, 0x82000000), outside the kernel's
+    /// memblock range, so the kernel can never allocate these pages for its
+    /// own use. (The previous top-of-RAM bump allocator collided with the
+    /// kernel's page tables: the kernel placed an L2 table at 0x7effe000 and
+    /// our allocator handed out and zeroed the same page, wiping the kernel
+    /// text mapping at step ~96.2M.)
     fn alloc_vmemmap_page(&mut self) -> Option<u64> {
-        const POOL_PAGES: u64 = 4096; // 16MB pool
+        const POOL_PAGES: u64 = VMEMMAP_POOL_SIZE / 4096; // 8192 pages = 32MB
         const PAGE_SIZE: u64 = 4096;
         if self.vmemmap_pages_used >= POOL_PAGES {
             return None;
         }
-        let pa = RAM_BASE + RAM_SIZE - (self.vmemmap_pages_used + 1) * PAGE_SIZE;
+        let pa = VMEMMAP_POOL_BASE + self.vmemmap_pages_used * PAGE_SIZE;
         self.vmemmap_pages_used += 1;
         // Zero the page.
         let off = (pa - RAM_BASE) as usize;
