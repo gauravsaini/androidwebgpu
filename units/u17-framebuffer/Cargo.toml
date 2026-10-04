@@ -1,0 +1,10 @@
+[package]
+name = "u17-framebuffer"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+name = "u17_framebuffer"
+path = "src/lib.rs"
+
+[dependencies]

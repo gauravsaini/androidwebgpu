@@ -20,6 +20,7 @@ members = [
   "units/u7-gpu-device",
   "units/u8-gpu-host",
   "units/u16-pl011-uart",
+  "units/u17-framebuffer",
   "units/u13-adapters",
   "units/u12-orchestrator",
   "units/u15-exec-wasmtime",

@@ -33,3 +33,12 @@
     - Gate 3: Compositor & HUD (PASSED)
     - Gate 4: Real APK Flight Stream (PASSED)
   - Captured verified visual artifact screenshot and generated `walkthrough.md`.
+
+## UPDATED ON : 2026-10-05
+
+### feat (2026-10-05) — Track D: Framebuffer Device Model + WebGPU Host
+
+1. **Framebuffer Device & WebGPU Display**: Implemented `units/u17-framebuffer` (640×480 a8b8g8r8, MMIO at `0x1000_0000`, 2560-byte stride) with Linux simple-framebuffer DTB node generator, AArch64 bare-metal test pattern generator, and WebGPU WGSL canvas presentation.
+2. **Tests** (before → after): 0/0 → 14/14 passed (`cargo test -p u17-framebuffer`).
+3. **Files changed**: `Cargo.toml`, `units/u17-framebuffer/*`, `www/framebuffer.html`.
+
