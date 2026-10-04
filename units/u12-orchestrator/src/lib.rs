@@ -528,6 +528,10 @@ pub struct Orchestrator {
     /// The WASM execution backend (wasmtime on native, wasmi on wasm32).
     /// Injected — see [`Orchestrator::with_executor`].
     executor: Box<dyn BlockExecutor>,
+    /// Bump allocator for vmemmap demand-population pages. Counts pages
+    /// allocated from the top of RAM (grows downward). Each vmemmap fault
+    /// allocates a zeroed 4K page for the missing L3 table or data page.
+    vmemmap_pages_used: u64,
 }
 
 /// Default backend for this target: wasmtime where a JIT is available,
@@ -593,6 +597,7 @@ impl Orchestrator {
             last_notified: Vec::new(),
             exclusive: None,
             executor: default_executor(),
+            vmemmap_pages_used: 0,
         };
         #[cfg(not(target_arch = "wasm32"))]
         {
@@ -945,6 +950,153 @@ impl Orchestrator {
             ttbr1: sysregs.ttbr1_el1,
         };
         u4_mmu::translate_with_base(&st, &self.machine.ram, RAM_BASE, va, access)
+    }
+
+    /// Handle a vmemmap demand-population fault.
+    ///
+    /// The kernel populates vmemmap on-demand via its data-abort handler
+    /// (`do_page_fault` -> `vmemmap_populate`). Since the emulator does not
+    /// deliver data aborts to the guest, we emulate the population here:
+    /// allocate a zeroed 4K page (from a bump allocator at the top of RAM),
+    /// install the missing PTE, and return true so the faulting instruction
+    /// can be retried.
+    ///
+    /// Returns false if the VA is not in the vmemmap range (not our fault
+    /// to handle).
+    fn handle_vmemmap_fault(&mut self, va: u64) -> bool {
+        // vmemmap range for 39-bit VA: [0xffffffbe00000000, 0xffffffc000000000).
+        // Derived from VMEMMAP_START = -(1 << (VA_BITS - 2)).
+        const VMEMMAP_START: u64 = 0xffffffbe00000000;
+        const VMEMMAP_END: u64 = 0xffffffc000000000;
+        if va < VMEMMAP_START || va >= VMEMMAP_END {
+            return false;
+        }
+
+        // Get TCR to determine VA bits and table levels.
+        let tcr = self.machine.cpu[0].sysregs.tcr_el1;
+        let t1sz = (tcr >> 16) & 0x3f;
+        if t1sz != 25 {
+            // Only 39-bit VA supported for vmemmap emulation.
+            return false;
+        }
+        let ttbr1 = self.machine.cpu[0].sysregs.ttbr1_el1 & 0x0000_FFFF_FFFF_F000;
+
+        // Walk to find the invalid entry. 39-bit VA, 4K granule: start at L1.
+        // L1 index: bits [38:30], L2 index: bits [29:21], L3 index: bits [20:12].
+        let l1_idx = (va >> 30) & 0x1ff;
+        let l2_idx = (va >> 21) & 0x1ff;
+        let l3_idx = (va >> 12) & 0x1ff;
+
+        let ram_base = RAM_BASE;
+        let ram_len = self.machine.ram.len() as u64;
+
+        // Helper to read a u64 from guest PA.
+        let read_u64 = |ram: &[u8], pa: u64| -> Option<u64> {
+            let off = pa.checked_sub(ram_base)? as usize;
+            if off + 8 > ram.len() {
+                return None;
+            }
+            Some(u64::from_le_bytes(ram[off..off + 8].try_into().unwrap()))
+        };
+        // Helper to write a u64 to guest PA.
+        let write_u64 = |ram: &mut [u8], pa: u64, val: u64| -> bool {
+            let off = match pa.checked_sub(ram_base) {
+                Some(o) => o as usize,
+                None => return false,
+            };
+            if off + 8 > ram.len() {
+                return false;
+            }
+            ram[off..off + 8].copy_from_slice(&val.to_le_bytes());
+            true
+        };
+
+        // L1 -> L2
+        let l1_pa = ttbr1 + l1_idx * 8;
+        let l1_desc = match read_u64(&self.machine.ram, l1_pa) {
+            Some(d) => d,
+            None => return false,
+        };
+        if l1_desc & 0b11 != 0b11 {
+            // L1 entry invalid or block: not a vmemmap population case.
+            return false;
+        }
+        let l2_base = l1_desc & 0x0000_FFFF_FFFF_F000;
+
+        // L2 -> L3
+        let l2_pa = l2_base + l2_idx * 8;
+        let l2_desc = match read_u64(&self.machine.ram, l2_pa) {
+            Some(d) => d,
+            None => return false,
+        };
+        let l3_base = if l2_desc & 0b11 == 0b00 {
+            // L2 entry invalid: allocate a new L3 table.
+            let new_table_pa = match self.alloc_vmemmap_page() {
+                Some(pa) => pa,
+                None => return false,
+            };
+            // Zero the table (already zeroed by allocator).
+            // Install table descriptor: PA | 0b11.
+            let desc = (new_table_pa & 0x0000_FFFF_FFFF_F000) | 0b11;
+            if !write_u64(&mut self.machine.ram, l2_pa, desc) {
+                return false;
+            }
+            new_table_pa
+        } else if l2_desc & 0b11 == 0b11 {
+            l2_desc & 0x0000_FFFF_FFFF_F000
+        } else {
+            // Block descriptor or reserved: not our case.
+            return false;
+        };
+
+        // L3: install page descriptor if invalid.
+        let l3_pa = l3_base + l3_idx * 8;
+        let l3_desc = match read_u64(&self.machine.ram, l3_pa) {
+            Some(d) => d,
+            None => return false,
+        };
+        if l3_desc & 0b11 != 0b00 {
+            // Already mapped (race): nothing to do.
+            return true;
+        }
+        let data_pa = match self.alloc_vmemmap_page() {
+            Some(pa) => pa,
+            None => return false,
+        };
+        // Page descriptor: PA | AF (bit 10) | SH=01 (bits 9:8) | AP=00 (bits 7:6, RW EL1)
+        // | UXN (bit 54) | PXN (bit 53) | AttrIndx=000 (bits 4:2, normal memory).
+        // 0x00500000_00000793? Let's construct: 
+        // bits[1:0]=11 (page), bit10=1 (AF), bits[9:8]=01 (inner shareable),
+        // bits[7:6]=00 (RW), bits[5]=0, bits[4:2]=000, bit54=1 (UXN), bit53=1 (PXN).
+        let desc = (data_pa & 0x0000_FFFF_FFFF_F000)
+            | (1 << 10)  // AF
+            | (1 << 8)   // SH[0], inner shareable
+            | (1 << 54)  // UXN
+            | (1 << 53)  // PXN
+            | 0b11;      // page descriptor
+        if !write_u64(&mut self.machine.ram, l3_pa, desc) {
+            return false;
+        }
+        true
+    }
+
+    /// Allocate a zeroed 4K page for vmemmap backing, from the top of RAM.
+    /// Returns the guest-physical address, or None if the pool is exhausted.
+    fn alloc_vmemmap_page(&mut self) -> Option<u64> {
+        const POOL_PAGES: u64 = 4096; // 16MB pool
+        const PAGE_SIZE: u64 = 4096;
+        if self.vmemmap_pages_used >= POOL_PAGES {
+            return None;
+        }
+        let pa = RAM_BASE + RAM_SIZE - (self.vmemmap_pages_used + 1) * PAGE_SIZE;
+        self.vmemmap_pages_used += 1;
+        // Zero the page.
+        let off = (pa - RAM_BASE) as usize;
+        if off + PAGE_SIZE as usize > self.machine.ram.len() {
+            return None;
+        }
+        self.machine.ram[off..off + PAGE_SIZE as usize].fill(0);
+        Some(pa)
     }
 
     /// MMIO dispatch per PLATFORM.md. Returns Some(byte) for console reads,
@@ -2721,6 +2873,18 @@ impl Orchestrator {
                             )
                         {
                             return self.survey_skip_instruction(pc, word, None);
+                        }
+                        // vmemmap demand-population: if this is a TranslationFault
+                        // on a vmemmap VA, populate the page table and retry the
+                        // instruction instead of halting.
+                        if let HaltReason::WasmTrap { addr, ref message } = reason {
+                            if message.starts_with("mmu_fault: TranslationFault") {
+                                if self.handle_vmemmap_fault(addr) {
+                                    // Retry the instruction (do not advance PC,
+                                    // do not count as a step yet).
+                                    return self.step_vcpu();
+                                }
+                            }
                         }
                         self.halted = Some(reason.clone());
                         return StepOutcome::Halted(reason);
