@@ -1460,11 +1460,9 @@ impl Orchestrator {
                 let imm3 = (word >> 10) & 0x7;
                 let rn = ((word >> 5) & 0x1F) as usize;
                 let rd = (word & 0x1F) as usize;
-                // Only UXTW/UXTX/SXTW/SXTX are valid for 64-bit ADD/SUB
-                // (extend). Byte/halfword options (UXTB/UXTH/SXTB/SXTH)
-                // are UNDEFINED — do not claim, fall through.
-                let valid_option = matches!(option, 0b010 | 0b011 | 0b110 | 0b111);
-                if imm3 <= 4 && valid_option {
+                // For 64-bit ADD/SUB (extend), all 8 extend options
+                // (UXTB/UXTH/UXTW/UXTX/SXTB/SXTH/SXTW/SXTX) are valid per ARM DDI 0487.
+                if imm3 <= 4 {
                     let w = if rm == 31 {
                         0
                     } else {
@@ -1727,44 +1725,55 @@ impl Orchestrator {
             }
         }
 
-        // 5b. Multiply-add/subtract, 32-bit: MADD/MSUB (Wd = Wa +/- Wn*Wm).
-        // GB-26: the kernel hits `madd w8, w8, w10, w11` (0x1B0A2D08) at
-        // step 1249581, which U2 traps ("DataProc: 32-bit MADD width is
-        // not expressible in IrOp::Madd"); 64-bit MADD goes through WASM
-        // fine, so only the 32-bit form is claimed here.
-        // Encoding: sf=0 00 11011 000 Rm o0 Ra Rn Rd --
-        // bits[31:21] == 0b00011011000; bit15: 0 = MADD, 1 = MSUB.
-        // 32-bit arithmetic: low 32 bits of product, wrapping add/sub,
-        // zero-extended into Rd. Rn/Rm/Ra/Rd=31 name WZR.
-        if (word >> 21) & 0x7FF == 0b00011011000 {
+        // 5b. Multiply-add/subtract (32-bit and 64-bit): MADD/MSUB (Rd = Ra +/- Rn*Wm/Xm).
+        // GB-26 added 32-bit MADD/MSUB; Track A1 added 64-bit MSUB (0x9B08D928
+        // at step 40,897,820, PC 0xffffff8009469414).
+        // Encoding: sf 00 11011 000 Rm o0 Ra Rn Rd --
+        // bits[30:21] == 0b0011011000 (0x0D8); bit15 (o0): 0 = MADD, 1 = MSUB.
+        // Rn/Rm/Ra/Rd=31 name WZR/XZR.
+        if (word >> 21) & 0x3FF == 0b0011011000 {
+            let sf = (word >> 31) & 1;
             let rm = ((word >> 16) & 0x1F) as usize;
             let is_sub = (word >> 15) & 1 == 1;
             let ra = ((word >> 10) & 0x1F) as usize;
             let rn = ((word >> 5) & 0x1F) as usize;
             let rd = (word & 0x1F) as usize;
-            let n = if rn == 31 {
-                0
+            let val = if sf == 1 {
+                let n = if rn == 31 { 0 } else { self.machine.cpu[0].regs[rn] };
+                let m = if rm == 31 { 0 } else { self.machine.cpu[0].regs[rm] };
+                let a = if ra == 31 { 0 } else { self.machine.cpu[0].regs[ra] };
+                let prod = n.wrapping_mul(m);
+                if is_sub {
+                    a.wrapping_sub(prod)
+                } else {
+                    a.wrapping_add(prod)
+                }
             } else {
-                self.machine.cpu[0].regs[rn] as u32
-            };
-            let m = if rm == 31 {
-                0
-            } else {
-                self.machine.cpu[0].regs[rm] as u32
-            };
-            let a = if ra == 31 {
-                0
-            } else {
-                self.machine.cpu[0].regs[ra] as u32
-            };
-            let prod = n.wrapping_mul(m);
-            let res = if is_sub {
-                a.wrapping_sub(prod)
-            } else {
-                a.wrapping_add(prod)
+                let n = if rn == 31 {
+                    0
+                } else {
+                    self.machine.cpu[0].regs[rn] as u32
+                };
+                let m = if rm == 31 {
+                    0
+                } else {
+                    self.machine.cpu[0].regs[rm] as u32
+                };
+                let a = if ra == 31 {
+                    0
+                } else {
+                    self.machine.cpu[0].regs[ra] as u32
+                };
+                let prod = n.wrapping_mul(m);
+                let res = if is_sub {
+                    a.wrapping_sub(prod)
+                } else {
+                    a.wrapping_add(prod)
+                };
+                res as u64
             };
             if rd != 31 {
-                self.machine.cpu[0].regs[rd] = res as u64;
+                self.machine.cpu[0].regs[rd] = val;
             }
             self.machine.cpu[0].pc = pc.wrapping_add(4);
             return Some(Ok(()));
@@ -1876,20 +1885,24 @@ impl Orchestrator {
 
         // 7b. Conditional compare: CCMP / CCMN (immediate and register).
         // 2026-10-03: the 50M-step boot run reached 20,458,502 steps and
-        // halted on `ccmp w3, #4, #0, cs` (0x7A442060) at 0xffffff800808a1f4.
-        // Encoding: sf op S 11010010 imm5/Rm cond 0 o0 Rn nzcv --
+        // halted on `ccmp w3, w4, #0, hs` (0x7A442060) at 0xffffff800808a1f4.
+        // Encoding (ARM DDI 0487): sf op S 11010010 imm5/Rm cond 1/0 0 Rn 0 nzcv --
         // bits[30:21] == 0x3D2 (op=1: CCMP) or 0x1D2 (op=0: CCMN),
-        // bit10 (o0) = 0 for immediate, 1 for register.
+        // bit10 == 0, bit4 == 0.
+        // bit11: 0 for register (Rm = bits[20:16]), 1 for immediate (imm5 = bits[20:16]).
         // Semantics: if cond holds, set NZCV as SUBS (CCMP) or ADDS (CCMN)
         // of Rn and the operand; else set NZCV = nzcv (4-bit immediate).
         // Executed directly like CSEL: the condition reads the live NZCV
         // flags from pstate, which the WASM path cannot see.
         {
             let b30_21 = (word >> 21) & 0x3FF;
-            if b30_21 == 0x3D2 || b30_21 == 0x1D2 {
+            if (b30_21 == 0x3D2 || b30_21 == 0x1D2)
+                && (word >> 10) & 1 == 0
+                && (word >> 4) & 1 == 0
+            {
                 let sf = (word >> 31) & 1;
                 let op = (word >> 30) & 1; // 0 = CCMN, 1 = CCMP
-                let is_reg = (word >> 10) & 1 == 1;
+                let is_reg = (word >> 11) & 1 == 0;
                 let imm5_rm = (word >> 16) & 0x1F;
                 let cond = ((word >> 12) & 0xF) as u8;
                 let rn = ((word >> 5) & 0x1F) as usize;
@@ -1923,6 +1936,71 @@ impl Orchestrator {
                     nzcv_imm << 28
                 };
                 cpu.pstate = (cpu.pstate & !FLAGS_NZCV_MASK) | nzcv;
+                cpu.pc = pc.wrapping_add(4);
+                return Some(Ok(()));
+            }
+        }
+
+        // 7c. Integer divide: UDIV / SDIV (ARM DDI 0487 C4.1.5 Data-processing 2 source).
+        // 2026-10-05 (Track A1): the kernel hits `udiv x24, x25, x22` (0x9AD60B38)
+        // at step 40,891,471 at PC 0xffffff80088e1cc0.
+        // Encoding: sf 0 0 11010 110 Rm opcode2 Rn Rd --
+        // bits[30:21] == 0x0D6, opcode2 (bits[15:10]) == 0b000010 (UDIV) or 0b000011 (SDIV).
+        // Division by zero yields 0 (does not trap). Signed overflow (MIN / -1) yields MIN.
+        if (word >> 21) & 0x3FF == 0x0D6 {
+            let opcode2 = (word >> 10) & 0x3F;
+            if opcode2 == 0b000010 || opcode2 == 0b000011 {
+                let sf = (word >> 31) & 1;
+                let is_signed = opcode2 == 0b000011;
+                let rm = ((word >> 16) & 0x1F) as usize;
+                let rn = ((word >> 5) & 0x1F) as usize;
+                let rd = (word & 0x1F) as usize;
+                let cpu = &mut self.machine.cpu[0];
+                let m_val = if rm == 31 { 0 } else { cpu.regs[rm] };
+                let n_val = if rn == 31 { 0 } else { cpu.regs[rn] };
+                let val = if sf == 1 {
+                    if is_signed {
+                        let n = n_val as i64;
+                        let d = m_val as i64;
+                        if d == 0 {
+                            0
+                        } else if n == i64::MIN && d == -1 {
+                            i64::MIN as u64
+                        } else {
+                            (n / d) as u64
+                        }
+                    } else {
+                        if m_val == 0 {
+                            0
+                        } else {
+                            n_val / m_val
+                        }
+                    }
+                } else {
+                    let n32 = n_val as u32;
+                    let m32 = m_val as u32;
+                    let res32 = if is_signed {
+                        let n = n32 as i32;
+                        let d = m32 as i32;
+                        if d == 0 {
+                            0
+                        } else if n == i32::MIN && d == -1 {
+                            i32::MIN as u32
+                        } else {
+                            (n / d) as u32
+                        }
+                    } else {
+                        if m32 == 0 {
+                            0
+                        } else {
+                            n32 / m32
+                        }
+                    };
+                    res32 as u64
+                };
+                if rd != 31 {
+                    cpu.regs[rd] = val;
+                }
                 cpu.pc = pc.wrapping_add(4);
                 return Some(Ok(()));
             }
@@ -2039,6 +2117,130 @@ impl Orchestrator {
             }
             self.machine.cpu[0].pc = pc.wrapping_add(4);
             return Some(Ok(()));
+        }
+
+        // 6c3. Load/store exclusive pair: LDXP/LDAXP and STXP/STLXP.
+        // 2026-10-05 (Track A1): kernel hits `ldxp x17, x16, [x4]` (0xC87F4091)
+        // at step 48,826,270 at PC 0xffffff80085bed50, followed by `stlxp w17, x2, x3, [x4]`.
+        // Encoding: size 001000 o2=0 L o1=1 Rs o0 Rt2 Rn Rt --
+        // bits[29:24] == 0b001000, bit23 == 0, bit21 == 1.
+        // L=bit22: 1=LDXP/LDAXP, 0=STXP/STLXP.
+        // size: bit30=0 -> 32-bit (8 bytes total), bit30=1 -> 64-bit (16 bytes total).
+        // Rt = bits[4:0], Rt2 = bits[14:10], Rn = bits[9:5], Rs = bits[20:16].
+        if (word >> 24) & 0x3F == 0b001000
+            && (word >> 23) & 1 == 0
+            && (word >> 21) & 1 == 1
+            && (word >> 10) & 0x1F != 0b11111
+        {
+            let size = (word >> 30) & 0x3;
+            if size >= 2 {
+                let elem_bytes: u64 = if size == 3 { 8 } else { 4 };
+                let total_bytes = (2 * elem_bytes) as u8;
+                let is_load = (word >> 22) & 1 == 1;
+                let rn = ((word >> 5) & 0x1F) as usize;
+                let rt = (word & 0x1F) as usize;
+                let rt2 = ((word >> 10) & 0x1F) as usize;
+                let va = if rn == 31 {
+                    self.machine.cpu[0].sp
+                } else {
+                    self.machine.cpu[0].regs[rn]
+                };
+                if is_load {
+                    if (word >> 16) & 0x1F != 0b11111 {
+                        return None;
+                    }
+                    let pa0 = match self.translate_data_orch(va, Access::Read) {
+                        Ok(pa) => pa,
+                        Err(reason) => return Some(Err(reason)),
+                    };
+                    let pa1 = match self.translate_data_orch(va.wrapping_add(elem_bytes), Access::Read) {
+                        Ok(pa) => pa,
+                        Err(reason) => return Some(Err(reason)),
+                    };
+                    let off0 = match self.ram_offset(pa0, elem_bytes) {
+                        Ok(off) => off,
+                        Err(_) => {
+                            return Some(Err(HaltReason::WasmTrap {
+                                addr: va,
+                                message: "ldxp outside RAM".to_string(),
+                            }))
+                        }
+                    };
+                    let off1 = match self.ram_offset(pa1, elem_bytes) {
+                        Ok(off) => off,
+                        Err(_) => {
+                            return Some(Err(HaltReason::WasmTrap {
+                                addr: va.wrapping_add(elem_bytes),
+                                message: "ldxp outside RAM".to_string(),
+                            }))
+                        }
+                    };
+                    let (val0, val1) = if elem_bytes == 8 {
+                        (
+                            u64::from_le_bytes(self.machine.ram[off0..off0 + 8].try_into().unwrap()),
+                            u64::from_le_bytes(self.machine.ram[off1..off1 + 8].try_into().unwrap()),
+                        )
+                    } else {
+                        (
+                            u32::from_le_bytes(self.machine.ram[off0..off0 + 4].try_into().unwrap()) as u64,
+                            u32::from_le_bytes(self.machine.ram[off1..off1 + 4].try_into().unwrap()) as u64,
+                        )
+                    };
+                    if rt != 31 {
+                        self.machine.cpu[0].regs[rt] = val0;
+                    }
+                    if rt2 != 31 {
+                        self.machine.cpu[0].regs[rt2] = val1;
+                    }
+                    self.exclusive = Some((va, total_bytes));
+                } else {
+                    let rs = ((word >> 16) & 0x1F) as usize; // Ws status
+                    let ok = self.exclusive == Some((va, total_bytes));
+                    if ok {
+                        let pa0 = match self.translate_data_orch(va, Access::Write) {
+                            Ok(pa) => pa,
+                            Err(reason) => return Some(Err(reason)),
+                        };
+                        let pa1 = match self.translate_data_orch(va.wrapping_add(elem_bytes), Access::Write) {
+                            Ok(pa) => pa,
+                            Err(reason) => return Some(Err(reason)),
+                        };
+                        let off0 = match self.ram_offset(pa0, elem_bytes) {
+                            Ok(off) => off,
+                            Err(_) => {
+                                return Some(Err(HaltReason::WasmTrap {
+                                    addr: va,
+                                    message: "stxp outside RAM".to_string(),
+                                }))
+                            }
+                        };
+                        let off1 = match self.ram_offset(pa1, elem_bytes) {
+                            Ok(off) => off,
+                            Err(_) => {
+                                return Some(Err(HaltReason::WasmTrap {
+                                    addr: va.wrapping_add(elem_bytes),
+                                    message: "stxp outside RAM".to_string(),
+                                }))
+                            }
+                        };
+                        let d0 = if rt == 31 { 0 } else { self.machine.cpu[0].regs[rt] };
+                        let d1 = if rt2 == 31 { 0 } else { self.machine.cpu[0].regs[rt2] };
+                        if elem_bytes == 8 {
+                            self.machine.ram[off0..off0 + 8].copy_from_slice(&d0.to_le_bytes());
+                            self.machine.ram[off1..off1 + 8].copy_from_slice(&d1.to_le_bytes());
+                        } else {
+                            self.machine.ram[off0..off0 + 4].copy_from_slice(&(d0 as u32).to_le_bytes());
+                            self.machine.ram[off1..off1 + 4].copy_from_slice(&(d1 as u32).to_le_bytes());
+                        }
+                    }
+                    self.exclusive = None;
+                    if rs != 31 {
+                        self.machine.cpu[0].regs[rs] = if ok { 0 } else { 1 };
+                    }
+                }
+                self.machine.cpu[0].pc = pc.wrapping_add(4);
+                return Some(Ok(()));
+            }
         }
 
         // 6c2. Store-release / load-acquire: STLR/LDLR.
@@ -2217,7 +2419,13 @@ impl Orchestrator {
                 (1, 0b000000) => rn_val.reverse_bits(),
                 // RBIT 32-bit: reverse low 32 bits, zero-extend.
                 (0, 0b000000) => (rn_val as u32).reverse_bits() as u64,
-                _ => return None, // CLZ/CLS or S=1: not handled here.
+                // CLZ 64-bit: count leading zeros.
+                (1, 0b000100) => rn_val.leading_zeros() as u64,
+                // CLZ 32-bit: count leading zeros in low 32 bits, zero-extend.
+                // (2026-10-05: kernel hits `clz w13, w14` (0x5AC011CD) at
+                // 0xffffff8009452d2c, step 40,893,233.)
+                (0, 0b000100) => (rn_val as u32).leading_zeros() as u64,
+                _ => return None, // CLS or S=1: not handled here.
             };
             if rd != 31 {
                 self.machine.cpu[0].regs[rd] = result;
@@ -5372,6 +5580,21 @@ mod tests {
     }
 
     #[test]
+    fn gb28_msub64() {
+        // MSUB X8, X9, X8, X22 (0x9B08D928): exact kernel word at step 40,897,820.
+        // X8 = X22 - (X9 * X8)
+        let pc = RAM_BASE + 0x1000;
+        let sp = RAM_BASE + 0x2000;
+        let mut o = sp_test_orchestrator(pc, sp, 0x9B08_D928);
+        o.machine_mut().cpu[0].regs[9] = 5;
+        o.machine_mut().cpu[0].regs[8] = 20;
+        o.machine_mut().cpu[0].regs[22] = 200;
+        assert_eq!(o.step_vcpu(), StepOutcome::Continue);
+        assert_eq!(o.machine().cpu[0].regs[8], 100); // 200 - (5 * 20)
+        assert_eq!(o.machine().cpu[0].pc, pc + 4);
+    }
+
+    #[test]
     fn gb26_strb_sp_imm() {
         // Exact kernel word: STRB W8, [SP] (0x390003E8, offset 0).
         // Measured halt at step 1249745 (pc 0xffffff8008df55c0).
@@ -5492,6 +5715,44 @@ mod tests {
         assert_eq!(
             u32::from_le_bytes(o.machine().ram[a..a + 4].try_into().unwrap()),
             0x1234_5678
+        );
+        assert_eq!(o.exclusive, None);
+        assert_eq!(o.machine().cpu[0].pc, pc + 4);
+    }
+
+    #[test]
+    fn gb28_ldxp_stxp_pair() {
+        // Kernel instructions at step 48,826,270 (pc 0xffffff80085bed50):
+        // LDXP X17, X16, [X4] (0xC87F4091)
+        // STXP W17, X2, X3, [X4] (0xC8310C82)
+        let pc = RAM_BASE + 0x1000;
+        let sp = RAM_BASE + 0x2000;
+        let mut o = sp_test_orchestrator(pc, sp, 0xC87F_4091);
+        let addr = RAM_BASE + 0x3000;
+        o.machine_mut().cpu[0].regs[4] = addr;
+        let a = (addr - RAM_BASE) as usize;
+        o.machine_mut().ram[a..a + 8].copy_from_slice(&0x1111_2222_3333_4444u64.to_le_bytes());
+        o.machine_mut().ram[a + 8..a + 16].copy_from_slice(&0x5555_6666_7777_8888u64.to_le_bytes());
+        assert!(matches!(o.step_vcpu(), StepOutcome::Continue));
+        assert_eq!(o.machine().cpu[0].regs[17], 0x1111_2222_3333_4444);
+        assert_eq!(o.machine().cpu[0].regs[16], 0x5555_6666_7777_8888);
+        assert_eq!(o.exclusive, Some((addr, 16)));
+
+        // STXP W17, X2, X3, [X4]
+        o.machine_mut().cpu[0].regs[2] = 0xAAAA_AAAA_AAAA_AAAA;
+        o.machine_mut().cpu[0].regs[3] = 0xBBBB_BBBB_BBBB_BBBB;
+        let off = (pc - RAM_BASE) as usize;
+        o.machine_mut().ram[off..off + 4].copy_from_slice(&0xC831_0C82u32.to_le_bytes());
+        o.machine_mut().cpu[0].pc = pc;
+        assert!(matches!(o.step_vcpu(), StepOutcome::Continue));
+        assert_eq!(o.machine().cpu[0].regs[17], 0); // Ws=0: success
+        assert_eq!(
+            u64::from_le_bytes(o.machine().ram[a..a + 8].try_into().unwrap()),
+            0xAAAA_AAAA_AAAA_AAAA
+        );
+        assert_eq!(
+            u64::from_le_bytes(o.machine().ram[a + 8..a + 16].try_into().unwrap()),
+            0xBBBB_BBBB_BBBB_BBBB
         );
         assert_eq!(o.exclusive, None);
         assert_eq!(o.machine().cpu[0].pc, pc + 4);
@@ -5650,6 +5911,24 @@ mod tests {
     }
 
     #[test]
+    fn gb28_adds_extended_uxtb_64() {
+        // ADDS X10, X10, W1, UXTB #4 (0xAB21114A): sf=1, S=1, op=0 (ADDS),
+        // option=000 (UXTB), imm3=4.
+        // X10 = X10 + (UXTB(W1) << 4). Updates NZCV.
+        let pc = RAM_BASE + 0x1000;
+        let sp = RAM_BASE + 0x2000;
+        let mut o = sp_test_orchestrator(pc, sp, 0xAB21_114A);
+        o.machine_mut().cpu[0].regs[10] = 0x100;
+        o.machine_mut().cpu[0].regs[1] = 0x1234_0005; // W1[7:0] = 5
+        assert!(matches!(o.step_vcpu(), StepOutcome::Continue));
+        // 0x100 + (5 << 4) = 0x100 + 0x50 = 0x150.
+        assert_eq!(o.machine().cpu[0].regs[10], 0x150);
+        // Positive result, no carry, no overflow: NZCV = 0.
+        assert_eq!(o.machine().cpu[0].pstate & FLAGS_NZCV_MASK, 0);
+        assert_eq!(o.machine().cpu[0].pc, pc + 4);
+    }
+
+    #[test]
     fn gb27_sub_extended_uxtw_32_zero_extends() {
         // SUB W5, W6, W7, UXTW (0x4B2740C5): S=0, 32-bit result zero-extends.
         let pc = RAM_BASE + 0x1000;
@@ -5755,6 +6034,24 @@ mod tests {
         // Only low 32 bits reversed, upper 32 zeroed.
         assert_eq!(o.machine().cpu[0].regs[9], 0x8000_0001u32.reverse_bits() as u64);
         assert_eq!(o.machine().cpu[0].pc, pc + 4);
+    }
+
+    #[test]
+    fn gb28_clz_32bit() {
+        // CLZ W13, W14 (0x5AC011CD): exact kernel halt instruction at step 40,893,233.
+        let pc = RAM_BASE + 0x1000;
+        let sp = RAM_BASE + 0x2000;
+        let mut o = sp_test_orchestrator(pc, sp, 0x5AC0_11CD);
+        o.machine_mut().cpu[0].regs[14] = 0x0001_0000;
+        assert_eq!(o.step_vcpu(), StepOutcome::Continue);
+        assert_eq!(o.machine().cpu[0].regs[13], 15);
+        assert_eq!(o.machine().cpu[0].pc, pc + 4);
+
+        // Zero returns 32 per ARM64 specification.
+        let mut o = sp_test_orchestrator(pc, sp, 0x5AC0_11CD);
+        o.machine_mut().cpu[0].regs[14] = 0;
+        assert_eq!(o.step_vcpu(), StepOutcome::Continue);
+        assert_eq!(o.machine().cpu[0].regs[13], 32);
     }
 
     #[test]
@@ -6219,11 +6516,11 @@ mod tests {
 
     #[test]
     fn ccmn_imm_cond_true_sets_adds_flags() {
-        // CCMN W1, #5, #0, EQ (0x3A450020): op=0 selects CCMN.
+        // CCMN W1, #5, #0, EQ (0x3A450820): op=0 selects CCMN, bit11=1 selects immediate.
         // With Z set, condition holds: NZCV = ADDS(W1, #5).
         let pc = RAM_BASE + 0x1000;
         let sp = RAM_BASE + 0x2000;
-        let mut o = sp_test_orchestrator(pc, sp, 0x3A45_0020);
+        let mut o = sp_test_orchestrator(pc, sp, 0x3A45_0820);
         o.machine_mut().cpu[0].regs[1] = 0xFFFF_FFFF; // -1 as u32
         o.machine_mut().cpu[0].pstate = 0x4000_0000; // Z set
         assert_eq!(o.step_vcpu(), StepOutcome::Continue);
@@ -6236,11 +6533,11 @@ mod tests {
 
     #[test]
     fn ccmp_reg_cond_true() {
-        // CCMP X2, X3, #0, NE (0xFA431440): register variant, bit10=1.
+        // CCMP X2, X3, #0, NE (0xFA431040): authentic register variant, bit11=0, bit10=0.
         // With Z clear, NE holds: NZCV = SUBS(X2, X3).
         let pc = RAM_BASE + 0x1000;
         let sp = RAM_BASE + 0x2000;
-        let mut o = sp_test_orchestrator(pc, sp, 0xFA43_1440);
+        let mut o = sp_test_orchestrator(pc, sp, 0xFA43_1040);
         o.machine_mut().cpu[0].regs[2] = 100;
         o.machine_mut().cpu[0].regs[3] = 100;
         o.machine_mut().cpu[0].pstate = 0; // Z clear -> NE true
@@ -6248,6 +6545,63 @@ mod tests {
         // SUBS(100, 100): Z=1, C=1 -> 0x60000000.
         assert_eq!(o.machine().cpu[0].pstate & 0xF000_0000, 0x6000_0000);
         assert_eq!(o.machine().cpu[0].pc, pc + 4);
+    }
+
+    #[test]
+    fn ccmp_reg_wzr_strchr_null_terminator() {
+        // Real guest instruction at 0xffffff8008089e14 in strchr:
+        // `ccmp w2, wzr, #0x4, ne` (0x7A5F1044).
+        // Encoding: sf=0, op=1 (CCMP), bits[30:21]=0x3D2, Rm=31 (wzr),
+        // cond=1 (NE), bit11=0 (register), bit10=0, Rn=2 (w2), bit4=0, nzcv=4.
+        // When scanning a string, w2 holds the current byte. When w2 == 0 (null terminator):
+        // Previous `cmp w2, w1` had w2 != w1, so Z=0 (NE holds).
+        // With NE holding, CCMP evaluates SUBS(w2, wzr) = SUBS(0, 0) = 0.
+        // This MUST set Z=1, C=1 so the subsequent `b.ne` loop exit condition is met!
+        let pc = RAM_BASE + 0x1000;
+        let sp = RAM_BASE + 0x2000;
+        let mut o = sp_test_orchestrator(pc, sp, 0x7A5F_1044);
+        o.machine_mut().cpu[0].regs[2] = 0; // null byte
+        o.machine_mut().cpu[0].pstate = 0;  // Z=0, so NE condition holds
+        assert_eq!(o.step_vcpu(), StepOutcome::Continue);
+        let nzcv = o.machine().cpu[0].pstate & 0xF000_0000;
+        assert_eq!(nzcv & 0x4000_0000, 0x4000_0000, "Z flag must be set on null byte compare with wzr");
+        assert_eq!(nzcv & 0x2000_0000, 0x2000_0000, "C flag must be set (0 - 0 no borrow)");
+        assert_eq!(o.machine().cpu[0].pc, pc + 4);
+    }
+
+    #[test]
+    fn test_udiv_sdiv_variants() {
+        // Kernel halt instruction at step 40,891,471:
+        // `udiv x24, x25, x22` (0x9AD60B38)
+        let pc = RAM_BASE + 0x1000;
+        let sp = RAM_BASE + 0x2000;
+        let mut o = sp_test_orchestrator(pc, sp, 0x9AD6_0B38);
+        o.machine_mut().cpu[0].regs[25] = 100;
+        o.machine_mut().cpu[0].regs[22] = 4;
+        assert_eq!(o.step_vcpu(), StepOutcome::Continue);
+        assert_eq!(o.machine().cpu[0].regs[24], 25);
+        assert_eq!(o.machine().cpu[0].pc, pc + 4);
+
+        // UDIV divide-by-zero returns 0 (ARM64 standard, no trap).
+        let mut o = sp_test_orchestrator(pc, sp, 0x9AD6_0B38);
+        o.machine_mut().cpu[0].regs[25] = 100;
+        o.machine_mut().cpu[0].regs[22] = 0;
+        assert_eq!(o.step_vcpu(), StepOutcome::Continue);
+        assert_eq!(o.machine().cpu[0].regs[24], 0);
+
+        // SDIV 64-bit: -100 / 4 = -25.
+        let mut o = sp_test_orchestrator(pc, sp, 0x9AD6_0F38); // sdiv x24, x25, x22
+        o.machine_mut().cpu[0].regs[25] = (-100i64) as u64;
+        o.machine_mut().cpu[0].regs[22] = 4;
+        assert_eq!(o.step_vcpu(), StepOutcome::Continue);
+        assert_eq!(o.machine().cpu[0].regs[24] as i64, -25);
+
+        // SDIV 32-bit: 100 / -4 = -25.
+        let mut o = sp_test_orchestrator(pc, sp, 0x1AD6_0F38); // sdiv w24, w25, w22
+        o.machine_mut().cpu[0].regs[25] = 100;
+        o.machine_mut().cpu[0].regs[22] = (-4i32) as u32 as u64;
+        assert_eq!(o.step_vcpu(), StepOutcome::Continue);
+        assert_eq!(o.machine().cpu[0].regs[24], (-25i32) as u32 as u64);
     }
 
     #[test]
