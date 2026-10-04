@@ -15,6 +15,7 @@ fn print_help() {
     println!("Options:");
     println!("  --kernel <PATH>       Path to ARM64 kernel Image (default: /mnt/sdb1/aosp/Image)");
     println!("  --dtb <PATH>          Path to device tree blob (optional; x0 set to DTB address if given)");
+    println!("  --initrd <PATH>       Path to initramfs CPIO (optional; loaded at 0x4800_0000 per Track B layout)");
     println!("  --max-steps <N>       Step budget cap (default: 2000000)");
     println!("  --trace <FILE>        Enable per-step execution tracing to file");
     println!("  --survey              Enable survey mode (discovery only, never progress)");
@@ -33,6 +34,7 @@ fn print_help() {
 fn main() {
     let mut kernel_path = "/mnt/sdb1/aosp/Image".to_string();
     let mut dtb_path: Option<String> = None;
+    let mut initrd_path: Option<String> = None;
     let mut max_steps: u64 = 2_000_000;
     let mut trace_file: Option<String> = None;
     let mut dump_around: Option<usize> = None;
@@ -61,6 +63,12 @@ fn main() {
                 i += 1;
                 if i < args.len() {
                     dtb_path = Some(args[i].clone());
+                }
+            }
+            "--initrd" => {
+                i += 1;
+                if i < args.len() {
+                    initrd_path = Some(args[i].clone());
                 }
             }
             "--max-steps" => {
@@ -192,9 +200,33 @@ fn main() {
         orch.machine_mut().cpu[0].regs[4] = KERNEL_LOAD_ADDR;
         orch.machine_mut().cpu[0].pstate = 0x4000_0000; // Z flag (bit 30)
 
-        // Optional DTB: load at 0x4800_0000 (128MB offset, matches QEMU virt),
-        // set x0 per ARM64 boot protocol.
-        const DTB_LOAD_ADDR: u64 = RAM_BASE + 0x0800_0000;
+        // Initrd (Shelf Job 2, 2026-10-05): Track B QEMU layout.
+        // - Initramfs CPIO at 0x4800_0000 (INITRD_LOAD_ADDR)
+        // - DTB at 0x4820_0000 (DTB_LOAD_ADDR, moved from 0x4800_0000)
+        // - Kernel Image at 0x4008_0000 (unchanged)
+        // Non-overlapping: kernel ends at 0x4168_1200, initrd is 6656 bytes,
+        // DTB is 1501 bytes. All clear of each other and framebuffer (0x7F00_0000).
+        const INITRD_LOAD_ADDR: u64 = RAM_BASE + 0x0800_0000; // 0x4800_0000
+        const DTB_LOAD_ADDR: u64 = RAM_BASE + 0x0820_0000; // 0x4820_0000
+        if let Some(ref initrd_p) = initrd_path {
+            let initrd_bytes = fs::read(initrd_p).expect("failed to read initrd");
+            let off = (INITRD_LOAD_ADDR - RAM_BASE) as usize;
+            let ram = &mut orch.machine_mut().ram;
+            assert!(
+                off + initrd_bytes.len() <= ram.len(),
+                "initrd does not fit in RAM"
+            );
+            // Verify no overlap with DTB region (DTB loads after initrd)
+            assert!(
+                INITRD_LOAD_ADDR + initrd_bytes.len() as u64 <= DTB_LOAD_ADDR,
+                "initrd overlaps DTB region"
+            );
+            ram[off..off + initrd_bytes.len()].copy_from_slice(&initrd_bytes);
+            println!(
+                "[boot] Loaded initrd ({} bytes) at {INITRD_LOAD_ADDR:#x}",
+                initrd_bytes.len()
+            );
+        }
         if let Some(ref dtb_p) = dtb_path {
             let dtb_bytes = fs::read(dtb_p).expect("failed to read DTB");
             let off = (DTB_LOAD_ADDR - RAM_BASE) as usize;

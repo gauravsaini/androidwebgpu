@@ -103,8 +103,13 @@ def build() -> bytes:
     b.prop_u32("#size-cells", 2)
 
     b.begin_node("chosen")
-    b.prop_str("bootargs", "console=ttyAMA0,115200 earlycon")
+    b.prop_str("bootargs", "console=ttyAMA0,115200 earlycon rdinit=/init")
     b.prop_str("stdout-path", "/pl011@9000000")
+    # Initrd wiring (2026-10-05, Shelf Job 2): matches Track B QEMU layout.
+    # Initramfs CPIO (6656 bytes) at 0x4800_0000, DTB at 0x4820_0000.
+    # Encoded as <hi32 lo32> per #address-cells = <2>.
+    b.prop_u32("linux,initrd-start", 0x00, 0x48000000)
+    b.prop_u32("linux,initrd-end", 0x00, 0x48001A00)
     b.end_node()
 
     b.begin_node("aliases")
