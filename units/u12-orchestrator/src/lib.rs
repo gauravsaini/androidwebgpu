@@ -537,8 +537,8 @@ pub struct Orchestrator {
     /// Injected — see [`Orchestrator::with_executor`].
     executor: Box<dyn BlockExecutor>,
     /// Bump allocator for vmemmap demand-population pages. Counts pages
-    /// allocated from the top of RAM (grows downward). Each vmemmap fault
-    /// allocates a zeroed 4K page for the missing L3 table or data page.
+    /// allocated from VMEMMAP_POOL_BASE (grows upward). Each vmemmap fault
+    /// allocates zeroed 4K pages for missing L2 tables, L3 tables, or data pages.
     vmemmap_pages_used: u64,
 }
 
@@ -965,9 +965,9 @@ impl Orchestrator {
     /// The kernel populates vmemmap on-demand via its data-abort handler
     /// (`do_page_fault` -> `vmemmap_populate`). Since the emulator does not
     /// deliver data aborts to the guest, we emulate the population here:
-    /// allocate a zeroed 4K page (from a bump allocator at the top of RAM),
-    /// install the missing PTE, and return true so the faulting instruction
-    /// can be retried.
+    /// allocate zeroed 4K pages from the dedicated vmemmap pool at
+    /// VMEMMAP_POOL_BASE, install missing L2/L3 table descriptors and PTEs,
+    /// and return true so the faulting instruction can be retried.
     ///
     /// Returns false if the VA is not in the vmemmap range (not our fault
     /// to handle).
@@ -996,7 +996,6 @@ impl Orchestrator {
         let l3_idx = (va >> 12) & 0x1ff;
 
         let ram_base = RAM_BASE;
-        let ram_len = self.machine.ram.len() as u64;
 
         // Helper to read a u64 from guest PA.
         let read_u64 = |ram: &[u8], pa: u64| -> Option<u64> {
@@ -1025,11 +1024,25 @@ impl Orchestrator {
             Some(d) => d,
             None => return false,
         };
-        if l1_desc & 0b11 != 0b11 {
-            // L1 entry invalid or block: not a vmemmap population case.
+        let l2_base = if l1_desc & 0b11 == 0b00 {
+            // L1 entry invalid: allocate a new L2 table.
+            let new_table_pa = match self.alloc_vmemmap_page() {
+                Some(pa) => pa,
+                None => return false,
+            };
+            // Zero the table (already zeroed by allocator).
+            // Install table descriptor: PA | 0b11.
+            let desc = (new_table_pa & 0x0000_FFFF_FFFF_F000) | 0b11;
+            if !write_u64(&mut self.machine.ram, l1_pa, desc) {
+                return false;
+            }
+            new_table_pa
+        } else if l1_desc & 0b11 == 0b11 {
+            l1_desc & 0x0000_FFFF_FFFF_F000
+        } else {
+            // Block descriptor or reserved: not our case.
             return false;
-        }
-        let l2_base = l1_desc & 0x0000_FFFF_FFFF_F000;
+        };
 
         // L2 -> L3
         let l2_pa = l2_base + l2_idx * 8;
@@ -6235,5 +6248,145 @@ mod tests {
         // SUBS(100, 100): Z=1, C=1 -> 0x60000000.
         assert_eq!(o.machine().cpu[0].pstate & 0xF000_0000, 0x6000_0000);
         assert_eq!(o.machine().cpu[0].pc, pc + 4);
+    }
+
+    #[test]
+    fn vmemmap_l1_gap_demand_population_allocates_l2_l3_and_page() {
+        // Halt at step 121,480,531: WasmTrap TranslationFault at VA 0xffffffbf00000000.
+        // VA 0xffffffbf00000000 is L1 index 0xfc (252), L2 index 0, L3 index 0.
+        // In the guest page table, L1[0xfc] is unpopulated (0b00).
+        // handle_vmemmap_fault must allocate an L2 table, an L3 table, and an L3 page,
+        // and link them together in the page table hierarchy.
+        let mut orch = Orchestrator::new();
+        let sysregs = v01_sysregs();
+        orch.machine_mut().cpu[0].sysregs = sysregs.clone();
+
+        let l1_table_pa = sysregs.ttbr1_el1 & 0x0000_FFFF_FFFF_F000;
+        let fault_va = 0xffffffbf00000000u64;
+        let l1_idx = (fault_va >> 30) & 0x1ff;
+        assert_eq!(l1_idx, 0xfc);
+
+        let l1_entry_pa = l1_table_pa + l1_idx * 8;
+        let l1_entry_off = (l1_entry_pa - RAM_BASE) as usize;
+        assert_eq!(
+            u64::from_le_bytes(
+                orch.machine().ram[l1_entry_off..l1_entry_off + 8]
+                    .try_into()
+                    .unwrap()
+            ),
+            0,
+            "L1 descriptor must initially be unpopulated"
+        );
+        assert_eq!(orch.vmemmap_pages_used, 0);
+
+        // Call handle_vmemmap_fault on the unpopulated L1 entry.
+        let handled = orch.handle_vmemmap_fault(fault_va);
+        assert!(
+            handled,
+            "handle_vmemmap_fault must succeed for VA in vmemmap range"
+        );
+
+        // 3 pages allocated: L2 table, L3 table, data page.
+        assert_eq!(orch.vmemmap_pages_used, 3);
+        let l2_table_pa = VMEMMAP_POOL_BASE;
+        let l3_table_pa = VMEMMAP_POOL_BASE + 4096;
+        let data_page_pa = VMEMMAP_POOL_BASE + 8192;
+
+        // Verify L1 entry: points to l2_table_pa with table descriptor bits (0b11).
+        let l1_desc = u64::from_le_bytes(
+            orch.machine().ram[l1_entry_off..l1_entry_off + 8]
+                .try_into()
+                .unwrap(),
+        );
+        assert_eq!(l1_desc & 0b11, 0b11, "L1 entry must be table descriptor");
+        assert_eq!(l1_desc & 0x0000_FFFF_FFFF_F000, l2_table_pa);
+
+        // Verify L2 entry (index 0): points to l3_table_pa with table descriptor bits (0b11).
+        let l2_entry_off = (l2_table_pa - RAM_BASE) as usize;
+        let l2_desc = u64::from_le_bytes(
+            orch.machine().ram[l2_entry_off..l2_entry_off + 8]
+                .try_into()
+                .unwrap(),
+        );
+        assert_eq!(l2_desc & 0b11, 0b11, "L2 entry must be table descriptor");
+        assert_eq!(l2_desc & 0x0000_FFFF_FFFF_F000, l3_table_pa);
+
+        // Verify L3 entry (index 0): points to data_page_pa with page descriptor bits (0b11).
+        let l3_entry_off = (l3_table_pa - RAM_BASE) as usize;
+        let l3_desc = u64::from_le_bytes(
+            orch.machine().ram[l3_entry_off..l3_entry_off + 8]
+                .try_into()
+                .unwrap(),
+        );
+        assert_eq!(l3_desc & 0b11, 0b11, "L3 entry must be page descriptor");
+        assert_eq!(l3_desc & 0x0000_FFFF_FFFF_F000, data_page_pa);
+
+        // Translation walk must now succeed.
+        let st = MmuState {
+            sctlr: sysregs.sctlr_el1,
+            tcr: sysregs.tcr_el1,
+            ttbr0: sysregs.ttbr0_el1,
+            ttbr1: sysregs.ttbr1_el1,
+        };
+        let translated = u4_mmu::translate_with_base(
+            &st,
+            &orch.machine().ram,
+            RAM_BASE,
+            fault_va,
+            Access::Read,
+        );
+        assert_eq!(translated, Ok(data_page_pa));
+
+        // Subsequent fault on next page in same L3 table (0xffffffbf00001000):
+        // Reuses L1 and L2, only allocates 1 new page for L3 data page.
+        let next_va = fault_va + 4096;
+        let handled2 = orch.handle_vmemmap_fault(next_va);
+        assert!(handled2);
+        assert_eq!(orch.vmemmap_pages_used, 4);
+
+        // Fault on an already populated page is a no-op (returns true without allocating).
+        let handled3 = orch.handle_vmemmap_fault(fault_va);
+        assert!(handled3);
+        assert_eq!(orch.vmemmap_pages_used, 4);
+
+        // Non-vmemmap VA returns false.
+        assert!(!orch.handle_vmemmap_fault(0xffffffc0_0000_0000));
+        assert!(!orch.handle_vmemmap_fault(0xffffffbe_0000_0000 - 1));
+    }
+
+    #[test]
+    fn vmemmap_l1_gap_step_vcpu_instruction_retry() {
+        // Reproduce the exact step 121,480,531 halt instruction:
+        // PC 0xffffff8008089e0c: ldrb w2, [x0], #1 (0x38401402)
+        // with x0 = 0xffffffbf00000000.
+        let mut orch = Orchestrator::new();
+        let sysregs = v01_sysregs();
+        orch.machine_mut().cpu[0].sysregs = sysregs;
+
+        // Populate V01 page tables in RAM so PC translates:
+        // VA 0xFFFF_FF80_096A_B158 -> PA 0x416A_B158.
+        let v01 = v01_ram();
+        orch.machine_mut().ram[..v01.len()].copy_from_slice(&v01);
+
+        // Put the faulting instruction at VA 0xFFFF_FF80_096A_B158.
+        let code_va = 0xFFFF_FF80_096A_B158u64;
+        let code_pa = 0x416A_B158u64;
+        let code_off = (code_pa - RAM_BASE) as usize;
+        // 0x38401402: ldrb w2, [x0], #1
+        orch.machine_mut().ram[code_off..code_off + 4]
+            .copy_from_slice(&0x38401402u32.to_le_bytes());
+
+        let cpu = &mut orch.machine_mut().cpu[0];
+        cpu.pc = code_va;
+        cpu.regs[0] = 0xffffffbf00000000; // x0 = fault VA
+        cpu.regs[2] = 0xbeef;             // w2 poisoned
+
+        let outcome = orch.step_vcpu();
+        assert_eq!(outcome, StepOutcome::Continue);
+        assert_eq!(orch.machine().cpu[0].pc, code_va + 4);
+        assert_eq!(orch.machine().cpu[0].regs[0], 0xffffffbf00000001); // post-indexed +1
+        assert_eq!(orch.machine().cpu[0].regs[2], 0); // read 0 from zeroed vmemmap page
+        assert_eq!(orch.halted(), None);
+        assert_eq!(orch.vmemmap_pages_used, 3);
     }
 }
