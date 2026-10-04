@@ -2889,6 +2889,16 @@ impl Orchestrator {
             if let Some(res) = self.execute_arm64(&insn) {
                 match res {
                     Ok(()) => {
+                        // LIVELOCK GUARD: fast-path handlers must advance PC.
+                        // If PC didn't change, halt honestly instead of spinning.
+                        if self.machine.cpu[0].pc == pc {
+                            let halt = HaltReason::Unsupported {
+                                addr: pc,
+                                reason: "livelock: fast-path did not advance PC",
+                            };
+                            self.halted = Some(halt.clone());
+                            return StepOutcome::Halted(halt);
+                        }
                         self.steps += 1;
                         self.tick_clock(TIMER_CYCLES_PER_STEP);
                         return StepOutcome::Continue;
@@ -3005,7 +3015,22 @@ impl Orchestrator {
             self.halted = Some(halt.clone());
             return StepOutcome::Halted(halt);
         }
-        self.machine.cpu[0].pc = exit_addr as u64;
+        let new_pc = exit_addr as u64;
+        // LIVELOCK GUARD (2026-10-05): If the block execution returns the
+        // same PC it started with (and it's not a WFI yield), the emulator
+        // would spin forever on the same instruction. This is always a bug:
+        // either the instruction wasn't actually executed, or the exit
+        // address was computed incorrectly. Halt honestly instead of
+        // spinning. (Gate 0 caught a 10M-step spin on UBFM 0xd347fd08.)
+        if new_pc == pc && !wfi_seen {
+            let halt = HaltReason::Unsupported {
+                addr: pc,
+                reason: "livelock: PC did not advance after block execution",
+            };
+            self.halted = Some(halt.clone());
+            return StepOutcome::Halted(halt);
+        }
+        self.machine.cpu[0].pc = new_pc;
 
         self.steps += 1;
         // Injected clock: the timer advances only here, never wall time.
