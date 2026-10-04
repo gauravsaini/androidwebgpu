@@ -97,7 +97,7 @@ pub const RAM_SIZE: u64 = 0x4000_0000;
 /// allocator, which collided with the kernel's own page tables (the kernel
 /// put an L2 table at 0x7effe000; our allocator zeroed it at step ~96.2M,
 /// causing a FetchFault on kernel text). 1GB RAM needs ~16.8MB of vmemmap.
-pub const VMEMMAP_POOL_SIZE: u64 = 32 * 1024 * 1024;
+pub const VMEMMAP_POOL_SIZE: u64 = 128 * 1024 * 1024;
 pub const VMEMMAP_POOL_BASE: u64 = RAM_BASE + RAM_SIZE;
 /// Console MMIO base (PLATFORM.md).
 pub const CONSOLE_BASE: u64 = 0x0900_0000;
@@ -1889,7 +1889,7 @@ impl Orchestrator {
             if b30_21 == 0x3D2 || b30_21 == 0x1D2 {
                 let sf = (word >> 31) & 1;
                 let op = (word >> 30) & 1; // 0 = CCMN, 1 = CCMP
-                let is_reg = (word >> 10) & 1 == 1;
+                let is_reg = (word >> 11) & 1 == 0;
                 let imm5_rm = (word >> 16) & 0x1F;
                 let cond = ((word >> 12) & 0xF) as u8;
                 let rn = ((word >> 5) & 0x1F) as usize;
@@ -6236,11 +6236,11 @@ mod tests {
 
     #[test]
     fn ccmp_reg_cond_true() {
-        // CCMP X2, X3, #0, NE (0xFA431440): register variant, bit10=1.
+        // CCMP X2, X3, #0, NE (0xFA431040): register variant, bit11=0.
         // With Z clear, NE holds: NZCV = SUBS(X2, X3).
         let pc = RAM_BASE + 0x1000;
         let sp = RAM_BASE + 0x2000;
-        let mut o = sp_test_orchestrator(pc, sp, 0xFA43_1440);
+        let mut o = sp_test_orchestrator(pc, sp, 0xFA43_1040);
         o.machine_mut().cpu[0].regs[2] = 100;
         o.machine_mut().cpu[0].regs[3] = 100;
         o.machine_mut().cpu[0].pstate = 0; // Z clear -> NE true

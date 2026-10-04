@@ -228,6 +228,15 @@ fn main() {
                 break;
             }
         }
+        let s = orch.steps();
+        if s > 0 && s % 10_000_000 == 0 {
+            let pc = orch.machine().cpu[0].pc;
+            let x0 = orch.machine().cpu[0].regs[0];
+            let x1 = orch.machine().cpu[0].regs[1];
+            let x2 = orch.machine().cpu[0].regs[2];
+            let lr = orch.machine().cpu[0].regs[30];
+            println!("[progress] step {s} ({}M), PC={pc:#018x} x0={x0:#018x} x1={x1:#018x} x2={x2:#018x} lr={lr:#018x}", s / 1_000_000);
+        }
         // --save-at: snapshot as soon as the step counter reaches the target.
         if let Some(target) = save_at {
             if orch.steps() >= target {

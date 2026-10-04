@@ -33,3 +33,12 @@
     - Gate 3: Compositor & HUD (PASSED)
     - Gate 4: Real APK Flight Stream (PASSED)
   - Captured verified visual artifact screenshot and generated `walkthrough.md`.
+
+## UPDATED ON : 2026-10-05
+
+### scout (2026-10-05) — Track A2: Discovered & Mapped 50 Boot Halts
+
+1. **Scout Discovery**: Automated force-skipping runner mapped 50 distinct halts past 20.8M steps with full Capstone disassemblies, register dumps, and actionable fix recipes for Track A1 in `/Users/Shared/track-a2-scout.md`.
+2. **Critical Fix**: Identified and fixed ARM64 register CCMP encoding bug (`is_reg = bit11 == 0`), terminating 150M-step `strchr` runaway loop and unblocking authentic kernel init at step 20,820,288.
+3. **Tests**: `ccmp_reg_cond_true` passed; `scout_kernel` completed 50/50 halt mappings.
+4. **Files changed**: `units/u12-orchestrator/src/bin/scout_kernel.rs`, `units/u12-orchestrator/src/lib.rs`, `/Users/Shared/track-a2-scout.md`.
