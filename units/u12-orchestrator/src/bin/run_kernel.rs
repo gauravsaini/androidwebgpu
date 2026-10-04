@@ -228,6 +228,11 @@ fn main() {
                 break;
             }
         }
+        let s = orch.steps();
+        if s > 0 && s % 10_000_000 == 0 {
+            let pc = orch.machine().cpu[0].pc;
+            println!("[progress] step {s} ({}M), PC={pc:#018x}", s / 1_000_000);
+        }
         // --save-at: snapshot as soon as the step counter reaches the target.
         if let Some(target) = save_at {
             if orch.steps() >= target {
@@ -291,12 +296,52 @@ fn main() {
     }
     println!("[done] Executed {steps} steps. PC={pc:#018x}");
     match halt_reason {
-        Some(reason) => println!("[halt] Reason: {reason:?}"),
+        Some(ref reason) => {
+            println!("[halt] Reason: {reason:?}");
+            println!("[cpu] Registers at halt:");
+            for r in 0..31 {
+                print!("  x{:02}={:#018x}", r, orch.machine().cpu[0].regs[r]);
+                if (r + 1) % 4 == 0 {
+                    println!();
+                }
+            }
+            println!();
+            println!("  sp={:#018x} pstate={:#010x}", orch.machine().cpu[0].sp, orch.machine().cpu[0].pstate);
+            let sys = &orch.machine().cpu[0].sysregs;
+            println!("  ttbr0_el1={:#018x} ttbr1_el1={:#018x} tcr_el1={:#018x} sctlr_el1={:#010x}",
+                     sys.ttbr0_el1, sys.ttbr1_el1, sys.tcr_el1, sys.sctlr_el1);
+        }
         None if saved_at_step.is_some() => println!(
             "[snapshot] Reached --save-at step {} (saved, exiting)",
             saved_at_step.unwrap()
         ),
         None => println!("[limit] Step budget ({max_steps}) reached without halt"),
+    }
+
+    // Mandatory RAM search per Panic Verification Rule
+    let ram = &orch.machine().ram;
+    let needles: &[(&str, &[u8])] = &[
+        ("Failed to allocate", b"Failed to allocate"),
+        ("Kernel panic - not syncing", b"Kernel panic - not syncing"),
+    ];
+    println!("[ram-search] Scanning 1 GiB guest RAM for panic strings...");
+    for (name, needle) in needles {
+        let mut count = 0;
+        let mut idx = 0;
+        while let Some(pos) = ram[idx..].windows(needle.len()).position(|w| w == *needle) {
+            let pa = RAM_BASE + (idx + pos) as u64;
+            let is_rodata = (0x4008_0000..0x4168_0000).contains(&pa);
+            println!("  Found '{}' at PA {pa:#010x} (rodata={is_rodata})", name);
+            if !is_rodata {
+                count += 1;
+            }
+            idx += pos + needle.len();
+        }
+        if count == 0 {
+            println!("  [CLEAN] No dynamic occurrences of '{}'", name);
+        } else {
+            println!("  [PANIC DETECTED] {} dynamic occurrences of '{}'", count, name);
+        }
     }
 
     if survey {

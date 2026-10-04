@@ -234,6 +234,14 @@ mod tests {
     }
 
     #[test]
+    fn dp_2source_div_are_dataproc() {
+        assert_eq!(ok_kind(0x9AD6_0B38), InsnKind::DataProc); // UDIV X24, X25, X22 (kernel halt step 40891471)
+        assert_eq!(ok_kind(0x9AD6_0F38), InsnKind::DataProc); // SDIV X24, X25, X22
+        assert_eq!(ok_kind(0x1AD6_0B38), InsnKind::DataProc); // UDIV W24, W25, W22
+        assert_eq!(ok_kind(0x1AD6_0F38), InsnKind::DataProc); // SDIV W24, W25, W22
+    }
+
+    #[test]
     fn decode_bitmasks_table_cases() {
         // 1. Kernel mask: AND X23, X23, #0x1fffff (N=1, imms=20, immr=0, sf=true)
         assert_eq!(decode_bitmasks(1, 20, 0, true), Some(0x0000_0000_001F_FFFF));
