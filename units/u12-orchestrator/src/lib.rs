@@ -4953,11 +4953,12 @@ mod tests {
         assert_eq!(o.machine().cpu[0].regs[0], 70);
         assert_eq!(o.machine().cpu[0].pc, pc + 4);
 
-        // 64-bit S=0 with Rd=31 writes SP (not XZR): ADD SP, SP, X1.
+        // 64-bit S=0 shifted-register with Rn=31/Rd=31 uses XZR (not SP).
         // 0x8B0103FF (Rn=11111, Rd=11111, S=0): architecturally
-        // ADD SP, SP, X1 (ARM ARM: Rn/Rd=31 name SP for S=0; Rm=31
-        // would be XZR). capstone renders the 31s as xzr -- display
-        // quirk, same as above.
+        // ADD XZR, XZR, X1 -- the shifted-register form NEVER uses SP
+        // (only the immediate form does). This was the memblock panic
+        // root cause: `sub x23, xzr, x23` was mis-executed as
+        // `sub x23, sp, x23`. SP must remain unchanged.
         let mut o = sp_test_orchestrator(pc, sp, 0x8B01_03FF);
         o.machine_mut().cpu[0].regs[1] = 0x200;
         let outcome = o.step_vcpu();
@@ -4965,7 +4966,10 @@ mod tests {
             matches!(outcome, StepOutcome::Continue),
             "expected Continue, got: {outcome:?}"
         );
-        assert_eq!(o.machine().cpu[0].sp, sp + 0x200);
+        assert_eq!(
+            o.machine().cpu[0].sp, sp,
+            "SP must be unchanged: Rd=31 is XZR (discard), not SP"
+        );
     }
 
     #[test]
