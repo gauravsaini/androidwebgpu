@@ -1218,6 +1218,19 @@ impl Orchestrator {
         let word = insn.word;
         let pc = insn.addr;
 
+        // 0. ERET (exception model, 2026-10-05): 0xD69F03E0.
+        // Exception return: PC = ELR_EL1, PSTATE = SPSR_EL1.
+        if word == 0xD69F_03E0 {
+            let elr = self.machine.cpu[0].sysregs.elr_el1;
+            let spsr = self.machine.cpu[0].sysregs.spsr_el1;
+            // Restore NZCV (bits 31:28) to pstate, DAIF (bits 9:6) to sysregs.daif.
+            self.machine.cpu[0].pstate =
+                (self.machine.cpu[0].pstate & !0xF000_0000) | (spsr & 0xF000_0000);
+            self.machine.cpu[0].sysregs.daif = spsr & 0x3C0;
+            self.machine.cpu[0].pc = elr;
+            return Some(Ok(()));
+        }
+
         // 1. B.cond: 0101010 0 imm19 0 cond (cond 0..15, AL/NV legal and always true)
         if (word >> 24) == 0x54 && (word & 0x10) == 0 {
             let cond = (word & 0xF) as u8;
@@ -3111,6 +3124,33 @@ impl Orchestrator {
         if let Some(reason) = self.halted.clone() {
             return StepOutcome::Halted(reason);
         }
+
+        // Exception model (2026-10-05): IRQ delivery check at step boundary.
+        // If an IRQ is pending, IRQs are unmasked (PSTATE.I == 0), and the
+        // kernel has programmed VBAR_EL1, take the exception instead of
+        // executing the next instruction.
+        if self.machine.irq.pending != 0 {
+            let daif = self.machine.cpu[0].sysregs.daif;
+            let vbar = self.machine.cpu[0].sysregs.vbar_el1;
+            // I bit is bit 7 of DAIF. VBAR must be programmed (non-zero).
+            if (daif & 0x80) == 0 && vbar != 0 {
+                let pc = self.machine.cpu[0].pc;
+                // Save PSTATE (NZCV from pstate, DAIF from sysregs.daif).
+                let pstate = self.machine.cpu[0].pstate;
+                self.machine.cpu[0].sysregs.spsr_el1 =
+                    (pstate & 0xF000_0000) | (daif & 0x3C0);
+                // Save return address.
+                self.machine.cpu[0].sysregs.elr_el1 = pc;
+                // Mask further IRQs.
+                self.machine.cpu[0].sysregs.daif |= 0x80;
+                // Jump to IRQ vector: VBAR_EL1 + 0x280 (EL1h IRQ).
+                self.machine.cpu[0].pc = vbar.wrapping_add(0x280);
+                self.steps += 1;
+                self.tick_clock(TIMER_CYCLES_PER_STEP);
+                return StepOutcome::Continue;
+            }
+        }
+
         let pc = self.machine.cpu[0].pc;
 
         // Fetch.
@@ -4545,6 +4585,69 @@ mod tests {
         o.machine.irq.pending = 1 << 5;
         let outcome = o.step_vcpu();
         assert_eq!(outcome, StepOutcome::Continue);
+        assert_eq!(o.machine.cpu[0].pc, 0x4000_0004);
+    }
+
+    #[test]
+    fn exception_irq_delivery_to_vbar() {
+        // Exception model (2026-10-05): pending IRQ with I=0 and VBAR set
+        // must vector to VBAR+0x280, saving PSTATE->SPSR_EL1 and PC->ELR_EL1.
+        let mut o = Orchestrator::new();
+        // NOP at 0x4000_0000, ERET at VBAR+0x280 handler.
+        o.load_image(&minimal_image(0x4000_0000, &[0xD503_201F])).unwrap();
+        // Program VBAR_EL1.
+        o.machine.cpu[0].sysregs.vbar_el1 = 0x5000_0000;
+        // Unmask IRQs (clear I bit).
+        o.machine.cpu[0].sysregs.daif = 0x0;
+        // Set a pending IRQ.
+        o.machine.irq.pending = 1 << 27;
+        let pc_before = o.machine.cpu[0].pc;
+        let outcome = o.step_vcpu();
+        assert_eq!(outcome, StepOutcome::Continue);
+        // Should have vectored to VBAR+0x280.
+        assert_eq!(o.machine.cpu[0].pc, 0x5000_0280);
+        // ELR_EL1 should hold the return address.
+        assert_eq!(o.machine.cpu[0].sysregs.elr_el1, pc_before);
+        // IRQs should now be masked (I bit set).
+        assert_eq!(o.machine.cpu[0].sysregs.daif & 0x80, 0x80);
+    }
+
+    #[test]
+    fn exception_eret_restores_state() {
+        // Exception model (2026-10-05): ERET restores PC from ELR_EL1
+        // and PSTATE from SPSR_EL1.
+        let mut o = Orchestrator::new();
+        // ERET at 0x4000_0000.
+        o.load_image(&minimal_image(0x4000_0000, &[0xD69F_03E0])).unwrap();
+        // Set up ELR_EL1 and SPSR_EL1 as if an exception was taken.
+        o.machine.cpu[0].sysregs.elr_el1 = 0x4000_1000;
+        // SPSR with NZCV=0b1010 (bits 31:28) and DAIF=0x3c0 (all masked).
+        o.machine.cpu[0].sysregs.spsr_el1 = 0xA000_0000 | 0x3C0;
+        o.machine.cpu[0].pstate = 0x0; // Clear NZCV.
+        o.machine.cpu[0].sysregs.daif = 0x0; // Clear DAIF.
+        let outcome = o.step_vcpu();
+        assert_eq!(outcome, StepOutcome::Continue);
+        // PC should be restored from ELR_EL1.
+        assert_eq!(o.machine.cpu[0].pc, 0x4000_1000);
+        // NZCV should be restored to pstate.
+        assert_eq!(o.machine.cpu[0].pstate & 0xF000_0000, 0xA000_0000);
+        // DAIF should be restored.
+        assert_eq!(o.machine.cpu[0].sysregs.daif, 0x3C0);
+    }
+
+    #[test]
+    fn exception_irq_masked_no_delivery() {
+        // Exception model (2026-10-05): pending IRQ with I=1 (masked)
+        // must NOT be delivered; normal execution continues.
+        let mut o = Orchestrator::new();
+        o.load_image(&minimal_image(0x4000_0000, &[0xD503_201F])).unwrap();
+        o.machine.cpu[0].sysregs.vbar_el1 = 0x5000_0000;
+        // Keep IRQs masked (I bit set, default 0x3c0).
+        assert_eq!(o.machine.cpu[0].sysregs.daif & 0x80, 0x80);
+        o.machine.irq.pending = 1 << 27;
+        let outcome = o.step_vcpu();
+        assert_eq!(outcome, StepOutcome::Continue);
+        // Should NOT have vectored; PC advances normally past NOP.
         assert_eq!(o.machine.cpu[0].pc, 0x4000_0004);
     }
 

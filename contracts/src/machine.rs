@@ -125,6 +125,10 @@ pub struct SysRegs {
     pub lorc_el1: u64,
     pub pmccntr_el0: u64,
     pub zcr_el1: u64,
+    // Exception model (2026-10-05): SPSR_EL1/ELR_EL1 for IRQ delivery.
+    // Written on exception entry, read by ERET. Stored u64, default 0.
+    pub spsr_el1: u64,
+    pub elr_el1: u64,
 
 }
 
@@ -227,6 +231,9 @@ impl Default for SysRegs {
             lorc_el1: 0,
             pmccntr_el0: 0,
             zcr_el1: 0,
+            // Exception model (2026-10-05): UNKNOWN at reset.
+            spsr_el1: 0,
+            elr_el1: 0,
 
         }
     }
@@ -395,6 +402,9 @@ impl SysRegs {
             SysReg::LorcEl1 => self.lorc_el1,
             SysReg::PmccntrEl0 => self.pmccntr_el0,
             SysReg::ZcrEl1 => self.zcr_el1,
+            // Exception model (2026-10-05).
+            SysReg::SpsrEl1 => self.spsr_el1,
+            SysReg::ElrEl1 => self.elr_el1,
 
         }
     }
@@ -554,6 +564,9 @@ impl SysRegs {
             SysReg::LorcEl1 => self.lorc_el1 = val,
             SysReg::PmccntrEl0 => self.pmccntr_el0 = val,
             SysReg::ZcrEl1 => self.zcr_el1 = val,
+            // Exception model (2026-10-05).
+            SysReg::SpsrEl1 => self.spsr_el1 = val,
+            SysReg::ElrEl1 => self.elr_el1 = val,
 
         }
     }
@@ -702,6 +715,9 @@ impl SysRegs {
             133 => Some(SysReg::LorcEl1),
             134 => Some(SysReg::PmccntrEl0),
             135 => Some(SysReg::ZcrEl1),
+            // Exception model (2026-10-05).
+            136 => Some(SysReg::SpsrEl1),
+            137 => Some(SysReg::ElrEl1),
 
             _ => None,
         }

@@ -274,6 +274,12 @@ fn lift_system(word: u32) -> Vec<IrOp> {
             // it programmed via MSR VBAR_EL1 (e.g. to verify relocation).
             // S3_0_C12_C0_0. MSR already stored; MRS was trapping (R_SYSTEM).
             (3, 0, 12, 0, 0) => SysReg::VbarEl1,
+            // SPSR_EL1 (exception model, 2026-10-05): S3_0_C4_C0_0.
+            // Written on exception entry, read by ERET.
+            (3, 0, 4, 0, 0) => SysReg::SpsrEl1,
+            // ELR_EL1 (exception model, 2026-10-05): S3_0_C4_C0_1.
+            // Written on exception entry with return PC, read by ERET.
+            (3, 0, 4, 0, 1) => SysReg::ElrEl1,
             // HCR_EL2 (P1, 2026-10-03): kernel reads back hypervisor config
             // (e.g. to check RW/VM bits). S3_4_C1_C1_0. MSR already stored;
             // MRS was trapping (R_SYSTEM).
@@ -692,6 +698,10 @@ fn lift_system(word: u32) -> Vec<IrOp> {
             (3, 4, 14, 0, 3) => SysReg::CntvoffEl2,
             // VBAR_EL1
             (3, 0, 12, 0, 0) => SysReg::VbarEl1,
+            // SPSR_EL1 (exception model, 2026-10-05): S3_0_C4_C0_0.
+            (3, 0, 4, 0, 0) => SysReg::SpsrEl1,
+            // ELR_EL1 (exception model, 2026-10-05): S3_0_C4_C0_1.
+            (3, 0, 4, 0, 1) => SysReg::ElrEl1,
             // SP_EL0
             (3, 0, 4, 1, 0) => SysReg::SpEl0,
             // CPACR_EL1 (GB-9): kernel enables FP/ASIMD via MSR CPACR_EL1
@@ -5033,11 +5043,11 @@ mod tests {
         );
         assert_eq!(
             lift(&insn(0x4000, 0xD538_4020, InsnKind::System)),
-            vec![IrOp::Mov { dst: 0, imm: 0 }] // MRS X0, ELR_EL1
+            vec![IrOp::ReadSys { dst: 0, reg: SysReg::ElrEl1 }] // MRS X0, ELR_EL1
         );
         assert_eq!(
             lift(&insn(0x4000, 0xD538_4000, InsnKind::System)),
-            vec![IrOp::Mov { dst: 0, imm: 0 }] // MRS X0, SPSR_EL1
+            vec![IrOp::ReadSys { dst: 0, reg: SysReg::SpsrEl1 }] // MRS X0, SPSR_EL1
         );
     }
 
