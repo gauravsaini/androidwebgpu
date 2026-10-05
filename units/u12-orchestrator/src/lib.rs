@@ -98,6 +98,20 @@ pub const RAM_SIZE: u64 = 0x4000_0000;
 /// put an L2 table at 0x7effe000; our allocator zeroed it at step ~96.2M,
 /// causing a FetchFault on kernel text). 1GB RAM needs ~16.8MB of vmemmap.
 pub const VMEMMAP_POOL_SIZE: u64 = 32 * 1024 * 1024;
+
+/// Kernel text VA range for icache invalidation (2026-10-05, icache-fix).
+/// Linux ARM64 "alternatives" patching rewrites kernel text at boot. Any
+/// guest store to this VA range must invalidate the WASM JIT code cache,
+/// otherwise we execute STALE instructions (QEMU executes PATCHED ones).
+/// The 3-PC spin loop at 0xffffff80085c95f8-0x85c96a0 was caused by this.
+pub const KERNEL_TEXT_VA_START: u64 = 0xffffff8008000000;
+pub const KERNEL_TEXT_VA_END: u64 = 0xffffff800a000000;
+
+/// Returns true if a guest VA is in the kernel text region (for icache invalidation).
+#[inline]
+pub fn is_kernel_text_va(va: u64) -> bool {
+    (KERNEL_TEXT_VA_START..KERNEL_TEXT_VA_END).contains(&va)
+}
 pub const VMEMMAP_POOL_BASE: u64 = RAM_BASE + RAM_SIZE;
 /// Console MMIO base (PLATFORM.md).
 pub const CONSOLE_BASE: u64 = 0x0900_0000;
@@ -2103,6 +2117,10 @@ impl Orchestrator {
                     } else {
                         self.machine.cpu[0].regs[rt]
                     };
+                    // ICACHE-FIX: invalidate on kernel text writes (alternatives patching).
+                    if is_kernel_text_va(va) {
+                        self.invalidate_code_cache();
+                    }
                     match size {
                         0 => self.machine.ram[off] = data as u8,
                         1 => self.machine.ram[off..off + 2]
@@ -2227,6 +2245,10 @@ impl Orchestrator {
                         };
                         let d0 = if rt == 31 { 0 } else { self.machine.cpu[0].regs[rt] };
                         let d1 = if rt2 == 31 { 0 } else { self.machine.cpu[0].regs[rt2] };
+                        // ICACHE-FIX: invalidate on kernel text writes (alternatives patching).
+                        if is_kernel_text_va(va) {
+                            self.invalidate_code_cache();
+                        }
                         if elem_bytes == 8 {
                             self.machine.ram[off0..off0 + 8].copy_from_slice(&d0.to_le_bytes());
                             self.machine.ram[off1..off1 + 8].copy_from_slice(&d1.to_le_bytes());
@@ -2303,6 +2325,10 @@ impl Orchestrator {
                 } else {
                     self.machine.cpu[0].regs[rt]
                 };
+                // ICACHE-FIX: invalidate on kernel text writes.
+                if is_kernel_text_va(va) {
+                    self.invalidate_code_cache();
+                }
                 match size {
                     0 => self.machine.ram[off] = val as u8,
                     1 => {
@@ -2552,6 +2578,10 @@ impl Orchestrator {
                     } else {
                         self.machine.cpu[0].regs[rt]
                     };
+                    // ICACHE-FIX: invalidate on kernel text writes.
+                    if is_kernel_text_va(va) {
+                        self.invalidate_code_cache();
+                    }
                     match size {
                         0 => self.machine.ram[off] = val as u8,
                         1 => self.machine.ram[off..off + 2]
@@ -2648,6 +2678,10 @@ impl Orchestrator {
                         } else {
                             self.machine.cpu[0].regs[rt]
                         };
+                        // ICACHE-FIX: invalidate on kernel text writes.
+                        if is_kernel_text_va(addr) {
+                            self.invalidate_code_cache();
+                        }
                         match size {
                             0 => self.machine.ram[off] = val as u8,
                             1 => self.machine.ram[off..off + 2]
@@ -2783,6 +2817,10 @@ impl Orchestrator {
                     } else {
                         self.machine.cpu[0].regs[rt2]
                     };
+                    // ICACHE-FIX: invalidate on kernel text writes.
+                    if is_kernel_text_va(va) {
+                        self.invalidate_code_cache();
+                    }
                     if is64 {
                         self.machine.ram[off..off + 8].copy_from_slice(&v1.to_le_bytes());
                         self.machine.ram[off2..off2 + 8].copy_from_slice(&v2.to_le_bytes());
@@ -2921,8 +2959,16 @@ impl Orchestrator {
                         self.machine.cpu[0].regs[rt]
                     };
                     if size == 0 {
+                        // ICACHE-FIX: invalidate on kernel text writes.
+                        if is_kernel_text_va(va) {
+                            self.invalidate_code_cache();
+                        }
                         self.machine.ram[off] = v as u8;
                     } else {
+                        // ICACHE-FIX: invalidate on kernel text writes.
+                        if is_kernel_text_va(va) {
+                            self.invalidate_code_cache();
+                        }
                         self.machine.ram[off..off + 2].copy_from_slice(&(v as u16).to_le_bytes());
                     }
                 } else {
@@ -3009,6 +3055,10 @@ impl Orchestrator {
                     } else {
                         self.machine.cpu[0].regs[rt]
                     };
+                    // ICACHE-FIX: invalidate on kernel text writes.
+                    if is_kernel_text_va(va) {
+                        self.invalidate_code_cache();
+                    }
                     if size == 0 {
                         self.machine.ram[off] = v as u8;
                     } else {
@@ -3204,6 +3254,7 @@ impl Orchestrator {
             console,
             gpu_port,
             sysregs,
+            code_write: false,
         };
         let (exit_addr, wfi_seen) = match self.executor.run_block(&wasm, regs, &mut host) {
             Ok(pair) => pair,
@@ -3213,6 +3264,13 @@ impl Orchestrator {
                 return StepOutcome::Halted(halt);
             }
         };
+        // ICACHE-FIX (2026-10-05): If the guest wrote to kernel text during
+        // this block (Linux ARM64 alternatives patching), invalidate the
+        // WASM JIT code cache so subsequent fetches get the PATCHED
+        // instructions, not stale cached ones.
+        if host.code_write {
+            self.executor.invalidate();
+        }
         // The ExitVm sentinel is exactly -1 (0xFFFF_FFFF_FFFF_FFFF). A `< 0`
         // test is wrong: kernel VAs live in the high half (0xFFFF_...), so
         // every legitimate kernel-VA indirect-branch target is negative as
@@ -3670,6 +3728,12 @@ struct WasmHost<'a> {
     console: &'a mut ConsoleState,
     gpu_port: &'a mut GpuPort,
     sysregs: &'a mut SysRegs,
+    /// Set when a guest store writes to kernel text VA range (icache-fix).
+    /// The orchestrator checks this after run_block and invalidates the
+    /// WASM JIT code cache if set. Linux ARM64 alternatives patching
+    /// rewrites kernel text at boot; without invalidation we execute stale
+    /// instructions.
+    pub code_write: bool,
 }
 
 impl WasmHost<'_> {
@@ -3771,6 +3835,14 @@ impl HostOps for WasmHost<'_> {
     fn mem_store(&mut self, addr: i64, size: i64, val: i64) -> Result<(), String> {
         // Data VA -> PA first (identity when the MMU is off); the
         // translated PA then dispatches to MMIO or RAM as before.
+        //
+        // ICACHE-FIX (2026-10-05): If the guest writes to kernel text VA
+        // range, set code_write flag. The orchestrator invalidates the WASM
+        // JIT code cache after the block completes. This handles Linux ARM64
+        // "alternatives" patching which rewrites kernel text at boot.
+        if is_kernel_text_va(addr as u64) {
+            self.code_write = true;
+        }
         let pa = self.translate_data(addr as u64, Access::Write)?;
         if (CONSOLE_BASE..CONSOLE_BASE + CONSOLE_SIZE).contains(&pa) {
             // Accept 1/2/4-byte accesses: a real PL011 driver writes DR
@@ -4787,6 +4859,7 @@ mod tests {
             console: &mut p.console,
             gpu_port: &mut p.gpu_port,
             sysregs: &mut p.sysregs,
+            code_write: false,
         };
         f(&mut host)
     }
