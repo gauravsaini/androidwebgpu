@@ -129,6 +129,9 @@ pub struct SysRegs {
     // Written on exception entry, read by ERET. Stored u64, default 0.
     pub spsr_el1: u64,
     pub elr_el1: u64,
+    // Exception model (2026-10-05): ICC_IAR1_EL1. Written by IRQ delivery
+    // code with the delivered INTID; read by handler. Stored u64.
+    pub icc_iar1_el1: u64,
 
 }
 
@@ -234,6 +237,7 @@ impl Default for SysRegs {
             // Exception model (2026-10-05): UNKNOWN at reset.
             spsr_el1: 0,
             elr_el1: 0,
+            icc_iar1_el1: 1023,
 
         }
     }
@@ -405,6 +409,7 @@ impl SysRegs {
             // Exception model (2026-10-05).
             SysReg::SpsrEl1 => self.spsr_el1,
             SysReg::ElrEl1 => self.elr_el1,
+            SysReg::IccIar1El1 => self.icc_iar1_el1,
 
         }
     }
@@ -567,6 +572,7 @@ impl SysRegs {
             // Exception model (2026-10-05).
             SysReg::SpsrEl1 => self.spsr_el1 = val,
             SysReg::ElrEl1 => self.elr_el1 = val,
+            SysReg::IccIar1El1 => self.icc_iar1_el1 = val,
 
         }
     }
@@ -718,6 +724,7 @@ impl SysRegs {
             // Exception model (2026-10-05).
             136 => Some(SysReg::SpsrEl1),
             137 => Some(SysReg::ElrEl1),
+            138 => Some(SysReg::IccIar1El1),
 
             _ => None,
         }

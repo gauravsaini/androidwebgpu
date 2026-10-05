@@ -384,6 +384,10 @@ pub enum SysReg {
     /// S3_0_C4_C0_1. Written on exception entry with the return PC,
     /// read by ERET to resume execution. Stored u64, default 0.
     ElrEl1 = 137,
+    /// Exception model (2026-10-05): Interrupt Controller Interrupt
+    /// Acknowledge Register 1, EL1. S3_0_C12_C12_0. Read by IRQ handler
+    /// to get the INTID; acknowledges (clears pending) the interrupt.
+    IccIar1El1 = 138,
 
 }
 

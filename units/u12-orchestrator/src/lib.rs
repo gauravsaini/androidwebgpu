@@ -3148,7 +3148,13 @@ impl Orchestrator {
                 // handler is expected to re-arm or EOI).
                 // For minimal model: clear all pending to avoid IRQ storm.
                 // The timer tick will re-set if counter >= compare.
+                // Find the lowest set INTID to report via IAR1.
+                let pending = self.machine.irq.pending;
+                let intid = pending.trailing_zeros();
                 self.machine.irq.pending = 0;
+                // Pre-fill IAR1_EL1 so the handler's MRS gets the INTID.
+                // 1023 = spurious if no bits were set (shouldn't happen).
+                self.machine.cpu[0].sysregs.icc_iar1_el1 = intid as u64;
                 // Jump to IRQ vector: VBAR_EL1 + 0x280 (EL1h IRQ).
                 self.machine.cpu[0].pc = vbar.wrapping_add(0x280);
                 self.steps += 1;

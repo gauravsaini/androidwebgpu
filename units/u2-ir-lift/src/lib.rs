@@ -280,6 +280,9 @@ fn lift_system(word: u32) -> Vec<IrOp> {
             // ELR_EL1 (exception model, 2026-10-05): S3_0_C4_C0_1.
             // Written on exception entry with return PC, read by ERET.
             (3, 0, 4, 0, 1) => SysReg::ElrEl1,
+            // ICC_IAR1_EL1 (exception model, 2026-10-05): S3_0_C12_C12_0.
+            // Read by IRQ handler to get INTID.
+            (3, 0, 12, 12, 0) => SysReg::IccIar1El1,
             // HCR_EL2 (P1, 2026-10-03): kernel reads back hypervisor config
             // (e.g. to check RW/VM bits). S3_4_C1_C1_0. MSR already stored;
             // MRS was trapping (R_SYSTEM).
@@ -702,6 +705,8 @@ fn lift_system(word: u32) -> Vec<IrOp> {
             (3, 0, 4, 0, 0) => SysReg::SpsrEl1,
             // ELR_EL1 (exception model, 2026-10-05): S3_0_C4_C0_1.
             (3, 0, 4, 0, 1) => SysReg::ElrEl1,
+            // ICC_IAR1_EL1 (exception model, 2026-10-05): S3_0_C12_C12_0.
+            (3, 0, 12, 12, 0) => SysReg::IccIar1El1,
             // SP_EL0
             (3, 0, 4, 1, 0) => SysReg::SpEl0,
             // CPACR_EL1 (GB-9): kernel enables FP/ASIMD via MSR CPACR_EL1

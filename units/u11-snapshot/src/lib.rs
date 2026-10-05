@@ -161,6 +161,7 @@ impl Writer {
         self.u64(c.sysregs.zcr_el1);
         self.u64(c.sysregs.spsr_el1);
         self.u64(c.sysregs.elr_el1);
+        self.u64(c.sysregs.icc_iar1_el1);
     }
 
     fn mmu(&mut self, m: &MmuState) {
@@ -355,6 +356,7 @@ impl<'a> Reader<'a> {
                 zcr_el1: self.u64()?,
                 spsr_el1: self.u64()?,
                 elr_el1: self.u64()?,
+                icc_iar1_el1: self.u64()?,
             },
         })
     }
@@ -542,6 +544,7 @@ mod tests {
                 zcr_el1: seed.wrapping_add(67),
                 spsr_el1: seed.wrapping_add(68),
                 elr_el1: seed.wrapping_add(69),
+                icc_iar1_el1: seed.wrapping_add(70),
             },
         }
     }
@@ -707,6 +710,7 @@ mod tests {
                     zcr_el1: u64::MAX,
                     spsr_el1: u64::MAX,
                     elr_el1: u64::MAX,
+                    icc_iar1_el1: u64::MAX,
                 },
             }],
             mmu: MmuState {
