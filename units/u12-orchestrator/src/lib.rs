@@ -3143,6 +3143,12 @@ impl Orchestrator {
                 self.machine.cpu[0].sysregs.elr_el1 = pc;
                 // Mask further IRQs.
                 self.machine.cpu[0].sysregs.daif |= 0x80;
+                // Clear the pending bit we're delivering (level-triggered
+                // sources will re-assert via tick() if still active; the
+                // handler is expected to re-arm or EOI).
+                // For minimal model: clear all pending to avoid IRQ storm.
+                // The timer tick will re-set if counter >= compare.
+                self.machine.irq.pending = 0;
                 // Jump to IRQ vector: VBAR_EL1 + 0x280 (EL1h IRQ).
                 self.machine.cpu[0].pc = vbar.wrapping_add(0x280);
                 self.steps += 1;
