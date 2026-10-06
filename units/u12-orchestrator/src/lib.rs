@@ -1218,6 +1218,38 @@ impl Orchestrator {
         let word = insn.word;
         let pc = insn.addr;
 
+        // DC ZVA, Xt (SYS #3, C7, C4, #1, Xt). DCZID_EL0 advertises a
+        // 64-byte block (BS=4), so align Xt down and zero through the normal
+        // guest write translation and RAM bounds path before U2's generic
+        // cache-operation no-op can consume this SYS instruction.
+        if word & 0xFFFF_FFE0 == 0xD50B_7420 {
+            let rt = (word & 0x1F) as usize;
+            let va = (if rt == 31 {
+                0
+            } else {
+                self.machine.cpu[0].regs[rt]
+            }) & !0x3F;
+            let pa = match self.translate_data_orch(va, Access::Write) {
+                Ok(pa) => pa,
+                Err(reason) => return Some(Err(reason)),
+            };
+            let off = match self.ram_offset(pa, 64) {
+                Ok(off) => off,
+                Err(fault) => {
+                    return Some(Err(HaltReason::WasmTrap {
+                        addr: va,
+                        message: format!("ram_fault: {fault:?}"),
+                    }))
+                }
+            };
+            self.machine.ram[off..off + 64].fill(0);
+            if is_kernel_text_va(va) {
+                self.invalidate_code_cache();
+            }
+            self.machine.cpu[0].pc = pc.wrapping_add(4);
+            return Some(Ok(()));
+        }
+
         // 1. B.cond: 0101010 0 imm19 0 cond (cond 0..15, AL/NV legal and always true)
         if (word >> 24) == 0x54 && (word & 0x10) == 0 {
             let cond = (word & 0xF) as u8;
@@ -4990,6 +5022,25 @@ mod tests {
             m.cpu[0].sp = sp;
         }
         o
+    }
+
+    #[test]
+    fn track44_dc_zva_zeros_exactly_one_aligned_64_byte_block() {
+        let pc = RAM_BASE + 0x2000;
+        let mut o = sp_test_orchestrator(pc, RAM_BASE + 0x3000, 0xD50B_7429); // DC ZVA, X9
+        let start = 0x0FC0;
+        o.machine_mut().ram[start..0x1080].fill(0xA5);
+        o.machine_mut().cpu[0].regs[9] = RAM_BASE + 0x103F; // unaligned; block starts at +0x1000
+
+        assert_eq!(o.step_vcpu(), StepOutcome::Continue);
+
+        assert!(o.machine().ram[0x1000..0x1040].iter().all(|&byte| byte == 0));
+        assert!(o.machine().ram[0x0FC0..0x1000]
+            .iter()
+            .all(|&byte| byte == 0xA5));
+        assert!(o.machine().ram[0x1040..0x1080]
+            .iter()
+            .all(|&byte| byte == 0xA5));
     }
 
     #[test]
