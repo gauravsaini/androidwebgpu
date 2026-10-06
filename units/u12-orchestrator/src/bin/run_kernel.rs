@@ -18,6 +18,7 @@ fn print_help() {
     println!("  --initrd <PATH>       Path to initramfs CPIO (optional; loaded at 0x4800_0000 per Track B layout)");
     println!("  --max-steps <N>       Step budget cap (default: 2000000)");
     println!("  --trace <FILE>        Enable per-step execution tracing to file");
+    println!("  --console-output <FILE>  Write all captured UART bytes to FILE");
     println!("  --survey              Enable survey mode (discovery only, never progress)");
     println!("  --save-snapshot <PATH>  Write emulator snapshot to PATH after the run");
     println!("  --save-at <STEP>     With --save-snapshot: save when step counter reaches STEP and exit");
@@ -32,11 +33,17 @@ fn print_help() {
 }
 
 fn main() {
+    println!(
+        "BINARY_GIT_REV={}",
+        option_env!("BINARY_GIT_REV").unwrap_or("unknown")
+    );
+
     let mut kernel_path = "/mnt/sdb1/aosp/Image".to_string();
     let mut dtb_path: Option<String> = None;
     let mut initrd_path: Option<String> = None;
     let mut max_steps: u64 = 2_000_000;
     let mut trace_file: Option<String> = None;
+    let mut console_output: Option<String> = None;
     let mut dump_around: Option<usize> = None;
     let mut dump_console = false;
     let mut survey = false;
@@ -83,6 +90,12 @@ fn main() {
                 i += 1;
                 if i < args.len() {
                     trace_file = Some(args[i].clone());
+                }
+            }
+            "--console-output" => {
+                i += 1;
+                if i < args.len() {
+                    console_output = Some(args[i].clone());
                 }
             }
             "--dump-around" => {
@@ -289,6 +302,11 @@ fn main() {
     }
 
     orch.flush_trace();
+
+    if let Some(path) = console_output {
+        fs::write(&path, &orch.console().tx_bytes)
+            .unwrap_or_else(|error| panic!("failed to write UART output to {path}: {error}"));
+    }
 
     // Snapshot save: u64 LE step-count header + u11-snapshot blob.
     if let Some(ref snap_path) = save_snapshot {
