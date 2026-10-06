@@ -527,13 +527,9 @@ fn lift_system(word: u32) -> Vec<IrOp> {
                         // S3_3_C0_C0_7 -- (op0,op1,crn,crm,op2) = (3,3,0,0,7)
                         // extracted by hand from the word and confirmed by
                         // capstone disassembly; not trusted from the first
-                        // reading). Value 0x10: DZP=1 (DC ZVA prohibited).
-                        // Our DC ops are honest NOPs, so advertising "allowed"
-                        // would corrupt memory the kernel expects zeroed;
-                        // DZP=1 takes the kernel's store-based fallback path,
-                        // which we implement. Same conservative shape as the
-                        // GB-14/GB-16 ID-register probes.
-                        (3, 3, 0, 0, 7) => 0x10,
+                        // reading). Match QEMU's Cortex-A53 value: DZP=0,
+                        // BS=4 (64-byte DC ZVA block).
+                        (3, 3, 0, 0, 7) => 0x4,
                         // MPIDR_EL1 (GB-26): measured halt at step 1248961
                         // (pc 0xffffff80095d2620, word 0xd53800a9 = MRS X9,
                         // S3_0_C0_C0_5 -- (op0,op1,crn,crm,op2) = (3,0,0,0,5)
@@ -4059,14 +4055,13 @@ mod tests {
     }
 
     #[test]
-    fn gb26_mrs_dczid_el0_lifts_to_mov_prohibited() {
+    fn gb26_mrs_dczid_el0_lifts_to_mov_64_byte_block() {
         // DCZID_EL0 = MRS X3, S3_3_C0_C0_7 (word 0xD53B00E3, measured
         // kernel halt at step 1210749, pc 0xffffff8008209d80).
-        // DZP (bit 4) is set: our DC ZVA is an honest NOP, so the
-        // kernel must take its store-based zeroing fallback.
+        // Match QEMU Cortex-A53: DZP is clear and BS=4 describes 64 bytes.
         assert_eq!(
             lift(&insn(0x4000, 0xD53B_00E3, InsnKind::System)),
-            vec![IrOp::Mov { dst: 3, imm: 0x10 }]
+            vec![IrOp::Mov { dst: 3, imm: 0x4 }]
         );
     }
 
