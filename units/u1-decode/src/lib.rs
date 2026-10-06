@@ -360,6 +360,11 @@ mod tests {
     }
 
     #[test]
+    fn mvn_w_self_is_dataproc() {
+        assert_eq!(ok_kind(0x2A28_03E8), InsnKind::DataProc); // MVN W8, W8 (ORN W8, WZR, W8)
+    }
+
+    #[test]
     fn eon_w_is_dataproc() {
         assert_eq!(ok_kind(0x4A22_2020), InsnKind::DataProc); // EON W0, W1, W2
     }
