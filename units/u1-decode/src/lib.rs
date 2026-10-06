@@ -208,6 +208,22 @@ mod tests {
     }
 
     #[test]
+    fn extr_and_ror_immediate_alias_are_dataproc() {
+        for word in [
+            0x93C0_C021, // EXTR X1, X1, X0, #0x30
+            0x138F_39CE, // EXTR W14, W14, W15, #0xE
+            0x93C8_0908, // ROR X8, X8, #2 (EXTR alias)
+            0x1394_0A86, // ROR W6, W20, #2 (EXTR alias)
+        ] {
+            assert_eq!(
+                ok_kind(word),
+                InsnKind::DataProc,
+                "0x{word:08X} should decode as data processing"
+            );
+        }
+    }
+
+    #[test]
     fn shifted_reg_logical_all_ops_are_dataproc() {
         assert_eq!(ok_kind(0x8A02_0020), InsnKind::DataProc); // AND X0, X1, X2
         assert_eq!(ok_kind(0x8A22_0020), InsnKind::DataProc); // BIC X0, X1, X2
