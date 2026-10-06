@@ -517,10 +517,10 @@ fn lift_system(word: u32) -> Vec<IrOp> {
                         // aarch64-linux-gnu-objdump; not trusted from the
                         // first reading). Value 0 = no memory-model features
                         // advertised, matching the sibling ID_AA64MMFR0_EL1 /
-                        // ID_AA64DFR0_EL1 / ID_AA64MMFR2_EL1 reads. The kernel
-                        // only feature-probes this register (MRS -> AND #0xF
-                        // -> CBZ), so 0 takes the honest conservative
-                        // fallback path.
+                        // ID_AA64MMFR2_EL1 reads. ID_AA64DFR0_EL1 returns
+                        // 0x10305106. The kernel only feature-probes this
+                        // register (MRS -> AND #0xF -> CBZ), so 0 takes the
+                        // honest conservative fallback path.
                         (3, 0, 0, 7, 1) => 0,
                         // DCZID_EL0 (GB-26): measured halt at step 1210749
                         // (pc 0xffffff8008209d80, word 0xd53b00e3 = MRS X3,
