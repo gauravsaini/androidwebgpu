@@ -13,9 +13,9 @@ pub fn decode(word: u32) -> Option<InsnKind> {
     if (word >> 24) == 0x54 {
         return Some(InsnKind::Branch);
     }
-    // CBZ / CBNZ: sf 011010 op imm19 Rt. bits[29:24] = 0b11010_op, so the op
-    // bit (bit 24) distinguishes them: 0b110100 = CBZ, 0b110101 = CBNZ.
-    if (word >> 24) & 0x3F == 0b110100 || (word >> 24) & 0x3F == 0b110101 {
+    // CBZ / CBNZ: sf 011010 op imm19 Rt. Bits[30:25] are fixed; bit 24
+    // distinguishes the two operations.
+    if (word >> 25) & 0x3F == 0b011010 {
         return Some(InsnKind::Branch);
     }
     // TBZ / TBNZ: b5 011011 op b40 imm14 Rt.

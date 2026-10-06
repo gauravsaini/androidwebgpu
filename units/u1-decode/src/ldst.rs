@@ -14,12 +14,13 @@ pub fn decode(word: u32) -> Option<InsnKind> {
     // with bits[29:25] == 0b10100 (which pins V=0, integer registers).
     if (word >> 25) & 0x1F == 0b10100 {
         let opc = (word >> 30) & 0x3;
+        let mode = (word >> 23) & 0x3;
         let is_load = (word >> 22) & 1 == 1;
         return match opc {
-            0b00 => Some(InsnKind::LoadStore),            // 32-bit STP / LDP
-            0b01 if is_load => Some(InsnKind::LoadStore), // LDPSW
-            0b10 => Some(InsnKind::LoadStore),            // 64-bit STP / LDP
-            _ => None,                                    // 01 with store or 11: unallocated
+            0b00 => Some(InsnKind::LoadStore), // 32-bit STP / LDP
+            0b01 if is_load && mode != 0 => Some(InsnKind::LoadStore), // LDPSW
+            0b10 => Some(InsnKind::LoadStore), // 64-bit STP / LDP
+            _ => None, // LDPSW store/non-temporal and opc=11 are unallocated
         };
     }
 
@@ -66,13 +67,27 @@ pub fn decode(word: u32) -> Option<InsnKind> {
         };
     }
 
-    // 5. Load/store register (register offset) and atomic memory operations:
+    // 5. Load/store register (register offset), plus LDRAA/LDRAB:
     // size 111 V 00 opc 1 Rm option S 10 Rn Rt
     if (word >> 24) & 0x3F == 0b111000 && (word >> 21) & 1 == 1 {
         let sub_op = (word >> 10) & 0x3;
+        let size_bits = (word >> 30) & 0x3;
+        let atomic_op = (word >> 12) & 0xF;
+        if sub_op == 0 {
+            if atomic_op <= 0b1000 {
+                return Some(InsnKind::LoadStore); // LSE atomics: LDADD..LDUMIN and SWP
+            }
+            if atomic_op == 0b1100 && (word >> 21) & 0x7 == 0b101 && (word >> 16) & 0x1F == 0x1F {
+                return Some(InsnKind::LoadStore); // LDAPR(B/H/W/X)
+            }
+            return None;
+        }
         if sub_op == 0b10 {
-            let size_bits = (word >> 30) & 0x3;
             let opc = (word >> 22) & 0x3;
+            let option = (word >> 13) & 0x7;
+            if !matches!(option, 0b010 | 0b011 | 0b110 | 0b111) {
+                return None;
+            }
             return match (size_bits, opc) {
                 (_, 0b00 | 0b01) => Some(InsnKind::LoadStore),
                 (_, 0b10) => Some(InsnKind::LoadStore), // LDRSB Xt, LDRSH Xt, LDRSW, PRFM
@@ -80,14 +95,35 @@ pub fn decode(word: u32) -> Option<InsnKind> {
                 _ => None,
             };
         }
-        // Atomic memory operations (LSE: SWP, LDADD, STADD, etc.) and LDAPR:
-        return Some(InsnKind::LoadStore);
+        // LDRAA/LDRA(B) use this group with size=11 and pre/post-index
+        // sub-ops. Other non-register-offset sub-ops are unallocated here.
+        if size_bits == 0b11 && matches!(sub_op, 0b01 | 0b11) {
+            return Some(InsnKind::LoadStore);
+        }
+        return None;
     }
 
     // 6. Load/store exclusive, load-acquire / store-release, and compare-and-swap:
     // bits[29:24] == 0b001000 (V=0)
     if (word >> 24) & 0x3F == 0b001000 {
-        return Some(InsnKind::LoadStore);
+        let size = (word >> 30) & 0x3;
+        let op = (word >> 21) & 0x7;
+        let rs = (word >> 16) & 0x1F;
+        let rt2 = (word >> 10) & 0x1F;
+        let valid = match op {
+            0 => rt2 == 0x1F,                   // STXR / STLXR
+            1 => size >= 0b10,                  // STXP / STLXP
+            2 => rs == 0x1F && rt2 == 0x1F,     // LDXR / LDAXR
+            3 => size >= 0b10,                  // LDXP / LDAXP
+            4 | 6 => rs == 0x1F && rt2 == 0x1F, // STLR / LDAR family
+            5 | 7 => rt2 == 0x1F,               // CAS family
+            _ => false,
+        };
+        return if valid {
+            Some(InsnKind::LoadStore)
+        } else {
+            None
+        };
     }
 
     None

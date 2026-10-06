@@ -433,6 +433,27 @@ mod tests {
     }
 
     #[test]
+    fn consensus_invalid_reserved_encodings_are_illegal() {
+        // Static raw-Image examples only; these words are not execution evidence.
+        for word in [
+            0x7461_642E, // CBZ-shaped word with invalid fixed bits
+            0x5B9C_CA4F, // reserved 3-source multiply opcode
+            0x6B63_6F6C, // reserved add/sub extended-register fixed bits
+            0x6B14_FB25, // 32-bit add/sub shift amount >= 32
+            0x9A8D_0AE3, // conditional-select reserved op2
+            0x9A82_2820, // CSEL-shaped word with reserved op2=10
+            0x9A5E_21DE, // 2-source-shaped word with reserved fixed fields
+            0xDB0D_7D4A, // 3-source multiply with reserved op54=10
+            0x684C_AB0F, // LDPSW in reserved non-temporal mode
+            0x7865_742E, // register-offset load/store reserved sub-op
+            0x08FF_EF00, // exclusive/CAS encoding with reserved Rt2
+            0xD41E_B64A, // HVC with nonzero reserved bits[4:2]
+        ] {
+            assert_illegal(word);
+        }
+    }
+
+    #[test]
     fn and_reg_is_dataproc() {
         assert_eq!(ok_kind(0x8A02_0020), InsnKind::DataProc); // AND: Track GB-4
     }
@@ -782,7 +803,7 @@ mod tests {
         // would match the data-processing (2 source) check, so the
         // conditional-select class must be pinned first. The class
         // check is identical either way here; this guards the order.
-        assert_eq!(ok_kind(0x9A82_2820), InsnKind::DataProc);
+        assert_eq!(ok_kind(0x9A82_2020), InsnKind::DataProc);
     }
 
     #[test]
@@ -809,8 +830,8 @@ mod tests {
         assert_eq!(ok_kind(0x1B0D_7D4A), InsnKind::DataProc);
         // MSUB X10, X10, X13, XZR (o0 = 1): recognized, trapped in U2
         assert_eq!(ok_kind(0x9B0D_FD4A), InsnKind::DataProc);
-        // SMADDL X10, W10, W13, XZR (op54 = 01): recognized, trapped in U2
-        assert_eq!(ok_kind(0xDB0D_7D4A), InsnKind::DataProc);
+        // SMADDL X10, W10, W13, XZR (SMULL alias): recognized, trapped in U2
+        assert_eq!(ok_kind(0x9B2D_7D4A), InsnKind::DataProc);
     }
 
     #[test]

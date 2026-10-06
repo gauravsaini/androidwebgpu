@@ -12,16 +12,24 @@ pub fn decode(word: u32) -> Option<InsnKind> {
             if bit21 == 0 {
                 // Shifted register form.
                 let shift = (word >> 22) & 0x3;
-                if shift < 0b11 {
+                let sf = (word >> 31) & 1;
+                let imm6 = (word >> 10) & 0x3F;
+                if shift < 0b11 && (sf == 1 || (imm6 & 0x20) == 0) {
                     Some(InsnKind::DataProc) // ADD / SUB / ADDS / SUBS (including CMP / CMN reg)
                 } else {
-                    None // reserved shift: out of scope
+                    None // ROR and 32-bit shifts >= 32 are unallocated here
                 }
             } else {
-                // Extended register form (bit 21 = 1).
-                // Implemented in U2 for unsigned extends (UXTB/UXTH/UXTW/UXTX);
-                // signed extends trap honestly.
-                Some(InsnKind::DataProc)
+                // Extended register form requires bits[23:22] == 00 and
+                // imm3 in 0..=4. Implemented unsigned extends lift; signed
+                // extends trap honestly.
+                let option_prefix = (word >> 22) & 0x3;
+                let imm3 = (word >> 10) & 0x7;
+                if option_prefix == 0 && imm3 <= 4 {
+                    Some(InsnKind::DataProc)
+                } else {
+                    None
+                }
             }
         }
         // Logical (shifted register): sf opc 01010 shift N Rm imm6 Rn Rd.
@@ -70,7 +78,7 @@ pub fn decode(word: u32) -> Option<InsnKind> {
             // must precede the 2-source check below: a CSEL with
             // cond == 0b0010 would otherwise alias the 2-source class
             // (opcode2 >> 2 == cond).
-            if b30_21 == 0xD4 || b30_21 == 0x2D4 {
+            if (b30_21 == 0xD4 || b30_21 == 0x2D4) && (word >> 10) & 0x3 < 2 && (word & 0x10) == 0 {
                 return Some(InsnKind::DataProc);
             }
             let bit30 = (word >> 30) & 1;
@@ -119,12 +127,20 @@ pub fn decode(word: u32) -> Option<InsnKind> {
             None
         }
         // Data-processing (3 source): sf op54 11011 op31 Rm o0 Ra Rn Rd (GB-8).
-        // The defined multiply class (op54 == 00/01/10) is recognized and the
-        // lifter sorts it out: 64-bit MADD lifts, 32-bit MADD / MSUB /
-        // long-multiply trap with explicit reasons. op54 == 11 is unallocated.
+        // MADD/MSUB and long-multiply encodings use op54 == 00. op31 selects
+        // the operation; long-multiply and high-multiply forms require sf=1.
         0b11011 => {
             let op54 = (word >> 29) & 0x3;
-            if op54 < 0b11 {
+            let op31 = (word >> 21) & 0x7;
+            let sf = (word >> 31) & 1;
+            let o0 = (word >> 15) & 1;
+            let valid_op = match op31 {
+                0b000 => true,                       // MADD / MSUB
+                0b001 | 0b101 => sf == 1,            // SMADDL/SMSUBL, UMADDL/UMSUBL
+                0b010 | 0b110 => sf == 1 && o0 == 0, // SMULH / UMULH
+                _ => false,
+            };
+            if op54 == 0 && valid_op {
                 Some(InsnKind::DataProc) // MADD / MSUB / SMADDL / UMADDL / ...
             } else {
                 None
