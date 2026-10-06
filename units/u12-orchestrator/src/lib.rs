@@ -2484,7 +2484,7 @@ impl Orchestrator {
                 if lsb >= 64 {
                     return None; // UNDEFINED: lsb >= datasize.
                 }
-                let concat = ((m_val as u128) << 64) | (n_val as u128);
+                let concat = ((n_val as u128) << 64) | (m_val as u128);
                 ((concat >> lsb) & 0xFFFF_FFFF_FFFF_FFFF) as u64
             } else {
                 if lsb >= 32 {
@@ -2492,7 +2492,7 @@ impl Orchestrator {
                 }
                 let n32 = n_val as u32 as u64;
                 let m32 = m_val as u32 as u64;
-                let concat = (m32 << 32) | n32;
+                let concat = (n32 << 32) | m32;
                 ((concat >> lsb) & 0xFFFF_FFFF) as u64
             };
             if rd != 31 {
@@ -6385,6 +6385,20 @@ mod tests {
         );
         // Rotate right by 2: 0x8000...0001 -> 0x6000...0000.
         assert_eq!(o.machine().cpu[0].regs[8], 0x6000_0000_0000_0000);
+        assert_eq!(o.machine().cpu[0].pc, pc + 4);
+    }
+
+    #[test]
+    fn track49_extr_64bit_concatenates_rn_then_rm() {
+        // EXTR X4, X0, X1, #17 (0x93C14404) from the Track 40 QEMU vector.
+        let pc = RAM_BASE + 0xA8;
+        let sp = RAM_BASE + 0x2000;
+        let mut o = sp_test_orchestrator(pc, sp, 0x93C1_4404);
+        o.machine_mut().cpu[0].regs[0] = 0xFEDC_BA98_7654_3210;
+        o.machine_mut().cpu[0].regs[1] = 0x0123_4567_89AB_4321;
+
+        assert_eq!(o.step_vcpu(), StepOutcome::Continue);
+        assert_eq!(o.machine().cpu[0].regs[4], 0x1908_0091_A2B3_C4D5);
         assert_eq!(o.machine().cpu[0].pc, pc + 4);
     }
 
