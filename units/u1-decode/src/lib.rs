@@ -725,6 +725,21 @@ mod tests {
     }
 
     #[test]
+    fn bc_cond_all_16_conditions_are_branch() {
+        // BC.cond uses the same branch format with bit 4 set.
+        for cond in 0..=15u32 {
+            let word = 0x5400_0010 | cond;
+            assert_eq!(
+                ok_kind(word),
+                InsnKind::Branch,
+                "BC.cond with cond {cond} must decode as Branch"
+            );
+        }
+        // Exact audit witness: BC.GT at image PC 0x40c55128.
+        assert_eq!(ok_kind(0x54D8_D61C), InsnKind::Branch);
+    }
+
+    #[test]
     fn b_cond_backward_target_is_branch() {
         // Real guest word: 0x54ffff61 (B.NE -5)
         assert_eq!(ok_kind(0x54FF_FF61), InsnKind::Branch);
