@@ -129,6 +129,9 @@ def main() -> int:
     print(f"INIT_MARKER={'haan' if b'/init' in uart else 'nahi'}")
     print(f"HALT_PC={halt_pc}")
     print(f"HALT_FN={halt_fn}")
+    for line in boot.stdout.splitlines():
+        if line.startswith("SYSREG_MRS "):
+            print(line)
     return 0
 
 
