@@ -495,14 +495,15 @@ fn lift_system(word: u32) -> Vec<IrOp> {
                         // ID_AA64MMFR2_EL1 (GB-16: was mislabeled ID_AA64MMFR1_EL1;
                         // (3,0,0,7,1) is the real ID_AA64MMFR1_EL1 -- see below)
                         (3, 0, 0, 7, 2) => 0,
-                        // ID_AA64DFR0_EL1
-                        (3, 0, 0, 5, 0) => 0,
+                        // ID_AA64DFR0_EL1: match the Cortex-A53 value used by
+                        // QEMU so Linux's PMU feature probe follows the same path.
+                        (3, 0, 0, 5, 0) => 0x1030_5106,
                         // ID_AA64MMFR0_EL1 (GB-14): measured halt at step 7474
                         // (pc 0x40c03694, word 0xd5380705 = MRS X5,
                         // S3_0_C0_C7_0 -- fields extracted by hand from the
                         // word, not trusted from the first reading). Value 0
                         // = no memory-model features advertised, matching the
-                        // sibling ID_AA64MMFR1_EL1 / ID_AA64DFR0_EL1 reads.
+                        // sibling ID_AA64MMFR1_EL1 read.
                         // The kernel only feature-probes this register
                         // (MRS -> bitfield extract -> compare -> conditional
                         // branch, same shape as the ID_AA64DFR0_EL1 probe at
@@ -4562,8 +4563,7 @@ mod tests {
         // Measured halt word: MRS X5, ID_AA64MMFR0_EL1 (step 7474,
         // pc 0x40c03694). Field extraction: (op0,op1,crn,crm,op2) =
         // (3,0,0,7,0) = S3_0_C0_C7_0 = ID_AA64MMFR0_EL1; Rt = X5.
-        // Value 0 = no memory-model features advertised (matches the
-        // sibling ID_AA64MMFR1_EL1 / ID_AA64DFR0_EL1 reads).
+        // Value 0 = no memory-model features advertised.
         assert_eq!(
             lift(&insn(0x40c0_3694, 0xD538_0705, InsnKind::System)),
             vec![IrOp::Mov { dst: 5, imm: 0 }]
@@ -4576,11 +4576,22 @@ mod tests {
         // pc 0x40c036ac). Field extraction: (op0,op1,crn,crm,op2) =
         // (3,0,0,7,1) = S3_0_C0_C7_1 = ID_AA64MMFR1_EL1; Rt = X9.
         // objdump-confirmed on the box. Value 0 = no memory-model
-        // features advertised (matches the sibling ID_AA64MMFR0_EL1 /
-        // ID_AA64DFR0_EL1 reads).
+        // features advertised (matches the sibling ID_AA64MMFR0_EL1 read).
         assert_eq!(
             lift(&insn(0x40c0_36ac, 0xD538_0729, InsnKind::System)),
             vec![IrOp::Mov { dst: 9, imm: 0 }]
+        );
+    }
+
+    #[test]
+    fn gb31_id_aa64dfr0_el1_mrs_lifts_to_cortex_a53_value() {
+        // ID_AA64DFR0_EL1 = MRS X0, S3_0_C0_C5_0 (word 0xD5380500).
+        assert_eq!(
+            lift(&insn(0x40c8_3660, 0xD538_0500, InsnKind::System)),
+            vec![IrOp::Mov {
+                dst: 0,
+                imm: 0x1030_5106
+            }]
         );
     }
 
