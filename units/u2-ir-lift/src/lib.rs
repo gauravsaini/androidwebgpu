@@ -4552,7 +4552,8 @@ mod tests {
         // pc 0x40c036ac). Field extraction: (op0,op1,crn,crm,op2) =
         // (3,0,0,7,1) = S3_0_C0_C7_1 = ID_AA64MMFR1_EL1; Rt = X9.
         // objdump-confirmed on the box. Value 0 = no memory-model
-        // features advertised (matches the sibling ID_AA64MMFR0_EL1 read).
+        // features advertised (matches the sibling ID_AA64MMFR2_EL1 read;
+        // ID_AA64MMFR0_EL1 returns 0x1122).
         assert_eq!(
             lift(&insn(0x40c0_36ac, 0xD538_0729, InsnKind::System)),
             vec![IrOp::Mov { dst: 9, imm: 0 }]
