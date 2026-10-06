@@ -68,7 +68,7 @@ use std::collections::VecDeque;
 use pathn_contracts::adapters::{BlobStore, InputSource};
 use pathn_contracts::cpu::{
     Access, BlockExit, DecodeResult, InsnKind, Instruction, IrBlock, IrOp, IrqState, MemFault,
-    MmuState,
+    MmuState, SysReg,
 };
 use pathn_contracts::device::{DevEvent, DevOut, GpuCmd, GpuDevState, TransportState};
 use pathn_contracts::execution::{BlockExecutor, HostOps};
@@ -3112,6 +3112,7 @@ impl Orchestrator {
                 return StepOutcome::Halted(reason);
             }
         };
+        let feature_mrs = id_feature_mrs(word);
 
         #[cfg(not(target_arch = "wasm32"))]
         {
@@ -3203,10 +3204,24 @@ impl Orchestrator {
 
         // Lift (U2).
         let ops = u2_ir_lift::lift(&insn);
+        let feature_mrs_source = feature_mrs.and_then(|read| {
+            ops.iter().find_map(|op| match op {
+                IrOp::Mov { dst, imm } if *dst == read.rt => {
+                    Some(FeatureMRSValue::Constant(*imm as u64))
+                }
+                IrOp::ReadSys { dst, reg } if *dst == read.rt => {
+                    Some(FeatureMRSValue::SysReg(*reg))
+                }
+                _ => None,
+            })
+        });
 
         // Trap check BEFORE compiling: U2's trap strings are the exact,
         // honest reason. Compiling a trap would only produce `unreachable`.
         if let Some(reason) = first_trap_reason(&ops) {
+            if let Some(read) = feature_mrs {
+                log_id_feature_mrs(read, pc, None, true);
+            }
             if self.survey_mode {
                 return self.survey_skip_instruction(pc, word, Some(kind));
             }
@@ -3250,11 +3265,23 @@ impl Orchestrator {
         let (exit_addr, wfi_seen) = match self.executor.run_block(&wasm, regs, &mut host) {
             Ok(pair) => pair,
             Err(message) => {
+                if let Some(read) = feature_mrs {
+                    log_id_feature_mrs(read, pc, None, true);
+                }
                 let halt = HaltReason::WasmTrap { addr: pc, message };
                 self.halted = Some(halt.clone());
                 return StepOutcome::Halted(halt);
             }
         };
+        if let Some(read) = feature_mrs {
+            let value = match feature_mrs_source {
+                Some(FeatureMRSValue::Constant(value)) => Some(value),
+                Some(FeatureMRSValue::SysReg(reg)) => Some(host.sysregs.load(reg)),
+                None if read.rt < 31 => Some(regs[read.rt as usize]),
+                None => None,
+            };
+            log_id_feature_mrs(read, pc, value, false);
+        }
         // ICACHE-FIX (2026-10-05): If the guest wrote to kernel text during
         // this block (Linux ARM64 alternatives patching), invalidate the
         // WASM JIT code cache so subsequent fetches get the PATCHED
@@ -3661,6 +3688,56 @@ pub enum RestoreError {
 // ---------------------------------------------------------------------------
 
 /// First `IrOp::Trap` reason in a lifted op sequence, if any.
+#[derive(Clone, Copy)]
+struct FeatureMRS {
+    op0: u32,
+    op1: u32,
+    crn: u32,
+    crm: u32,
+    op2: u32,
+    rt: u8,
+}
+
+#[derive(Clone, Copy)]
+enum FeatureMRSValue {
+    Constant(u64),
+    SysReg(SysReg),
+}
+
+fn id_feature_mrs(word: u32) -> Option<FeatureMRS> {
+    if (word >> 22) & 0x3FF != 0x354 || (word >> 21) & 1 != 1 {
+        return None;
+    }
+
+    let read = FeatureMRS {
+        op0: (word >> 19) & 0x3,
+        op1: (word >> 16) & 0x7,
+        crn: (word >> 12) & 0xF,
+        crm: (word >> 8) & 0xF,
+        op2: (word >> 5) & 0x7,
+        rt: (word & 0x1F) as u8,
+    };
+
+    // The architectural ID, MIDR/MPIDR, CTR/DCZID, and cache-geometry
+    // feature registers all occupy CRn=0. CurrentEL and ordinary system
+    // state registers use other CRn values and are intentionally excluded.
+    (read.op0 == 3 && read.crn == 0).then_some(read)
+}
+
+fn log_id_feature_mrs(read: FeatureMRS, pc: u64, value: Option<u64>, trapped: bool) {
+    let selector = format!(
+        "({},{},{},{},{})",
+        read.op0, read.op1, read.crn, read.crm, read.op2
+    );
+    if trapped {
+        println!("SYSREG_MRS selector={selector} pc=0x{pc:016x} value=trap");
+    } else if let Some(value) = value {
+        println!("SYSREG_MRS selector={selector} pc=0x{pc:016x} value=0x{value:016x}");
+    } else {
+        println!("SYSREG_MRS selector={selector} pc=0x{pc:016x} value=unavailable");
+    }
+}
+
 fn first_trap_reason(ops: &[IrOp]) -> Option<&'static str> {
     for op in ops {
         if let IrOp::Trap { reason } = op {
