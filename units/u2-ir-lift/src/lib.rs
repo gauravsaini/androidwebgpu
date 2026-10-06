@@ -469,8 +469,10 @@ fn lift_system(word: u32) -> Vec<IrOp> {
                     let val: u64 = match (op0, op1, crn, crm, op2) {
                         // CurrentEL: bits[3:2] = 0b01 (EL1) -> 0x4
                         (3, 0, 4, 2, 2) => 0x4,
-                        // CTR_EL0: Cache Type Register (64B D-cache, 64B I-cache)
-                        (3, 3, 0, 0, 1) => 0x8444_c004,
+                        // CTR_EL0: QEMU Cortex-A53. IminLine=4 and
+                        // DminLine=4 each describe 64-byte lines; L1Ip=2
+                        // selects PIPT. DminLine agrees with DCZID_EL0.BS=4.
+                        (3, 3, 0, 0, 1) => 0x8444_8004,
                         // NZCV: stays in GB-2 live pstate flag path
                         (3, 3, 4, 2, 0) => 0,
                         // ID_AA64PFR0_EL1: EL0/EL1 AArch64 supported
@@ -523,28 +525,16 @@ fn lift_system(word: u32) -> Vec<IrOp> {
                         // reading). Match QEMU's Cortex-A53 value: DZP=0,
                         // BS=4 (64-byte DC ZVA block).
                         (3, 3, 0, 0, 7) => 0x4,
-                        // MPIDR_EL1 (GB-26): measured halt at step 1248961
-                        // (pc 0xffffff80095d2620, word 0xd53800a9 = MRS X9,
-                        // S3_0_C0_C0_5 -- (op0,op1,crn,crm,op2) = (3,0,0,0,5)
-                        // confirmed by capstone disassembly). Value
-                        // 0x40000000: U (bit 30) = 1, uniprocessor system;
-                        // Aff0 = 0, this is the single vCPU 0. The kernel
-                        // derives its CPU number from MPIDR; this is the
-                        // architecturally correct single-CPU value.
-                        // (Fixed: old 0x80000000 set RES0 bit 31, not U.)
-                        (3, 0, 0, 0, 5) => 0x4000_0000,
-                        // MIDR_EL1 (GB-26): measured halt at step 1248969
-                        // (pc 0xffffff80095d2640, word 0xd5380002 = MRS X2,
-                        // S3_0_C0_C0_0 -- (op0,op1,crn,crm,op2) = (3,0,0,0,0)
-                        // confirmed by capstone disassembly). Value 0: no
-                        // implementer/part advertised, so the kernel's errata
-                        // framework matches nothing and takes the generic
-                        // path -- same conservative shape as the GB-14/GB-16
-                        // ID-register probes. (Deliberately NOT a real
-                        // Cortex-A57 MIDR: claiming real silicon would invite
-                        // errata workarounds that poke IMPLEMENTATION DEFINED
-                        // registers we don't model.)
-                        (3, 0, 0, 0, 0) => 0,
+                        // MPIDR_EL1: match QEMU virt's Cortex-A53 value.
+                        // Aff0=0 identifies vCPU 0 and matches the DTB
+                        // cpu@0 `reg = <0>` entry; bit 31 is RES1.
+                        (3, 0, 0, 0, 5) => 0x8000_0000,
+                        // MIDR_EL1: match QEMU's Cortex-A53. This enables
+                        // Linux's A53 errata handling (including 843419,
+                        // 845719, and 819472), alternatives patching, and
+                        // additional sysreg reads. Any new halt along those
+                        // paths is expected and is exposed by the MRS logger.
+                        (3, 0, 0, 0, 0) => 0x410f_d034,
                         // (P3, 2026-10-03) TPIDR_EL2 graduated to persistent
                         // (ReadSys); the constant-0 arm moved to the
                         // persistent match above.
@@ -4007,12 +3997,12 @@ mod tests {
             lift(&insn(0x4000, 0xD538_4240, InsnKind::System)),
             vec![IrOp::Mov { dst: 0, imm: 4 }]
         );
-        // CTR_EL0 -> 0x8444_c004
+        // CTR_EL0 -> QEMU Cortex-A53: PIPT (L1Ip=2), 64-byte lines.
         assert_eq!(
             lift(&insn(0x4000, 0xD53B_0023, InsnKind::System)),
             vec![IrOp::Mov {
                 dst: 3,
-                imm: 0x8444_C004
+                imm: 0x8444_8004
             }]
         );
         // DAIF -> persistent (GB-sysreg2)
@@ -4059,28 +4049,31 @@ mod tests {
     }
 
     #[test]
-    fn gb26_mrs_mpidr_el1_lifts_to_mov_uniprocessor() {
+    fn gb26_mrs_mpidr_el1_lifts_to_mov_qemu_virt_vcpu_zero() {
         // MPIDR_EL1 = MRS X9, S3_0_C0_C0_5 (word 0xD53800A9, measured
         // kernel halt at step 1248961, pc 0xffffff80095d2620).
-        // U (bit 30) = 1: uniprocessor; Aff0 = 0: this is vCPU 0.
+        // QEMU virt returns RES1 bit 31 with Aff0=0, matching cpu@0 reg=<0>.
         assert_eq!(
             lift(&insn(0x4000, 0xD538_00A9, InsnKind::System)),
             vec![IrOp::Mov {
                 dst: 9,
-                imm: 0x4000_0000
+                imm: 0x8000_0000
             }]
         );
     }
 
     #[test]
-    fn gb26_mrs_midr_el1_lifts_to_mov_zero() {
+    fn gb26_mrs_midr_el1_lifts_to_mov_cortex_a53() {
         // MIDR_EL1 = MRS X2, S3_0_C0_C0_0 (word 0xD5380002, measured
         // kernel halt at step 1248969, pc 0xffffff80095d2640).
-        // 0 = no implementer/part advertised; the kernel's errata
-        // framework matches nothing and takes the generic path.
+        // QEMU Cortex-A53 MIDR. This enables Linux's A53 errata list and
+        // alternatives, including additional sysreg reads.
         assert_eq!(
             lift(&insn(0x4000, 0xD538_0002, InsnKind::System)),
-            vec![IrOp::Mov { dst: 2, imm: 0 }]
+            vec![IrOp::Mov {
+                dst: 2,
+                imm: 0x410f_d034
+            }]
         );
     }
 
