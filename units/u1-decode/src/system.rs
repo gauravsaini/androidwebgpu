@@ -12,7 +12,7 @@ pub fn decode(word: u32) -> Option<InsnKind> {
         let opc = (word >> 21) & 0x7;
         let ll = word & 0x3;
         match opc {
-            0b000 => match ll {
+            0b000 if (word & 0x1C) == 0 => match ll {
                 0b01 => return Some(InsnKind::Svc),
                 0b10 | 0b11 => return Some(InsnKind::System), // HVC, SMC
                 _ => {}

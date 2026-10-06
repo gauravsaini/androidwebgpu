@@ -8,14 +8,14 @@ pub fn decode(word: u32) -> Option<InsnKind> {
         0b000101 | 0b100101 => return Some(InsnKind::Branch),
         _ => {}
     }
-    // B.cond: 0101010 0 imm19 0 cond.
-    // bits[31:24] == 0x54, bit 4 == 0, cond is bits[3:0] (0..15, all legal; AL/NV always true).
-    if (word >> 24) == 0x54 && (word & 0x10) == 0 {
+    // B.cond / BC.cond: 01010100 0 imm19 op cond. Bit 4 selects the
+    // instruction; all 16 condition values are defined for both forms.
+    if (word >> 24) == 0x54 {
         return Some(InsnKind::Branch);
     }
-    // CBZ / CBNZ: sf 011010 op imm19 Rt. bits[29:24] = 0b11010_op, so the op
-    // bit (bit 24) distinguishes them: 0b110100 = CBZ, 0b110101 = CBNZ.
-    if (word >> 24) & 0x3F == 0b110100 || (word >> 24) & 0x3F == 0b110101 {
+    // CBZ / CBNZ: sf 011010 op imm19 Rt. Bits[30:25] are fixed; bit 24
+    // distinguishes the two operations.
+    if (word >> 25) & 0x3F == 0b011010 {
         return Some(InsnKind::Branch);
     }
     // TBZ / TBNZ: b5 011011 op b40 imm14 Rt.

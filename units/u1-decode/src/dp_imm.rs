@@ -3,6 +3,20 @@
 use pathn_contracts::cpu::{decode_bitmasks, InsnKind};
 
 pub fn decode(word: u32) -> Option<InsnKind> {
+    // Extract register: sf 00 100111 N Rm lsb Rn Rd.
+    // N must match sf and lsb must fit the selected 32/64-bit width. ROR
+    // (immediate) is the Rm == Rn alias of this encoding.
+    let sf = (word >> 31) & 1;
+    let n = (word >> 22) & 1;
+    let lsb = (word >> 10) & 0x3F;
+    if (word >> 23) & 0x3F == 0b100111
+        && (word >> 29) & 0x3 == 0
+        && n == sf
+        && (sf == 1 || (lsb & 0x20) == 0)
+    {
+        return Some(InsnKind::DataProc);
+    }
+
     match (word >> 22) & 0x7F {
         // Add/subtract (immediate): sf op S 10001 sh imm12 Rn Rd, sh ∈ {00,01}.
         0b1000100 | 0b1000101 => {

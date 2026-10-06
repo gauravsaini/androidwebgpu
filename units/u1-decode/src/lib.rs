@@ -208,6 +208,22 @@ mod tests {
     }
 
     #[test]
+    fn extr_and_ror_immediate_alias_are_dataproc() {
+        for word in [
+            0x93C0_C021, // EXTR X1, X1, X0, #0x30
+            0x138F_39CE, // EXTR W14, W14, W15, #0xE
+            0x93C8_0908, // ROR X8, X8, #2 (EXTR alias)
+            0x1394_0A86, // ROR W6, W20, #2 (EXTR alias)
+        ] {
+            assert_eq!(
+                ok_kind(word),
+                InsnKind::DataProc,
+                "0x{word:08X} should decode as data processing"
+            );
+        }
+    }
+
+    #[test]
     fn shifted_reg_logical_all_ops_are_dataproc() {
         assert_eq!(ok_kind(0x8A02_0020), InsnKind::DataProc); // AND X0, X1, X2
         assert_eq!(ok_kind(0x8A22_0020), InsnKind::DataProc); // BIC X0, X1, X2
@@ -221,6 +237,28 @@ mod tests {
                                                               // 32-bit forms
         assert_eq!(ok_kind(0x0A02_0020), InsnKind::DataProc); // AND W0, W1, W2
         assert_eq!(ok_kind(0x0A22_0020), InsnKind::DataProc); // BIC W0, W1, W2
+    }
+
+    #[test]
+    fn shifted_reg_logical_ror_forms_are_dataproc() {
+        for word in [
+            0x0AC0_4129, // AND W9, W9, W0, ROR #16
+            0x8AF8_8AE9, // BIC X9, X23, X24, ROR #34
+            0x2AC9_4108, // ORR W8, W8, W9, ROR #16
+            0xAAEA_68DC, // ORN X28, X6, X10, ROR #26
+            0x4AD8_3B06, // EOR W6, W24, W24, ROR #14
+            0xCAFC_E31D, // EON X29, X24, X28, ROR #56
+            0xEADC_674F, // ANDS X15, X26, X28, ROR #25
+            0xEAFF_FFF6, // BICS X22, XZR, XZR, ROR #63
+            0xAAEE_3FE6, // MVN X6, X14, ROR #15 (ORN alias)
+            0xEACC_B09F, // TST X4, X12, ROR #44 (ANDS alias)
+        ] {
+            assert_eq!(
+                ok_kind(word),
+                InsnKind::DataProc,
+                "0x{word:08X} should decode as data processing"
+            );
+        }
     }
 
     #[test]
@@ -239,6 +277,51 @@ mod tests {
         assert_eq!(ok_kind(0x9AD6_0F38), InsnKind::DataProc); // SDIV X24, X25, X22
         assert_eq!(ok_kind(0x1AD6_0B38), InsnKind::DataProc); // UDIV W24, W25, W22
         assert_eq!(ok_kind(0x1AD6_0F38), InsnKind::DataProc); // SDIV W24, W25, W22
+    }
+
+    #[test]
+    fn dp_1source_reverse_and_conditional_compare_are_dataproc() {
+        for word in [
+            0x5AC0_0288, // RBIT W8, W20
+            0xDAC0_0CC6, // REV X6, X6
+            0x5AC0_0748, // REV16 W8, W26
+            0x5AC0_161E, // CLS W30, W16
+            0xFA45_A068, // CCMP X3, X5, #8, GE
+            0x3A52_4B60, // CCMN W27, #0x12, #0, MI
+        ] {
+            assert_eq!(
+                ok_kind(word),
+                InsnKind::DataProc,
+                "0x{word:08X} should decode as data processing"
+            );
+        }
+    }
+
+    #[test]
+    fn dp_2source_crc_mte_pauth_and_flag_forms_are_dataproc() {
+        for word in [
+            0x1ADC_4080, // CRC32B W0, W4, W28
+            0x1AD1_46FA, // CRC32H W26, W23, W17
+            0x1AC6_4830, // CRC32W W16, W1, W6
+            0x9AC1_4EBC, // CRC32X W28, W21, X1
+            0x1AC9_53D2, // CRC32CB W18, W30, W9
+            0x1AC9_5734, // CRC32CH W20, W25, W9
+            0x1AC9_59DC, // CRC32CW W28, W14, W9
+            0x9ADD_5E1F, // CRC32CX WZR, W16, X29
+            0x9ACF_330F, // PACGA X15, X24, X15
+            0x9ACC_0375, // SUBP X21, X27, X12
+            0xBAC3_02C2, // SUBPS X2, X22, X3
+            0x9AD3_16D0, // GMI X16, X22, X19
+            0x9AC4_101F, // IRG SP, X0, X4
+            0xBA1F_86C9, // RMIF X22, #0x3F, #9
+            0xDAC1_12FB, // AUTIA X27, X23
+        ] {
+            assert_eq!(
+                ok_kind(word),
+                InsnKind::DataProc,
+                "0x{word:08X} should decode as data processing"
+            );
+        }
     }
 
     #[test]
@@ -350,6 +433,27 @@ mod tests {
     }
 
     #[test]
+    fn consensus_invalid_reserved_encodings_are_illegal() {
+        // Static raw-Image examples only; these words are not execution evidence.
+        for word in [
+            0x7461_642E, // CBZ-shaped word with invalid fixed bits
+            0x5B9C_CA4F, // reserved 3-source multiply opcode
+            0x6B63_6F6C, // reserved add/sub extended-register fixed bits
+            0x6B14_FB25, // 32-bit add/sub shift amount >= 32
+            0x9A8D_0AE3, // conditional-select reserved op2
+            0x9A82_2820, // CSEL-shaped word with reserved op2=10
+            0x9A5E_21DE, // 2-source-shaped word with reserved fixed fields
+            0xDB0D_7D4A, // 3-source multiply with reserved op54=10
+            0x684C_AB0F, // LDPSW in reserved non-temporal mode
+            0x7865_742E, // register-offset load/store reserved sub-op
+            0x08FF_EF00, // exclusive/CAS encoding with reserved Rt2
+            0xD41E_B64A, // HVC with nonzero reserved bits[4:2]
+        ] {
+            assert_illegal(word);
+        }
+    }
+
+    #[test]
     fn and_reg_is_dataproc() {
         assert_eq!(ok_kind(0x8A02_0020), InsnKind::DataProc); // AND: Track GB-4
     }
@@ -357,6 +461,11 @@ mod tests {
     #[test]
     fn orn_w_is_dataproc() {
         assert_eq!(ok_kind(0x2A22_2020), InsnKind::DataProc); // ORN W0, W1, W2
+    }
+
+    #[test]
+    fn mvn_w_self_is_dataproc() {
+        assert_eq!(ok_kind(0x2A28_03E8), InsnKind::DataProc); // MVN W8, W8 (ORN W8, WZR, W8)
     }
 
     #[test]
@@ -637,6 +746,21 @@ mod tests {
     }
 
     #[test]
+    fn bc_cond_all_16_conditions_are_branch() {
+        // BC.cond uses the same branch format with bit 4 set.
+        for cond in 0..=15u32 {
+            let word = 0x5400_0010 | cond;
+            assert_eq!(
+                ok_kind(word),
+                InsnKind::Branch,
+                "BC.cond with cond {cond} must decode as Branch"
+            );
+        }
+        // Exact audit witness: BC.GT at image PC 0x40c55128.
+        assert_eq!(ok_kind(0x54D8_D61C), InsnKind::Branch);
+    }
+
+    #[test]
     fn b_cond_backward_target_is_branch() {
         // Real guest word: 0x54ffff61 (B.NE -5)
         assert_eq!(ok_kind(0x54FF_FF61), InsnKind::Branch);
@@ -679,7 +803,7 @@ mod tests {
         // would match the data-processing (2 source) check, so the
         // conditional-select class must be pinned first. The class
         // check is identical either way here; this guards the order.
-        assert_eq!(ok_kind(0x9A82_2820), InsnKind::DataProc);
+        assert_eq!(ok_kind(0x9A82_2020), InsnKind::DataProc);
     }
 
     #[test]
@@ -706,8 +830,8 @@ mod tests {
         assert_eq!(ok_kind(0x1B0D_7D4A), InsnKind::DataProc);
         // MSUB X10, X10, X13, XZR (o0 = 1): recognized, trapped in U2
         assert_eq!(ok_kind(0x9B0D_FD4A), InsnKind::DataProc);
-        // SMADDL X10, W10, W13, XZR (op54 = 01): recognized, trapped in U2
-        assert_eq!(ok_kind(0xDB0D_7D4A), InsnKind::DataProc);
+        // SMADDL X10, W10, W13, XZR (SMULL alias): recognized, trapped in U2
+        assert_eq!(ok_kind(0x9B2D_7D4A), InsnKind::DataProc);
     }
 
     #[test]
