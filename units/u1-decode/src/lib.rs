@@ -240,6 +240,28 @@ mod tests {
     }
 
     #[test]
+    fn shifted_reg_logical_ror_forms_are_dataproc() {
+        for word in [
+            0x0AC0_4129, // AND W9, W9, W0, ROR #16
+            0x8AF8_8AE9, // BIC X9, X23, X24, ROR #34
+            0x2AC9_4108, // ORR W8, W8, W9, ROR #16
+            0xAAEA_68DC, // ORN X28, X6, X10, ROR #26
+            0x4AD8_3B06, // EOR W6, W24, W24, ROR #14
+            0xCAFC_E31D, // EON X29, X24, X28, ROR #56
+            0xEADC_674F, // ANDS X15, X26, X28, ROR #25
+            0xEAFF_FFF6, // BICS X22, XZR, XZR, ROR #63
+            0xAAEE_3FE6, // MVN X6, X14, ROR #15 (ORN alias)
+            0xEACC_B09F, // TST X4, X12, ROR #44 (ANDS alias)
+        ] {
+            assert_eq!(
+                ok_kind(word),
+                InsnKind::DataProc,
+                "0x{word:08X} should decode as data processing"
+            );
+        }
+    }
+
+    #[test]
     fn dp_2source_shifts_are_dataproc() {
         assert_eq!(ok_kind(0x9AC3_2042), InsnKind::DataProc); // LSL X2, X2, X3 (kernel 0x40004d70)
         assert_eq!(ok_kind(0x9AC3_2442), InsnKind::DataProc); // LSR X2, X2, X3
