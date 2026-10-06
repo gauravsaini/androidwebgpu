@@ -1673,7 +1673,7 @@ impl Orchestrator {
             let rn = ((word >> 5) & 0x1F) as usize;
             let rd = (word & 0x1F) as usize;
 
-            if shift < 3 {
+            if shift < 3 && (sf == 1 || (imm6 & 0x20) == 0) {
                 // Logical operations complement the shifted second operand
                 // first when N=1 (BIC, ORN, EON, or BICS).
                 let rn_val = if rn == 31 {
@@ -5022,6 +5022,29 @@ mod tests {
             m.cpu[0].sp = sp;
         }
         o
+    }
+
+    #[test]
+    fn track44_w_form_orr_shift_32_is_rejected_before_fast_path_execution() {
+        let pc = RAM_BASE + 0x1000;
+        let word = 0x2A02_8020; // ORR W0, W1, W2 with unallocated imm6=0x20
+        assert_eq!(
+            u1_decode::decode(word),
+            DecodeResult::Illegal { word },
+            "the decoder must reject W-form shift amounts >= 32"
+        );
+
+        let mut o = sp_test_orchestrator(pc, RAM_BASE + 0x2000, word);
+        o.machine_mut().cpu[0].regs[0] = 0xDEAD_BEEF;
+        o.machine_mut().cpu[0].regs[1] = 1;
+        o.machine_mut().cpu[0].regs[2] = 2;
+
+        assert_eq!(
+            o.step_vcpu(),
+            StepOutcome::Halted(HaltReason::IllegalInstruction { addr: pc, word })
+        );
+        assert_eq!(o.machine().cpu[0].regs[0], 0xDEAD_BEEF);
+        assert_eq!(o.machine().cpu[0].pc, pc);
     }
 
     #[test]
