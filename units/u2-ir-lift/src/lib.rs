@@ -2027,7 +2027,7 @@ fn lift_load_store(insn: &Instruction) -> Vec<IrOp> {
                 ops.push(IrOp::AndShift {
                     dst: SCRATCH,
                     a: rm,
-                    b: SCRATCH,
+                    b: rm,
                     shift: 0,
                     amount: 0,
                     invert: false,
@@ -2369,6 +2369,64 @@ mod tests {
 
     fn insn(addr: u64, word: u32, kind: InsnKind) -> Instruction {
         Instruction { addr, word, kind }
+    }
+
+    fn register_value(regs: &[u64; 33], reg: u8) -> u64 {
+        if reg == 31 {
+            0
+        } else {
+            regs[reg as usize]
+        }
+    }
+
+    fn shifted_value(value: u64, shift: u8, amount: u8) -> u64 {
+        match shift {
+            0 => value.wrapping_shl(amount as u32),
+            1 => value >> amount,
+            2 => ((value as i64) >> amount) as u64,
+            3 => value.rotate_right(amount as u32),
+            _ => panic!("unsupported shift type {shift}"),
+        }
+    }
+
+    fn lifted_load_address(ops: &[IrOp], mut regs: [u64; 33]) -> u64 {
+        for op in ops {
+            match *op {
+                IrOp::AndShift {
+                    dst,
+                    a,
+                    b,
+                    shift,
+                    amount,
+                    invert,
+                    is_32,
+                } => {
+                    let mask = if is_32 { u32::MAX as u64 } else { u64::MAX };
+                    let lhs = register_value(&regs, a) & mask;
+                    let rhs = shifted_value(register_value(&regs, b) & mask, shift, amount) & mask;
+                    regs[dst as usize] = lhs & (if invert { !rhs } else { rhs }) & mask;
+                }
+                IrOp::OrrShift {
+                    dst,
+                    a,
+                    b,
+                    shift,
+                    amount,
+                } => {
+                    regs[dst as usize] = register_value(&regs, a)
+                        | shifted_value(register_value(&regs, b), shift, amount);
+                }
+                IrOp::Add { dst, a, b } => {
+                    regs[dst as usize] =
+                        register_value(&regs, a).wrapping_add(register_value(&regs, b));
+                }
+                IrOp::LoadDyn { base, off, .. } => {
+                    return register_value(&regs, base).wrapping_add(off);
+                }
+                _ => panic!("unexpected op in register-offset load: {op:?}"),
+            }
+        }
+        panic!("register-offset load did not produce a dynamic load")
     }
 
     // ---------- goldens: exact op sequences ----------
@@ -3116,7 +3174,7 @@ mod tests {
     }
 
     #[test]
-    fn ldr_reg_offset_sxtw() {
+    fn ldr_reg_offset_uxtw_sxtw_lsl_addresses() {
         // ldr x9, [x10, w9, sxtw #3] — word 0xF869D949, the kernel halt at
         // 0xffffff8008217d80 (boot step 50,953). SXTW sign-extends W9.
         let ops = lift(&insn(0x4000, 0xF869_D949, InsnKind::LoadStore));
@@ -3165,6 +3223,52 @@ mod tests {
                     size: 8
                 },
             ]
+        );
+
+        // LDR X0, [X9, W8, UXTW #3] at kmalloc_slab+0x60. The zeroed scratch
+        // value ensures the UXTW AND must read Rm from both operands.
+        let base = 0xffff_ff80_0941_1a90;
+        let mut regs = [0; 33];
+        regs[8] = 7;
+        regs[9] = base;
+        assert_eq!(
+            lifted_load_address(
+                &lift(&insn(
+                    0xffff_ff80_0833_3870,
+                    0xF868_5920,
+                    InsnKind::LoadStore,
+                )),
+                regs,
+            ),
+            0xffff_ff80_0941_1ac8,
+        );
+
+        // SXTW still sign-extends W8 before applying #3.
+        regs[8] = 0xffff_fff9;
+        assert_eq!(
+            lifted_load_address(
+                &lift(&insn(
+                    0xffff_ff80_0833_3870,
+                    0xF868_D920,
+                    InsnKind::LoadStore,
+                )),
+                regs,
+            ),
+            base - 56,
+        );
+
+        // LSL still uses the full 64-bit X8 offset.
+        regs[8] = 7;
+        assert_eq!(
+            lifted_load_address(
+                &lift(&insn(
+                    0xffff_ff80_0833_3870,
+                    0xF868_7920,
+                    InsnKind::LoadStore,
+                )),
+                regs,
+            ),
+            0xffff_ff80_0941_1ac8,
         );
     }
 
