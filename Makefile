@@ -18,7 +18,10 @@ test:
 	cargo test --workspace
 	node tests/e2e/runner.mjs
 
-.PHONY: web build verify test serve clean vendor-check
+.PHONY: web build verify test serve clean vendor-check boot-report
+
+boot-report:
+	@uv run python scripts/boot_report.py
 
 serve:
 	node scripts/serve.mjs --serve
