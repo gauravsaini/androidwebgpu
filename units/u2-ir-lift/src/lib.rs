@@ -475,21 +475,15 @@ fn lift_system(word: u32) -> Vec<IrOp> {
                         (3, 3, 0, 0, 1) => 0x8444_8004,
                         // NZCV: stays in GB-2 live pstate flag path
                         (3, 3, 4, 2, 0) => 0,
-                        // ID_AA64PFR0_EL1: EL0/EL1 AArch64 supported
-                        (3, 0, 0, 4, 0) => 0x11,
+                        // ID_AA64PFR0_EL1: QEMU Cortex-A53 feature value.
+                        (3, 0, 0, 4, 0) => 0x22,
                         // ID_AA64PFR1_EL1 (2026-10-02): minimal Cortex-A53 =
                         // 0. No BT, no MTE, no RAS. If we advertised these,
                         // the alternatives framework would patch in code
                         // using unimplemented features.
                         (3, 0, 0, 4, 1) => 0,
-                        // ID_AA64ISAR0_EL1 (2026-10-02): minimal Cortex-A53 =
-                        // 0. No LSE atomics, no AES/SHA crypto, no CRC32.
-                        // The kernel's alternatives framework reads this to
-                        // decide patches; 0 takes the generic fallback path
-                        // instead of patching in optimized sequences we can't
-                        // execute (e.g. the 0x7a44_1060 / 0x7a43_2040
-                        // unallocated-encoding patches).
-                        (3, 0, 0, 6, 0) => 0,
+                        // ID_AA64ISAR0_EL1: match QEMU Cortex-A53.
+                        (3, 0, 0, 6, 0) => 0x1_1120,
                         // ID_AA64ISAR1_EL1 (2026-10-02): minimal Cortex-A53 =
                         // 0. No DPB, no APA, no JSCVT, no FCMA. Same
                         // alternatives-framework reasoning as ISAR0.
@@ -545,31 +539,27 @@ fn lift_system(word: u32) -> Vec<IrOp> {
                         // kernel's entry.S el1_irq path reads this and must
                         // not see a phantom interrupt number.
                         (3, 0, 12, 12, 0) => 0x3ff,
-                        // P3 slice B — ID register family completion. All 0:
-                        // the conservative "no optional features advertised"
-                        // answer (GB-14/GB-16 pattern). The kernel's cpuinfo
-                        // block and alternatives framework take the generic
-                        // fallback path instead of patching in optimized
-                        // sequences we can't execute.
-                        // AArch32 ID registers (read by /proc/cpuinfo block).
-                        (3, 0, 0, 1, 0) => 0, // ID_PFR0_EL1
-                        (3, 0, 0, 1, 1) => 0, // ID_PFR1_EL1
-                        (3, 0, 0, 1, 2) => 0, // ID_DFR0_EL1
-                        (3, 0, 0, 1, 4) => 0, // ID_MMFR0_EL1
-                        (3, 0, 0, 1, 5) => 0, // ID_MMFR1_EL1
-                        (3, 0, 0, 1, 6) => 0, // ID_MMFR2_EL1
-                        (3, 0, 0, 1, 7) => 0, // ID_MMFR3_EL1
-                        (3, 0, 0, 2, 0) => 0, // ID_ISAR0_EL1
-                        (3, 0, 0, 2, 1) => 0, // ID_ISAR1_EL1
-                        (3, 0, 0, 2, 2) => 0, // ID_ISAR2_EL1
-                        (3, 0, 0, 2, 3) => 0, // ID_ISAR3_EL1
-                        (3, 0, 0, 2, 4) => 0, // ID_ISAR4_EL1
-                        (3, 0, 0, 2, 5) => 0, // ID_ISAR5_EL1
-                        (3, 0, 0, 3, 0) => 0, // MVFR0_EL1
-                        (3, 0, 0, 3, 1) => 0, // MVFR1_EL1
-                        (3, 0, 0, 3, 2) => 0, // MVFR2_EL1
-                        // AArch64: revision + debug + SVE.
-                        (3, 0, 0, 0, 6) => 0, // REVIDR_EL1
+                        // Remaining ID registers: use the T39 QEMU
+                        // Cortex-A53 values, including the AArch32 ID block
+                        // read by /proc/cpuinfo.
+                        (3, 0, 0, 1, 0) => 0x131, // ID_PFR0_EL1
+                        (3, 0, 0, 1, 1) => 0x1_0001, // ID_PFR1_EL1
+                        (3, 0, 0, 1, 2) => 0x300_0006, // ID_DFR0_EL1
+                        (3, 0, 0, 1, 4) => 0x1010_1105, // ID_MMFR0_EL1
+                        (3, 0, 0, 1, 5) => 0x4000_0000, // ID_MMFR1_EL1
+                        (3, 0, 0, 1, 6) => 0x0126_0000, // ID_MMFR2_EL1
+                        (3, 0, 0, 1, 7) => 0x0210_2211, // ID_MMFR3_EL1
+                        (3, 0, 0, 2, 0) => 0x0210_1110, // ID_ISAR0_EL1
+                        (3, 0, 0, 2, 1) => 0x1311_2111, // ID_ISAR1_EL1
+                        (3, 0, 0, 2, 2) => 0x2123_2042, // ID_ISAR2_EL1
+                        (3, 0, 0, 2, 3) => 0x0111_2131, // ID_ISAR3_EL1
+                        (3, 0, 0, 2, 4) => 0x0001_1142, // ID_ISAR4_EL1
+                        (3, 0, 0, 2, 5) => 0x0001_1121, // ID_ISAR5_EL1
+                        (3, 0, 0, 3, 0) => 0x1011_0222, // MVFR0_EL1
+                        (3, 0, 0, 3, 1) => 0x1211_1111, // MVFR1_EL1
+                        (3, 0, 0, 3, 2) => 0x43, // MVFR2_EL1
+                        // AArch64 revision + debug + SVE.
+                        (3, 0, 0, 0, 6) => 0x100, // REVIDR_EL1
                         (3, 0, 0, 5, 1) => 0, // ID_AA64DFR1_EL1
                         (3, 0, 0, 4, 4) => 0, // ID_AA64ZFR0_EL1: 0 = no SVE
                         // P3 slice C — PMU: 0 = no common events advertised /
@@ -601,13 +591,12 @@ fn lift_system(word: u32) -> Vec<IrOp> {
                         (2, 6, 13, 5, 1) => 0, // s2_6_c13_c5_1: errata-probe cluster; IMPDEF.
                         // (P3, 2026-10-03) PMUSERENR_EL0 graduated to
                         // persistent (ReadSys); constant-0 arm moved above.
-                        // CLIDR_EL1: Cache Level ID Register (10 static hits)
-                        // L1 Harvard (separate I/D), L2 unified, LoUIS=1, LoUU=1, LoC=2
-                        (3, 1, 0, 0, 1) => 0x0920_0023,
+                        // CLIDR_EL1: QEMU Cortex-A53 cache hierarchy.
+                        (3, 1, 0, 0, 1) => 0x0a20_0023,
                         // CSSELR_EL1: Cache Size Selection Register
                         (3, 2, 0, 0, 0) => 0,
-                        // CCSIDR_EL1: Cache Size ID Register (64B line, 4-way, 64KB)
-                        (3, 1, 0, 0, 0) => 0x701F_E00A,
+                        // CCSIDR_EL1 (CSSELR=0): QEMU Cortex-A53 L1D geometry.
+                        (3, 1, 0, 0, 0) => 0x700F_E01A,
                         // CNTFRQ_EL0: Counter-timer frequency (62.5MHz)
                         (3, 3, 14, 0, 0) => 0x03B9_ACA0,
                         // (fam/devices) CNTVCT_EL0/CNTPCT_EL0 now persistent
@@ -4203,7 +4192,7 @@ mod tests {
         let w = sys_word(3, 0, 0, 4, 0, 2, true);
         assert_eq!(
             lift(&insn(0x4000, w, InsnKind::System)),
-            vec![IrOp::Mov { dst: 2, imm: 0x11 }]
+            vec![IrOp::Mov { dst: 2, imm: 0x22 }]
         );
     }
 
@@ -4216,33 +4205,36 @@ mod tests {
             lift(&insn(0x4000, w, InsnKind::System)),
             vec![IrOp::Mov { dst: 22, imm: 0x3ff }]
         );
-        // P3 slice B: ID family completion -> all 0 (conservative).
+        // T39 QEMU Cortex-A53 ID-register values.
         let id_cases = [
-            (3, 0, 0, 1, 0), // ID_PFR0_EL1
-            (3, 0, 0, 1, 1), // ID_PFR1_EL1
-            (3, 0, 0, 1, 2), // ID_DFR0_EL1
-            (3, 0, 0, 1, 4), // ID_MMFR0_EL1
-            (3, 0, 0, 1, 5), // ID_MMFR1_EL1
-            (3, 0, 0, 1, 6), // ID_MMFR2_EL1
-            (3, 0, 0, 1, 7), // ID_MMFR3_EL1
-            (3, 0, 0, 2, 0), // ID_ISAR0_EL1
-            (3, 0, 0, 2, 1), // ID_ISAR1_EL1
-            (3, 0, 0, 2, 2), // ID_ISAR2_EL1
-            (3, 0, 0, 2, 3), // ID_ISAR3_EL1
-            (3, 0, 0, 2, 4), // ID_ISAR4_EL1
-            (3, 0, 0, 2, 5), // ID_ISAR5_EL1
-            (3, 0, 0, 3, 0), // MVFR0_EL1
-            (3, 0, 0, 3, 1), // MVFR1_EL1
-            (3, 0, 0, 3, 2), // MVFR2_EL1
-            (3, 0, 0, 0, 6), // REVIDR_EL1
-            (3, 0, 0, 5, 1), // ID_AA64DFR1_EL1
-            (3, 0, 0, 4, 4), // ID_AA64ZFR0_EL1
+            ((3, 0, 0, 1, 0), 0x131), // ID_PFR0_EL1
+            ((3, 0, 0, 1, 1), 0x1_0001), // ID_PFR1_EL1
+            ((3, 0, 0, 1, 2), 0x300_0006), // ID_DFR0_EL1
+            ((3, 0, 0, 1, 4), 0x1010_1105), // ID_MMFR0_EL1
+            ((3, 0, 0, 1, 5), 0x4000_0000), // ID_MMFR1_EL1
+            ((3, 0, 0, 1, 6), 0x0126_0000), // ID_MMFR2_EL1
+            ((3, 0, 0, 1, 7), 0x0210_2211), // ID_MMFR3_EL1
+            ((3, 0, 0, 2, 0), 0x0210_1110), // ID_ISAR0_EL1
+            ((3, 0, 0, 2, 1), 0x1311_2111), // ID_ISAR1_EL1
+            ((3, 0, 0, 2, 2), 0x2123_2042), // ID_ISAR2_EL1
+            ((3, 0, 0, 2, 3), 0x0111_2131), // ID_ISAR3_EL1
+            ((3, 0, 0, 2, 4), 0x0001_1142), // ID_ISAR4_EL1
+            ((3, 0, 0, 2, 5), 0x0001_1121), // ID_ISAR5_EL1
+            ((3, 0, 0, 3, 0), 0x1011_0222), // MVFR0_EL1
+            ((3, 0, 0, 3, 1), 0x1211_1111), // MVFR1_EL1
+            ((3, 0, 0, 3, 2), 0x43), // MVFR2_EL1
+            ((3, 0, 0, 0, 6), 0x100), // REVIDR_EL1
+            ((3, 0, 0, 5, 1), 0), // ID_AA64DFR1_EL1
+            ((3, 0, 0, 4, 4), 0), // ID_AA64ZFR0_EL1
         ];
-        for (op0, op1, crn, crm, op2) in id_cases {
+        for ((op0, op1, crn, crm, op2), value) in id_cases {
             let w = sys_word(op0, op1, crn, crm, op2, 8, true);
             assert_eq!(
                 lift(&insn(0x4000, w, InsnKind::System)),
-                vec![IrOp::Mov { dst: 8, imm: 0 }],
+                vec![IrOp::Mov {
+                    dst: 8,
+                    imm: value
+                }],
                 "mrs {op0} {op1} {crn} {crm} {op2}"
             );
         }
@@ -4979,7 +4971,7 @@ mod tests {
             lift(&insn(0x4000, 0xD539_0020, InsnKind::System)),
             vec![IrOp::Mov {
                 dst: 0,
-                imm: 0x0920_0023
+                imm: 0x0a20_0023
             }] // MRS X0, CLIDR_EL1
         );
         assert_eq!(
@@ -4994,7 +4986,7 @@ mod tests {
             lift(&insn(0x4000, 0xD539_0000, InsnKind::System)),
             vec![IrOp::Mov {
                 dst: 0,
-                imm: 0x701F_E00A
+                imm: 0x700F_E01A
             }] // MRS X0, CCSIDR_EL1
         );
         assert_eq!(
