@@ -355,8 +355,13 @@ mod tests {
     }
 
     #[test]
-    fn orr_w_unallocated_n_is_illegal() {
-        assert_illegal(0x2A22_2020); // sf=0, N=1 is unallocated
+    fn orn_w_is_dataproc() {
+        assert_eq!(ok_kind(0x2A22_2020), InsnKind::DataProc); // ORN W0, W1, W2
+    }
+
+    #[test]
+    fn eon_w_is_dataproc() {
+        assert_eq!(ok_kind(0x4A22_2020), InsnKind::DataProc); // EON W0, W1, W2
     }
 
     // ---- loads / stores ----

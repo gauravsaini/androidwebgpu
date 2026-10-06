@@ -27,16 +27,13 @@ pub fn decode(word: u32) -> Option<InsnKind> {
         // Logical (shifted register): sf opc 01010 shift N Rm imm6 Rn Rd.
         0b01010 => {
             let sf = (word >> 31) & 1;
-            let opc = (word >> 29) & 0x3;
-            let n = (word >> 21) & 1;
             let shift = (word >> 22) & 0x3;
             let imm6 = (word >> 10) & 0x3F;
             // shift==0b11 (ROR) is reserved; 32-bit shift amount >= 32 is
-            // unallocated; 32-bit ORR with N==1 is reserved (GB-4 refinement).
-            // N==1 itself is valid: it selects BIC / ORN / EON / BICS.
+            // unallocated. N complements the shifted second operand, selecting
+            // BIC / ORN / EON / BICS for the corresponding opc value.
             let encoding_valid = shift < 0b11
-                && (sf == 1 || (imm6 & 0x20) == 0)
-                && (sf == 1 || opc != 0b01 || n == 0);
+                && (sf == 1 || (imm6 & 0x20) == 0);
             if encoding_valid {
                 Some(InsnKind::DataProc) // AND / BIC / ORR / ORN / EOR / EON / ANDS (TST) / BICS
             } else {

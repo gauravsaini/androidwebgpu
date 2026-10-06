@@ -1629,7 +1629,7 @@ impl Orchestrator {
             }
         }
 
-        // 5. Logical (shifted register): ANDS / TST (opc=11) and BIC (opc=00, N=1)
+        // 5. Logical (shifted register): AND/BIC, ORR/ORN, EOR/EON, ANDS/BICS.
         // sf opc 01010 shift N Rm imm6 Rn Rd
         if (word >> 24) & 0x1F == 0x0A {
             let opc = (word >> 29) & 0x3;
@@ -1641,8 +1641,9 @@ impl Orchestrator {
             let rn = ((word >> 5) & 0x1F) as usize;
             let rd = (word & 0x1F) as usize;
 
-            if opc == 0b11 && shift < 3 {
-                // ANDS (TST when rd=31) or BICS
+            if shift < 3 {
+                // Logical operations complement the shifted second operand
+                // first when N=1 (BIC, ORN, EON, or BICS).
                 let rn_val = if rn == 31 {
                     0
                 } else {
@@ -1653,88 +1654,46 @@ impl Orchestrator {
                 } else {
                     self.machine.cpu[0].regs[rm]
                 };
-                if sf == 1 {
+                let result = if sf == 1 {
                     let mut op2 = eval_shift64(rm_val, shift, imm6);
                     if n == 1 {
                         op2 = !op2;
                     }
-                    let res = rn_val & op2;
-                    if rd != 31 {
-                        self.machine.cpu[0].regs[rd] = res;
+                    let res = match opc {
+                        0b00 | 0b11 => rn_val & op2,
+                        0b01 => rn_val | op2,
+                        0b10 => rn_val ^ op2,
+                        _ => unreachable!(),
+                    };
+                    if opc == 0b11 {
+                        let nzcv = nzcv_and64(res);
+                        self.machine.cpu[0].pstate =
+                            (self.machine.cpu[0].pstate & !FLAGS_NZCV_MASK) | nzcv;
                     }
-                    let nzcv = nzcv_and64(res);
-                    self.machine.cpu[0].pstate =
-                        (self.machine.cpu[0].pstate & !FLAGS_NZCV_MASK) | nzcv;
+                    res
                 } else {
                     let mut op2 = eval_shift32(rm_val as u32, shift, imm6 & 0x1F);
                     if n == 1 {
                         op2 = !op2;
                     }
-                    let res = (rn_val as u32) & op2;
-                    if rd != 31 {
-                        self.machine.cpu[0].regs[rd] = res as u64;
+                    let rn_val = rn_val as u32;
+                    let res = match opc {
+                        0b00 | 0b11 => rn_val & op2,
+                        0b01 => rn_val | op2,
+                        0b10 => rn_val ^ op2,
+                        _ => unreachable!(),
+                    };
+                    if opc == 0b11 {
+                        let nzcv = nzcv_and32(res);
+                        self.machine.cpu[0].pstate =
+                            (self.machine.cpu[0].pstate & !FLAGS_NZCV_MASK) | nzcv;
                     }
-                    let nzcv = nzcv_and32(res);
-                    self.machine.cpu[0].pstate =
-                        (self.machine.cpu[0].pstate & !FLAGS_NZCV_MASK) | nzcv;
-                }
-                self.machine.cpu[0].pc = pc.wrapping_add(4);
-                return Some(Ok(()));
-            }
-            if opc == 0b00 && n == 1 && shift < 3 {
-                // BIC: Rd = Rn & ~shifted(Rm)
-                let rn_val = if rn == 31 {
-                    0
-                } else {
-                    self.machine.cpu[0].regs[rn]
+
+                    res as u64
                 };
-                let rm_val = if rm == 31 {
-                    0
-                } else {
-                    self.machine.cpu[0].regs[rm]
-                };
-                if sf == 1 {
-                    let op2 = !eval_shift64(rm_val, shift, imm6);
-                    let res = rn_val & op2;
-                    if rd != 31 {
-                        self.machine.cpu[0].regs[rd] = res;
-                    }
-                } else {
-                    let op2 = !eval_shift32(rm_val as u32, shift, imm6 & 0x1F);
-                    let res = (rn_val as u32) & op2;
-                    if rd != 31 {
-                        self.machine.cpu[0].regs[rd] = res as u64;
-                    }
-                }
-                self.machine.cpu[0].pc = pc.wrapping_add(4);
-                return Some(Ok(()));
-            }
-            // GB-25: ORR (opc=01). Rd = Rn | shift(Rm).
-            // 32-bit form (sf=0) zeroes upper 32 bits of Rd.
-            // Note: for logical ops, Rn/Rm=31 means XZR (not SP).
-            if opc == 0b01 && shift < 3 {
-                let rn_val = if rn == 31 {
-                    0
-                } else {
-                    self.machine.cpu[0].regs[rn]
-                };
-                let rm_val = if rm == 31 {
-                    0
-                } else {
-                    self.machine.cpu[0].regs[rm]
-                };
-                if sf == 1 {
-                    let op2 = eval_shift64(rm_val, shift, imm6);
-                    let res = rn_val | op2;
-                    if rd != 31 {
-                        self.machine.cpu[0].regs[rd] = res;
-                    }
-                } else {
-                    let op2 = eval_shift32(rm_val as u32, shift, imm6 & 0x1F);
-                    let res = (rn_val as u32) | op2;
-                    if rd != 31 {
-                        self.machine.cpu[0].regs[rd] = res as u64;
-                    }
+
+                if rd != 31 {
+                    self.machine.cpu[0].regs[rd] = result;
                 }
                 self.machine.cpu[0].pc = pc.wrapping_add(4);
                 return Some(Ok(()));
@@ -5426,6 +5385,86 @@ mod tests {
         // W2 << 4 = 0xF0, 0xF0 | 0xF0 = 0xF0.
         assert_eq!(o.machine().cpu[0].regs[0], 0x0000_00F0);
         assert_eq!(o.machine().cpu[0].pc, pc + 4);
+    }
+
+    #[test]
+    fn orn_w_mvn_w8_w8_inverts_the_operand() {
+        // MVN W8, W8 == ORN W8, WZR, W8.
+        let pc = RAM_BASE + 0x1000;
+        let sp = RAM_BASE + 0x2000;
+        let mut o = sp_test_orchestrator(pc, sp, 0x2A28_03E8);
+        o.machine_mut().cpu[0].regs[8] = 0xFFFF_FFFF;
+
+        assert_eq!(o.step_vcpu(), StepOutcome::Continue);
+        assert_eq!(o.machine().cpu[0].regs[8], 0);
+        assert_eq!(o.machine().cpu[0].pc, pc + 4);
+    }
+
+    #[test]
+    fn orn_w_shifted_inverts_the_shifted_operand() {
+        // ORN W0, W1, W2, LSL #4. Inversion applies after the shift.
+        let pc = RAM_BASE + 0x1000;
+        let sp = RAM_BASE + 0x2000;
+        let mut o = sp_test_orchestrator(pc, sp, 0x2A22_1020);
+        o.machine_mut().cpu[0].regs[1] = 0;
+        o.machine_mut().cpu[0].regs[2] = 0xF;
+
+        assert_eq!(o.step_vcpu(), StepOutcome::Continue);
+        assert_eq!(o.machine().cpu[0].regs[0], 0xFFFF_FF0F);
+    }
+
+    #[test]
+    fn track20_mvn_x24_x24_produces_fffffffffffffffc() {
+        // MVN X24, X24 == ORN X24, XZR, X24. Track 20 starts with X24=3.
+        let pc = RAM_BASE + 0x1000;
+        let sp = RAM_BASE + 0x2000;
+        let mut o = sp_test_orchestrator(pc, sp, 0xAA38_03F8);
+        o.machine_mut().cpu[0].regs[24] = 3;
+
+        assert_eq!(o.step_vcpu(), StepOutcome::Continue);
+        assert_eq!(o.machine().cpu[0].regs[24], 0xFFFF_FFFF_FFFF_FFFC);
+        assert_eq!(o.machine().cpu[0].pc, pc + 4);
+    }
+
+    #[test]
+    fn eon_w_shifted_inverts_the_shifted_operand() {
+        // EON W0, W1, W2, LSR #2. (~(W2 >> 2)) XOR W1.
+        let pc = RAM_BASE + 0x1000;
+        let sp = RAM_BASE + 0x2000;
+        let mut o = sp_test_orchestrator(pc, sp, 0x4A62_0820);
+        o.machine_mut().cpu[0].regs[1] = 0;
+        o.machine_mut().cpu[0].regs[2] = 0x3C;
+
+        assert_eq!(o.step_vcpu(), StepOutcome::Continue);
+        assert_eq!(o.machine().cpu[0].regs[0], 0xFFFF_FFF0);
+    }
+
+    #[test]
+    fn bic_w_shifted_clears_bits_from_the_shifted_operand() {
+        // BIC W0, W1, W2, LSL #4: W1 & ~(W2 << 4).
+        let pc = RAM_BASE + 0x1000;
+        let sp = RAM_BASE + 0x2000;
+        let mut o = sp_test_orchestrator(pc, sp, 0x0A22_1020);
+        o.machine_mut().cpu[0].regs[1] = 0xFF;
+        o.machine_mut().cpu[0].regs[2] = 0xF;
+
+        assert_eq!(o.step_vcpu(), StepOutcome::Continue);
+        assert_eq!(o.machine().cpu[0].regs[0], 0xF);
+    }
+
+    #[test]
+    fn bics_w_shifted_sets_flags_from_the_inverted_operand_result() {
+        // BICS W0, W1, W2, LSL #4: W1 & ~(W2 << 4), then set NZCV.
+        let pc = RAM_BASE + 0x1000;
+        let sp = RAM_BASE + 0x2000;
+        let mut o = sp_test_orchestrator(pc, sp, 0x6A22_1020);
+        o.machine_mut().cpu[0].regs[1] = 0xF0;
+        o.machine_mut().cpu[0].regs[2] = 0xF;
+        o.machine_mut().cpu[0].pstate = 0xF000_0000;
+
+        assert_eq!(o.step_vcpu(), StepOutcome::Continue);
+        assert_eq!(o.machine().cpu[0].regs[0], 0);
+        assert_eq!(o.machine().cpu[0].pstate & FLAGS_NZCV_MASK, FLAG_Z);
     }
 
     #[test]
