@@ -508,8 +508,9 @@ fn lift_system(word: u32) -> Vec<IrOp> {
                         // extracted by hand from the word and confirmed by
                         // aarch64-linux-gnu-objdump; not trusted from the
                         // first reading). Value 0 = no memory-model features
-                        // advertised, matching the sibling ID_AA64MMFR0_EL1 /
-                        // ID_AA64MMFR2_EL1 reads. ID_AA64DFR0_EL1 returns
+                        // advertised, matching the sibling ID_AA64MMFR2_EL1
+                        // read. ID_AA64MMFR0_EL1 returns 0x1122 to match
+                        // QEMU's Cortex-A53 value. ID_AA64DFR0_EL1 returns
                         // 0x10305106. The kernel only feature-probes this
                         // register (MRS -> AND #0xF -> CBZ), so 0 takes the
                         // honest conservative fallback path.
