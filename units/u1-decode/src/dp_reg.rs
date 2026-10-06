@@ -45,14 +45,22 @@ pub fn decode(word: u32) -> Option<InsnKind> {
         // from data-processing (1 source); pinning it keeps CLZ (bit30 == 1)
         // from ever being misread here.
         // Data-processing (1 source): sf 1 S 11010 110 00000 opcode Rn Rd (GB-7).
-        // CLZ only (opcode == 0b000100, S == 0); RBIT/REV*/CLS stay Illegal.
-        // The 32-bit form (sf == 0) is recognized and trapped in U2.
+        // Recognize the audited CLZ/RBIT/REV*/CLS operations, plus AUTIA's
+        // fixed key selector. The 32-bit forms are recognized and trapped in U2.
         0b11010 => {
             // ADC/SBC (with carry): sf op S 11010000 Rm 000000 Rn Rd.
             // bits[28:21] == 0xD0, bits[15:10] == 0. The lifter traps these
             // with an explicit carry-flag reason (NZCV not in IrOp).
             if (word >> 21) & 0xFF == 0xD0 && (word >> 10) & 0x3F == 0 {
                 return Some(InsnKind::DataProc);
+            }
+            // Conditional compare: sf op 1 11010010 Rm cond o2 0 Rn 0 nzcv.
+            // op selects CCMN/CCMP; o2 selects register or immediate form.
+            let b30_21 = (word >> 21) & 0x3FF;
+            let compare_form = b30_21 == 0x1D2 || b30_21 == 0x3D2;
+            let compare_o2 = (word >> 10) & 0x3;
+            if compare_form && (compare_o2 == 0 || compare_o2 == 0b10) && (word & 0x10) == 0 {
+                return Some(InsnKind::DataProc); // CCMN / CCMP (register or immediate)
             }
             // Conditional select: sf op S 11010100 Rm cond op2 Rn Rd
             // (GB-15, encoding corrected GB-26). bits[30:21] ==
@@ -64,30 +72,53 @@ pub fn decode(word: u32) -> Option<InsnKind> {
             // must precede the 2-source check below: a CSEL with
             // cond == 0b0010 would otherwise alias the 2-source class
             // (opcode2 >> 2 == cond).
-            let b30_21 = (word >> 21) & 0x3FF;
             if b30_21 == 0xD4 || b30_21 == 0x2D4 {
                 return Some(InsnKind::DataProc);
             }
             let bit30 = (word >> 30) & 1;
             let bit29 = (word >> 29) & 1;
-            let bit21 = (word >> 21) & 1;
+            let sf = (word >> 31) & 1;
+            let op3 = (word >> 21) & 0x7;
+            let rm = (word >> 16) & 0x1F;
             let opcode2 = (word >> 10) & 0x3F;
-            if bit30 == 0
-                && bit29 == 0
-                && bit21 == 0
-                && ((opcode2 >> 2) == 0b0010 || opcode2 == 0b000010 || opcode2 == 0b000011)
+
+            // RMIF: sf=1, bits[30:21]=0b0111010000, fixed op bits[14:10]=1,
+            // and bit[4]=0. The rotation and NZCV mask occupy their own fields.
+            if sf == 1
+                && (word >> 21) & 0x3FF == 0x1D0
+                && (word >> 10) & 0x1F == 0b00001
+                && (word & 0x10) == 0
             {
-                Some(InsnKind::DataProc)
-            } else if bit30 == 1
-                && bit29 == 0
-                && ((word >> 21) & 0x7) == 0b110
-                && ((word >> 16) & 0x1F) == 0
-                && opcode2 == 0b000100
-            {
-                Some(InsnKind::DataProc) // CLZ
-            } else {
-                None
+                return Some(InsnKind::DataProc);
             }
+
+            if op3 == 0b110 {
+                if bit30 == 0 && bit29 == 0 {
+                    let is_crc32 = (0b010000..=0b010111).contains(&opcode2)
+                        && ((sf == 1) == (opcode2 & 0b11 == 0b11));
+                    let is_64bit_extension = sf == 1 && matches!(opcode2, 0 | 4 | 5 | 12);
+                    if matches!(opcode2, 2 | 3 | 8..=11) || is_crc32 || is_64bit_extension {
+                        return Some(InsnKind::DataProc); // div/shift, CRC32, MTE, PACGA
+                    }
+                }
+                if bit30 == 0 && bit29 == 1 && sf == 1 && opcode2 == 0 {
+                    return Some(InsnKind::DataProc); // SUBPS
+                }
+                if bit30 == 1 && bit29 == 0 {
+                    if rm == 0 {
+                        let valid_one_source = matches!(opcode2, 0 | 1 | 4 | 5)
+                            || (opcode2 == 2)
+                            || (sf == 1 && opcode2 == 3);
+                        if valid_one_source {
+                            return Some(InsnKind::DataProc); // RBIT / REV* / CLZ / CLS
+                        }
+                    } else if sf == 1 && rm == 1 && opcode2 == 4 {
+                        return Some(InsnKind::DataProc); // AUTIA
+                    }
+                }
+            }
+
+            None
         }
         // Data-processing (3 source): sf op54 11011 op31 Rm o0 Ra Rn Rd (GB-8).
         // The defined multiply class (op54 == 00/01/10) is recognized and the

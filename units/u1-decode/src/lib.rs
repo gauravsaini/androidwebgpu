@@ -242,6 +242,51 @@ mod tests {
     }
 
     #[test]
+    fn dp_1source_reverse_and_conditional_compare_are_dataproc() {
+        for word in [
+            0x5AC0_0288, // RBIT W8, W20
+            0xDAC0_0CC6, // REV X6, X6
+            0x5AC0_0748, // REV16 W8, W26
+            0x5AC0_161E, // CLS W30, W16
+            0xFA45_A068, // CCMP X3, X5, #8, GE
+            0x3A52_4B60, // CCMN W27, #0x12, #0, MI
+        ] {
+            assert_eq!(
+                ok_kind(word),
+                InsnKind::DataProc,
+                "0x{word:08X} should decode as data processing"
+            );
+        }
+    }
+
+    #[test]
+    fn dp_2source_crc_mte_pauth_and_flag_forms_are_dataproc() {
+        for word in [
+            0x1ADC_4080, // CRC32B W0, W4, W28
+            0x1AD1_46FA, // CRC32H W26, W23, W17
+            0x1AC6_4830, // CRC32W W16, W1, W6
+            0x9AC1_4EBC, // CRC32X W28, W21, X1
+            0x1AC9_53D2, // CRC32CB W18, W30, W9
+            0x1AC9_5734, // CRC32CH W20, W25, W9
+            0x1AC9_59DC, // CRC32CW W28, W14, W9
+            0x9ADD_5E1F, // CRC32CX WZR, W16, X29
+            0x9ACF_330F, // PACGA X15, X24, X15
+            0x9ACC_0375, // SUBP X21, X27, X12
+            0xBAC3_02C2, // SUBPS X2, X22, X3
+            0x9AD3_16D0, // GMI X16, X22, X19
+            0x9AC4_101F, // IRG SP, X0, X4
+            0xBA1F_86C9, // RMIF X22, #0x3F, #9
+            0xDAC1_12FB, // AUTIA X27, X23
+        ] {
+            assert_eq!(
+                ok_kind(word),
+                InsnKind::DataProc,
+                "0x{word:08X} should decode as data processing"
+            );
+        }
+    }
+
+    #[test]
     fn decode_bitmasks_table_cases() {
         // 1. Kernel mask: AND X23, X23, #0x1fffff (N=1, imms=20, immr=0, sf=true)
         assert_eq!(decode_bitmasks(1, 20, 0, true), Some(0x0000_0000_001F_FFFF));
