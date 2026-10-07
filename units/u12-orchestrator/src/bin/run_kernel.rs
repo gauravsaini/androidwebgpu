@@ -211,7 +211,8 @@ fn main() {
         orch.machine_mut().cpu[0].regs = [0; 31];
         // QEMU sets X4 to kernel load address and Z flag in PSTATE at boot.
         orch.machine_mut().cpu[0].regs[4] = KERNEL_LOAD_ADDR;
-        orch.machine_mut().cpu[0].pstate = 0x4000_0000; // Z flag (bit 30)
+        // QEMU enters this guest at EL1h with DAIF masked and Z set.
+        orch.machine_mut().cpu[0].pstate = 0x4000_03c5;
 
         // Initrd (Shelf Job 2, 2026-10-05): Track B QEMU layout.
         // - Initramfs CPIO at 0x4800_0000 (INITRD_LOAD_ADDR)
@@ -345,6 +346,24 @@ fn main() {
         }
     }
     println!("[done] Executed {steps} steps. PC={pc:#018x}");
+    println!("IRQ_ENTRIES={}", orch.irq_entry_count());
+    println!("IRQ_ERET_RETURNS={}", orch.irq_return_count());
+    for (index, entry) in orch.irq_entry_log().iter().enumerate() {
+        let source_mode = match entry.source_mode {
+            0x00 => "EL0t",
+            0x04 => "EL1t",
+            0x05 => "EL1h",
+            _ => "other",
+        };
+        println!(
+            "IRQ_ENTRY index={index} step={} intid={} source_pc={:#018x} vector_pc={:#018x} source_mode={source_mode} return_step={:?}",
+            entry.step,
+            entry.intid,
+            entry.source_pc,
+            entry.vector_pc,
+            entry.return_step
+        );
+    }
     match halt_reason {
         Some(ref reason) => {
             println!("[halt] Reason: {reason:?}");

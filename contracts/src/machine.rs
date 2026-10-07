@@ -8,7 +8,9 @@ use crate::cpu::{IrqState, MmuState, SysReg};
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CpuState {
     pub regs: [u64; 31],
+    /// Currently selected stack pointer; `sp_el1` stores the banked EL1 stack.
     pub sp: u64,
+    pub sp_el1: u64,
     pub pc: u64,
     pub pstate: u64,
     pub sysregs: SysRegs,
@@ -758,8 +760,8 @@ pub const MAX_GUEST_RAM_BYTES: usize = 2 * 1024 * 1024 * 1024;
 pub struct Snapshot(pub Vec<u8>);
 
 /// Current snapshot format version. Bump on any format change.
-pub const SNAPSHOT_VERSION: u32 = 14;
-/// v14 adds ELR_EL1 and SPSR_EL1 to the per-CPU exception state.
+pub const SNAPSHOT_VERSION: u32 = 15;
+/// v14 adds ELR_EL1 and SPSR_EL1; v15 adds the banked SP_EL1 value.
 
 /// Snapshot restore failure. Data, not panic — corrupt input never crashes the host.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -804,6 +806,7 @@ mod tests {
             cpu: vec![CpuState {
                 regs: [0; 31],
                 sp: 0,
+                sp_el1: 0,
                 pc: 0x4000,
                 pstate: 0,
                 sysregs: SysRegs::default(),

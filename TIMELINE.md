@@ -41,3 +41,12 @@
 1. **Kernel Halt-Chasing & Emulator Fixes**: Fixed CCMP register decode bit (bit 11 vs 10) resolving runaway `strchr` loop; added UDIV/SDIV decoding to `u1-decode` and `u12-orchestrator`; resolved LDP/LDPSW base register clobber (`rn == rt`) in `u2-ir-lift`; supported 64-bit ADD/SUB extended UXTB, 32/64-bit CLZ, 64-bit MADD/MSUB, and LDXP/LDAXP/STXP/STLXP atomic pairs; booted AOSP kernel to 200M steps halt-free with clean 1 GiB guest RAM panic search.
 2. **Tests** (before → after): u1-decode 104 → 105 passed, u2-ir-lift 126 → 127 passed, u12-orchestrator 127 → 133 passed.
 3. **Files changed**: `units/u1-decode/src/dp_reg.rs`, `units/u1-decode/src/lib.rs`, `units/u2-ir-lift/src/lib.rs`, `units/u12-orchestrator/src/lib.rs`, `units/u12-orchestrator/src/bin/run_kernel.rs`.
+
+## UPDATED ON : 2026-10-08
+
+### Track 75 (IRQ exception entry — continuation of the T74 WFI/timer branch)
+
+- Added persistent banked `SP_EL1`, EL1 IRQ vector entry, ELR/SPSR/PSTATE updates, ERET restoration, and bounded IRQ entry/return diagnostics. EL1h IRQs use the architecture's `VBAR_EL1 + 0x280` slot; EL1t uses `+0x080` and lower-EL AArch64 uses `+0x480`.
+- The first release boot entered the timer vector for INTID 27 and reached the guest GICC IAR/EOIR accesses, then stopped at step 45,730,665 because the active-handler guard rejected a nested timer IRQ before ERET. This isolated a nested-exception gap in the boot path.
+- Added nested EL1 IRQ stack tracking so nested entry may overwrite ELR/SPSR and ERET returns unwind in order. Focused IRQ/WFI tests passed (6 passed, 1 ignored); the full orchestrator library suite passed (153 passed, 2 ignored). The second release boot reached the 60M step budget with `IRQ_ENTRIES=4951` and `IRQ_ERET_RETURNS=4949`; UART was 2,562 bytes and `INIT_MARKER=haan` because the kernel command line printed `rdinit=/init`. There was no `STATUS: PASS`, so this marker does not prove `/init` launched. The boot report ended at `PC=0xffffff80082430c0` without a guest halt.
+- Runtime logs recorded 5,775 GICC IAR reads for INTID 27 and 5,774 EOIs. The ISR now runs repeatedly and returns through ERET; two entries were still active at the step cap.

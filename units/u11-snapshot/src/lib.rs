@@ -3,11 +3,11 @@
 //! PURE: deterministic encode/decode. No I/O, no wall-clock, no threads,
 //! no hidden state. A corrupt blob is data ([`SnapshotError`]), never a panic.
 //!
-//! Wire format v14 (all integers little-endian):
+//! Wire format v15 (all integers little-endian):
 //! ```text
-//! u32 version            == SNAPSHOT_VERSION (14)
+//! u32 version            == SNAPSHOT_VERSION (15)
 //! u32 cpu_count
-//! cpu_count × { 31×u64 regs, u64 sp, u64 pc, u64 pstate, 135×u64 sysregs } (1352 bytes each)
+//! cpu_count × { 31×u64 regs, u64 sp, u64 sp_el1, u64 pc, u64 pstate, 135×u64 sysregs } (1360 bytes each)
 //! u64 ttbr0, u64 ttbr1, u64 tcr, u64 sctlr
 //! u32 irq_enabled, u64 irq_pending, u64 timer_count, u64 timer_compare
 //! u64 ram_len, ram_len bytes
@@ -24,9 +24,9 @@ use pathn_contracts::machine::{
     SNAPSHOT_VERSION, SysRegs,
 };
 
-/// Encoded size of one [`CpuState`]: 31 regs + sp + pc + pstate + 135 sysregs,
+/// Encoded size of one [`CpuState`]: 31 regs + sp + sp_el1 + pc + pstate + 135 sysregs,
 /// all u64LE.
-const CPU_ENCODED_BYTES: usize = 169 * 8;
+const CPU_ENCODED_BYTES: usize = 170 * 8;
 /// Minimum encoded size of one [`DeviceState`]: u8 tag + u64 blob length.
 const DEVICE_MIN_BYTES: usize = 1 + 8;
 
@@ -81,6 +81,7 @@ impl Writer {
             self.u64(r);
         }
         self.u64(c.sp);
+        self.u64(c.sp_el1);
         self.u64(c.pc);
         self.u64(c.pstate);
         self.u64(c.sysregs.daif);
@@ -279,6 +280,7 @@ impl<'a> Reader<'a> {
         Ok(CpuState {
             regs,
             sp: self.u64()?,
+            sp_el1: self.u64()?,
             pc: self.u64()?,
             pstate: self.u64()?,
             sysregs: SysRegs {
@@ -469,6 +471,7 @@ mod tests {
         CpuState {
             regs,
             sp: seed.wrapping_add(0x1000),
+            sp_el1: seed.wrapping_add(0x1001),
             pc: 0x4000 + seed,
             pstate: seed & 0xF,
             sysregs: SysRegs {
@@ -634,6 +637,7 @@ mod tests {
             cpu: vec![CpuState {
                 regs: [u64::MAX; 31],
                 sp: u64::MAX,
+                sp_el1: u64::MAX,
                 pc: u64::MAX,
                 pstate: u64::MAX,
                 sysregs: SysRegs {

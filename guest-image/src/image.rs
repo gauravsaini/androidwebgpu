@@ -158,6 +158,7 @@ pub fn initial_cpu_state(manifest: &GuestManifest) -> CpuState {
     CpuState {
         regs: [0u64; 31],
         sp: STACK_TOP,
+        sp_el1: 0,
         pc: manifest.load_addr,
         pstate: 0,
         sysregs: SysRegs::default(),
