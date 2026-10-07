@@ -78,7 +78,7 @@ pub fn decode(word: u32) -> Option<InsnKind> {
             // must precede the 2-source check below: a CSEL with
             // cond == 0b0010 would otherwise alias the 2-source class
             // (opcode2 >> 2 == cond).
-            if (b30_21 == 0xD4 || b30_21 == 0x2D4) && (word >> 10) & 0x3 < 2 && (word & 0x10) == 0 {
+            if (b30_21 == 0xD4 || b30_21 == 0x2D4) && (word >> 10) & 0x3 < 2 {
                 return Some(InsnKind::DataProc);
             }
             let bit30 = (word >> 30) & 1;

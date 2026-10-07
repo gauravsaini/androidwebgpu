@@ -798,6 +798,13 @@ mod tests {
     }
 
     #[test]
+    fn csel_with_x16_plus_destination_is_dataproc() {
+        // QEMU Track 80 stream: CSEL X20, X8, X0, EQ at 0xffffff80082265f4.
+        // Rd[4] is part of the destination register field, not a reserved bit.
+        assert_eq!(ok_kind(0x9A80_0114), InsnKind::DataProc);
+    }
+
+    #[test]
     fn csel_cond_cs_does_not_alias_two_source() {
         // CSEL X0, X1, X2, CS (cond == 0b0010): opcode2 >> 2 == cond
         // would match the data-processing (2 source) check, so the
