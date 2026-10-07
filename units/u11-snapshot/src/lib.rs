@@ -3,11 +3,11 @@
 //! PURE: deterministic encode/decode. No I/O, no wall-clock, no threads,
 //! no hidden state. A corrupt blob is data ([`SnapshotError`]), never a panic.
 //!
-//! Wire format v15 (all integers little-endian):
+//! Wire format v16 (all integers little-endian):
 //! ```text
-//! u32 version            == SNAPSHOT_VERSION (15)
+//! u32 version            == SNAPSHOT_VERSION (16)
 //! u32 cpu_count
-//! cpu_count × { 31×u64 regs, u64 sp, u64 sp_el1, u64 pc, u64 pstate, 135×u64 sysregs } (1360 bytes each)
+//! cpu_count × { 31×u64 regs, u64 sp, u64 sp_el1, u64 pc, u64 pstate, 137×u64 sysregs } (1376 bytes each)
 //! u64 ttbr0, u64 ttbr1, u64 tcr, u64 sctlr
 //! u32 irq_enabled, u64 irq_pending, u64 timer_count, u64 timer_compare
 //! u64 ram_len, ram_len bytes
@@ -24,9 +24,9 @@ use pathn_contracts::machine::{
     SNAPSHOT_VERSION, SysRegs,
 };
 
-/// Encoded size of one [`CpuState`]: 31 regs + sp + sp_el1 + pc + pstate + 135 sysregs,
+/// Encoded size of one [`CpuState`]: 31 regs + sp + sp_el1 + pc + pstate + 137 sysregs,
 /// all u64LE.
-const CPU_ENCODED_BYTES: usize = 170 * 8;
+const CPU_ENCODED_BYTES: usize = 172 * 8;
 /// Minimum encoded size of one [`DeviceState`]: u8 tag + u64 blob length.
 const DEVICE_MIN_BYTES: usize = 1 + 8;
 
@@ -162,6 +162,8 @@ impl Writer {
         self.u64(c.sysregs.zcr_el1);
         self.u64(c.sysregs.elr_el1);
         self.u64(c.sysregs.spsr_el1);
+        self.u64(c.sysregs.esr_el1);
+        self.u64(c.sysregs.far_el1);
     }
 
     fn mmu(&mut self, m: &MmuState) {
@@ -357,6 +359,8 @@ impl<'a> Reader<'a> {
                 zcr_el1: self.u64()?,
                 elr_el1: self.u64()?,
                 spsr_el1: self.u64()?,
+                esr_el1: self.u64()?,
+                far_el1: self.u64()?,
             },
         })
     }
@@ -545,6 +549,8 @@ mod tests {
                 zcr_el1: seed.wrapping_add(67),
                 elr_el1: seed.wrapping_add(68),
                 spsr_el1: seed.wrapping_add(69),
+                esr_el1: seed.wrapping_add(70),
+                far_el1: seed.wrapping_add(71),
             },
         }
     }
@@ -711,6 +717,8 @@ mod tests {
                     zcr_el1: u64::MAX,
                     elr_el1: u64::MAX,
                     spsr_el1: u64::MAX,
+                    esr_el1: u64::MAX,
+                    far_el1: u64::MAX,
                 },
             }],
             mmu: MmuState {
