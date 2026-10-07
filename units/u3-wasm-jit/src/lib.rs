@@ -89,6 +89,9 @@ const FUNC_RUN: u32 = 6;
 const XZR: u8 = 31;
 /// U2's scratch index maps to the single declared local.
 const SCRATCH: u8 = 32;
+/// Temporaries reused by independent 32-bit rotate operations.
+const ROR_VALUE_TEMP: u64 = 10;
+const ROR_AMOUNT_TEMP: u64 = 11;
 
 /// Sentinel result when the block exits the VM (or declares no exits).
 const EXIT_VM_SENTINEL: i64 = -1;
@@ -149,7 +152,8 @@ pub fn compile(block: &IrBlock) -> WasmModule {
     section(7, &ex, &mut out);
 
     // Code section (id 10): one body, 12 i64 locals (local 0 = U2 SCRATCH;
-    // locals 1-11 are temporaries for Umulh/Smulh).
+    // locals 1-10 are Umulh temporaries; locals 10-11 are reused by
+    // 32-bit rotates).
     let mut body = Vec::new();
     uleb(1, &mut body); // one local entry: 12 x i64
     uleb(12, &mut body);
@@ -353,7 +357,9 @@ pub fn compile(block: &IrBlock) -> WasmModule {
                 };
                 reg_get(&mut body, *a);
                 reg_get(&mut body, *b);
-                if *amount > 0 {
+                if *shift == 3 && *is_32 {
+                    emit_ror32_imm(&mut body, *amount);
+                } else if *amount > 0 {
                     body.push(OP_I64_CONST);
                     sleb(*amount as i64, &mut body);
                     body.push(shift_op);
@@ -392,7 +398,9 @@ pub fn compile(block: &IrBlock) -> WasmModule {
                 };
                 reg_get(&mut body, *a);
                 reg_get(&mut body, *b);
-                if *amount > 0 {
+                if *shift == 3 && *is_32 {
+                    emit_ror32_imm(&mut body, *amount);
+                } else if *amount > 0 {
                     body.push(OP_I64_CONST);
                     sleb(*amount as i64, &mut body);
                     body.push(shift_op);
@@ -431,7 +439,9 @@ pub fn compile(block: &IrBlock) -> WasmModule {
                 };
                 reg_get(&mut body, *a);
                 reg_get(&mut body, *b);
-                if *amount > 0 {
+                if *shift == 3 && *is_32 {
+                    emit_ror32_imm(&mut body, *amount);
+                } else if *amount > 0 {
                     body.push(OP_I64_CONST);
                     sleb(*amount as i64, &mut body);
                     body.push(shift_op);
@@ -627,10 +637,6 @@ pub fn compile(block: &IrBlock) -> WasmModule {
                     sleb(0xFFFF_FFFF, &mut body);
                     body.push(OP_I64_AND);
                 }
-                reg_get(&mut body, *b);
-                body.push(OP_I64_CONST);
-                sleb(if *is_32 { 31 } else { 63 }, &mut body);
-                body.push(OP_I64_AND);
                 let op = match shift {
                     0 => OP_I64_SHL,   // 00 = LSLV
                     1 => OP_I64_SHR_U, // 01 = LSRV
@@ -638,7 +644,43 @@ pub fn compile(block: &IrBlock) -> WasmModule {
                     3 => OP_I64_ROTR,  // 11 = RORV
                     _ => OP_UNREACHABLE,
                 };
-                body.push(op);
+                if *is_32 && *shift == 3 {
+                    // Keep both operands in the 32-bit rotate domain. WASM's
+                    // i64.rotr would wrap at bit 63 and lose W-form wraparound.
+                    body.push(OP_LOCAL_SET);
+                    uleb(ROR_VALUE_TEMP, &mut body);
+                    reg_get(&mut body, *b);
+                    body.push(OP_I64_CONST);
+                    sleb(31, &mut body);
+                    body.push(OP_I64_AND);
+                    body.push(OP_LOCAL_SET);
+                    uleb(ROR_AMOUNT_TEMP, &mut body);
+
+                    body.push(OP_LOCAL_GET);
+                    uleb(ROR_VALUE_TEMP, &mut body);
+                    body.push(OP_LOCAL_GET);
+                    uleb(ROR_AMOUNT_TEMP, &mut body);
+                    body.push(OP_I64_SHR_U);
+
+                    body.push(OP_LOCAL_GET);
+                    uleb(ROR_VALUE_TEMP, &mut body);
+                    body.push(OP_I64_CONST);
+                    sleb(32, &mut body);
+                    body.push(OP_LOCAL_GET);
+                    uleb(ROR_AMOUNT_TEMP, &mut body);
+                    body.push(OP_I64_SUB);
+                    body.push(OP_I64_CONST);
+                    sleb(31, &mut body);
+                    body.push(OP_I64_AND);
+                    body.push(OP_I64_SHL);
+                    body.push(OP_I64_OR);
+                } else {
+                    reg_get(&mut body, *b);
+                    body.push(OP_I64_CONST);
+                    sleb(if *is_32 { 31 } else { 63 }, &mut body);
+                    body.push(OP_I64_AND);
+                    body.push(op);
+                }
                 if *is_32 {
                     body.push(OP_I64_CONST);
                     sleb(0xFFFF_FFFF, &mut body);
@@ -778,6 +820,37 @@ pub fn compile(block: &IrBlock) -> WasmModule {
     section(10, &code, &mut out);
 
     WasmModule { bytes: out }
+}
+
+/// Emit a modulo-32 rotate right for the top-of-stack value, leaving a
+/// zero-extended 32-bit result on the stack. The caller combines it with any
+/// other operands after this value.
+fn emit_ror32_imm(body: &mut Vec<u8>, amount: u8) {
+    body.push(OP_I64_CONST);
+    sleb(0xFFFF_FFFF, body);
+    body.push(OP_I64_AND);
+
+    let amount = u64::from(amount & 31);
+    if amount == 0 {
+        return;
+    }
+
+    body.push(OP_LOCAL_SET);
+    uleb(ROR_VALUE_TEMP, body);
+    body.push(OP_LOCAL_GET);
+    uleb(ROR_VALUE_TEMP, body);
+    body.push(OP_I64_CONST);
+    sleb(amount as i64, body);
+    body.push(OP_I64_SHR_U);
+    body.push(OP_LOCAL_GET);
+    uleb(ROR_VALUE_TEMP, body);
+    body.push(OP_I64_CONST);
+    sleb(((32 - amount) & 31) as i64, body);
+    body.push(OP_I64_SHL);
+    body.push(OP_I64_OR);
+    body.push(OP_I64_CONST);
+    sleb(0xFFFF_FFFF, body);
+    body.push(OP_I64_AND);
 }
 
 /// Push a register source: XZR -> `i64.const 0`, SCRATCH -> the one local,
@@ -1461,6 +1534,18 @@ mod tests {
                 vec![BlockExit::FallThrough(0x4)],
             ),
             (
+                vec![IrOp::AndShift {
+                    dst: 0,
+                    a: 1,
+                    b: 2,
+                    shift: 3,
+                    amount: 16,
+                    invert: false,
+                    is_32: true,
+                }],
+                vec![BlockExit::FallThrough(0x4)],
+            ),
+            (
                 vec![IrOp::OrShift {
                     dst: 0,
                     a: 1,
@@ -1473,6 +1558,18 @@ mod tests {
                 vec![BlockExit::FallThrough(0x4)],
             ),
             (
+                vec![IrOp::OrShift {
+                    dst: 0,
+                    a: 1,
+                    b: 2,
+                    shift: 3,
+                    amount: 16,
+                    invert: false,
+                    is_32: true,
+                }],
+                vec![BlockExit::FallThrough(0x4)],
+            ),
+            (
                 vec![IrOp::EorShift {
                     dst: 0,
                     a: 1,
@@ -1481,6 +1578,18 @@ mod tests {
                     amount: 16,
                     invert: false,
                     is_32: false,
+                }],
+                vec![BlockExit::FallThrough(0x4)],
+            ),
+            (
+                vec![IrOp::EorShift {
+                    dst: 0,
+                    a: 1,
+                    b: 2,
+                    shift: 3,
+                    amount: 16,
+                    invert: false,
+                    is_32: true,
                 }],
                 vec![BlockExit::FallThrough(0x4)],
             ),
@@ -1524,6 +1633,16 @@ mod tests {
                     b: 2,
                     shift: 0, // LSLV
                     is_32: false,
+                }],
+                vec![BlockExit::FallThrough(0x4)],
+            ),
+            (
+                vec![IrOp::ShiftVar {
+                    dst: 0,
+                    a: 1,
+                    b: 2,
+                    shift: 3, // RORV
+                    is_32: true,
                 }],
                 vec![BlockExit::FallThrough(0x4)],
             ),

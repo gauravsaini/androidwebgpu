@@ -6260,6 +6260,34 @@ mod tests {
     }
 
     #[test]
+    fn track68_rorv_w_wraps_bit_zero_to_bit31() {
+        // Arm vector: RORV W2, W2, W3 (0x1AC32C42), W2=1, W3=1.
+        // A 32-bit rotate wraps bit 0 into bit 31.
+        let pc = RAM_BASE + 0x1000;
+        let mut o = sp_test_orchestrator(pc, RAM_BASE + 0x2000, 0x1AC3_2C42);
+        o.machine_mut().cpu[0].regs[2] = 0x0000_0001;
+        o.machine_mut().cpu[0].regs[3] = 1;
+
+        assert!(matches!(o.step_vcpu(), StepOutcome::Continue));
+        assert_eq!(o.machine().cpu[0].regs[2], 0x8000_0000);
+        assert_eq!(o.machine().cpu[0].pc, pc + 4);
+    }
+
+    #[test]
+    fn track68_and_w_ror_immediate_wraps_within_32_bits() {
+        // Arm vector: AND W9, W9, W0, ROR #16 (0x0AC04129),
+        // W9=0xFFFFFFFF, W0=1. The rotated operand is 0x00010000.
+        let pc = RAM_BASE + 0x1000;
+        let mut o = sp_test_orchestrator(pc, RAM_BASE + 0x2000, 0x0AC0_4129);
+        o.machine_mut().cpu[0].regs[9] = 0xFFFF_FFFF;
+        o.machine_mut().cpu[0].regs[0] = 0x0000_0001;
+
+        assert!(matches!(o.step_vcpu(), StepOutcome::Continue));
+        assert_eq!(o.machine().cpu[0].regs[9], 0x0001_0000);
+        assert_eq!(o.machine().cpu[0].pc, pc + 4);
+    }
+
+    #[test]
     fn gb4_bfxil_32bit_preserves_destination_bits_outside_field() {
         // BFXIL W9, W8, #16, #15 (0x33107909) copies W8[30:16] into
         // W9[14:0] and preserves W9[31:15]. A W-form result zero-extends
