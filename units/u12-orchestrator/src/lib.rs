@@ -75,7 +75,7 @@ use pathn_contracts::cpu::{
 };
 use pathn_contracts::device::{DevEvent, DevOut, GpuCmd, GpuDevState, TransportState};
 use pathn_contracts::execution::{BlockExecutor, HostOps};
-use pathn_contracts::machine::{CpuState, MachineState, SysRegs};
+use pathn_contracts::machine::{CpuState, MachineState, SysRegs, MAX_GUEST_RAM_BYTES};
 use sha2::{Digest, Sha256};
 
 pub mod arm64;
@@ -197,6 +197,9 @@ const IMAGE_MAGIC: u32 = 0x4D49_4E50;
 const IMAGE_VERSION: u32 = 1;
 /// Image header length: magic u32 + version u32 + entry u64 + blob-size u64.
 const IMAGE_HEADER_LEN: usize = 24;
+/// Full emulator snapshot envelope magic and version.
+const FULL_SNAPSHOT_MAGIC: &[u8; 4] = b"PNFS";
+const FULL_SNAPSHOT_VERSION: u32 = 1;
 
 // ---------------------------------------------------------------------------
 // Errors / halt reasons — data, never panics
@@ -608,33 +611,37 @@ fn default_executor() -> Box<dyn BlockExecutor> {
 
 impl Orchestrator {
     pub fn new() -> Self {
+        Self::with_machine(MachineState {
+            cpu: vec![CpuState {
+                regs: [0; 31],
+                // Shelf Job 2 (2026-10-05): SP moved from 0x4800_0000 to
+                // 0x4830_0000 to avoid initrd (0x4800_0000) and DTB (0x4820_0000).
+                sp: 0x4830_0000,
+                pc: 0x4000_0000,
+                pstate: 0,
+                sysregs: SysRegs::default(),
+            }],
+            mmu: MmuState {
+                ttbr0: 0,
+                ttbr1: 0,
+                tcr: 0,
+                sctlr: 0,
+            },
+            irq: IrqState {
+                enabled: 0,
+                pending: 0,
+                timer_count: 0,
+                timer_compare: 0,
+            },
+            ram: vec![0; (RAM_SIZE + VMEMMAP_POOL_SIZE) as usize],
+            devices: vec![],
+        })
+    }
+
+    fn with_machine(machine: MachineState) -> Self {
         #[allow(unused_mut)]
         let mut orch = Self {
-            machine: MachineState {
-                cpu: vec![CpuState {
-                    regs: [0; 31],
-                    // Shelf Job 2 (2026-10-05): SP moved from 0x4800_0000 to
-                    // 0x4830_0000 to avoid initrd (0x4800_0000) and DTB (0x4820_0000).
-                    sp: 0x4830_0000,
-                    pc: 0x4000_0000,
-                    pstate: 0,
-                    sysregs: SysRegs::default(),
-                }],
-                mmu: MmuState {
-                    ttbr0: 0,
-                    ttbr1: 0,
-                    tcr: 0,
-                    sctlr: 0,
-                },
-                irq: IrqState {
-                    enabled: 0,
-                    pending: 0,
-                    timer_count: 0,
-                    timer_compare: 0,
-                },
-                ram: vec![0; (RAM_SIZE + VMEMMAP_POOL_SIZE) as usize],
-                devices: vec![],
-            },
+            machine,
             transport: TransportState {
                 queue_count: 0,
                 features: 0,
@@ -3562,16 +3569,19 @@ impl Orchestrator {
 
     // ---- snapshot / persist (U11 + U13 BlobStore) ----
 
-    /// Full snapshot: U11's machine snapshot plus a canonical encoding of the
-    /// orchestrator-owned device states (transport, gpu, console, GICv2),
-    /// the injected clock, step count, and halt reason. Layout: `u64` U11-blob
-    /// length, U11 blob, `b"PN12"`, canonical section, then an optional GIC2
-    /// extension.
+    /// Full snapshot of the machine and all mutable orchestrator state.
+    /// The `PNFS` envelope versions this format independently from U11's
+    /// machine-state blob. It also stores the current GIC registers in a
+    /// trailing GIC3 extension. Runtime JIT/cache state and trace output are
+    /// intentionally rebuilt or reattached by the runner.
     pub fn snapshot_full(&self) -> Vec<u8> {
         let snap = u11_snapshot::snapshot(&self.machine);
-        let mut out = Vec::new();
-        out.extend_from_slice(&(snap.0.len() as u64).to_le_bytes());
-        out.extend_from_slice(&snap.0);
+        let mut out = Vec::with_capacity(FULL_SNAPSHOT_MAGIC.len() + 4 + 8 + snap.0.len() + 4);
+        out.extend_from_slice(FULL_SNAPSHOT_MAGIC);
+        let mut w = CanonWriter::new();
+        w.u32(FULL_SNAPSHOT_VERSION);
+        w.bytes(&snap.0);
+        out.extend_from_slice(&w.buf);
         out.extend_from_slice(b"PN12");
         let mut w = CanonWriter::new();
         // TransportState.
@@ -3636,6 +3646,25 @@ impl Orchestrator {
                 w.u64(*addr);
             }
         }
+        // Remaining mutable execution/device state.
+        w.bytes(&self.gpu_port.stream);
+        w.u8(self.gpu_port.submit_pending as u8);
+        w.u32(self.last_notified.len() as u32);
+        for index in &self.last_notified {
+            w.u16(*index);
+        }
+        match self.exclusive {
+            None => w.u8(0),
+            Some((addr, size)) => {
+                w.u8(1);
+                w.u64(addr);
+                w.u8(size);
+            }
+        }
+        w.u64(self.vmemmap_pages_used);
+        w.u8(self.survey_mode as u8);
+        write_survey_misses(&mut w, &self.survey_first_miss);
+        write_survey_misses(&mut w, &self.survey_traps);
         out.extend_from_slice(&w.buf);
         out.extend_from_slice(b"GIC3");
         out.extend_from_slice(&self.gic.gicd_ctlr.to_le_bytes());
@@ -3651,15 +3680,39 @@ impl Orchestrator {
     /// corrupt input is a typed error, never a panic.
     pub fn restore_full(bytes: &[u8]) -> Result<Self, RestoreError> {
         let mut r = CanonReader::new(bytes);
-        let u11_len = r.u64().ok_or(RestoreError::BadFormat)? as usize;
+        if r.take(4).ok_or(RestoreError::BadFormat)? != FULL_SNAPSHOT_MAGIC {
+            return Err(RestoreError::BadFormat);
+        }
+        let found_version = r.u32().ok_or(RestoreError::BadFormat)?;
+        if found_version != FULL_SNAPSHOT_VERSION {
+            return Err(RestoreError::VersionMismatch {
+                format: "full-state snapshot",
+                found: found_version,
+                expected: FULL_SNAPSHOT_VERSION,
+            });
+        }
+        let u11_limit = MAX_GUEST_RAM_BYTES.saturating_add(64 * 1024 * 1024);
+        let u11_len = r.length(u11_limit).ok_or(RestoreError::BadFormat)?;
         let u11_blob = r.take(u11_len).ok_or(RestoreError::BadFormat)?;
-        let machine = u11_snapshot::restore(u11_blob).map_err(|_| RestoreError::BadFormat)?;
+        let machine = u11_snapshot::restore(u11_blob).map_err(|error| match error {
+            pathn_contracts::machine::SnapshotError::VersionMismatch { found } => {
+                RestoreError::VersionMismatch {
+                    format: "U11 machine snapshot",
+                    found,
+                    expected: pathn_contracts::machine::SNAPSHOT_VERSION,
+                }
+            }
+            pathn_contracts::machine::SnapshotError::Corrupt
+            | pathn_contracts::machine::SnapshotError::TooLarge => RestoreError::BadFormat,
+        })?;
+        if machine.cpu.is_empty() {
+            return Err(RestoreError::BadFormat);
+        }
         let marker = r.take(4).ok_or(RestoreError::BadFormat)?;
         if marker != b"PN12" {
             return Err(RestoreError::BadFormat);
         }
-        let mut o = Orchestrator::new();
-        o.machine = machine;
+        let mut o = Orchestrator::with_machine(machine);
         o.transport.queue_count = r.u16().ok_or(RestoreError::BadFormat)?;
         o.transport.features = r.u64().ok_or(RestoreError::BadFormat)?;
         o.transport.status = r.u8().ok_or(RestoreError::BadFormat)?;
@@ -3725,6 +3778,39 @@ impl Orchestrator {
             }),
             _ => return Err(RestoreError::BadFormat),
         };
+        o.gpu_port.stream = r.bytes().ok_or(RestoreError::BadFormat)?;
+        o.gpu_port.submit_pending = match r.u8().ok_or(RestoreError::BadFormat)? {
+            0 => false,
+            1 => true,
+            _ => return Err(RestoreError::BadFormat),
+        };
+        let notified_len = r.u32().ok_or(RestoreError::BadFormat)? as usize;
+        if notified_len > 1024 {
+            return Err(RestoreError::BadFormat);
+        }
+        for _ in 0..notified_len {
+            o.last_notified
+                .push(r.u16().ok_or(RestoreError::BadFormat)?);
+        }
+        o.exclusive = match r.u8().ok_or(RestoreError::BadFormat)? {
+            0 => None,
+            1 => Some((
+                r.u64().ok_or(RestoreError::BadFormat)?,
+                r.u8().ok_or(RestoreError::BadFormat)?,
+            )),
+            _ => return Err(RestoreError::BadFormat),
+        };
+        o.vmemmap_pages_used = r.u64().ok_or(RestoreError::BadFormat)?;
+        if o.vmemmap_pages_used > VMEMMAP_POOL_SIZE / 4096 {
+            return Err(RestoreError::BadFormat);
+        }
+        o.survey_mode = match r.u8().ok_or(RestoreError::BadFormat)? {
+            0 => false,
+            1 => true,
+            _ => return Err(RestoreError::BadFormat),
+        };
+        o.survey_first_miss = read_survey_misses(&mut r).ok_or(RestoreError::BadFormat)?;
+        o.survey_traps = read_survey_misses(&mut r).ok_or(RestoreError::BadFormat)?;
         if matches!(r.remaining(), 8 | 16 | 28) {
             let extension_len = r.remaining();
             let marker = r.take(4).ok_or(RestoreError::BadFormat)?;
@@ -3752,7 +3838,6 @@ impl Orchestrator {
         } else if r.remaining() != 0 {
             return Err(RestoreError::BadFormat);
         }
-        o.last_notified = vec![0; o.transport.queues.len()];
         Ok(o)
     }
 
@@ -3788,7 +3873,30 @@ impl Drop for Orchestrator {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum RestoreError {
     BadFormat,
+    VersionMismatch {
+        format: &'static str,
+        found: u32,
+        expected: u32,
+    },
 }
+
+impl std::fmt::Display for RestoreError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::BadFormat => f.write_str("corrupt or truncated snapshot"),
+            Self::VersionMismatch {
+                format,
+                found,
+                expected,
+            } => write!(
+                f,
+                "{format} version mismatch: found {found}, expected {expected}"
+            ),
+        }
+    }
+}
+
+impl std::error::Error for RestoreError {}
 
 // ---------------------------------------------------------------------------
 // Small pure helpers (scheduling logic, no emulation semantics)
@@ -4335,6 +4443,64 @@ impl CanonWriter {
     }
 }
 
+fn insn_kind_to_tag(kind: InsnKind) -> u8 {
+    match kind {
+        InsnKind::DataProc => 0,
+        InsnKind::LoadStore => 1,
+        InsnKind::Branch => 2,
+        InsnKind::System => 3,
+        InsnKind::Svc => 4,
+        InsnKind::PcRel => 5,
+        InsnKind::Unknown => 6,
+    }
+}
+
+fn tag_to_insn_kind(tag: u8) -> Option<InsnKind> {
+    match tag {
+        0 => Some(InsnKind::DataProc),
+        1 => Some(InsnKind::LoadStore),
+        2 => Some(InsnKind::Branch),
+        3 => Some(InsnKind::System),
+        4 => Some(InsnKind::Svc),
+        5 => Some(InsnKind::PcRel),
+        6 => Some(InsnKind::Unknown),
+        _ => None,
+    }
+}
+
+fn write_survey_misses(w: &mut CanonWriter, misses: &[SurveyMiss]) {
+    w.u32(misses.len() as u32);
+    for miss in misses {
+        w.u64(miss.step);
+        w.u64(miss.pc);
+        w.u32(miss.word);
+        w.u8(insn_kind_to_tag(miss.kind));
+    }
+}
+
+fn read_survey_misses(r: &mut CanonReader<'_>) -> Option<Vec<SurveyMiss>> {
+    let count = r.u32()? as usize;
+    if count > 256 {
+        return None;
+    }
+    let mut misses = Vec::with_capacity(count);
+    for _ in 0..count {
+        let step = r.u64()?;
+        let pc = r.u64()?;
+        let word = r.u32()?;
+        let kind = tag_to_insn_kind(r.u8()?)?;
+        let mnemonic = best_effort_classify(word).1;
+        misses.push(SurveyMiss {
+            step,
+            pc,
+            word,
+            kind,
+            mnemonic,
+        });
+    }
+    Some(misses)
+}
+
 struct CanonReader<'a> {
     buf: &'a [u8],
     pos: usize,
@@ -4345,11 +4511,12 @@ impl<'a> CanonReader<'a> {
         Self { buf, pos: 0 }
     }
     fn take(&mut self, n: usize) -> Option<&'a [u8]> {
-        if self.pos + n > self.buf.len() {
+        let end = self.pos.checked_add(n)?;
+        if end > self.buf.len() {
             return None;
         }
-        let s = &self.buf[self.pos..self.pos + n];
-        self.pos += n;
+        let s = &self.buf[self.pos..end];
+        self.pos = end;
         Some(s)
     }
     fn remaining(&self) -> usize {
@@ -4370,11 +4537,15 @@ impl<'a> CanonReader<'a> {
         self.take(8)
             .map(|s| u64::from_le_bytes(s.try_into().unwrap()))
     }
-    fn bytes(&mut self) -> Option<Vec<u8>> {
-        let n = self.u64()? as usize;
-        if n > 1 << 30 {
+    fn length(&mut self, limit: usize) -> Option<usize> {
+        let len = self.u64()?;
+        if len > limit as u64 || len > usize::MAX as u64 {
             return None;
         }
+        Some(len as usize)
+    }
+    fn bytes(&mut self) -> Option<Vec<u8>> {
+        let n = self.length(2 * 1024 * 1024 * 1024)?;
         self.take(n).map(|s| s.to_vec())
     }
 }
@@ -4643,6 +4814,9 @@ mod tests {
         let mut o = Orchestrator::new();
         o.load_image(&minimal_image(0x4000_0000, &[0xD28000A1]))
             .unwrap();
+        // This is a state-format test; keep its RAM small instead of copying
+        // the 1 GiB production guest image through several snapshot buffers.
+        o.machine.ram.truncate(4096);
         o.console.write_tx(b'X');
         o.console.feed_rx(b"yz");
         o.gic.gicd_ctlr = 1;
@@ -4659,6 +4833,26 @@ mod tests {
             last_used_idx: 2,
         });
         o.gpu.next_resource_id = 42;
+        o.gpu_port.push_byte(0xA5);
+        o.gpu_port.submit();
+        o.last_notified = vec![7];
+        o.exclusive = Some((0x4000_1000, 16));
+        o.vmemmap_pages_used = 12;
+        o.survey_mode = true;
+        o.survey_first_miss.push(SurveyMiss {
+            step: 17,
+            pc: 0x4000_0010,
+            word: 0x1400_0000,
+            kind: InsnKind::Branch,
+            mnemonic: "B",
+        });
+        o.survey_traps.push(SurveyMiss {
+            step: 18,
+            pc: 0x4000_0014,
+            word: 0xD420_0000,
+            kind: InsnKind::System,
+            mnemonic: "BRK",
+        });
         o.tick_clock(1234);
         o.halted = Some(HaltReason::Unsupported {
             addr: 0x4000_0000,
@@ -4674,8 +4868,22 @@ mod tests {
         assert_eq!(r.clock_cycles, o.clock_cycles);
         assert_eq!(r.steps, o.steps);
         assert_eq!(r.halted, o.halted);
-        // State hash is stable across the roundtrip.
+        assert_eq!(r.gpu_port.stream, o.gpu_port.stream);
+        assert_eq!(r.gpu_port.submit_pending, o.gpu_port.submit_pending);
+        assert_eq!(r.last_notified, o.last_notified);
+        assert_eq!(r.exclusive, o.exclusive);
+        assert_eq!(r.vmemmap_pages_used, o.vmemmap_pages_used);
+        assert_eq!(r.survey_mode, o.survey_mode);
+        assert_eq!(r.survey_first_miss, o.survey_first_miss);
+        assert_eq!(r.survey_traps, o.survey_traps);
+        // Two consecutive save/load cycles produce byte-identical snapshots.
+        let second = r.snapshot_full();
+        assert_eq!(blob, second);
+        let r2 = Orchestrator::restore_full(&second).unwrap();
+        assert_eq!(second, r2.snapshot_full());
+        // State hash is stable across each roundtrip.
         assert_eq!(r.state_hash(), o.state_hash());
+        assert_eq!(r2.state_hash(), o.state_hash());
     }
 
     #[test]
@@ -4689,12 +4897,37 @@ mod tests {
             Err(RestoreError::BadFormat)
         ));
         // Truncated tail.
-        let o = Orchestrator::new();
+        let mut o = Orchestrator::new();
+        o.machine.ram.truncate(4096);
         let mut blob = o.snapshot_full();
         blob.truncate(blob.len() - 5);
         assert!(matches!(
             Orchestrator::restore_full(&blob),
             Err(RestoreError::BadFormat)
+        ));
+        let mut o = Orchestrator::new();
+        o.machine.ram.truncate(4096);
+        let mut blob = o.snapshot_full();
+        blob.push(0xAA);
+        assert!(matches!(
+            Orchestrator::restore_full(&blob),
+            Err(RestoreError::BadFormat)
+        ));
+    }
+
+    #[test]
+    fn restore_full_rejects_version_mismatch_with_details() {
+        let mut o = Orchestrator::new();
+        o.machine.ram.truncate(4096);
+        let mut blob = o.snapshot_full();
+        blob[4..8].copy_from_slice(&99u32.to_le_bytes());
+        assert!(matches!(
+            Orchestrator::restore_full(&blob),
+            Err(RestoreError::VersionMismatch {
+                format: "full-state snapshot",
+                found: 99,
+                expected: FULL_SNAPSHOT_VERSION,
+            })
         ));
     }
 

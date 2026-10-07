@@ -6,7 +6,7 @@
 use std::env;
 use std::fs;
 use std::path::Path;
-use u11_snapshot;
+use std::time::Instant;
 use u12_orchestrator::{HaltReason, Orchestrator, StepOutcome, RAM_BASE};
 
 fn print_help() {
@@ -20,15 +20,21 @@ fn print_help() {
     println!("  --trace <FILE>        Enable per-step execution tracing to file");
     println!("  --console-output <FILE>  Write all captured UART bytes to FILE");
     println!("  --survey              Enable survey mode (discovery only, never progress)");
-    println!("  --save-snapshot <PATH>  Write emulator snapshot to PATH after the run");
-    println!("  --save-at <STEP>     With --save-snapshot: save when step counter reaches STEP and exit");
+    println!("  --save-snapshot <PATH>  Write a full emulator snapshot to PATH after the run");
+    println!("  --snapshot-at-step <N>  With --save-snapshot: save at absolute step N and exit");
     println!("                        (default: save at end of run)");
     println!("  --save-every <N>     With --save-snapshot: auto-save every N steps to PATH.<step>");
     println!("                        (e.g. --save-snapshot snap.bin --save-every 100000)");
-    println!("                        Enables restart from pre-divergence snapshot instead of reset.");
-    println!("  --load-snapshot <PATH>  Restore emulator state from PATH instead of fresh boot;");
-    println!("                        --max-steps then counts from the snapshot's step count.");
-    println!("                        Snapshot files store an 8-byte LE step count header.");
+    println!(
+        "                        Enables restart from pre-divergence snapshot instead of reset."
+    );
+    println!(
+        "  --load-snapshot <PATH>  Restore the versioned full machine/device state and resume."
+    );
+    println!("                        --max-steps is the number of additional steps to execute.");
+    println!("  --pause-on-pending-irq <INTID>  Stop at an unmasked pending IRQ boundary (scout only).");
+    println!("  --pause-on-init-marker  Stop as soon as the UART emits the init execution line.");
+    println!("  --skip-ram-search       Skip the post-run panic-string scan (discovery only).");
     println!("  --help, -h            Print this help text");
 }
 
@@ -51,6 +57,9 @@ fn main() {
     let mut save_at: Option<u64> = None;
     let mut save_every: Option<u64> = None;
     let mut load_snapshot: Option<String> = None;
+    let mut pause_on_pending_irq: Option<u32> = None;
+    let mut pause_on_init_marker = false;
+    let mut skip_ram_search = false;
 
     let args: Vec<String> = env::args().collect();
     let mut i = 1;
@@ -118,7 +127,7 @@ fn main() {
                     save_snapshot = Some(args[i].clone());
                 }
             }
-            "--save-at" => {
+            "--snapshot-at-step" | "--save-at" => {
                 i += 1;
                 if i < args.len() {
                     if let Ok(val) = args[i].parse() {
@@ -140,6 +149,27 @@ fn main() {
                     load_snapshot = Some(args[i].clone());
                 }
             }
+            "--pause-on-pending-irq" => {
+                i += 1;
+                if i < args.len() {
+                    match args[i].parse::<u32>() {
+                        Ok(intid) if intid < 64 => pause_on_pending_irq = Some(intid),
+                        _ => {
+                            eprintln!("Error: --pause-on-pending-irq requires an INTID from 0 to 63");
+                            std::process::exit(1);
+                        }
+                    }
+                } else {
+                    eprintln!("Error: --pause-on-pending-irq requires an INTID from 0 to 63");
+                    std::process::exit(1);
+                }
+            }
+            "--pause-on-init-marker" => {
+                pause_on_init_marker = true;
+            }
+            "--skip-ram-search" => {
+                skip_ram_search = true;
+            }
             other => {
                 eprintln!("Unknown argument: {other}");
                 print_help();
@@ -149,7 +179,44 @@ fn main() {
         i += 1;
     }
 
-    let mut orch = Orchestrator::new();
+    if save_at.is_some() && save_snapshot.is_none() {
+        eprintln!("Error: --snapshot-at-step requires --save-snapshot <PATH>");
+        std::process::exit(1);
+    }
+    if save_every.is_some() && save_snapshot.is_none() {
+        eprintln!("Error: --save-every requires --save-snapshot <PATH>");
+        std::process::exit(1);
+    }
+
+    // Load directly into the restored machine so a 1 GiB snapshot does not
+    // also allocate and then discard a fresh 1 GiB guest RAM image.
+    let mut orch = if let Some(snap_path) = load_snapshot.as_ref() {
+        let started = Instant::now();
+        let bytes = fs::read(snap_path).unwrap_or_else(|error| {
+            eprintln!("Error: failed to read snapshot {snap_path}: {error}");
+            std::process::exit(1);
+        });
+        let snapshot_size = bytes.len();
+        let restored = Orchestrator::restore_full(&bytes).unwrap_or_else(|error| {
+            eprintln!("Error: failed to restore snapshot {snap_path}: {error}");
+            std::process::exit(1);
+        });
+        let elapsed = started.elapsed();
+        let pc = restored.machine().cpu[0].pc;
+        println!(
+            "[snapshot] Loaded {snapshot_size} bytes from {snap_path} at step {}, PC={pc:#018x}, load_ms={:.3}",
+            restored.steps(),
+            elapsed.as_secs_f64() * 1000.0
+        );
+        println!(
+            "[boot] Resuming from snapshot. Running for up to {max_steps} additional steps from step {}...",
+            restored.steps()
+        );
+        restored
+    } else {
+        Orchestrator::new()
+    };
+
     if let Some(ref tf) = trace_file {
         orch.enable_trace_file(tf)
             .expect("failed to open trace output file");
@@ -162,29 +229,7 @@ fn main() {
         println!("[survey] Survey mode active: skipping unimplemented opcodes (discovery only)");
     }
 
-    // Snapshot load takes precedence over fresh boot: the restored
-    // MachineState already contains kernel, DTB, registers, RAM, etc.
-    // File format: u64 LE step-count header followed by the u11-snapshot blob.
-    if let Some(ref snap_path) = load_snapshot {
-        let bytes = fs::read(snap_path).expect("failed to read snapshot file");
-        if bytes.len() < 8 {
-            eprintln!("Error: snapshot file too short (missing step-count header)");
-            std::process::exit(1);
-        }
-        let saved_steps = u64::from_le_bytes(bytes[0..8].try_into().unwrap());
-        let state = u11_snapshot::restore(&bytes[8..]).expect("failed to restore snapshot");
-        let pc = state.cpu[0].pc;
-        *orch.machine_mut() = state;
-        orch.steps = saved_steps;
-        println!(
-            "[snapshot] Loaded {} bytes from {snap_path} at step {saved_steps}, PC={pc:#018x}",
-            bytes.len()
-        );
-        println!(
-            "[boot] Resuming from snapshot. Running up to {max_steps} steps from step {}...",
-            orch.steps()
-        );
-    } else {
+    if load_snapshot.is_none() {
         let path = Path::new(&kernel_path);
         if !path.exists() {
             eprintln!("Error: kernel image not found at {kernel_path}");
@@ -260,42 +305,83 @@ fn main() {
     }
 
     let mut halt_reason = None;
-    let mut saved_at_step: Option<u64> = None;
-    for _ in 0..max_steps {
-        match orch.step_vcpu() {
-            StepOutcome::Continue => {}
-            StepOutcome::WfiYield { addr } => {
-                halt_reason = Some(HaltReason::Wfi { addr });
+    let mut interrupt_pause = None;
+    let mut init_marker_pause = false;
+    const INIT_MARKER: &[u8] = b"Run /init as init process";
+    let mut uart_len = orch.console().tx_bytes.len();
+    let mut init_marker_seen = orch
+        .console()
+        .tx_bytes
+        .windows(INIT_MARKER.len())
+        .any(|window| window == INIT_MARKER);
+    let mut saved_at_step = save_at
+        .filter(|target| orch.steps() >= *target)
+        .map(|_| orch.steps());
+    if saved_at_step.is_none() {
+        for _ in 0..max_steps {
+            if pause_on_init_marker && init_marker_seen {
+                init_marker_pause = true;
                 break;
             }
-            StepOutcome::Halted(reason) => {
-                halt_reason = Some(reason);
-                break;
+            if let Some(intid) = pause_on_pending_irq {
+                let pending = orch.machine().irq.pending & (1u64 << intid) != 0;
+                let irq_masked = orch.machine().cpu[0].pstate & (1 << 7) != 0;
+                if pending && !irq_masked {
+                    interrupt_pause = Some(intid);
+                    break;
+                }
             }
-        }
-        let s = orch.steps();
-        if s > 0 && s % 10_000_000 == 0 {
-            let pc = orch.machine().cpu[0].pc;
-            println!("[progress] step {s} ({}M), PC={pc:#018x}", s / 1_000_000);
-        }
-        // --save-at: snapshot as soon as the step counter reaches the target.
-        if let Some(target) = save_at {
-            if orch.steps() >= target {
-                saved_at_step = Some(target);
-                break;
+            match orch.step_vcpu() {
+                StepOutcome::Continue => {}
+                StepOutcome::WfiYield { addr } => {
+                    halt_reason = Some(HaltReason::Wfi { addr });
+                    break;
+                }
+                StepOutcome::Halted(reason) => {
+                    halt_reason = Some(reason);
+                    break;
+                }
             }
-        }
-        // --save-every: periodic auto-save for fast restart from pre-divergence.
-        if let (Some(ref base), Some(every)) = (&save_snapshot, save_every) {
-            if every > 0 && orch.steps() > 0 && orch.steps() % every == 0 {
-                let path = format!("{}.{}", base, orch.steps());
-                let blob = u11_snapshot::snapshot(orch.machine()).0;
-                let mut out = Vec::with_capacity(8 + blob.len());
-                out.extend_from_slice(&orch.steps().to_le_bytes());
-                out.extend_from_slice(&blob);
-                if fs::write(&path, &out).is_ok() {
-                    println!("[snapshot] Auto-saved {} bytes to {} at step {}",
-                             out.len(), path, orch.steps());
+            if pause_on_init_marker {
+                let uart = &orch.console().tx_bytes;
+                if uart.len() != uart_len {
+                    let search_start = uart_len.saturating_sub(INIT_MARKER.len() - 1);
+                    init_marker_seen = uart[search_start..]
+                        .windows(INIT_MARKER.len())
+                        .any(|window| window == INIT_MARKER);
+                    uart_len = uart.len();
+                    if init_marker_seen {
+                        init_marker_pause = true;
+                        break;
+                    }
+                }
+            }
+            let s = orch.steps();
+            if s > 0 && s % 10_000_000 == 0 {
+                let pc = orch.machine().cpu[0].pc;
+                println!("[progress] step {s} ({}M), PC={pc:#018x}", s / 1_000_000);
+            }
+            // Save immediately after the instruction that reaches the requested
+            // absolute step. Full state includes the step counter and devices.
+            if let Some(target) = save_at {
+                if orch.steps() >= target {
+                    saved_at_step = Some(orch.steps());
+                    break;
+                }
+            }
+            // --save-every: periodic auto-save for fast restart from pre-divergence.
+            if let (Some(ref base), Some(every)) = (&save_snapshot, save_every) {
+                if every > 0 && orch.steps() > 0 && orch.steps() % every == 0 {
+                    let path = format!("{}.{}", base, orch.steps());
+                    let blob = orch.snapshot_full();
+                    if fs::write(&path, &blob).is_ok() {
+                        println!(
+                            "[snapshot] Auto-saved {} bytes to {} at step {}",
+                            blob.len(),
+                            path,
+                            orch.steps()
+                        );
+                    }
                 }
             }
         }
@@ -308,17 +394,19 @@ fn main() {
             .unwrap_or_else(|error| panic!("failed to write UART output to {path}: {error}"));
     }
 
-    // Snapshot save: u64 LE step-count header + u11-snapshot blob.
+    // Save U12's versioned full snapshot, including UART bytes and device state.
     if let Some(ref snap_path) = save_snapshot {
-        let blob = u11_snapshot::snapshot(orch.machine()).0;
-        let mut out = Vec::with_capacity(8 + blob.len());
-        out.extend_from_slice(&orch.steps().to_le_bytes());
-        out.extend_from_slice(&blob);
-        fs::write(snap_path, &out).expect("failed to write snapshot file");
+        let started = Instant::now();
+        let blob = orch.snapshot_full();
+        fs::write(snap_path, &blob).unwrap_or_else(|error| {
+            eprintln!("Error: failed to write snapshot {snap_path}: {error}");
+            std::process::exit(1);
+        });
         println!(
-            "[snapshot] Saved {} bytes to {snap_path} at step {}",
-            out.len(),
-            orch.steps()
+            "[snapshot] Saved {} bytes to {snap_path} at step {}, save_ms={:.3}",
+            blob.len(),
+            orch.steps(),
+            started.elapsed().as_secs_f64() * 1000.0
         );
     }
 
@@ -345,6 +433,12 @@ fn main() {
         }
     }
     println!("[done] Executed {steps} steps. PC={pc:#018x}");
+    if let Some(intid) = interrupt_pause {
+        println!("[irq-pause] INTID {intid} pending and unmasked at step {steps}, PC={pc:#018x}");
+    }
+    if init_marker_pause {
+        println!("[init-marker-pause] UART contains 'Run /init as init process' at step {steps}, PC={pc:#018x}");
+    }
     match halt_reason {
         Some(ref reason) => {
             println!("[halt] Reason: {reason:?}");
@@ -362,35 +456,39 @@ fn main() {
                      sys.ttbr0_el1, sys.ttbr1_el1, sys.tcr_el1, sys.sctlr_el1);
         }
         None if saved_at_step.is_some() => println!(
-            "[snapshot] Reached --save-at step {} (saved, exiting)",
+            "[snapshot] Reached --snapshot-at-step {} (saved, exiting)",
             saved_at_step.unwrap()
         ),
+        None if interrupt_pause.is_some() => {}
+        None if init_marker_pause => {}
         None => println!("[limit] Step budget ({max_steps}) reached without halt"),
     }
 
-    // Mandatory RAM search per Panic Verification Rule
-    let ram = &orch.machine().ram;
-    let needles: &[(&str, &[u8])] = &[
-        ("Failed to allocate", b"Failed to allocate"),
-        ("Kernel panic - not syncing", b"Kernel panic - not syncing"),
-    ];
-    println!("[ram-search] Scanning 1 GiB guest RAM for panic strings...");
-    for (name, needle) in needles {
-        let mut count = 0;
-        let mut idx = 0;
-        while let Some(pos) = ram[idx..].windows(needle.len()).position(|w| w == *needle) {
-            let pa = RAM_BASE + (idx + pos) as u64;
-            let is_rodata = (0x4008_0000..0x4168_0000).contains(&pa);
-            println!("  Found '{}' at PA {pa:#010x} (rodata={is_rodata})", name);
-            if !is_rodata {
-                count += 1;
+    if !skip_ram_search {
+        // Mandatory RAM search per Panic Verification Rule on normal runs.
+        let ram = &orch.machine().ram;
+        let needles: &[(&str, &[u8])] = &[
+            ("Failed to allocate", b"Failed to allocate"),
+            ("Kernel panic - not syncing", b"Kernel panic - not syncing"),
+        ];
+        println!("[ram-search] Scanning 1 GiB guest RAM for panic strings...");
+        for (name, needle) in needles {
+            let mut count = 0;
+            let mut idx = 0;
+            while let Some(pos) = ram[idx..].windows(needle.len()).position(|w| w == *needle) {
+                let pa = RAM_BASE + (idx + pos) as u64;
+                let is_rodata = (0x4008_0000..0x4168_0000).contains(&pa);
+                println!("  Found '{}' at PA {pa:#010x} (rodata={is_rodata})", name);
+                if !is_rodata {
+                    count += 1;
+                }
+                idx += pos + needle.len();
             }
-            idx += pos + needle.len();
-        }
-        if count == 0 {
-            println!("  [CLEAN] No dynamic occurrences of '{}'", name);
-        } else {
-            println!("  [PANIC DETECTED] {} dynamic occurrences of '{}'", count, name);
+            if count == 0 {
+                println!("  [CLEAN] No dynamic occurrences of '{}'", name);
+            } else {
+                println!("  [PANIC DETECTED] {} dynamic occurrences of '{}'", count, name);
+            }
         }
     }
 

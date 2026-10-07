@@ -27,6 +27,7 @@ use pathn_contracts::machine::{
 /// Encoded size of one [`CpuState`]: 31 regs + sp + pc + pstate + 135 sysregs,
 /// all u64LE.
 const CPU_ENCODED_BYTES: usize = 169 * 8;
+const CPU_ENCODED_BYTES_V13: usize = 167 * 8;
 /// Minimum encoded size of one [`DeviceState`]: u8 tag + u64 blob length.
 const DEVICE_MIN_BYTES: usize = 1 + 8;
 
@@ -271,7 +272,7 @@ impl<'a> Reader<'a> {
         self.take(n as usize)
     }
 
-    fn cpu(&mut self) -> Result<CpuState, SnapshotError> {
+    fn cpu(&mut self, version: u32) -> Result<CpuState, SnapshotError> {
         let mut regs = [0u64; 31];
         for reg in regs.iter_mut() {
             *reg = self.u64()?;
@@ -353,8 +354,11 @@ impl<'a> Reader<'a> {
                 lorc_el1: self.u64()?,
                 pmccntr_el0: self.u64()?,
                 zcr_el1: self.u64()?,
-                elr_el1: self.u64()?,
-                spsr_el1: self.u64()?,
+                // v14 appends ELR_EL1 and SPSR_EL1. Older Track 69
+                // checkpoints restore these exception-return fields to reset
+                // values so the current runner can resume them.
+                elr_el1: if version >= 14 { self.u64()? } else { 0 },
+                spsr_el1: if version >= 14 { self.u64()? } else { 0 },
             },
         })
     }
@@ -367,7 +371,7 @@ impl<'a> Reader<'a> {
 /// * fewer than 4 bytes, or any truncation mid-field → `Corrupt`;
 /// * declared byte-length past the 2 GiB contract cap → `TooLarge`;
 /// * declared length within cap but beyond the bytes present → `Corrupt`;
-/// * version != [`SNAPSHOT_VERSION`] → `VersionMismatch { found }`;
+/// * unsupported versions → `VersionMismatch { found }`;
 /// * unknown device tag, or any trailing bytes → `Corrupt`.
 pub fn restore(blob: &[u8]) -> Result<MachineState, SnapshotError> {
     let mut r = Reader::new(blob);
@@ -376,19 +380,24 @@ pub fn restore(blob: &[u8]) -> Result<MachineState, SnapshotError> {
         return Err(SnapshotError::Corrupt);
     }
     let found = r.u32()?;
-    if found != SNAPSHOT_VERSION {
+    if found != SNAPSHOT_VERSION && found != 13 {
         return Err(SnapshotError::VersionMismatch { found });
     }
 
     let cpu_count = r.u32()? as u64;
     // Each vCPU costs exactly CPU_ENCODED_BYTES; reject absurd counts up front.
     // count <= u32::MAX, so the u64 multiply cannot overflow.
-    if cpu_count * CPU_ENCODED_BYTES as u64 > r.remaining() as u64 {
+    let cpu_encoded_bytes = if found == 13 {
+        CPU_ENCODED_BYTES_V13
+    } else {
+        CPU_ENCODED_BYTES
+    };
+    if cpu_count * cpu_encoded_bytes as u64 > r.remaining() as u64 {
         return Err(SnapshotError::Corrupt);
     }
     let mut cpu = Vec::new();
     for _ in 0..cpu_count {
-        cpu.push(r.cpu()?);
+        cpu.push(r.cpu(found)?);
     }
 
     let mmu = MmuState {

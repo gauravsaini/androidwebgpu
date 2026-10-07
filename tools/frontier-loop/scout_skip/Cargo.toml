@@ -1,0 +1,15 @@
+[package]
+name = "frontier-scout-skip"
+version = "0.1.0"
+edition = "2021"
+
+[workspace]
+
+[[bin]]
+name = "scout-skip"
+path = "src/main.rs"
+
+[dependencies]
+pathn-contracts = { path = "../../../contracts" }
+u12-orchestrator = { path = "../../../units/u12-orchestrator" }
+u4-mmu = { path = "../../../units/u4-mmu" }
