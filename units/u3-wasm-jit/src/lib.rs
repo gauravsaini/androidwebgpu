@@ -513,11 +513,18 @@ pub fn compile(block: &IrBlock) -> WasmModule {
                         reg_set(&mut body, *dst);
                     }
                     1 => {
-                        // BFM: (dst & ~wmask) | (bot & wmask)
+                        // BFM combines the rotated source with two masks:
+                        // bits outside tmask keep dst, while bits inside it
+                        // take the bitfield-move result.
                         reg_get(&mut body, *dst);
-                        let dst_keep_mask = if *is_32 { (!wmask) & 0xFFFF_FFFF } else { !wmask };
+                        let dst_top_mask = (!tmask) & mask;
                         body.push(OP_I64_CONST);
-                        sleb(dst_keep_mask as i64, &mut body);
+                        sleb(dst_top_mask as i64, &mut body);
+                        body.push(OP_I64_AND);
+                        reg_get(&mut body, *dst);
+                        let dst_bottom_mask = (!wmask) & mask;
+                        body.push(OP_I64_CONST);
+                        sleb(dst_bottom_mask as i64, &mut body);
                         body.push(OP_I64_AND);
 
                         reg_get(&mut body, *src);
@@ -548,6 +555,10 @@ pub fn compile(block: &IrBlock) -> WasmModule {
                         sleb(wmask as i64, &mut body);
                         body.push(OP_I64_AND);
 
+                        body.push(OP_I64_OR);
+                        body.push(OP_I64_CONST);
+                        sleb(tmask as i64, &mut body);
+                        body.push(OP_I64_AND);
                         body.push(OP_I64_OR);
                         reg_set(&mut body, *dst);
                     }
