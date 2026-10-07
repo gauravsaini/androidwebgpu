@@ -203,6 +203,7 @@ const PSTATE_MODE_MASK: u64 = 0x1F;
 const EL0T_MODE: u64 = 0x00;
 const EL1T_MODE: u64 = 0x04;
 const EL1H_MODE: u64 = 0x05;
+const MAX_IRQ_NESTING_DEPTH: usize = 64;
 const IRQ_ENTRY_LOG_CAPACITY: usize = 16;
 
 // ---------------------------------------------------------------------------
@@ -3211,6 +3212,12 @@ impl Orchestrator {
             (cpu.pstate & !PSTATE_DAIF_MASK) | (cpu.sysregs.daif & PSTATE_DAIF_MASK);
         if saved_pstate & PSTATE_IRQ_MASK != 0 {
             return Ok(());
+        }
+        if self.irq_entry_stack.len() >= MAX_IRQ_NESTING_DEPTH {
+            return Err(HaltReason::Unsupported {
+                addr: cpu.pc,
+                reason: "IRQ nesting limit exceeded",
+            });
         }
         let source_mode = (saved_pstate & PSTATE_MODE_MASK) as u8;
         let vector_offset = match source_mode as u64 {
