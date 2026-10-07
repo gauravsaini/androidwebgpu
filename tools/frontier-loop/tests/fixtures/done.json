@@ -1,0 +1,10 @@
+{
+  "schema": "frontier-boot-report/1",
+  "binary": {"git_rev": "a1b2c3d", "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "profile": "release"},
+  "guest": {"image_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", "initramfs_sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc", "dtb_sha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"},
+  "run": {"steps": 47, "halt_step": 47, "wall_s": 1.0, "resumed_from_snapshot": "snap-46.bin"},
+  "halt": {"pc": null, "symbol": null, "insn_hex": null, "disasm": null, "reason": "completed", "detail": "kernel reached init marker"},
+  "uart": {"bytes": 35, "init_marker": true, "tail": "Run /init as init process"},
+  "spin": {"detected": false},
+  "classification": {"category": "unknown", "confidence": "low", "oracle": "none", "agent_kind": "human"}
+}
