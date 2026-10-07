@@ -2458,7 +2458,7 @@ impl Orchestrator {
         // 1250891. Encoding: sf 0 0 100111 N Rm lsb Rn Rd.
         // bits[28:23] == 0b100111, op=bit30=0, S=bit29=0, N=bit22 must
         // equal sf. Rm = bits[21:16], lsb = bits[15:10], Rn = bits[9:5],
-        // Rd = bits[4:0]. Rd = (Rm:Rn)[lsb+datasize-1 : lsb].
+        // Rd = bits[4:0]. Rd = (Rn:Rm)[lsb+datasize-1 : lsb].
         // Rn/Rm=31 name XZR (not SP) for this class.
         if (word >> 23) & 0x3F == 0b100111
             && (word >> 30) & 1 == 0
@@ -2484,7 +2484,7 @@ impl Orchestrator {
                 if lsb >= 64 {
                     return None; // UNDEFINED: lsb >= datasize.
                 }
-                let concat = ((m_val as u128) << 64) | (n_val as u128);
+                let concat = ((n_val as u128) << 64) | (m_val as u128);
                 ((concat >> lsb) & 0xFFFF_FFFF_FFFF_FFFF) as u64
             } else {
                 if lsb >= 32 {
@@ -2492,7 +2492,7 @@ impl Orchestrator {
                 }
                 let n32 = n_val as u32 as u64;
                 let m32 = m_val as u32 as u64;
-                let concat = (m32 << 32) | n32;
+                let concat = (n32 << 32) | m32;
                 ((concat >> lsb) & 0xFFFF_FFFF) as u64
             };
             if rd != 31 {
@@ -6408,6 +6408,61 @@ mod tests {
         );
         // Rotate right by 2: 0x8000...0001 -> 0x6000...0000.
         assert_eq!(o.machine().cpu[0].regs[8], 0x6000_0000_0000_0000);
+        assert_eq!(o.machine().cpu[0].pc, pc + 4);
+    }
+
+    #[test]
+    fn track60_extr_matches_t59_ttbr_root_case() {
+        // EXTR X4, X4, X3, #48 (0x93C3C084), the T59 kernel sequence.
+        // Arm concatenates Rn:Rm, then extracts bits [111:48].
+        let pc = RAM_BASE + 0x1000;
+        let mut o = sp_test_orchestrator(pc, RAM_BASE + 0x2000, 0x93C3_C084);
+        o.machine_mut().cpu[0].regs[4] = 0x0000_0000_416E_A000; // Rn / X4
+        o.machine_mut().cpu[0].regs[3] = 0x0000_0000_4168_4000; // Rm / X3
+
+        assert_eq!(o.step_vcpu(), StepOutcome::Continue);
+        assert_eq!(o.machine().cpu[0].regs[4], 0x0000_416E_A000_0000);
+        assert_eq!(o.machine().cpu[0].pc, pc + 4);
+    }
+
+    #[test]
+    fn track60_extr_hand_verified_64bit_pair() {
+        // EXTR X0, X1, X2, #4 (0x93C21020):
+        // (0x12:0x34) >> 4, low 64 bits = 0x2000000000000003.
+        let pc = RAM_BASE + 0x1000;
+        let mut o = sp_test_orchestrator(pc, RAM_BASE + 0x2000, 0x93C2_1020);
+        o.machine_mut().cpu[0].regs[1] = 0x12;
+        o.machine_mut().cpu[0].regs[2] = 0x34;
+
+        assert_eq!(o.step_vcpu(), StepOutcome::Continue);
+        assert_eq!(o.machine().cpu[0].regs[0], 0x2000_0000_0000_0003);
+        assert_eq!(o.machine().cpu[0].pc, pc + 4);
+    }
+
+    #[test]
+    fn track60_extr_hand_verified_32bit_pair() {
+        // EXTR W0, W1, W2, #4 (0x13821020):
+        // (0x12:0x34) >> 4, low 32 bits = 0x20000003.
+        let pc = RAM_BASE + 0x1000;
+        let mut o = sp_test_orchestrator(pc, RAM_BASE + 0x2000, 0x1382_1020);
+        o.machine_mut().cpu[0].regs[1] = 0x12;
+        o.machine_mut().cpu[0].regs[2] = 0x34;
+
+        assert_eq!(o.step_vcpu(), StepOutcome::Continue);
+        assert_eq!(o.machine().cpu[0].regs[0], 0x2000_0003);
+        assert_eq!(o.machine().cpu[0].pc, pc + 4);
+    }
+
+    #[test]
+    fn track49_extr_64bit_concatenates_rn_then_rm() {
+        // EXTR X4, X0, X1, #17 (0x93C14404), the existing T49 vector.
+        let pc = RAM_BASE + 0xA8;
+        let mut o = sp_test_orchestrator(pc, RAM_BASE + 0x2000, 0x93C1_4404);
+        o.machine_mut().cpu[0].regs[0] = 0xFEDC_BA98_7654_3210;
+        o.machine_mut().cpu[0].regs[1] = 0x0123_4567_89AB_4321;
+
+        assert_eq!(o.step_vcpu(), StepOutcome::Continue);
+        assert_eq!(o.machine().cpu[0].regs[4], 0x1908_0091_A2B3_C4D5);
         assert_eq!(o.machine().cpu[0].pc, pc + 4);
     }
 
