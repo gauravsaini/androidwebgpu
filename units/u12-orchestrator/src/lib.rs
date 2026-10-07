@@ -4863,6 +4863,29 @@ mod tests {
     }
 
     #[test]
+    fn gb4_bfxil_32bit_preserves_destination_bits_outside_field() {
+        // BFXIL W9, W8, #16, #15 (0x33107909) copies W8[30:16] into
+        // W9[14:0] and preserves W9[31:15]. A W-form result zero-extends
+        // into X9.
+        let pc = RAM_BASE + 0x1000;
+        for (src, dst, expected) in [
+            // The allocator's exact BFXIL inputs: bit 21 is preserved while
+            // the extracted field contributes 0x20 to the low destination.
+            (0x0020_0000, 0x0020_0000, 0x0020_0020),
+            // Isolate the destination-preservation mask from source rotation.
+            (0x0001_0000, 0x0020_0000, 0x0020_0001),
+        ] {
+            let mut o = sp_test_orchestrator(pc, RAM_BASE + 0x2000, 0x3310_7909);
+            o.machine_mut().cpu[0].regs[8] = 0xFFFF_FFFF_0000_0000 | src;
+            o.machine_mut().cpu[0].regs[9] = 0xFFFF_FFFF_0000_0000 | dst;
+
+            assert!(matches!(o.step_vcpu(), StepOutcome::Continue));
+            assert_eq!(o.machine().cpu[0].regs[9], expected);
+            assert_eq!(o.machine().cpu[0].pc, pc + 4);
+        }
+    }
+
+    #[test]
     fn gb15_csel_cond_nv_executes_always() {
         // CSEL X5, X6, X5, NV (0x9A85F0C5): cond=NV is legal and
         // always-true per ARM ARM (GB-26 fix: no longer trapped as
