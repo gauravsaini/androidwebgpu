@@ -39,7 +39,7 @@ fn configure_mmu_pages(orch: &mut Orchestrator, read_only_data: bool) {
         ram[offset..offset + 8].copy_from_slice(&value.to_le_bytes());
     };
     let table = |pa: u64| pa | 0b11;
-    let page = |pa: u64, ap: u64| (pa & !0xFFF) | (ap << 6) | 0b11;
+    let page = |pa: u64, ap: u64| (pa & !0xFFF) | (ap << 6) | (1 << 10) | 0b11;
 
     write_desc(&mut orch.machine.ram, l0, table(l1)); // L0[0]
     write_desc(&mut orch.machine.ram, l1 + 8, table(l2)); // L1[1]

@@ -71,6 +71,7 @@ use std::collections::VecDeque;
 mod irq_wfi_tests;
 #[cfg(test)]
 mod sync_abort_tests;
+#[cfg(test)]
 mod fault_family_tests;
 
 use pathn_contracts::adapters::{BlobStore, InputSource};
@@ -204,6 +205,8 @@ const IMAGE_VERSION: u32 = 1;
 const IMAGE_HEADER_LEN: usize = 24;
 const PSTATE_DAIF_MASK: u64 = 0x0000_03C0;
 const PSTATE_IRQ_MASK: u64 = 1 << 7;
+const PSTATE_D_MASK: u64 = 1 << 9;
+const PSTATE_SS_MASK: u64 = 1 << 21;
 const PSTATE_MODE_MASK: u64 = 0x1F;
 const EL0T_MODE: u64 = 0x00;
 const EL1T_MODE: u64 = 0x04;
@@ -260,6 +263,10 @@ struct ExceptionFault {
     access: Access,
     fault: MemFault,
     level: u8,
+    dfsc: u8,
+    s1ptw: bool,
+    ea: bool,
+    fnv: bool,
 }
 
 impl ExceptionFault {
@@ -272,15 +279,23 @@ impl ExceptionFault {
             access,
             fault: fault.fault,
             level: fault.level,
+            dfsc: fault.dfsc,
+            s1ptw: fault.s1ptw,
+            ea: fault.ea,
+            fnv: false,
         }
     }
 
-    fn translation(va: u64, access: Access) -> Self {
+    fn external(va: u64, access: Access) -> Self {
         Self {
             va,
             access,
             fault: MemFault::TranslationFault { va },
             level: 0,
+            dfsc: 0x10,
+            s1ptw: false,
+            ea: false,
+            fnv: false,
         }
     }
 }
@@ -1097,7 +1112,7 @@ impl Orchestrator {
             .translate_va_status(pc, Access::Execute)
             .map_err(|fault| ExceptionFault::from_mmu(fault, Access::Execute))?;
         let off = ram_offset_in(&self.machine.ram, pa, 4)
-            .map_err(|_| ExceptionFault::translation(pc, Access::Execute))?;
+            .map_err(|_| ExceptionFault::external(pc, Access::Execute))?;
         Ok(u32::from_le_bytes(
             self.machine.ram[off..off + 4].try_into().unwrap(),
         ))
@@ -3370,6 +3385,279 @@ impl Orchestrator {
         self.enter_synchronous_exception(pc, pc.wrapping_add(4), source_mode, saved_pstate, esr, 0)
     }
 
+    fn enter_debug_exception(
+        &mut self,
+        source_pc: u64,
+        return_pc: u64,
+        source_mode: u64,
+        saved_pstate: u64,
+        ec: u8,
+        iss: u64,
+        far: u64,
+    ) -> Result<(), HaltReason> {
+        let esr = ((ec as u64) << 26) | (1 << 25) | iss;
+        self.enter_synchronous_exception(
+            source_pc,
+            return_pc,
+            source_mode,
+            saved_pstate,
+            esr,
+            far,
+        )
+    }
+
+    fn debug_exceptions_enabled(&self, source_mode: u64) -> bool {
+        let cpu = &self.machine.cpu[0];
+        if cpu.pstate & PSTATE_D_MASK != 0 {
+            return false;
+        }
+        // MDE globally enables self-hosted debug events; KDE additionally
+        // allows events from EL1. EL0 events only require MDE.
+        if cpu.sysregs.mdscr_el1 & (1 << 15) == 0 {
+            return false;
+        }
+        match source_mode {
+            EL1T_MODE | EL1H_MODE => cpu.sysregs.mdscr_el1 & (1 << 13) != 0, // KDE
+            EL0T_MODE => true,
+            _ => false,
+        }
+    }
+
+    fn debug_pac_matches(pac: u64, source_mode: u64) -> bool {
+        match source_mode {
+            // PAC/PMC bit 0 selects EL1 and bit 1 selects EL0; zero disables
+            // both and 0b11 selects both exception levels.
+            EL0T_MODE => pac & 0b10 != 0,
+            EL1T_MODE | EL1H_MODE => pac & 0b01 != 0,
+            _ => false,
+        }
+    }
+
+    fn hardware_breakpoint_matches(&self, pc: u64, source_mode: u64) -> bool {
+        if !self.debug_exceptions_enabled(source_mode) {
+            return false;
+        }
+        let cpu = &self.machine.cpu[0];
+        cpu.sysregs.dbg_bcr.iter().zip(cpu.sysregs.dbg_bvr).any(|(bcr, bvr)| {
+            let bas = (bcr >> 5) & 0xF;
+            bcr & 1 != 0
+                && Self::debug_pac_matches((bcr >> 1) & 0x3, source_mode)
+                && bas == 0xF // A64 breakpoint must select all instruction bytes.
+                && pc & !3 == bvr & !3
+        })
+    }
+
+    fn decoded_data_access(&self, word: u32) -> Option<(u64, u64, Access, bool)> {
+        let rn = ((word >> 5) & 0x1F) as usize;
+        let base = if rn == 31 {
+            self.machine.cpu[0].sp
+        } else {
+            self.machine.cpu[0].regs[rn]
+        };
+
+        // Load/store register (unsigned immediate): size, V, opc, imm12, Rn.
+        if word & 0x3B00_0000 == 0x3900_0000 {
+            let bytes = 1u64 << ((word >> 30) & 0x3);
+            let offset = (((word >> 10) & 0xFFF) as u64) * bytes;
+            let access = if (word >> 22) & 0x3 == 0 {
+                Access::Write
+            } else {
+                Access::Read
+            };
+            return Some((base.wrapping_add(offset), bytes, access, rn == 31));
+        }
+
+        // Load/store register (unscaled, pre-indexed, post-indexed, unprivileged).
+        if word & 0x3B00_0000 == 0x3800_0000 && (word >> 26) & 1 == 0 {
+            let bytes = 1u64 << ((word >> 30) & 0x3);
+            let imm9 = (((word >> 12) & 0x1FF) as i64) << 55 >> 55;
+            let mode = (word >> 10) & 0x3;
+            let address = if mode == 0b01 {
+                base
+            } else {
+                base.wrapping_add(imm9 as u64)
+            };
+            let access = if (word >> 22) & 0x3 == 0 {
+                Access::Write
+            } else {
+                Access::Read
+            };
+            return Some((address, bytes, access, rn == 31));
+        }
+
+        // Load/store pair: signed imm7 scaled by element width.
+        if word & 0x3A00_0000 == 0x2800_0000 {
+            let bytes = 1u64 << ((word >> 30) & 0x3);
+            let imm7 = (((word >> 15) & 0x7F) as i64) << 57 >> 57;
+            let mode = (word >> 23) & 0x3;
+            let byte_offset = (imm7 * bytes as i64) as u64;
+            let address = if mode == 0b01 {
+                base
+            } else {
+                base.wrapping_add(byte_offset)
+            };
+            let access = if (word >> 22) & 1 == 0 {
+                Access::Write
+            } else {
+                Access::Read
+            };
+            return Some((address, bytes * 2, access, rn == 31));
+        }
+
+        None
+    }
+
+    fn watchpoint_match(
+        &self,
+        address: u64,
+        size: u64,
+        access: Access,
+        source_mode: u64,
+    ) -> bool {
+        if !self.debug_exceptions_enabled(source_mode) {
+            return false;
+        }
+        let cpu = &self.machine.cpu[0];
+        cpu.sysregs.dbg_wcr.iter().zip(cpu.sysregs.dbg_wvr).any(|(wcr, wvr)| {
+            let bas = (wcr >> 5) & 0xFF;
+            let lsc = (wcr >> 3) & 0x3;
+            let access_enabled = match access {
+                Access::Read => lsc & 0b01 != 0,
+                Access::Write => lsc & 0b10 != 0,
+                Access::Execute => false,
+            };
+            if wcr & 1 == 0
+                || !Self::debug_pac_matches((wcr >> 1) & 0x3, source_mode)
+                || !access_enabled
+            {
+                return false;
+            }
+            (0..size).any(|offset| {
+                let byte_address = address.wrapping_add(offset);
+                let byte_offset = byte_address & 7;
+                byte_address & !7 == wvr & !7 && bas & (1 << byte_offset) != 0
+            })
+        })
+    }
+
+    fn enter_pre_execution_exception(
+        &mut self,
+        pc: u64,
+        word: u32,
+    ) -> Result<bool, HaltReason> {
+        let cpu = &self.machine.cpu[0];
+        let source_mode = cpu.pstate & PSTATE_MODE_MASK;
+        let saved_pstate = (cpu.pstate & !PSTATE_DAIF_MASK)
+            | (cpu.sysregs.daif & PSTATE_DAIF_MASK);
+
+        if self.hardware_breakpoint_matches(pc, source_mode) {
+            let ec = if source_mode == EL0T_MODE { 0x30 } else { 0x31 };
+            self.enter_debug_exception(pc, pc, source_mode, saved_pstate, ec, 0x22, 0)?;
+            return Ok(true);
+        }
+
+        if word & 0xFFE0_0000 == 0xD420_0000 {
+            let immediate = ((word >> 5) & 0xFFFF) as u64;
+            self.enter_debug_exception(pc, pc, source_mode, saved_pstate, 0x3C, immediate, 0)?;
+            return Ok(true);
+        }
+
+        let top4 = (word >> 25) & 0xF;
+        let fp_simd = matches!(top4, 0b0110 | 0b0111 | 0b1110 | 0b1111);
+        let fpen = (cpu.sysregs.cpacr_el1 >> 20) & 0x3;
+        let fp_enabled = match source_mode {
+            EL0T_MODE => fpen == 0b11,
+            EL1T_MODE | EL1H_MODE => fpen & 0b10 != 0,
+            _ => true,
+        };
+        if fp_simd && !fp_enabled {
+            let esr = (0x07u64 << 26) | (1 << 25) | (1 << 24) | (0b1110 << 20);
+            self.enter_synchronous_exception(pc, pc, source_mode, saved_pstate, esr, 0)?;
+            return Ok(true);
+        }
+
+        if let Some((address, size, access, base_is_sp)) = self.decoded_data_access(word) {
+            let sctlr = cpu.sysregs.sctlr_el1;
+            let sa = if source_mode == EL0T_MODE {
+                sctlr & (1 << 4) != 0 // SCTLR_EL1.SA0
+            } else {
+                sctlr & (1 << 3) != 0 // SCTLR_EL1.SA
+            };
+            if base_is_sp && sa && cpu.sp & 0xF != 0 {
+                self.enter_synchronous_exception(
+                    pc,
+                    pc,
+                    source_mode,
+                    saved_pstate,
+                    (0x26u64 << 26) | (1 << 25),
+                    0,
+                )?;
+                return Ok(true);
+            }
+            if sctlr & (1 << 1) != 0 && size > 1 && address & (size - 1) != 0 {
+                let fault = ExceptionFault {
+                    va: address,
+                    access,
+                    fault: MemFault::TranslationFault { va: address },
+                    level: 0,
+                    dfsc: 0x21,
+                    s1ptw: false,
+                    ea: false,
+                    fnv: false,
+                };
+                self.enter_abort_exception(pc, fault)?;
+                return Ok(true);
+            }
+            if self.watchpoint_match(address, size, access, source_mode) {
+                let ec = if source_mode == EL0T_MODE { 0x34 } else { 0x35 };
+                let wnr = u64::from(access == Access::Write) << 6;
+                self.enter_debug_exception(
+                    pc,
+                    pc,
+                    source_mode,
+                    saved_pstate,
+                    ec,
+                    0x22 | wnr,
+                    address,
+                )?;
+                return Ok(true);
+            }
+
+            // A RAM-bounds miss is a synchronous external abort. Keep
+            // translated accesses on their existing path when the stage-1
+            // walk itself faults so demand-populated vmemmap still works.
+            if let Ok(pa) = self.translate_va_status(address, access) {
+                let known_mmio = (CONSOLE_BASE..CONSOLE_BASE + CONSOLE_SIZE).contains(&pa)
+                    || (GPU_BASE..GPU_BASE + GPU_SIZE).contains(&pa)
+                    || (GICD_BASE..GICD_BASE + GICD_SIZE).contains(&pa)
+                    || (GICC_BASE..GICC_BASE + GICC_SIZE).contains(&pa);
+                if !known_mmio && ram_offset_in(&self.machine.ram, pa, size).is_err() {
+                    self.enter_abort_exception(pc, ExceptionFault::external(address, access))?;
+                    return Ok(true);
+                }
+            }
+        }
+
+        Ok(false)
+    }
+
+    fn take_software_step(&mut self, source_pc: u64, return_pc: u64) -> Result<bool, HaltReason> {
+        let cpu = &self.machine.cpu[0];
+        let source_mode = cpu.pstate & PSTATE_MODE_MASK;
+        let saved_pstate = (cpu.pstate & !PSTATE_DAIF_MASK)
+            | (cpu.sysregs.daif & PSTATE_DAIF_MASK);
+        if saved_pstate & PSTATE_SS_MASK == 0
+            || cpu.sysregs.mdscr_el1 & 1 == 0
+            || !self.debug_exceptions_enabled(source_mode)
+        {
+            return Ok(false);
+        }
+        let ec = if source_mode == EL0T_MODE { 0x32 } else { 0x33 };
+        self.enter_debug_exception(source_pc, return_pc, source_mode, saved_pstate, ec, 0x22, 0)?;
+        self.machine.cpu[0].pstate &= !PSTATE_SS_MASK;
+        Ok(true)
+    }
+
     fn enter_abort_exception(
         &mut self,
         pc: u64,
@@ -3386,12 +3674,17 @@ impl Orchestrator {
             (_, true) => 0x24,
             (_, false) => 0x25,
         };
-        let dfsc = match fault.fault {
-            MemFault::TranslationFault { .. } => 0x04u64.saturating_add(fault.level as u64),
-            MemFault::PermissionFault { .. } => 0x0Cu64.saturating_add(fault.level as u64),
-        };
         let wnr = u64::from(fault.access == Access::Write) << 6;
-        let esr = ((ec as u64) << 26) | (1 << 25) | wnr | dfsc;
+        let s1ptw = u64::from(fault.s1ptw) << 7;
+        let ea = u64::from(fault.ea) << 9;
+        let fnv = u64::from(fault.fnv) << 10;
+        let esr = ((ec as u64) << 26)
+            | (1 << 25)
+            | wnr
+            | s1ptw
+            | ea
+            | fnv
+            | fault.dfsc as u64;
         self.enter_synchronous_exception(pc, pc, source_mode, saved_pstate, esr, fault.va)
     }
 
@@ -3521,6 +3814,27 @@ impl Orchestrator {
         let pc = self.machine.cpu[0].pc;
         self.pending_abort = None;
 
+        if pc & 3 != 0 {
+            let cpu = &self.machine.cpu[0];
+            let source_mode = cpu.pstate & PSTATE_MODE_MASK;
+            let saved_pstate = (cpu.pstate & !PSTATE_DAIF_MASK)
+                | (cpu.sysregs.daif & PSTATE_DAIF_MASK);
+            return match self.enter_synchronous_exception(
+                pc,
+                pc,
+                source_mode,
+                saved_pstate,
+                (0x22u64 << 26) | (1 << 25),
+                pc,
+            ) {
+                Ok(()) => self.complete_exception_step(),
+                Err(reason) => {
+                    self.halted = Some(reason.clone());
+                    StepOutcome::Halted(reason)
+                }
+            };
+        }
+
         // Fetch.
         let word = match self.fetch_word_for_step(pc) {
             Ok(w) => w,
@@ -3534,6 +3848,14 @@ impl Orchestrator {
                 };
             }
         };
+        match self.enter_pre_execution_exception(pc, word) {
+            Ok(true) => return self.complete_exception_step(),
+            Ok(false) => {}
+            Err(reason) => {
+                self.halted = Some(reason.clone());
+                return StepOutcome::Halted(reason);
+            }
+        }
         if let Some((exception_class, immediate)) = service_exception_word(word) {
             return match self.enter_service_exception(pc, exception_class, immediate) {
                 Ok(()) => self.complete_exception_step(),
@@ -3584,6 +3906,14 @@ impl Orchestrator {
                             };
                             self.halted = Some(halt.clone());
                             return StepOutcome::Halted(halt);
+                        }
+                        match self.take_software_step(pc, self.machine.cpu[0].pc) {
+                            Ok(true) => return self.complete_exception_step(),
+                            Ok(false) => {}
+                            Err(reason) => {
+                                self.halted = Some(reason.clone());
+                                return StepOutcome::Halted(reason);
+                            }
                         }
                         self.steps += 1;
                         self.tick_clock(TIMER_CYCLES_PER_STEP);
@@ -3776,6 +4106,15 @@ impl Orchestrator {
             return StepOutcome::Halted(halt);
         }
         self.machine.cpu[0].pc = new_pc;
+
+        match self.take_software_step(pc, new_pc) {
+            Ok(true) => return self.complete_exception_step(),
+            Ok(false) => {}
+            Err(reason) => {
+                self.halted = Some(reason.clone());
+                return StepOutcome::Halted(reason);
+            }
+        }
 
         self.steps += 1;
         // Injected clock: the timer advances only here, never wall time.
@@ -4496,6 +4835,10 @@ impl HostOps for WasmHost<'_> {
                     access: Access::Read,
                     fault,
                     level: 0,
+                    dfsc: 0x10,
+                    s1ptw: false,
+                    ea: false,
+                    fnv: false,
                 });
                 return Err(format!("mem_load fault: {fault:?}"));
             }
@@ -4624,6 +4967,10 @@ impl HostOps for WasmHost<'_> {
                     access: Access::Write,
                     fault,
                     level: 0,
+                    dfsc: 0x10,
+                    s1ptw: false,
+                    ea: false,
+                    fnv: false,
                 });
                 return Err(format!("mem_store fault: {fault:?}"));
             }
@@ -5336,7 +5683,7 @@ mod tests {
         assert_eq!(o.step_vcpu(), StepOutcome::Continue);
         assert_eq!(o.machine.cpu[0].pc, 0x400);
         assert_eq!(o.machine.cpu[0].sysregs.elr_el1, 0x4000_0000);
-        assert_eq!(o.machine.cpu[0].sysregs.esr_el1, 0x9200_0004);
+        assert_eq!(o.machine.cpu[0].sysregs.esr_el1, 0x9200_0010);
         assert_eq!(o.machine.cpu[0].sysregs.far_el1, 0xFFFF_FFFF_0000_0000);
         assert_eq!(o.halted(), None);
     }
