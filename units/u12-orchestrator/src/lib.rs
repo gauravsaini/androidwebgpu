@@ -67,6 +67,8 @@ use std::collections::VecDeque;
 
 #[cfg(test)]
 mod irq_wfi_tests;
+#[cfg(test)]
+mod sync_abort_tests;
 
 use pathn_contracts::adapters::{BlobStore, InputSource};
 use pathn_contracts::cpu::{
