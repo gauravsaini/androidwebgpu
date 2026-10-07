@@ -78,6 +78,56 @@ pub fn nzcv_sub32(a: u32, b: u32) -> u64 {
     (n << 31) | (z << 30) | (c << 29) | (v << 28)
 }
 
+/// Add two 64-bit operands and a one-bit carry-in, returning result and NZCV.
+pub fn add_with_carry64(a: u64, b: u64, carry_in: u64) -> (u64, u64) {
+    let carry_in = carry_in & 1;
+    let unsigned_sum = a as u128 + b as u128 + carry_in as u128;
+    let result = unsigned_sum as u64;
+    let signed_sum = (a as i64 as i128) + (b as i64 as i128) + carry_in as i128;
+    let n = result >> 63;
+    let z = u64::from(result == 0);
+    let c = (unsigned_sum >> 64) as u64;
+    let v = u64::from(signed_sum > i64::MAX as i128 || signed_sum < i64::MIN as i128);
+    (result, (n << 31) | (z << 30) | (c << 29) | (v << 28))
+}
+
+/// Add two 32-bit operands and a one-bit carry-in, returning zero-extended result and NZCV.
+pub fn add_with_carry32(a: u32, b: u32, carry_in: u64) -> (u32, u64) {
+    let carry_in = carry_in & 1;
+    let unsigned_sum = a as u64 + b as u64 + carry_in;
+    let result = unsigned_sum as u32;
+    let signed_sum = (a as i32 as i128) + (b as i32 as i128) + carry_in as i128;
+    let n = ((result >> 31) & 1) as u64;
+    let z = u64::from(result == 0);
+    let c = (unsigned_sum >> 32) & 1;
+    let v = u64::from(signed_sum > i32::MAX as i128 || signed_sum < i32::MIN as i128);
+    (result, (n << 31) | (z << 30) | (c << 29) | (v << 28))
+}
+
+/// Subtract a 64-bit operand and borrow-in, returning result and NZCV.
+pub fn sub_with_borrow64(a: u64, b: u64, borrow_in: u64) -> (u64, u64) {
+    let borrow_in = borrow_in & 1;
+    let result = a.wrapping_sub(b).wrapping_sub(borrow_in);
+    let signed_diff = (a as i64 as i128) - (b as i64 as i128) - borrow_in as i128;
+    let n = result >> 63;
+    let z = u64::from(result == 0);
+    let c = u64::from((a as u128) >= (b as u128 + borrow_in as u128));
+    let v = u64::from(signed_diff > i64::MAX as i128 || signed_diff < i64::MIN as i128);
+    (result, (n << 31) | (z << 30) | (c << 29) | (v << 28))
+}
+
+/// Subtract a 32-bit operand and borrow-in, returning zero-extended result and NZCV.
+pub fn sub_with_borrow32(a: u32, b: u32, borrow_in: u64) -> (u32, u64) {
+    let borrow_in = borrow_in & 1;
+    let result = a.wrapping_sub(b).wrapping_sub(borrow_in as u32);
+    let signed_diff = (a as i32 as i128) - (b as i32 as i128) - borrow_in as i128;
+    let n = ((result >> 31) & 1) as u64;
+    let z = u64::from(result == 0);
+    let c = u64::from((a as u64) >= (b as u64 + borrow_in));
+    let v = u64::from(signed_diff > i32::MAX as i128 || signed_diff < i32::MIN as i128);
+    (result, (n << 31) | (z << 30) | (c << 29) | (v << 28))
+}
+
 /// Compute updated NZCV flags for 64-bit logical AND (ANDS / TST).
 pub fn nzcv_and64(res: u64) -> u64 {
     let n = (res >> 63) & 1;
@@ -317,6 +367,20 @@ mod tests {
         // 0xFFFF_FFFF_FFFF_FFFF + 1 == 0 -> C=1, Z=1
         let flags = nzcv_add64(u64::MAX, 1);
         assert_eq!(flags, FLAG_Z | FLAG_C);
+    }
+
+    #[test]
+    fn test_add_with_carry_and_sub_with_borrow() {
+        assert_eq!(add_with_carry64(u64::MAX, 0, 1), (0, FLAG_Z | FLAG_C));
+        assert_eq!(
+            add_with_carry32(0x7FFF_FFFF, 0, 1),
+            (0x8000_0000, FLAG_N | FLAG_V)
+        );
+        assert_eq!(sub_with_borrow64(0, 0, 1), (u64::MAX, FLAG_N));
+        assert_eq!(
+            sub_with_borrow32(0x8000_0000, 0x7FFF_FFFF, 1),
+            (0, FLAG_Z | FLAG_C | FLAG_V)
+        );
     }
 
     #[test]

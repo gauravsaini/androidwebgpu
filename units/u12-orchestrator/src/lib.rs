@@ -1532,6 +1532,43 @@ impl Orchestrator {
             return Some(Ok(()));
         }
 
+        // ADC / SBC (register) use the current PSTATE.C as carry-in.  The
+        // destination and both sources name XZR/WZR at register 31; unlike
+        // add/sub immediate forms, this encoding never names SP.
+        if (word >> 21) & 0xFF == 0xD0 && (word >> 10) & 0x3F == 0 {
+            let sf = (word >> 31) & 1;
+            let op = (word >> 30) & 1; // 0 = ADC, 1 = SBC
+            let set_flags = (word >> 29) & 1 == 1;
+            let rm = ((word >> 16) & 0x1F) as usize;
+            let rn = ((word >> 5) & 0x1F) as usize;
+            let rd = (word & 0x1F) as usize;
+            let cpu = &mut self.machine.cpu[0];
+            let carry_in = u64::from(cpu.pstate & FLAG_C != 0);
+            let a = if rn == 31 { 0 } else { cpu.regs[rn] };
+            let b = if rm == 31 { 0 } else { cpu.regs[rm] };
+            let (result, nzcv) = if sf == 1 {
+                if op == 0 {
+                    add_with_carry64(a, b, carry_in)
+                } else {
+                    sub_with_borrow64(a, b, 1 - carry_in)
+                }
+            } else if op == 0 {
+                let (result, nzcv) = add_with_carry32(a as u32, b as u32, carry_in);
+                (result as u64, nzcv)
+            } else {
+                let (result, nzcv) = sub_with_borrow32(a as u32, b as u32, 1 - carry_in);
+                (result as u64, nzcv)
+            };
+            if rd != 31 {
+                cpu.regs[rd] = result;
+            }
+            if set_flags {
+                cpu.pstate = (cpu.pstate & !FLAGS_NZCV_MASK) | nzcv;
+            }
+            cpu.pc = pc.wrapping_add(4);
+            return Some(Ok(()));
+        }
+
         // 3. Add/subtract (immediate) with S=1: ADDS / SUBS / CMP / CMN
         // sf op S 10001 sh imm12 Rn Rd
         // GB-24: Also handle S=0 (plain ADD/SUB). For S=0, Rd=31 means SP
@@ -7609,6 +7646,54 @@ mod tests {
         // Positive result, no carry, no overflow: NZCV = 0.
         assert_eq!(o.machine().cpu[0].pstate & FLAGS_NZCV_MASK, 0);
         assert_eq!(o.machine().cpu[0].pc, pc + 4);
+    }
+
+    #[test]
+    fn adc_sbc_register_execution_uses_live_carry_flag() {
+        // Exact kernel word at the post-timer halt: SBCS XZR, X10, X8.
+        // X10 - X8 with C=1 is INT64_MIN - INT64_MAX = 1, with signed
+        // overflow and no unsigned borrow. Rd=XZR discards the result.
+        let pc = RAM_BASE + 0x1000;
+        let mut o = sp_test_orchestrator(pc, RAM_BASE + 0x2000, 0xFA08_015F);
+        o.machine_mut().cpu[0].regs[10] = 0x8000_0000_0000_0000;
+        o.machine_mut().cpu[0].regs[8] = 0x7FFF_FFFF_FFFF_FFFF;
+        o.machine_mut().cpu[0].pstate = FLAG_C | EL1H_MODE;
+
+        assert!(matches!(o.step_vcpu(), StepOutcome::Continue));
+        assert_eq!(o.machine().cpu[0].pc, pc + 4);
+        assert_eq!(o.machine().cpu[0].pstate & FLAGS_NZCV_MASK, FLAG_C | FLAG_V);
+    }
+
+    #[test]
+    fn adc_register_w_form_zero_extends_and_preserves_nzcv() {
+        // ADC W0, W1, W2 with W1=0xffffffff, W2=0, and C=1 wraps to 0.
+        // The S=0 form writes the result but preserves the old NZCV flags.
+        let pc = RAM_BASE + 0x1000;
+        let mut o = sp_test_orchestrator(pc, RAM_BASE + 0x2000, 0x1A02_0020);
+        o.machine_mut().cpu[0].regs[1] = 0xFFFF_FFFF;
+        o.machine_mut().cpu[0].regs[2] = 0;
+        o.machine_mut().cpu[0].pstate = FLAG_C | FLAG_N | EL1H_MODE;
+
+        assert!(matches!(o.step_vcpu(), StepOutcome::Continue));
+        assert_eq!(o.machine().cpu[0].regs[0], 0);
+        assert_eq!(o.machine().cpu[0].pc, pc + 4);
+        assert_eq!(o.machine().cpu[0].pstate & FLAGS_NZCV_MASK, FLAG_C | FLAG_N);
+    }
+
+    #[test]
+    fn adcs_register_w_form_updates_overflow_flags() {
+        // ADCS W0, W1, W2 with W1=INT32_MAX, W2=0, and C=1 yields
+        // 0x80000000 (negative) with signed overflow.
+        let pc = RAM_BASE + 0x1000;
+        let mut o = sp_test_orchestrator(pc, RAM_BASE + 0x2000, 0x3A02_0020);
+        o.machine_mut().cpu[0].regs[1] = 0x7FFF_FFFF;
+        o.machine_mut().cpu[0].regs[2] = 0;
+        o.machine_mut().cpu[0].pstate = FLAG_C | EL1H_MODE;
+
+        assert!(matches!(o.step_vcpu(), StepOutcome::Continue));
+        assert_eq!(o.machine().cpu[0].regs[0], 0x8000_0000);
+        assert_eq!(o.machine().cpu[0].pc, pc + 4);
+        assert_eq!(o.machine().cpu[0].pstate & FLAGS_NZCV_MASK, FLAG_N | FLAG_V);
     }
 
     #[test]
