@@ -29,9 +29,9 @@
 //! - **Yields on WFI.** The `wfi` import only records that the block executed
 //!   WFI. After the call, with no IRQ pending, the step returns
 //!   [`StepOutcome::WfiYield`] WITHOUT setting `halted` — the vCPU is parked,
-//!   resumable by a later step (e.g. after input arrives). Interrupt
-//!   *injection* into the guest (vector jump) still needs an exception model —
-//!   future work, stated here, not faked.
+//!   resumable by a later step (e.g. after input arrives). A deliverable IRQ
+//!   enters the EL1 vector after the current instruction, saving ELR_EL1 and
+//!   SPSR_EL1; ERET restores that state.
 //! - **Trap ops halt before compiling.** If any lifted op is `IrOp::Trap`,
 //!   the orchestrator halts with [`HaltReason::Unsupported`] carrying U2's
 //!   exact reason string — it never compiles or executes the trap.
@@ -197,6 +197,13 @@ const IMAGE_MAGIC: u32 = 0x4D49_4E50;
 const IMAGE_VERSION: u32 = 1;
 /// Image header length: magic u32 + version u32 + entry u64 + blob-size u64.
 const IMAGE_HEADER_LEN: usize = 24;
+const PSTATE_DAIF_MASK: u64 = 0x0000_03C0;
+const PSTATE_IRQ_MASK: u64 = 1 << 7;
+const PSTATE_MODE_MASK: u64 = 0x1F;
+const EL0T_MODE: u64 = 0x00;
+const EL1T_MODE: u64 = 0x04;
+const EL1H_MODE: u64 = 0x05;
+const IRQ_ENTRY_LOG_CAPACITY: usize = 16;
 
 // ---------------------------------------------------------------------------
 // Errors / halt reasons — data, never panics
@@ -261,6 +268,17 @@ pub enum StepOutcome {
     WfiYield {
         addr: u64,
     },
+}
+
+/// Bounded diagnostic record for an asynchronous IRQ entry.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct IrqEntryRecord {
+    pub step: u64,
+    pub intid: u32,
+    pub source_pc: u64,
+    pub vector_pc: u64,
+    pub source_mode: u8,
+    pub return_step: Option<u64>,
 }
 
 // ---------------------------------------------------------------------------
@@ -591,6 +609,14 @@ pub struct Orchestrator {
     /// allocated from VMEMMAP_POOL_BASE (grows upward). Each vmemmap fault
     /// allocates zeroed 4K pages for missing L2 tables, L3 tables, or data pages.
     vmemmap_pages_used: u64,
+    /// Total asynchronous IRQ entries and completed ERET returns.
+    irq_entry_count: u64,
+    irq_return_count: u64,
+    /// The first entries are retained for boot diagnostics, not machine state.
+    irq_entry_log: Vec<IrqEntryRecord>,
+    /// Active IRQ records in nesting order. `None` marks entries beyond the
+    /// bounded diagnostic log while still tracking their matching ERET.
+    irq_entry_stack: Vec<Option<usize>>,
 }
 
 /// Default backend for this target: wasmtime where a JIT is available,
@@ -616,6 +642,7 @@ impl Orchestrator {
                     // Shelf Job 2 (2026-10-05): SP moved from 0x4800_0000 to
                     // 0x4830_0000 to avoid initrd (0x4800_0000) and DTB (0x4820_0000).
                     sp: 0x4830_0000,
+                    sp_el1: 0,
                     pc: 0x4000_0000,
                     pstate: 0,
                     sysregs: SysRegs::default(),
@@ -660,6 +687,10 @@ impl Orchestrator {
             exclusive: None,
             executor: default_executor(),
             vmemmap_pages_used: 0,
+            irq_entry_count: 0,
+            irq_return_count: 0,
+            irq_entry_log: Vec::new(),
+            irq_entry_stack: Vec::new(),
         };
         #[cfg(not(target_arch = "wasm32"))]
         {
@@ -711,6 +742,21 @@ impl Orchestrator {
     /// Traps are guest behavior, never unimplemented-instruction misses.
     pub fn survey_trap_summary(&self) -> &[SurveyMiss] {
         &self.survey_traps
+    }
+
+    /// Total asynchronous IRQ entries since construction or snapshot load.
+    pub fn irq_entry_count(&self) -> u64 {
+        self.irq_entry_count
+    }
+
+    /// Total IRQ handlers that returned through ERET.
+    pub fn irq_return_count(&self) -> u64 {
+        self.irq_return_count
+    }
+
+    /// First IRQ entries, bounded to keep diagnostics small on long boots.
+    pub fn irq_entry_log(&self) -> &[IrqEntryRecord] {
+        &self.irq_entry_log
     }
 
     /// Print the first-miss-per-class summary.
@@ -935,6 +981,7 @@ impl Orchestrator {
         let cpu = &mut self.machine.cpu[0];
         cpu.pc = entry;
         cpu.sp = 0;
+        cpu.sp_el1 = 0;
         cpu.regs = [0; 31];
         cpu.pstate = 0;
         self.invalidate_code_cache();
@@ -1255,6 +1302,27 @@ impl Orchestrator {
     pub fn execute_arm64(&mut self, insn: &Instruction) -> Option<Result<(), HaltReason>> {
         let word = insn.word;
         let pc = insn.addr;
+
+        // MSR SPSel, #0/#1. CurrentEL is EL1 throughout this emulator, so
+        // update the EL1t/EL1h mode and switch between its banked SPs.
+        if word == 0xD500_419F || word == 0xD500_41BF {
+            let select_sp_el1 = word == 0xD500_41BF;
+            let cpu = &mut self.machine.cpu[0];
+            let old_mode = cpu.pstate & PSTATE_MODE_MASK;
+            if (old_mode == EL1H_MODE) != select_sp_el1 {
+                if select_sp_el1 {
+                    cpu.sysregs.sp_el0 = cpu.sp;
+                    cpu.sp = cpu.sp_el1;
+                } else {
+                    cpu.sp_el1 = cpu.sp;
+                    cpu.sp = cpu.sysregs.sp_el0;
+                }
+            }
+            cpu.pstate = (cpu.pstate & !PSTATE_MODE_MASK)
+                | if select_sp_el1 { EL1H_MODE } else { EL1T_MODE };
+            cpu.pc = pc.wrapping_add(4);
+            return Some(Ok(()));
+        }
 
         // DC ZVA, Xt (SYS #3, C7, C4, #1, Xt). DCZID_EL0 advertises a
         // 64-byte block (BS=4), so align Xt down and zero through the normal
@@ -3134,10 +3202,113 @@ impl Orchestrator {
 
     // ---- vCPU ----
 
+    fn try_take_irq_exception(&mut self) -> Result<(), HaltReason> {
+        let Some(intid) = self.deliverable_irq() else {
+            return Ok(());
+        };
+        let cpu = &self.machine.cpu[0];
+        let saved_pstate =
+            (cpu.pstate & !PSTATE_DAIF_MASK) | (cpu.sysregs.daif & PSTATE_DAIF_MASK);
+        if saved_pstate & PSTATE_IRQ_MASK != 0 {
+            return Ok(());
+        }
+        let source_mode = (saved_pstate & PSTATE_MODE_MASK) as u8;
+        let vector_offset = match source_mode as u64 {
+            EL1H_MODE => 0x280,
+            EL1T_MODE => 0x080,
+            EL0T_MODE => 0x480,
+            _ => {
+                return Err(HaltReason::Unsupported {
+                    addr: cpu.pc,
+                    reason: "IRQ exception from an unsupported PSTATE mode",
+                })
+            }
+        };
+        let source_pc = cpu.pc;
+        let vector_pc = (cpu.sysregs.vbar_el1 & !0x7FF).wrapping_add(vector_offset);
+        let cpu = &mut self.machine.cpu[0];
+
+        cpu.sysregs.elr_el1 = source_pc;
+        cpu.sysregs.spsr_el1 = saved_pstate;
+        if source_mode != EL1H_MODE as u8 {
+            // Exceptions to EL1 select SP_EL1. Keep the interrupted SP_EL0
+            // value and restore the banked EL1 stack for the handler.
+            cpu.sysregs.sp_el0 = cpu.sp;
+            cpu.sp = cpu.sp_el1;
+        }
+        cpu.sysregs.daif = PSTATE_DAIF_MASK;
+        cpu.pstate = (saved_pstate & !(PSTATE_DAIF_MASK | PSTATE_MODE_MASK))
+            | PSTATE_DAIF_MASK
+            | EL1H_MODE;
+        cpu.pc = vector_pc;
+
+        self.irq_entry_count = self.irq_entry_count.saturating_add(1);
+        let entry_index = if self.irq_entry_log.len() < IRQ_ENTRY_LOG_CAPACITY {
+            let index = self.irq_entry_log.len();
+            self.irq_entry_log.push(IrqEntryRecord {
+                step: self.steps.saturating_add(1),
+                intid,
+                source_pc,
+                vector_pc,
+                source_mode,
+                return_step: None,
+            });
+            Some(index)
+        } else {
+            None
+        };
+        self.irq_entry_stack.push(entry_index);
+        Ok(())
+    }
+
+    fn execute_eret(&mut self, pc: u64) -> StepOutcome {
+        let cpu = &mut self.machine.cpu[0];
+        let return_pc = cpu.sysregs.elr_el1;
+        let saved_pstate = cpu.sysregs.spsr_el1;
+        let return_mode = saved_pstate & PSTATE_MODE_MASK;
+        if !matches!(return_mode, EL0T_MODE | EL1T_MODE | EL1H_MODE) {
+            let halt = HaltReason::Unsupported {
+                addr: pc,
+                reason: "ERET: unsupported SPSR_EL1 return mode",
+            };
+            self.halted = Some(halt.clone());
+            return StepOutcome::Halted(halt);
+        }
+
+        let current_mode = cpu.pstate & PSTATE_MODE_MASK;
+        if (current_mode == EL1H_MODE) != (return_mode == EL1H_MODE) {
+            if current_mode == EL1H_MODE {
+                cpu.sp_el1 = cpu.sp;
+                cpu.sp = cpu.sysregs.sp_el0;
+            } else {
+                cpu.sysregs.sp_el0 = cpu.sp;
+                cpu.sp = cpu.sp_el1;
+            }
+        }
+        cpu.pstate = saved_pstate;
+        cpu.sysregs.daif = saved_pstate & PSTATE_DAIF_MASK;
+        cpu.pc = return_pc;
+
+        if let Some(entry_index) = self.irq_entry_stack.pop() {
+            self.irq_return_count = self.irq_return_count.saturating_add(1);
+            if let Some(index) = entry_index {
+                self.irq_entry_log[index].return_step = Some(self.steps.saturating_add(1));
+            }
+        }
+
+        self.steps += 1;
+        self.tick_clock(TIMER_CYCLES_PER_STEP);
+        StepOutcome::Continue
+    }
+
     /// One vCPU step: fetch → U1 decode → U2 lift → U3 compile → wasmtime.
     /// Never panics: every failure becomes a typed [`HaltReason`].
     pub fn step_vcpu(&mut self) -> StepOutcome {
         if let Some(reason) = self.halted.clone() {
+            return StepOutcome::Halted(reason);
+        }
+        if let Err(reason) = self.try_take_irq_exception() {
+            self.halted = Some(reason.clone());
             return StepOutcome::Halted(reason);
         }
         let pc = self.machine.cpu[0].pc;
@@ -3150,6 +3321,9 @@ impl Orchestrator {
                 return StepOutcome::Halted(reason);
             }
         };
+        if word == 0xD69F_03E0 {
+            return self.execute_eret(pc);
+        }
         let feature_mrs = id_feature_mrs(word);
 
         #[cfg(not(target_arch = "wasm32"))]
@@ -3400,7 +3574,7 @@ impl Orchestrator {
     /// Advance the injected clock and tick the U5 timer. The ONLY clock.
     /// U5 handles the physical-timer model, and the virtual timer below also
     /// raises PPI 27 when CNTVCT reaches CNTV_CVAL. `pending_irqs` surfaces
-    /// that line. CPU exception-vector injection remains unmodeled.
+    /// that line. Deliverable IRQs enter the EL1 vector when PSTATE.I is clear.
     pub fn tick_clock(&mut self, cycles: u64) {
         self.clock_cycles = self.clock_cycles.wrapping_add(cycles);
 
