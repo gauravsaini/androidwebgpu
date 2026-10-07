@@ -19,6 +19,7 @@ fn print_help() {
     println!("  --max-steps <N>       Step budget cap (default: 2000000)");
     println!("  --trace <FILE>        Enable per-step execution tracing to file");
     println!("  --console-output <FILE>  Write all captured UART bytes to FILE");
+    println!("  --spin-detect         Halt/report if the same PC persists for 1M steps");
     println!("  --survey              Enable survey mode (discovery only, never progress)");
     println!("  --save-snapshot <PATH>  Write a full emulator snapshot to PATH after the run");
     println!("  --snapshot-at-step <N>  With --save-snapshot: save at absolute step N and exit");
@@ -47,6 +48,7 @@ fn main() {
     let mut max_steps: u64 = 2_000_000;
     let mut trace_file: Option<String> = None;
     let mut console_output: Option<String> = None;
+    let mut spin_detect = false;
     let mut dump_around: Option<usize> = None;
     let mut dump_console = false;
     let mut survey = false;
@@ -100,6 +102,9 @@ fn main() {
                 if i < args.len() {
                     console_output = Some(args[i].clone());
                 }
+            }
+            "--spin-detect" => {
+                spin_detect = true;
             }
             "--dump-around" => {
                 i += 1;
@@ -189,7 +194,7 @@ fn main() {
     } else {
         Orchestrator::new()
     };
-
+    orch.set_pc_stall_detection(spin_detect);
     if let Some(ref tf) = trace_file {
         orch.enable_trace_file(tf)
             .expect("failed to open trace output file");
@@ -282,11 +287,26 @@ fn main() {
     let mut saved_at_step = save_at
         .filter(|target| orch.steps() >= *target)
         .map(|_| orch.steps());
+    let mut spin_detected: Option<(u64, u64)> = None;
+    let mut unchanged_pc_steps = 0u64;
     if saved_at_step.is_none() {
         for _ in 0..max_steps {
             let pc_before = orch.machine().cpu[0].pc;
             match orch.step_vcpu() {
-                StepOutcome::Continue => {}
+                StepOutcome::Continue => {
+                    if spin_detect {
+                        let pc_after = orch.machine().cpu[0].pc;
+                        if pc_after == pc_before {
+                            unchanged_pc_steps += 1;
+                            if unchanged_pc_steps >= 1_000_000 {
+                                spin_detected = Some((pc_after, unchanged_pc_steps));
+                                break;
+                            }
+                        } else {
+                            unchanged_pc_steps = 0;
+                        }
+                    }
+                }
                 StepOutcome::WfiYield { addr } => {
                     halt_reason = Some(HaltReason::Wfi { addr });
                     break;
@@ -460,6 +480,11 @@ fn main() {
             "[snapshot] Reached --snapshot-at-step {} (saved, exiting)",
             saved_at_step.unwrap()
         ),
+        None if spin_detected.is_some() => {
+            let (spin_pc, iterations) = spin_detected.unwrap();
+            println!("[spin] PC={spin_pc:#018x} iteration_count={iterations}");
+            println!("[halt] Reason: spin_detected");
+        }
         None => println!("[limit] Step budget ({max_steps}) reached without halt"),
     }
 

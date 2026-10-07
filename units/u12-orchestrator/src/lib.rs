@@ -686,6 +686,10 @@ pub struct Orchestrator {
     /// Survey mode: skips unimplemented/illegal instructions for opcode discovery.
     /// Hard rule: discovery only — never progress.
     pub survey_mode: bool,
+    /// When enabled by the boot-report runner, allow a same-PC instruction to
+    /// continue so the runner can distinguish a sustained spin from a one-off
+    /// emulator livelock. Normal execution keeps the immediate guard.
+    pc_stall_detection: bool,
     /// First unimplemented/illegal miss per InsnKind seen during survey mode.
     pub survey_first_miss: Vec<SurveyMiss>,
     /// Guest traps (BRK/HLT) seen during survey mode, first per mnemonic.
@@ -788,6 +792,7 @@ impl Orchestrator {
             #[cfg(not(target_arch = "wasm32"))]
             trace_writer: None,
             survey_mode: false,
+            pc_stall_detection: false,
             survey_first_miss: Vec::new(),
             survey_traps: Vec::new(),
             last_notified: Vec::new(),
@@ -835,6 +840,12 @@ impl Orchestrator {
     /// claim boot progress or move any baseline.
     pub fn set_survey_mode(&mut self, enabled: bool) {
         self.survey_mode = enabled;
+    }
+
+    /// Allow same-PC steps so the native boot runner can count a sustained
+    /// instruction spin before reporting it. Disabled by default.
+    pub fn set_pc_stall_detection(&mut self, enabled: bool) {
+        self.pc_stall_detection = enabled;
     }
 
     /// Check if survey mode is active.
@@ -3983,7 +3994,7 @@ impl Orchestrator {
                     Ok(()) => {
                         // LIVELOCK GUARD: fast-path handlers must advance PC.
                         // If PC didn't change, halt honestly instead of spinning.
-                        if self.machine.cpu[0].pc == pc {
+                        if self.machine.cpu[0].pc == pc && !self.pc_stall_detection {
                             let halt = HaltReason::Unsupported {
                                 addr: pc,
                                 reason: "livelock: fast-path did not advance PC",
@@ -4181,7 +4192,7 @@ impl Orchestrator {
         // either the instruction wasn't actually executed, or the exit
         // address was computed incorrectly. Halt honestly instead of
         // spinning. (Gate 0 caught a 10M-step spin on UBFM 0xd347fd08.)
-        if new_pc == pc && !wfi_seen {
+        if new_pc == pc && !wfi_seen && !self.pc_stall_detection {
             let halt = HaltReason::Unsupported {
                 addr: pc,
                 reason: "livelock: PC did not advance after block execution",
@@ -4880,8 +4891,18 @@ impl WasmHost<'_> {
         if st.sctlr & 1 == 0 {
             return Ok(va);
         }
+        let access_name = match access {
+            Access::Read => "read",
+            Access::Write => "write",
+            Access::Execute => "execute",
+        };
         u4_mmu::translate_with_base_status(&st, self.ram, RAM_BASE, va, access).map_err(|f| {
             self.abort_fault = Some(ExceptionFault::from_mmu(f, access));
+            if std::env::var_os("PATHN_BOOT_REPORT_DIAGNOSTICS").is_some() {
+                eprintln!(
+                    "[boot-report-access] op={access_name} va=0x{va:016x} fault={f:?}"
+                );
+            }
             format!("mmu_fault: {:?}", f.fault)
         })
     }
@@ -5024,6 +5045,11 @@ impl HostOps for WasmHost<'_> {
                     ea: false,
                     fnv: false,
                 });
+                if std::env::var_os("PATHN_BOOT_REPORT_DIAGNOSTICS").is_some() {
+                    eprintln!(
+                        "[boot-report-access] op=read pa=0x{pa:016x} width_bytes={size} fault={fault:?}"
+                    );
+                }
                 return Err(format!("mem_load fault: {fault:?}"));
             }
         };
@@ -5156,6 +5182,11 @@ impl HostOps for WasmHost<'_> {
                     ea: false,
                     fnv: false,
                 });
+                if std::env::var_os("PATHN_BOOT_REPORT_DIAGNOSTICS").is_some() {
+                    eprintln!(
+                        "[boot-report-access] op=write pa=0x{pa:016x} width_bytes={size} fault={fault:?}"
+                    );
+                }
                 return Err(format!("mem_store fault: {fault:?}"));
             }
         };
