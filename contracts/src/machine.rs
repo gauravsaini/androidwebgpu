@@ -130,6 +130,9 @@ pub struct SysRegs {
     /// Exception return state captured by an EL1 exception.
     pub elr_el1: u64,
     pub spsr_el1: u64,
+    /// Syndrome and fault address captured by a synchronous EL1 exception.
+    pub esr_el1: u64,
+    pub far_el1: u64,
 
 }
 
@@ -234,6 +237,8 @@ impl Default for SysRegs {
             zcr_el1: 0,
             elr_el1: 0,
             spsr_el1: 0,
+            esr_el1: 0,
+            far_el1: 0,
 
         }
     }
@@ -404,6 +409,8 @@ impl SysRegs {
             SysReg::ZcrEl1 => self.zcr_el1,
             SysReg::ElrEl1 => self.elr_el1,
             SysReg::SpsrEl1 => self.spsr_el1,
+            SysReg::EsrEl1 => self.esr_el1,
+            SysReg::FarEl1 => self.far_el1,
 
         }
     }
@@ -565,6 +572,8 @@ impl SysRegs {
             SysReg::ZcrEl1 => self.zcr_el1 = val,
             SysReg::ElrEl1 => self.elr_el1 = val,
             SysReg::SpsrEl1 => self.spsr_el1 = val,
+            SysReg::EsrEl1 => self.esr_el1 = val,
+            SysReg::FarEl1 => self.far_el1 = val,
 
         }
     }
@@ -715,6 +724,8 @@ impl SysRegs {
             135 => Some(SysReg::ZcrEl1),
             136 => Some(SysReg::ElrEl1),
             137 => Some(SysReg::SpsrEl1),
+            138 => Some(SysReg::EsrEl1),
+            139 => Some(SysReg::FarEl1),
 
             _ => None,
         }
@@ -760,8 +771,8 @@ pub const MAX_GUEST_RAM_BYTES: usize = 2 * 1024 * 1024 * 1024;
 pub struct Snapshot(pub Vec<u8>);
 
 /// Current snapshot format version. Bump on any format change.
-pub const SNAPSHOT_VERSION: u32 = 15;
-/// v14 adds ELR_EL1 and SPSR_EL1; v15 adds the banked SP_EL1 value.
+pub const SNAPSHOT_VERSION: u32 = 16;
+/// v14 adds ELR_EL1/SPSR_EL1, v15 adds SP_EL1, and v16 adds ESR_EL1/FAR_EL1.
 
 /// Snapshot restore failure. Data, not panic — corrupt input never crashes the host.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -918,7 +929,7 @@ mod tests {
         ] {
             assert_eq!(SysRegs::from_index(idx), Some(reg));
         }
-        assert_eq!(SysRegs::from_index(136), None);
+        assert_eq!(SysRegs::from_index(140), None);
     }
 
     #[test]
@@ -952,7 +963,7 @@ mod tests {
         assert_eq!(s.load(SysReg::IccAp0r1El1), 0);
         assert_eq!(s.load(SysReg::ZcrEl1), 0x700);
         assert_eq!(s.load(SysReg::IccSgi1rEl1), 0x1);
-        // from_index pins the new discriminants 45..=135.
+        // from_index pins the new discriminants 45..=139.
         for (idx, reg) in [
             (45, SysReg::Dbgbvr0),
             (60, SysReg::Dbgbvr15),
@@ -971,9 +982,13 @@ mod tests {
             (133, SysReg::LorcEl1),
             (134, SysReg::PmccntrEl0),
             (135, SysReg::ZcrEl1),
+            (136, SysReg::ElrEl1),
+            (137, SysReg::SpsrEl1),
+            (138, SysReg::EsrEl1),
+            (139, SysReg::FarEl1),
         ] {
             assert_eq!(SysRegs::from_index(idx), Some(reg));
         }
-        assert_eq!(SysRegs::from_index(136), None);
+        assert_eq!(SysRegs::from_index(140), None);
     }
 }

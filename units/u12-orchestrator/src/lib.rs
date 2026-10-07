@@ -7,9 +7,10 @@
 //!
 //! ## vCPU execution model (honest)
 //!
-//! One step: fetch word at `pc` → U1 decode → U2 lift → U3 compile → execute
-//! the WASM block through the injected [`BlockExecutor`] backend (wasmtime on
-//! native, wasmi on wasm32 — see `pathn_contracts::execution`).
+//! One step fetches the word at `pc`; SVC/HVC/SMC and instruction/data faults
+//! take the modeled EL1 exception path, while ordinary instructions continue
+//! through U1 decode → U2 lift → U3 compile → the injected [`BlockExecutor`]
+//! backend (wasmtime on native, wasmi on wasm32).
 //!
 //! U3's module shape (contract `pathn_contracts::wasm_abi`, Wave-4 U3-G1):
 //! imports `env.mem_load` / `env.mem_store` / `env.wfi` plus 31 mutable `i64`
@@ -23,8 +24,9 @@
 //! - **Serves memory and console through host functions.** `mem_load` /
 //!   `mem_store` dispatch console MMIO (`CONSOLE_TX`/`CONSOLE_RX`) to the
 //!   [`ConsoleState`] and everything else through the RAM bounds check
-//!   ([`Orchestrator::ram_offset`]); faults become WASM traps, which halt
-//!   with [`HaltReason::WasmTrap`]. Guest RAM stays host-owned —
+//!   ([`Orchestrator::ram_offset`]); stage-1 and RAM-bounds faults enter EL1
+//!   abort vectors, while unsupported host accesses remain typed traps.
+//!   Guest RAM stays host-owned —
 //!   `MachineState.ram` is the single owner.
 //! - **Yields on WFI.** The `wfi` import only records that the block executed
 //!   WFI. After the call, with no IRQ pending, the step returns
@@ -205,6 +207,7 @@ const PSTATE_MODE_MASK: u64 = 0x1F;
 const EL0T_MODE: u64 = 0x00;
 const EL1T_MODE: u64 = 0x04;
 const EL1H_MODE: u64 = 0x05;
+const EL0T_AARCH32_MODE: u64 = 0x10;
 const MAX_IRQ_NESTING_DEPTH: usize = 64;
 const IRQ_ENTRY_LOG_CAPACITY: usize = 20_000;
 
@@ -240,13 +243,45 @@ pub enum HaltReason {
     Wfi {
         addr: u64,
     },
-    /// SVC executed but the exception model does not exist yet (Phase-2
-    /// spike, 2026-09-30). Distinct from Unsupported so a future SVC halt is
-    /// instantly recognizable in traces. Snapshot tag 8 is reserved for it
-    /// (additive - tags 0-7 decode exactly as before).
+    /// Legacy pre-exception SVC halt, retained so older snapshots still
+    /// decode. Current SVC instructions enter EL1. Snapshot tag 8 remains
+    /// reserved for this old state.
     Svc {
         addr: u64,
     },
+}
+
+/// A synchronous stage-1 fault retained until the current instruction is
+/// translated into an EL1 abort exception.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct ExceptionFault {
+    va: u64,
+    access: Access,
+    fault: MemFault,
+    level: u8,
+}
+
+impl ExceptionFault {
+    fn from_mmu(fault: u4_mmu::MmuFault, access: Access) -> Self {
+        let va = match fault.fault {
+            MemFault::TranslationFault { va } | MemFault::PermissionFault { va } => va,
+        };
+        Self {
+            va,
+            access,
+            fault: fault.fault,
+            level: fault.level,
+        }
+    }
+
+    fn translation(va: u64, access: Access) -> Self {
+        Self {
+            va,
+            access,
+            fault: MemFault::TranslationFault { va },
+            level: 0,
+        }
+    }
 }
 
 /// Image load failure — data, not panic.
@@ -570,6 +605,22 @@ pub fn is_guest_trap_word(word: u32) -> bool {
     matches!(word & 0xFFE0_0000, 0xD420_0000 | 0xD440_0000)
 }
 
+/// Decode SVC/HVC/SMC exception-generating instructions. HVC #0 is reserved
+/// for the emulator's existing PSCI call shim and continues through U2/U3.
+fn service_exception_word(word: u32) -> Option<(u8, u16)> {
+    if word & 0xFFE0_001C != 0xD400_0000 {
+        return None;
+    }
+    let immediate = ((word >> 5) & 0xFFFF) as u16;
+    let exception_class = match word & 0x3 {
+        0b01 => 0x15,
+        0b10 if immediate != 0 => 0x16,
+        0b11 => 0x17,
+        _ => return None,
+    };
+    Some((exception_class, immediate))
+}
+
 /// The single quarantined coordinator. Owns the machine state and threads it
 /// through every unit. `engine` and `block_cache` are runtime machinery —
 /// explicitly NOT part of the hashed state.
@@ -620,6 +671,12 @@ pub struct Orchestrator {
     /// Active IRQ records in nesting order. `None` marks entries beyond the
     /// bounded diagnostic log while still tracking their matching ERET.
     irq_entry_stack: Vec<Option<usize>>,
+    /// IRQ-stack depth at each synchronous exception entry, so an ERET from a
+    /// synchronous handler nested inside an IRQ does not consume the IRQ's
+    /// diagnostic record.
+    sync_entry_irq_depths: Vec<usize>,
+    /// Fault captured by the direct interpreter and consumed by step_vcpu.
+    pending_abort: Option<ExceptionFault>,
 }
 
 /// Default backend for this target: wasmtime where a JIT is available,
@@ -694,6 +751,8 @@ impl Orchestrator {
             irq_return_count: 0,
             irq_entry_log: Vec::new(),
             irq_entry_stack: Vec::new(),
+            sync_entry_irq_depths: Vec::new(),
+            pending_abort: None,
         };
         #[cfg(not(target_arch = "wasm32"))]
         {
@@ -1030,23 +1089,38 @@ impl Orchestrator {
         }
     }
 
-    /// Translate a fetch VA to a guest-physical address. Mirrors
-    /// WasmHost::translate_data but reports FetchFault (the fetch path's
-    /// own halt reason) instead of a trap string.
+    /// Step-time fetch that retains the walk level so a failed translation
+    /// can be reported to the guest as an instruction abort.
+    fn fetch_word_for_step(&self, pc: u64) -> Result<u32, ExceptionFault> {
+        let pa = self
+            .translate_va_status(pc, Access::Execute)
+            .map_err(|fault| ExceptionFault::from_mmu(fault, Access::Execute))?;
+        let off = ram_offset_in(&self.machine.ram, pa, 4)
+            .map_err(|_| ExceptionFault::translation(pc, Access::Execute))?;
+        Ok(u32::from_le_bytes(
+            self.machine.ram[off..off + 4].try_into().unwrap(),
+        ))
+    }
+
+    /// Translate a fetch VA for debug reads. The step-time fetch uses the
+    /// level-preserving path above; this diagnostic path keeps FetchFault.
     fn translate_fetch(&self, va: u64) -> Result<u64, HaltReason> {
         self.translate_va(va, Access::Execute)
             .map_err(|_| HaltReason::FetchFault { addr: va })
     }
 
     /// Translate a data-access VA to a guest-physical address for the
-    /// fast-path interpreter. MMU off: identity. Faults become WasmTrap
-    /// (same surfacing as WasmHost data accesses).
-    fn translate_data_orch(&self, va: u64, access: Access) -> Result<u64, HaltReason> {
-        self.translate_va(va, access)
-            .map_err(|f| HaltReason::WasmTrap {
+    /// fast-path interpreter. MMU off: identity. Stage-1 faults are retained
+    /// and converted to abort entry after the instruction reports its error.
+    fn translate_data_orch(&mut self, va: u64, access: Access) -> Result<u64, HaltReason> {
+        self.translate_va_status(va, access).map_err(|fault| {
+            let exception_fault = ExceptionFault::from_mmu(fault, access);
+            self.pending_abort = Some(exception_fault);
+            HaltReason::WasmTrap {
                 addr: va,
-                message: format!("mmu_fault: {f:?}"),
-            })
+                message: format!("mmu_fault: {:?}", fault.fault),
+            }
+        })
     }
 
     /// Shared VA->PA translation. MMU off (SCTLR_EL1.M == 0): identity.
@@ -1062,6 +1136,26 @@ impl Orchestrator {
             ttbr1: sysregs.ttbr1_el1,
         };
         u4_mmu::translate_with_base(&st, &self.machine.ram, RAM_BASE, va, access)
+    }
+
+    /// Stage-1 translation that preserves the fault level for ESR_EL1. With
+    /// the MMU disabled, addressability is checked by the eventual RAM access.
+    fn translate_va_status(
+        &self,
+        va: u64,
+        access: Access,
+    ) -> Result<u64, u4_mmu::MmuFault> {
+        let sysregs = &self.machine.cpu[0].sysregs;
+        let st = MmuState {
+            sctlr: sysregs.sctlr_el1,
+            tcr: sysregs.tcr_el1,
+            ttbr0: sysregs.ttbr0_el1,
+            ttbr1: sysregs.ttbr1_el1,
+        };
+        if st.sctlr & 1 == 0 {
+            return Ok(va);
+        }
+        u4_mmu::translate_with_base_status(&st, &self.machine.ram, RAM_BASE, va, access)
     }
 
     /// Handle a vmemmap demand-population fault.
@@ -3205,6 +3299,107 @@ impl Orchestrator {
 
     // ---- vCPU ----
 
+    fn synchronous_vector_offset(source_mode: u64) -> Option<u64> {
+        match source_mode {
+            EL1H_MODE => Some(0x200),
+            EL1T_MODE => Some(0x000),
+            EL0T_MODE => Some(0x400),
+            EL0T_AARCH32_MODE => Some(0x600),
+            _ => None,
+        }
+    }
+
+    fn enter_synchronous_exception(
+        &mut self,
+        source_pc: u64,
+        return_pc: u64,
+        source_mode: u64,
+        saved_pstate: u64,
+        esr: u64,
+        far: u64,
+    ) -> Result<(), HaltReason> {
+        if self.sync_entry_irq_depths.len() >= MAX_IRQ_NESTING_DEPTH {
+            return Err(HaltReason::Unsupported {
+                addr: source_pc,
+                reason: "synchronous exception nesting limit exceeded",
+            });
+        }
+        let vector_offset = Self::synchronous_vector_offset(source_mode).ok_or(
+            HaltReason::Unsupported {
+                addr: source_pc,
+                reason: "synchronous exception from an unsupported PSTATE mode",
+            },
+        )?;
+        let cpu = &mut self.machine.cpu[0];
+        let vector_pc = (cpu.sysregs.vbar_el1 & !0x7FF).wrapping_add(vector_offset);
+        cpu.sysregs.elr_el1 = return_pc;
+        cpu.sysregs.spsr_el1 = saved_pstate;
+        cpu.sysregs.esr_el1 = esr;
+        cpu.sysregs.far_el1 = far;
+        if source_mode != EL1H_MODE {
+            cpu.sysregs.sp_el0 = cpu.sp;
+            cpu.sp = cpu.sp_el1;
+        }
+        cpu.sysregs.daif = PSTATE_DAIF_MASK;
+        cpu.pstate = (saved_pstate & !(PSTATE_DAIF_MASK | PSTATE_MODE_MASK))
+            | PSTATE_DAIF_MASK
+            | EL1H_MODE;
+        cpu.pc = vector_pc;
+        self.sync_entry_irq_depths
+            .push(self.irq_entry_stack.len());
+        Ok(())
+    }
+
+    fn enter_service_exception(
+        &mut self,
+        pc: u64,
+        exception_class: u8,
+        immediate: u16,
+    ) -> Result<(), HaltReason> {
+        let cpu = &self.machine.cpu[0];
+        let source_mode = cpu.pstate & PSTATE_MODE_MASK;
+        let saved_pstate =
+            (cpu.pstate & !PSTATE_DAIF_MASK) | (cpu.sysregs.daif & PSTATE_DAIF_MASK);
+        let ec = if source_mode == EL0T_AARCH32_MODE && exception_class == 0x15 {
+            0x11 // SVC executed in AArch32 state.
+        } else {
+            exception_class
+        };
+        let esr = ((ec as u64) << 26) | (1 << 25) | immediate as u64;
+        self.enter_synchronous_exception(pc, pc.wrapping_add(4), source_mode, saved_pstate, esr, 0)
+    }
+
+    fn enter_abort_exception(
+        &mut self,
+        pc: u64,
+        fault: ExceptionFault,
+    ) -> Result<(), HaltReason> {
+        let cpu = &self.machine.cpu[0];
+        let source_mode = cpu.pstate & PSTATE_MODE_MASK;
+        let saved_pstate =
+            (cpu.pstate & !PSTATE_DAIF_MASK) | (cpu.sysregs.daif & PSTATE_DAIF_MASK);
+        let from_lower_el = source_mode == EL0T_MODE || source_mode == EL0T_AARCH32_MODE;
+        let ec = match (fault.access, from_lower_el) {
+            (Access::Execute, true) => 0x20,
+            (Access::Execute, false) => 0x21,
+            (_, true) => 0x24,
+            (_, false) => 0x25,
+        };
+        let dfsc = match fault.fault {
+            MemFault::TranslationFault { .. } => 0x04u64.saturating_add(fault.level as u64),
+            MemFault::PermissionFault { .. } => 0x0Cu64.saturating_add(fault.level as u64),
+        };
+        let wnr = u64::from(fault.access == Access::Write) << 6;
+        let esr = ((ec as u64) << 26) | (1 << 25) | wnr | dfsc;
+        self.enter_synchronous_exception(pc, pc, source_mode, saved_pstate, esr, fault.va)
+    }
+
+    fn complete_exception_step(&mut self) -> StepOutcome {
+        self.steps += 1;
+        self.tick_clock(TIMER_CYCLES_PER_STEP);
+        StepOutcome::Continue
+    }
+
     fn try_take_irq_exception(&mut self) -> Result<(), HaltReason> {
         let Some(intid) = self.deliverable_irq() else {
             return Ok(());
@@ -3298,7 +3493,9 @@ impl Orchestrator {
         cpu.sysregs.daif = saved_pstate & PSTATE_DAIF_MASK;
         cpu.pc = return_pc;
 
-        if let Some(entry_index) = self.irq_entry_stack.pop() {
+        if self.sync_entry_irq_depths.last().copied() == Some(self.irq_entry_stack.len()) {
+            self.sync_entry_irq_depths.pop();
+        } else if let Some(entry_index) = self.irq_entry_stack.pop() {
             self.irq_return_count = self.irq_return_count.saturating_add(1);
             if let Some(index) = entry_index {
                 self.irq_entry_log[index].return_step = Some(self.steps.saturating_add(1));
@@ -3321,15 +3518,30 @@ impl Orchestrator {
             return StepOutcome::Halted(reason);
         }
         let pc = self.machine.cpu[0].pc;
+        self.pending_abort = None;
 
         // Fetch.
-        let word = match self.fetch_word(pc) {
+        let word = match self.fetch_word_for_step(pc) {
             Ok(w) => w,
-            Err(reason) => {
-                self.halted = Some(reason.clone());
-                return StepOutcome::Halted(reason);
+            Err(fault) => {
+                return match self.enter_abort_exception(pc, fault) {
+                    Ok(()) => self.complete_exception_step(),
+                    Err(reason) => {
+                        self.halted = Some(reason.clone());
+                        StepOutcome::Halted(reason)
+                    }
+                };
             }
         };
+        if let Some((exception_class, immediate)) = service_exception_word(word) {
+            return match self.enter_service_exception(pc, exception_class, immediate) {
+                Ok(()) => self.complete_exception_step(),
+                Err(reason) => {
+                    self.halted = Some(reason.clone());
+                    StepOutcome::Halted(reason)
+                }
+            };
+        }
         if word == 0xD69F_03E0 {
             return self.execute_eret(pc);
         }
@@ -3394,9 +3606,19 @@ impl Orchestrator {
                                 if self.handle_vmemmap_fault(addr) {
                                     // Retry the instruction (do not advance PC,
                                     // do not count as a step yet).
+                                    self.pending_abort = None;
                                     return self.step_vcpu();
                                 }
                             }
+                        }
+                        if let Some(fault) = self.pending_abort.take() {
+                            return match self.enter_abort_exception(pc, fault) {
+                                Ok(()) => self.complete_exception_step(),
+                                Err(reason) => {
+                                    self.halted = Some(reason.clone());
+                                    StepOutcome::Halted(reason)
+                                }
+                            };
                         }
                         self.halted = Some(reason.clone());
                         return StepOutcome::Halted(reason);
@@ -3486,12 +3708,23 @@ impl Orchestrator {
             irq,
             sysregs,
             code_write: false,
+            abort_fault: None,
         };
         let (exit_addr, wfi_seen) = match self.executor.run_block(&wasm, regs, &mut host) {
             Ok(pair) => pair,
             Err(message) => {
                 if let Some(read) = feature_mrs {
                     log_id_feature_mrs(read, pc, None, true);
+                }
+                if let Some(fault) = host.abort_fault.take() {
+                    drop(host);
+                    return match self.enter_abort_exception(pc, fault) {
+                        Ok(()) => self.complete_exception_step(),
+                        Err(reason) => {
+                            self.halted = Some(reason.clone());
+                            StepOutcome::Halted(reason)
+                        }
+                    };
                 }
                 let halt = HaltReason::WasmTrap { addr: pc, message };
                 self.halted = Some(halt.clone());
@@ -4094,6 +4327,9 @@ struct WasmHost<'a> {
     /// rewrites kernel text at boot; without invalidation we execute stale
     /// instructions.
     pub code_write: bool,
+    /// Captured stage-1 or RAM-bounds fault, converted to an EL1 abort by the
+    /// orchestrator after the current WASM block returns.
+    abort_fault: Option<ExceptionFault>,
 }
 
 impl WasmHost<'_> {
@@ -4115,13 +4351,15 @@ impl WasmHost<'_> {
     /// live registers, rebasing descriptor PAs by RAM_BASE. Faults
     /// surface as `mmu_fault: <MemFault>` strings, which the executor
     /// turns into `HaltReason::WasmTrap`.
-    fn translate_data(&self, va: u64, access: Access) -> Result<u64, String> {
+    fn translate_data(&mut self, va: u64, access: Access) -> Result<u64, String> {
         let st = self.mmu_state();
         if st.sctlr & 1 == 0 {
             return Ok(va);
         }
-        u4_mmu::translate_with_base(&st, self.ram, RAM_BASE, va, access)
-            .map_err(|f| format!("mmu_fault: {f:?}"))
+        u4_mmu::translate_with_base_status(&st, self.ram, RAM_BASE, va, access).map_err(|f| {
+            self.abort_fault = Some(ExceptionFault::from_mmu(f, access));
+            format!("mmu_fault: {:?}", f.fault)
+        })
     }
 }
 
@@ -4143,7 +4381,8 @@ fn ram_offset_in(ram: &[u8], pa: u64, len: u64) -> Result<usize, MemFault> {
 
 /// `env.mem_load(addr, size) -> value`. Console and GPU MMIO are dispatched
 /// to their device models; everything else goes through the RAM bounds
-/// check. Faults become WASM traps (surfaced as `HaltReason::WasmTrap`).
+/// check. Stage-1 translation and RAM-bounds faults are captured as aborts;
+/// unsupported device accesses remain WASM traps.
 impl HostOps for WasmHost<'_> {
     fn mem_load(&mut self, addr: i64, size: i64) -> Result<i64, String> {
         // Data VA -> PA first (identity when the MMU is off); the
@@ -4248,8 +4487,18 @@ impl HostOps for WasmHost<'_> {
         if !matches!(size, 1 | 2 | 4 | 8) {
             return Err("mem_load: size must be 1, 2, 4 or 8".to_string());
         }
-        let off = ram_offset_in(self.ram, pa, size as u64)
-            .map_err(|f| format!("mem_load fault: {f:?}"))?;
+        let off = match ram_offset_in(self.ram, pa, size as u64) {
+            Ok(off) => off,
+            Err(fault) => {
+                self.abort_fault = Some(ExceptionFault {
+                    va: addr as u64,
+                    access: Access::Read,
+                    fault,
+                    level: 0,
+                });
+                return Err(format!("mem_load fault: {fault:?}"));
+            }
+        };
         let mut v = 0u64;
         for i in 0..size as usize {
             v |= (self.ram[off + i] as u64) << (8 * i);
@@ -4366,8 +4615,18 @@ impl HostOps for WasmHost<'_> {
         if !matches!(size, 1 | 2 | 4 | 8) {
             return Err("mem_store: size must be 1, 2, 4 or 8".to_string());
         }
-        let off = ram_offset_in(self.ram, pa, size as u64)
-            .map_err(|f| format!("mem_store fault: {f:?}"))?;
+        let off = match ram_offset_in(self.ram, pa, size as u64) {
+            Ok(off) => off,
+            Err(fault) => {
+                self.abort_fault = Some(ExceptionFault {
+                    va: addr as u64,
+                    access: Access::Write,
+                    fault,
+                    level: 0,
+                });
+                return Err(format!("mem_store fault: {fault:?}"));
+            }
+        };
         // QUIRK (2026-10-04, size-bug track): The kernel's memblock_add_range
         // contains a CSINV instruction (0xda818058 at 0xffffff8008354018) that
         // produces ~0x40000000 instead of 0x40000000 for the region size.
@@ -5067,15 +5326,18 @@ mod tests {
     }
 
     #[test]
-    fn wave4_mem_fault_becomes_wasm_trap() {
+    fn wave4_mem_fault_enters_data_abort_vector() {
         let mut o = Orchestrator::new();
         // LDRB W2, [X10] with X10 far outside RAM -> mem_load faults.
         o.load_image(&minimal_image(0x4000_0000, &[0x39400142]))
             .unwrap();
         o.machine.cpu[0].regs[10] = 0xFFFF_FFFF_0000_0000;
-        let reason = o.run_until_halt(10);
-        assert!(matches!(reason, HaltReason::WasmTrap { .. }));
-        assert_eq!(o.halted(), Some(&reason));
+        assert_eq!(o.step_vcpu(), StepOutcome::Continue);
+        assert_eq!(o.machine.cpu[0].pc, 0x400);
+        assert_eq!(o.machine.cpu[0].sysregs.elr_el1, 0x4000_0000);
+        assert_eq!(o.machine.cpu[0].sysregs.esr_el1, 0x9200_0004);
+        assert_eq!(o.machine.cpu[0].sysregs.far_el1, 0xFFFF_FFFF_0000_0000);
+        assert_eq!(o.halted(), None);
     }
 
     #[test]
@@ -5440,6 +5702,7 @@ mod tests {
             irq: &mut p.irq,
             sysregs: &mut p.sysregs,
             code_write: false,
+            abort_fault: None,
         };
         f(&mut host)
     }
@@ -5574,9 +5837,9 @@ mod tests {
     }
 
     #[test]
-    fn gb22_fetch_unmapped_va_is_fetch_fault() {
-        // GB-22: a fetch VA with no mapping faults honestly as FetchFault
-        // at the VA (not a silent wrong-physical read).
+    fn gb22_fetch_unmapped_va_enters_instruction_abort() {
+        // An unmapped instruction VA takes the lower-EL instruction-abort
+        // vector and exposes the faulting PC through ELR_EL1/FAR_EL1.
         let mut o = Orchestrator::new();
         {
             let m = o.machine_mut();
@@ -5587,15 +5850,11 @@ mod tests {
             m.cpu[0].pc = 0xffff_ff80_096a_b000;
         }
         let outcome = o.step_vcpu();
-        assert!(
-            matches!(
-                outcome,
-                StepOutcome::Halted(HaltReason::FetchFault {
-                    addr: 0xffff_ff80_096a_b000
-                })
-            ),
-            "expected FetchFault, got: {outcome:?}"
-        );
+        assert_eq!(outcome, StepOutcome::Continue);
+        assert_eq!(o.machine().cpu[0].pc, 0x400);
+        assert_eq!(o.machine().cpu[0].sysregs.elr_el1, 0xffff_ff80_096a_b000);
+        assert_eq!(o.machine().cpu[0].sysregs.esr_el1, 0x8200_0005);
+        assert_eq!(o.machine().cpu[0].sysregs.far_el1, 0xffff_ff80_096a_b000);
     }
 
     /// Helper: fresh Orchestrator with MMU off (identity), PC at `pc`,

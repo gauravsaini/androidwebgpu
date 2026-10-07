@@ -241,6 +241,8 @@ fn lift_system(word: u32) -> Vec<IrOp> {
             // Exception return state, read by the Linux IRQ entry/exit path.
             (3, 0, 4, 0, 1) => SysReg::ElrEl1,
             (3, 0, 4, 0, 0) => SysReg::SpsrEl1,
+            (3, 0, 5, 2, 0) => SysReg::EsrEl1,
+            (3, 0, 6, 0, 0) => SysReg::FarEl1,
             // CNTHCTL_EL2
             (3, 4, 14, 1, 0) => SysReg::CnthctlEl2,
             // CNTPCT_EL0 (fam/devices): physical counter, live value
@@ -610,8 +612,6 @@ fn lift_system(word: u32) -> Vec<IrOp> {
                         // TPIDR_EL0: Thread ID register EL0 (21 static hits)
                         (3, 3, 13, 0, 2) => 0,
                         // Exception status / syndrome registers
-                        (3, 0, 5, 2, 0) => 0, // ESR_EL1
-                        (3, 0, 6, 0, 0) => 0, // FAR_EL1
                         (3, 0, 4, 0, 1) => 0, // ELR_EL1
                         (3, 0, 4, 0, 0) => 0, // SPSR_EL1
                         // Performance monitors
@@ -5123,11 +5123,17 @@ mod tests {
         );
         assert_eq!(
             lift(&insn(0x4000, 0xD538_5200, InsnKind::System)),
-            vec![IrOp::Mov { dst: 0, imm: 0 }] // MRS X0, ESR_EL1
+            vec![IrOp::ReadSys {
+                dst: 0,
+                reg: SysReg::EsrEl1
+            }] // MRS X0, ESR_EL1
         );
         assert_eq!(
             lift(&insn(0x4000, 0xD538_6000, InsnKind::System)),
-            vec![IrOp::Mov { dst: 0, imm: 0 }] // MRS X0, FAR_EL1
+            vec![IrOp::ReadSys {
+                dst: 0,
+                reg: SysReg::FarEl1
+            }] // MRS X0, FAR_EL1
         );
         assert_eq!(
             lift(&insn(0x4000, 0xD538_4020, InsnKind::System)),
