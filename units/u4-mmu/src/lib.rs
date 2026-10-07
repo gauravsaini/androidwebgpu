@@ -135,6 +135,12 @@ fn read_desc(ram: &[u8], pa: u64, va: u64, ram_base: u64) -> Result<u64, MemFaul
 pub struct MmuFault {
     pub fault: MemFault,
     pub level: u8,
+    /// Data Fault Status Code (or Instruction Fault Status Code for fetches).
+    pub dfsc: u8,
+    /// The fault occurred while reading a stage-1 translation table.
+    pub s1ptw: bool,
+    /// The fault was reported by the physical memory system as an external abort.
+    pub ea: bool,
 }
 
 impl MmuFault {
@@ -142,6 +148,9 @@ impl MmuFault {
         Self {
             fault: MemFault::TranslationFault { va },
             level,
+            dfsc: 0x04 + level,
+            s1ptw: false,
+            ea: false,
         }
     }
 
@@ -149,6 +158,34 @@ impl MmuFault {
         Self {
             fault: MemFault::PermissionFault { va },
             level,
+            dfsc: 0x0C + level,
+            s1ptw: false,
+            ea: false,
+        }
+    }
+
+    fn access_flag(va: u64, level: u8) -> Self {
+        Self {
+            fault: MemFault::TranslationFault { va },
+            level,
+            dfsc: 0x08 + level,
+            s1ptw: false,
+            ea: false,
+        }
+    }
+
+    fn external(va: u64, level: u8, table_walk: bool) -> Self {
+        Self {
+            fault: MemFault::TranslationFault { va },
+            level,
+            dfsc: if table_walk { 0x14 + level } else { 0x10 },
+            // ESR_EL1.S1PTW is set for a stage-2 fault during a stage-1
+            // table walk. This MMU models stage 1 only, so it remains RES0;
+            // the table-walk external status is carried in DFSC instead.
+            s1ptw: false,
+            // The emulator's RAM bounds reject an unmapped PA like a bus
+            // decode error (DECERR), which the platform reports as EA=0.
+            ea: false,
         }
     }
 }
@@ -256,7 +293,7 @@ fn translate_impl_status(
             .checked_add(index * 8)
             .ok_or(MmuFault::translation(va, level as u8))?;
         let desc = read_desc(ram, entry_pa, va, ram_base)
-            .map_err(|_| MmuFault::translation(va, level as u8))?;
+            .map_err(|_| MmuFault::external(va, level as u8, true))?;
 
         match desc & 0b11 {
             0b00 | 0b10 => return Err(MmuFault::translation(va, level as u8)), // invalid / reserved
@@ -303,6 +340,11 @@ fn finish_block(
     no_write: bool,
     level: u8,
 ) -> Result<u64, MmuFault> {
+    // Cortex-A53's AArch64 translation regime has access-flag checks at
+    // levels 1–3. Level 0 access-flag faults require FEAT_LPA2.
+    if level > 0 && desc & (1 << 10) == 0 {
+        return Err(MmuFault::access_flag(va, level));
+    }
     let ap = (desc >> 6) & 0b11;
     let read_only = ap == 0b10 || ap == 0b11;
     // PXN (bit 53) denies EL1 execute. UXN (bit 54) only restricts EL0 and
@@ -336,7 +378,7 @@ mod tests {
     }
 
     fn page(out: u64, ap: u64) -> u64 {
-        (out & !0xFFF) | (ap << 6) | 0b11
+        (out & !0xFFF) | (ap << 6) | (1 << 10) | 0b11
     }
 
     /// 4K granule, 48-bit IA: T0SZ=16, TG0=4K.
@@ -483,6 +525,9 @@ mod tests {
                 Err(MmuFault {
                     fault: MemFault::TranslationFault { va },
                     level,
+                    dfsc: 0x04 + level,
+                    s1ptw: false,
+                    ea: false,
                 })
             );
         }
@@ -494,6 +539,9 @@ mod tests {
             Err(MmuFault {
                 fault: MemFault::PermissionFault { va },
                 level: 3,
+                dfsc: 0x0F,
+                s1ptw: false,
+                ea: false,
             })
         );
     }
@@ -524,7 +572,11 @@ mod tests {
     fn golden_block_descriptor_2mb() {
         let (mut ram, _) = chain4k();
         // L2[2] as a 2 MiB block: AP=00, output base 0x400000.
-        w64(&mut ram, 0x3000 + 2 * 8, (0x400000u64 & !0x1F_FFFF) | 0b01);
+        w64(
+            &mut ram,
+            0x3000 + 2 * 8,
+            (0x400000u64 & !0x1F_FFFF) | (1 << 10) | 0b01,
+        );
         assert_eq!(
             translate(&st4k(0x1000), &ram, 0x401234, Access::Read),
             Ok(0x401234)
@@ -575,7 +627,11 @@ mod tests {
         let va = 0x2401234u64; // L1[0] L2[1] L3[256], offset 0x1234
         w64(&mut ram, 0x4000, table(0x8000));
         w64(&mut ram, 0x8000 + 8, table(0xC000)); // L2[1]
-        w64(&mut ram, 0xC000 + 256 * 8, (0xA00000u64 & !0x3FFF) | 0b11);
+        w64(
+            &mut ram,
+            0xC000 + 256 * 8,
+            (0xA00000u64 & !0x3FFF) | (1 << 10) | 0b11,
+        );
         assert_eq!(translate(&st, &ram, va, Access::Read), Ok(0xA01234));
     }
 
