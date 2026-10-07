@@ -65,6 +65,9 @@
 
 use std::collections::VecDeque;
 
+#[cfg(test)]
+mod irq_wfi_tests;
+
 use pathn_contracts::adapters::{BlobStore, InputSource};
 use pathn_contracts::cpu::{
     Access, BlockExit, DecodeResult, InsnKind, Instruction, IrBlock, IrOp, IrqState, MemFault,
@@ -163,6 +166,21 @@ struct GicV2State {
     gicd_ctlr: u32,
     gicc_ctlr: u32,
     gicc_pmr: u32,
+    gicd_isenabler0: u32,
+    gicd_ppi27_priority: u8,
+    gicc_active: Option<u32>,
+}
+
+fn highest_pending_gic_irq(gic: &GicV2State, pending: u64) -> Option<u32> {
+    const PPI27: u32 = 1 << 27;
+    let priority_mask = gic.gicc_pmr as u8;
+    (gic.gicd_ctlr & 1 != 0
+        && gic.gicc_ctlr & 1 != 0
+        && gic.gicd_isenabler0 & PPI27 != 0
+        && pending & (PPI27 as u64) != 0
+        && gic.gicc_active != Some(27)
+        && gic.gicd_ppi27_priority < priority_mask)
+        .then_some(27)
 }
 
 /// Platform IRQ number the orchestrator raises for virtio-gpu completion.
@@ -3275,12 +3293,14 @@ impl Orchestrator {
         let console: &mut ConsoleState = &mut self.console;
         let gpu_port: &mut GpuPort = &mut self.gpu_port;
         let gic: &mut GicV2State = &mut self.gic;
+        let irq: &mut IrqState = &mut self.machine.irq;
         let sysregs: &mut SysRegs = &mut cpu.sysregs;
         let mut host = WasmHost {
             ram,
             console,
             gpu_port,
             gic,
+            irq,
             sysregs,
             code_write: false,
         };
@@ -3343,9 +3363,16 @@ impl Orchestrator {
         self.steps += 1;
         // Injected clock: the timer advances only here, never wall time.
         self.tick_clock(TIMER_CYCLES_PER_STEP);
-        // WFI with no IRQ pending parks the vCPU: resumable, not halted.
-        // (A pending IRQ is a spurious wake — the guest spins, honestly.)
-        if wfi_seen && self.machine.irq.pending == 0 {
+        // WFI waits for the next virtual-timer compare when one is armed.
+        // The injected clock advances to that deadline while the vCPU is
+        // parked, then the GIC line wakes it if the distributor and CPU
+        // interface can deliver PPI 27.
+        if wfi_seen && self.deliverable_irq().is_none() {
+            if let Some(cycles) = self.virtual_timer_cycles_until_expiry() {
+                self.tick_clock(cycles);
+            }
+        }
+        if wfi_seen && self.deliverable_irq().is_none() {
             return StepOutcome::WfiYield { addr: pc };
         }
         StepOutcome::Continue
@@ -3371,10 +3398,9 @@ impl Orchestrator {
     // ---- clock / timer (U5) ----
 
     /// Advance the injected clock and tick the U5 timer. The ONLY clock.
-    /// U5 sets the pending bit on the rising edge (INTID 27 per the LLD
-    /// convention); the orchestrator surfaces it via `pending_irqs`.
-    /// vCPU interrupt *injection* (vector jump) needs an exception model —
-    /// Wave-4 work, stated here, not faked.
+    /// U5 handles the physical-timer model, and the virtual timer below also
+    /// raises PPI 27 when CNTVCT reaches CNTV_CVAL. `pending_irqs` surfaces
+    /// that line. CPU exception-vector injection remains unmodeled.
     pub fn tick_clock(&mut self, cycles: u64) {
         self.clock_cycles = self.clock_cycles.wrapping_add(cycles);
 
@@ -3395,6 +3421,30 @@ impl Orchestrator {
         // Sync the free-running counter back so MRS CNTPCT_EL0 sees it.
         self.machine.cpu[0].sysregs.cntpct_el0 = self.machine.irq.timer_count;
 
+        // CNTVCT_EL0 is CNTPCT_EL0 minus CNTVOFF_EL2. CNTV_CTL_EL0.ISTATUS
+        // remains a derived readback; the unmasked enabled timer drives the
+        // shared virtual-timer PPI line while its compare is reached.
+        let sysregs = &self.machine.cpu[0].sysregs;
+        let virtual_count = sysregs.cntpct_el0.wrapping_sub(sysregs.cntvoff_el2);
+        let virtual_timer_fires = sysregs.cntv_ctl_el0 & 1 != 0
+            && sysregs.cntv_ctl_el0 & 2 == 0
+            && virtual_count >= sysregs.cntv_cval_el0;
+        if virtual_timer_fires {
+            self.machine.irq.pending |= u5_gic_timer::TIMER_PENDING_BIT;
+        }
+    }
+
+    fn deliverable_irq(&self) -> Option<u32> {
+        highest_pending_gic_irq(&self.gic, self.machine.irq.pending)
+    }
+
+    fn virtual_timer_cycles_until_expiry(&self) -> Option<u64> {
+        let sysregs = &self.machine.cpu[0].sysregs;
+        if sysregs.cntv_ctl_el0 & 1 == 0 || sysregs.cntv_ctl_el0 & 2 != 0 {
+            return None;
+        }
+        let virtual_count = sysregs.cntpct_el0.wrapping_sub(sysregs.cntvoff_el2);
+        Some(sysregs.cntv_cval_el0.saturating_sub(virtual_count))
     }
 
     /// Currently asserted interrupt lines (INTIDs with pending bits set).
@@ -3587,10 +3637,13 @@ impl Orchestrator {
             }
         }
         out.extend_from_slice(&w.buf);
-        out.extend_from_slice(b"GIC2");
+        out.extend_from_slice(b"GIC3");
         out.extend_from_slice(&self.gic.gicd_ctlr.to_le_bytes());
         out.extend_from_slice(&self.gic.gicc_ctlr.to_le_bytes());
         out.extend_from_slice(&self.gic.gicc_pmr.to_le_bytes());
+        out.extend_from_slice(&self.gic.gicd_isenabler0.to_le_bytes());
+        out.extend_from_slice(&(self.gic.gicd_ppi27_priority as u32).to_le_bytes());
+        out.extend_from_slice(&self.gic.gicc_active.unwrap_or(u32::MAX).to_le_bytes());
         out
     }
 
@@ -3672,15 +3725,29 @@ impl Orchestrator {
             }),
             _ => return Err(RestoreError::BadFormat),
         };
-        if matches!(r.remaining(), 8 | 16) {
+        if matches!(r.remaining(), 8 | 16 | 28) {
             let extension_len = r.remaining();
-            if r.take(4).ok_or(RestoreError::BadFormat)? != b"GIC2" {
-                return Err(RestoreError::BadFormat);
-            }
-            o.gic.gicd_ctlr = r.u32().ok_or(RestoreError::BadFormat)?;
-            if extension_len == 16 {
+            let marker = r.take(4).ok_or(RestoreError::BadFormat)?;
+            if extension_len == 28 {
+                if marker != b"GIC3" {
+                    return Err(RestoreError::BadFormat);
+                }
+                o.gic.gicd_ctlr = r.u32().ok_or(RestoreError::BadFormat)?;
                 o.gic.gicc_ctlr = r.u32().ok_or(RestoreError::BadFormat)?;
                 o.gic.gicc_pmr = r.u32().ok_or(RestoreError::BadFormat)?;
+                o.gic.gicd_isenabler0 = r.u32().ok_or(RestoreError::BadFormat)?;
+                o.gic.gicd_ppi27_priority = r.u32().ok_or(RestoreError::BadFormat)? as u8;
+                let active = r.u32().ok_or(RestoreError::BadFormat)?;
+                o.gic.gicc_active = (active != u32::MAX).then_some(active);
+            } else {
+                if marker != b"GIC2" {
+                    return Err(RestoreError::BadFormat);
+                }
+                o.gic.gicd_ctlr = r.u32().ok_or(RestoreError::BadFormat)?;
+                if extension_len == 16 {
+                    o.gic.gicc_ctlr = r.u32().ok_or(RestoreError::BadFormat)?;
+                    o.gic.gicc_pmr = r.u32().ok_or(RestoreError::BadFormat)?;
+                }
             }
         } else if r.remaining() != 0 {
             return Err(RestoreError::BadFormat);
@@ -3836,6 +3903,7 @@ struct WasmHost<'a> {
     console: &'a mut ConsoleState,
     gpu_port: &'a mut GpuPort,
     gic: &'a mut GicV2State,
+    irq: &'a mut IrqState,
     sysregs: &'a mut SysRegs,
     /// Set when a guest store writes to kernel text VA range (icache-fix).
     /// The orchestrator checks this after run_block and invalidates the
@@ -3963,6 +4031,17 @@ impl HostOps for WasmHost<'_> {
         if (GICC_BASE..GICC_BASE + GICC_SIZE).contains(&pa) {
             let offset = pa - GICC_BASE;
             if size == 4 {
+                if offset == 0x0c {
+                    let irq = highest_pending_gic_irq(self.gic, self.irq.pending).unwrap_or(1023);
+                    if irq != 1023 {
+                        self.gic.gicc_active = Some(irq);
+                        self.irq.pending &= !(1u64 << irq);
+                    }
+                    eprintln!(
+                        "GIC MMIO read: GICC PA={pa:#010x} offset={offset:#06x} size={size} value={irq:#010x}"
+                    );
+                    return Ok(irq as i64);
+                }
                 let value = match offset {
                     0x0 => Some(self.gic.gicc_ctlr),
                     0x4 => Some(self.gic.gicc_pmr),
@@ -4054,10 +4133,16 @@ impl HostOps for WasmHost<'_> {
             );
             if offset == 0 {
                 self.gic.gicd_ctlr = val as u32;
+            } else if offset == 0x100 {
+                self.gic.gicd_isenabler0 |= val as u32;
+            } else if offset == 0x180 {
+                self.gic.gicd_isenabler0 &= !(val as u32);
+            } else if offset == 0x418 {
+                // IDs 24–27 occupy the final four bytes of this word.
+                self.gic.gicd_ppi27_priority = (val as u32 >> 24) as u8;
             }
-            // The guest's early distributor setup uses write-only programming
-            // registers. The emulator does not deliver GIC interrupts, so
-            // those initialization writes are accepted without side effects.
+            // Other distributor programming registers are write-only on this
+            // boot path and are acknowledged without side effects.
             return Ok(());
         }
         if (GICC_BASE..GICC_BASE + GICC_SIZE).contains(&pa) {
@@ -4079,10 +4164,14 @@ impl HostOps for WasmHost<'_> {
             match offset {
                 0x0 => self.gic.gicc_ctlr = val as u32,
                 0x4 => self.gic.gicc_pmr = val as u32,
-                // EOIR completes an interrupt; APR writes update active
-                // priority state. No interrupt delivery is wired yet, so
-                // these acknowledge/no-op writes are sufficient for init.
-                0x10 | 0xd0..=0xdc => {}
+                0x10 => {
+                    if self.gic.gicc_active == Some((val as u32) & 0x3ff) {
+                        self.gic.gicc_active = None;
+                    }
+                }
+                // APR writes update active priority state. Priority-drop
+                // behavior is not needed for the single delivered PPI.
+                0xd0..=0xdc => {}
                 _ => {
                     return Err(format!(
                         "mem_store: unhandled GICC write pa={pa:#010x} size={size}"
@@ -4810,10 +4899,13 @@ mod tests {
     fn wave4_wfi_with_pending_irq_continues() {
         let mut o = Orchestrator::new();
         o.load_image(&minimal_image(0x4000_0000, &[WFI])).unwrap();
-        // Spurious wake: an already-pending IRQ means WFI returns at once.
-        // (Bit 5: a non-timer source — U5 owns and clears the timer bit 27
-        // on ticks where the timer is not asserting.)
-        o.machine.irq.pending = 1 << 5;
+        // A programmed virtual timer wakes WFI when the GIC can deliver PPI 27.
+        o.machine.cpu[0].sysregs.cntv_ctl_el0 = 1;
+        o.machine.cpu[0].sysregs.cntv_cval_el0 = TIMER_CYCLES_PER_STEP;
+        o.gic.gicd_ctlr = 1;
+        o.gic.gicc_ctlr = 1;
+        o.gic.gicc_pmr = 0xf0;
+        o.gic.gicd_isenabler0 = 1 << 27;
         let outcome = o.step_vcpu();
         assert_eq!(outcome, StepOutcome::Continue);
         assert_eq!(o.machine.cpu[0].pc, 0x4000_0004);
@@ -5135,6 +5227,7 @@ mod tests {
         console: ConsoleState,
         gpu_port: GpuPort,
         gic: GicV2State,
+        irq: IrqState,
         sysregs: SysRegs,
     }
 
@@ -5144,6 +5237,12 @@ mod tests {
             console: ConsoleState::new(),
             gpu_port: GpuPort::new(),
             gic: GicV2State::default(),
+            irq: IrqState {
+                enabled: 0,
+                pending: 0,
+                timer_count: 0,
+                timer_compare: 0,
+            },
             sysregs,
         }
     }
@@ -5155,6 +5254,7 @@ mod tests {
             console: &mut p.console,
             gpu_port: &mut p.gpu_port,
             gic: &mut p.gic,
+            irq: &mut p.irq,
             sysregs: &mut p.sysregs,
             code_write: false,
         };
