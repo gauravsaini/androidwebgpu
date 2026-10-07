@@ -125,6 +125,9 @@ pub struct SysRegs {
     pub lorc_el1: u64,
     pub pmccntr_el0: u64,
     pub zcr_el1: u64,
+    /// Exception return state captured by an EL1 exception.
+    pub elr_el1: u64,
+    pub spsr_el1: u64,
 
 }
 
@@ -227,6 +230,8 @@ impl Default for SysRegs {
             lorc_el1: 0,
             pmccntr_el0: 0,
             zcr_el1: 0,
+            elr_el1: 0,
+            spsr_el1: 0,
 
         }
     }
@@ -395,6 +400,8 @@ impl SysRegs {
             SysReg::LorcEl1 => self.lorc_el1,
             SysReg::PmccntrEl0 => self.pmccntr_el0,
             SysReg::ZcrEl1 => self.zcr_el1,
+            SysReg::ElrEl1 => self.elr_el1,
+            SysReg::SpsrEl1 => self.spsr_el1,
 
         }
     }
@@ -554,6 +561,8 @@ impl SysRegs {
             SysReg::LorcEl1 => self.lorc_el1 = val,
             SysReg::PmccntrEl0 => self.pmccntr_el0 = val,
             SysReg::ZcrEl1 => self.zcr_el1 = val,
+            SysReg::ElrEl1 => self.elr_el1 = val,
+            SysReg::SpsrEl1 => self.spsr_el1 = val,
 
         }
     }
@@ -702,6 +711,8 @@ impl SysRegs {
             133 => Some(SysReg::LorcEl1),
             134 => Some(SysReg::PmccntrEl0),
             135 => Some(SysReg::ZcrEl1),
+            136 => Some(SysReg::ElrEl1),
+            137 => Some(SysReg::SpsrEl1),
 
             _ => None,
         }
@@ -747,9 +758,8 @@ pub const MAX_GUEST_RAM_BYTES: usize = 2 * 1024 * 1024 * 1024;
 pub struct Snapshot(pub Vec<u8>);
 
 /// Current snapshot format version. Bump on any format change.
-pub const SNAPSHOT_VERSION: u32 = 13;
-/// P4 (2026-10-03): v13 adds the 91 P4 system registers (64 debug,
-/// 13 EL2, 10 GIC CPU-interface, 4 misc) to the per-CPU sysreg area.
+pub const SNAPSHOT_VERSION: u32 = 14;
+/// v14 adds ELR_EL1 and SPSR_EL1 to the per-CPU exception state.
 
 /// Snapshot restore failure. Data, not panic — corrupt input never crashes the host.
 #[derive(Debug, Clone, PartialEq, Eq)]

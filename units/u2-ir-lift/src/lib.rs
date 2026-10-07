@@ -238,6 +238,9 @@ fn lift_system(word: u32) -> Vec<IrOp> {
             // pc 0xffffff800839b164, word 0xd5384115). MSR SP_EL0 was
             // already persistent; the MRS read side was missing.
             (3, 0, 4, 1, 0) => SysReg::SpEl0,
+            // Exception return state, read by the Linux IRQ entry/exit path.
+            (3, 0, 4, 0, 1) => SysReg::ElrEl1,
+            (3, 0, 4, 0, 0) => SysReg::SpsrEl1,
             // CNTHCTL_EL2
             (3, 4, 14, 1, 0) => SysReg::CnthctlEl2,
             // CNTPCT_EL0 (fam/devices): physical counter, live value
@@ -663,6 +666,9 @@ fn lift_system(word: u32) -> Vec<IrOp> {
             (3, 0, 12, 0, 0) => SysReg::VbarEl1,
             // SP_EL0
             (3, 0, 4, 1, 0) => SysReg::SpEl0,
+            // Exception return state, updated by Linux's IRQ entry path.
+            (3, 0, 4, 0, 1) => SysReg::ElrEl1,
+            (3, 0, 4, 0, 0) => SysReg::SpsrEl1,
             // CPACR_EL1 (GB-9): kernel enables FP/ASIMD via MSR CPACR_EL1
             (3, 0, 1, 0, 2) => SysReg::CpacrEl1,
             // MDSCR_EL1 (GB-10): kernel zeroes debug control via MSR MDSCR_EL1
@@ -5125,11 +5131,31 @@ mod tests {
         );
         assert_eq!(
             lift(&insn(0x4000, 0xD538_4020, InsnKind::System)),
-            vec![IrOp::Mov { dst: 0, imm: 0 }] // MRS X0, ELR_EL1
+            vec![IrOp::ReadSys {
+                dst: 0,
+                reg: SysReg::ElrEl1
+            }] // MRS X0, ELR_EL1
         );
         assert_eq!(
             lift(&insn(0x4000, 0xD538_4000, InsnKind::System)),
-            vec![IrOp::Mov { dst: 0, imm: 0 }] // MRS X0, SPSR_EL1
+            vec![IrOp::ReadSys {
+                dst: 0,
+                reg: SysReg::SpsrEl1
+            }] // MRS X0, SPSR_EL1
+        );
+        assert_eq!(
+            lift(&insn(0x4000, 0xD518_4020, InsnKind::System)),
+            vec![IrOp::WriteSys {
+                src: 0,
+                reg: SysReg::ElrEl1
+            }] // MSR ELR_EL1, X0
+        );
+        assert_eq!(
+            lift(&insn(0x4000, 0xD518_4000, InsnKind::System)),
+            vec![IrOp::WriteSys {
+                src: 0,
+                reg: SysReg::SpsrEl1
+            }] // MSR SPSR_EL1, X0
         );
     }
 

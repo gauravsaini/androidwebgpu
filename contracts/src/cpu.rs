@@ -376,6 +376,10 @@ pub enum SysReg {
     PmccntrEl0 = 134,
     /// P4 (2026-10-03): ZCR_EL1: SVE Control Register, EL1. Written/read by the kernel's SVE probe (mrs x3, zcr_el1 @ 0x4008474c). Stored u64, default 0. ID_AA64ZFR0_EL1 reads 0 (no SVE), so the probe must see a consistent stored value, not a trap.
     ZcrEl1 = 135,
+    /// Exception Link Register, EL1. Captures the return PC on IRQ entry.
+    ElrEl1 = 136,
+    /// Saved Program Status Register, EL1. Captures PSTATE on IRQ entry.
+    SpsrEl1 = 137,
 
 }
 
