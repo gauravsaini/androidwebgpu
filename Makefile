@@ -20,6 +20,9 @@ test:
 
 .PHONY: web build verify test serve clean vendor-check boot-report
 
+.PHONY: frontier-loop
+frontier-loop: ; tools/frontier-loop/driver.sh
+
 boot-report:
 	@uv run python scripts/boot_report.py
 

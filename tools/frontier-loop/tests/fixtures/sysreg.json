@@ -1,0 +1,10 @@
+{
+  "schema": "frontier-boot-report/1",
+  "binary": {"git_rev": "a1b2c3d", "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "profile": "debug"},
+  "guest": {"image": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", "initramfs": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc", "dtb": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"},
+  "run": {"steps": 44, "halt_step": 44, "wall_s": 0.7, "resumed_from_snapshot": "snap-43.bin"},
+  "halt": {"pc": 2147487744, "symbol": "sysreg_read", "insn_hex": "d5381000", "disasm": "mrs x0, id_aa64pfr0_el1", "reason": "unhandled_sysreg", "detail": {"op0": 3, "op1": 0, "crn": 0, "crm": 4, "op2": 0}},
+  "uart": {"bytes": 2, "init_marker": false, "tail": "OK"},
+  "spin": null,
+  "classification": {"category": "unknown", "confidence": "low", "oracle": "none", "agent_kind": "human"}
+}

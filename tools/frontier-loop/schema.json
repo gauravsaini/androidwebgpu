@@ -1,0 +1,108 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://openai.com/schemas/frontier-boot-report-1.json",
+  "title": "Frontier boot report version 1",
+  "type": "object",
+  "required": ["schema", "binary", "guest", "run", "halt", "uart", "spin", "classification"],
+  "properties": {
+    "schema": { "const": "frontier-boot-report/1" },
+    "binary": {
+      "type": "object",
+      "required": ["git_rev", "sha256", "profile"],
+      "properties": {
+        "git_rev": { "type": "string", "minLength": 1 },
+        "sha256": { "$ref": "#/$defs/sha256" },
+        "profile": { "type": "string", "minLength": 1 }
+      },
+      "additionalProperties": true
+    },
+    "guest": {
+      "type": "object",
+      "anyOf": [
+        {
+          "required": ["image", "initramfs", "dtb"],
+          "properties": {
+            "image": { "$ref": "#/$defs/guestArtifact" },
+            "initramfs": { "$ref": "#/$defs/guestArtifact" },
+            "dtb": { "$ref": "#/$defs/guestArtifact" }
+          }
+        },
+        {
+          "required": ["image_sha256", "initramfs_sha256", "dtb_sha256"],
+          "properties": {
+            "image_sha256": { "$ref": "#/$defs/sha256" },
+            "initramfs_sha256": { "$ref": "#/$defs/sha256" },
+            "dtb_sha256": { "$ref": "#/$defs/sha256" }
+          }
+        }
+      ],
+      "additionalProperties": true
+    },
+    "run": {
+      "type": "object",
+      "required": ["steps", "halt_step", "wall_s", "resumed_from_snapshot"],
+      "properties": {
+        "steps": { "type": "integer", "minimum": 0 },
+        "halt_step": { "type": ["integer", "null"], "minimum": 0 },
+        "wall_s": { "type": "number", "minimum": 0 },
+        "resumed_from_snapshot": { "type": ["string", "boolean", "null"] }
+      },
+      "additionalProperties": true
+    },
+    "halt": {
+      "type": "object",
+      "required": ["pc", "symbol", "insn_hex", "disasm", "reason", "detail"],
+      "properties": {
+        "pc": { "type": ["string", "integer", "null"] },
+        "symbol": { "type": ["string", "null"] },
+        "insn_hex": { "type": ["string", "null"] },
+        "disasm": { "type": ["string", "null"] },
+        "reason": { "type": "string" },
+        "detail": { "type": ["string", "object", "array", "null"] }
+      },
+      "additionalProperties": true
+    },
+    "uart": {
+      "type": "object",
+      "required": ["bytes", "init_marker", "tail"],
+      "properties": {
+        "bytes": { "type": "integer", "minimum": 0 },
+        "init_marker": { "type": "boolean" },
+        "tail": { "type": ["string", "array"] }
+      },
+      "additionalProperties": true
+    },
+    "spin": { "type": ["object", "boolean", "null"] },
+    "classification": {
+      "type": "object",
+      "required": ["category", "confidence", "oracle", "agent_kind"],
+      "properties": {
+        "category": { "type": "string" },
+        "confidence": { "enum": ["high", "medium", "low"] },
+        "oracle": { "type": "string" },
+        "agent_kind": { "type": "string" }
+      },
+      "additionalProperties": true
+    }
+  },
+  "additionalProperties": true,
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^[A-Fa-f0-9]{64}$"
+    },
+    "guestArtifact": {
+      "oneOf": [
+        { "$ref": "#/$defs/sha256" },
+        {
+          "type": "object",
+          "required": ["sha256"],
+          "properties": {
+            "sha256": { "$ref": "#/$defs/sha256" }
+          },
+          "additionalProperties": true
+        }
+      ]
+    }
+  }
+}

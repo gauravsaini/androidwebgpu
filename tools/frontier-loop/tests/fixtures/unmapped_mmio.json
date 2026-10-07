@@ -1,0 +1,10 @@
+{
+  "schema": "frontier-boot-report/1",
+  "binary": {"git_rev": "a1b2c3d", "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "profile": "release"},
+  "guest": {"image": {"sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"}, "initramfs": {"sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"}, "dtb": {"sha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"}},
+  "run": {"steps": 42, "halt_step": 42, "wall_s": 0.5, "resumed_from_snapshot": null},
+  "halt": {"pc": "0x80001000", "symbol": "probe", "insn_hex": "f9400000", "disasm": "ldr x0, [x0]", "reason": "unmapped_mmio_read", "detail": "address 0x09000000"},
+  "uart": {"bytes": 0, "init_marker": false, "tail": ""},
+  "spin": {"detected": false},
+  "classification": {"category": "unknown", "confidence": "low", "oracle": "none", "agent_kind": "human"}
+}
