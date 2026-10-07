@@ -55,6 +55,20 @@ fn virtual_timer_compare_pends_ppi27_and_gicc_iar_acknowledges_it() {
 }
 
 #[test]
+fn timer_counter_uses_qemu_calibrated_cycles_per_guest_step() {
+    let mut orch = Orchestrator::new();
+    orch.machine.cpu[0].sysregs.sctlr_el1 = 0;
+    write_word(&mut orch, RAM_BASE, NOP);
+
+    for _ in 0..1_000 {
+        orch.machine.cpu[0].pc = RAM_BASE;
+        assert_eq!(orch.step_vcpu(), StepOutcome::Continue);
+    }
+
+    assert_eq!(orch.machine.cpu[0].sysregs.cntpct_el0, 5_000);
+}
+
+#[test]
 fn el1h_irq_enters_vector_saves_state_and_returns_through_eret() {
     let mut orch = Orchestrator::new();
     let source_pc = RAM_BASE;
