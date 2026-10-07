@@ -148,6 +148,23 @@ pub const GPU_DATA: u64 = 0x0A00_0000;
 /// [`Orchestrator::drain_gpu_submit`].
 pub const GPU_SUBMIT: u64 = 0x0A00_0008;
 
+/// GICv2 distributor MMIO window from the supplied virt DTB.
+const GICD_BASE: u64 = 0x0800_0000;
+const GICD_SIZE: u64 = 0x1_0000;
+/// QEMU `virt`'s GICv2 has 288 interrupt IDs (16 SGIs + 16 PPIs + 256 SPIs), so
+/// GICD_TYPER.ITLinesNumber is `(288 / 32) - 1 = 8`.
+const GICD_TYPER_VALUE: u32 = 0x8;
+/// GICv2 CPU-interface window from the second `reg` tuple in the DTB.
+const GICC_BASE: u64 = 0x0801_0000;
+const GICC_SIZE: u64 = 0x1_0000;
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+struct GicV2State {
+    gicd_ctlr: u32,
+    gicc_ctlr: u32,
+    gicc_pmr: u32,
+}
+
 /// Platform IRQ number the orchestrator raises for virtio-gpu completion.
 /// Not in the frozen contracts; a board device tree would fix this in M1+.
 /// Documented here as the orchestrator's explicit choice.
@@ -524,6 +541,8 @@ pub struct Orchestrator {
     pub console: ConsoleState,
     /// Guest-to-host virtio-gpu command-stream port (Track A).
     pub gpu_port: GpuPort,
+    /// Minimal GICv2 distributor / CPU-interface state.
+    gic: GicV2State,
     /// Injected cycle counter — the only "clock". Never wall time.
     pub clock_cycles: u64,
     pub steps: u64,
@@ -610,6 +629,7 @@ impl Orchestrator {
             },
             console: ConsoleState::new(),
             gpu_port: GpuPort::new(),
+            gic: GicV2State::default(),
             clock_cycles: 0,
             steps: 0,
             halted: None,
@@ -3254,11 +3274,13 @@ impl Orchestrator {
         let ram: &mut Vec<u8> = &mut self.machine.ram;
         let console: &mut ConsoleState = &mut self.console;
         let gpu_port: &mut GpuPort = &mut self.gpu_port;
+        let gic: &mut GicV2State = &mut self.gic;
         let sysregs: &mut SysRegs = &mut cpu.sysregs;
         let mut host = WasmHost {
             ram,
             console,
             gpu_port,
+            gic,
             sysregs,
             code_write: false,
         };
@@ -3491,9 +3513,10 @@ impl Orchestrator {
     // ---- snapshot / persist (U11 + U13 BlobStore) ----
 
     /// Full snapshot: U11's machine snapshot plus a canonical encoding of the
-    /// orchestrator-owned device states (transport, gpu, console), the injected
-    /// clock, step count, and halt reason. Layout: `u64` U11-blob length,
-    /// U11 blob, `b"PN12"`, then the canonical section.
+    /// orchestrator-owned device states (transport, gpu, console, GICv2),
+    /// the injected clock, step count, and halt reason. Layout: `u64` U11-blob
+    /// length, U11 blob, `b"PN12"`, canonical section, then an optional GIC2
+    /// extension.
     pub fn snapshot_full(&self) -> Vec<u8> {
         let snap = u11_snapshot::snapshot(&self.machine);
         let mut out = Vec::new();
@@ -3564,6 +3587,10 @@ impl Orchestrator {
             }
         }
         out.extend_from_slice(&w.buf);
+        out.extend_from_slice(b"GIC2");
+        out.extend_from_slice(&self.gic.gicd_ctlr.to_le_bytes());
+        out.extend_from_slice(&self.gic.gicc_ctlr.to_le_bytes());
+        out.extend_from_slice(&self.gic.gicc_pmr.to_le_bytes());
         out
     }
 
@@ -3645,6 +3672,19 @@ impl Orchestrator {
             }),
             _ => return Err(RestoreError::BadFormat),
         };
+        if matches!(r.remaining(), 8 | 16) {
+            let extension_len = r.remaining();
+            if r.take(4).ok_or(RestoreError::BadFormat)? != b"GIC2" {
+                return Err(RestoreError::BadFormat);
+            }
+            o.gic.gicd_ctlr = r.u32().ok_or(RestoreError::BadFormat)?;
+            if extension_len == 16 {
+                o.gic.gicc_ctlr = r.u32().ok_or(RestoreError::BadFormat)?;
+                o.gic.gicc_pmr = r.u32().ok_or(RestoreError::BadFormat)?;
+            }
+        } else if r.remaining() != 0 {
+            return Err(RestoreError::BadFormat);
+        }
         o.last_notified = vec![0; o.transport.queues.len()];
         Ok(o)
     }
@@ -3795,6 +3835,7 @@ struct WasmHost<'a> {
     ram: &'a mut Vec<u8>,
     console: &'a mut ConsoleState,
     gpu_port: &'a mut GpuPort,
+    gic: &'a mut GicV2State,
     sysregs: &'a mut SysRegs,
     /// Set when a guest store writes to kernel text VA range (icache-fix).
     /// The orchestrator checks this after run_block and invalidates the
@@ -3885,6 +3926,63 @@ impl HostOps for WasmHost<'_> {
             // Defined MMIO region, no readable registers: reads return 0.
             return Ok(0);
         }
+        if (GICD_BASE..GICD_BASE + GICD_SIZE).contains(&pa) {
+            if size != 4 {
+                eprintln!(
+                    "unhandled GIC MMIO read: GICD PA={pa:#010x} offset={:#06x} size={size}",
+                    pa - GICD_BASE
+                );
+                return Err(format!(
+                    "mem_load: unhandled GICD read pa={pa:#010x} size={size}"
+                ));
+            }
+            let offset = pa - GICD_BASE;
+            let value = match offset {
+                0x0 => self.gic.gicd_ctlr,
+                0x4 => GICD_TYPER_VALUE,
+                // QEMU virt's single-vCPU GICv2 returns RAZ for the
+                // read-only SGI/PPI target register block (ITARGETSR0-7).
+                0x800..=0x81c => 0,
+                // Linux reads GICD_ICFGR1 to retain the trigger setup for
+                // the PPIs; QEMU's reset value for this register is zero.
+                0xc04 => 0,
+                _ => {
+                    eprintln!(
+                        "unhandled GIC MMIO read: GICD PA={pa:#010x} offset={offset:#06x} size={size}"
+                    );
+                    return Err(format!(
+                        "mem_load: unhandled GICD read pa={pa:#010x} size={size}"
+                    ));
+                }
+            };
+            eprintln!(
+                "GIC MMIO read: GICD PA={pa:#010x} offset={offset:#06x} size={size} value={value:#010x}"
+            );
+            return Ok(value as i64);
+        }
+        if (GICC_BASE..GICC_BASE + GICC_SIZE).contains(&pa) {
+            let offset = pa - GICC_BASE;
+            if size == 4 {
+                let value = match offset {
+                    0x0 => Some(self.gic.gicc_ctlr),
+                    0x4 => Some(self.gic.gicc_pmr),
+                    0xfc => Some(0x0002_043b), // QEMU GICC_IIDR
+                    _ => None,
+                };
+                if let Some(value) = value {
+                    eprintln!(
+                        "GIC MMIO read: GICC PA={pa:#010x} offset={offset:#06x} size={size} value={value:#010x}"
+                    );
+                    return Ok(value as i64);
+                }
+            }
+            eprintln!(
+                "unhandled GIC MMIO read: GICC PA={pa:#010x} offset={offset:#06x} size={size}"
+            );
+            return Err(format!(
+                "mem_load: unhandled GICC read pa={pa:#010x} size={size}"
+            ));
+        }
         if !matches!(size, 1 | 2 | 4 | 8) {
             return Err("mem_load: size must be 1, 2, 4 or 8".to_string());
         }
@@ -3936,6 +4034,61 @@ impl HostOps for WasmHost<'_> {
                 self.gpu_port.submit();
             }
             // Writes to other GPU offsets are acknowledged, no effect.
+            return Ok(());
+        }
+        if (GICD_BASE..GICD_BASE + GICD_SIZE).contains(&pa) {
+            if size != 4 {
+                eprintln!(
+                    "unhandled GIC MMIO write: GICD PA={pa:#010x} offset={:#06x} size={size} value={:#x}",
+                    pa - GICD_BASE,
+                    val as u64
+                );
+                return Err(format!(
+                    "mem_store: unhandled GICD write pa={pa:#010x} size={size}"
+                ));
+            }
+            let offset = pa - GICD_BASE;
+            eprintln!(
+                "GIC MMIO write: GICD PA={pa:#010x} offset={offset:#06x} size={size} value={:#010x}",
+                val as u32
+            );
+            if offset == 0 {
+                self.gic.gicd_ctlr = val as u32;
+            }
+            // The guest's early distributor setup uses write-only programming
+            // registers. The emulator does not deliver GIC interrupts, so
+            // those initialization writes are accepted without side effects.
+            return Ok(());
+        }
+        if (GICC_BASE..GICC_BASE + GICC_SIZE).contains(&pa) {
+            if size != 4 {
+                eprintln!(
+                    "unhandled GIC MMIO write: GICC PA={pa:#010x} offset={:#06x} size={size} value={:#x}",
+                    pa - GICC_BASE,
+                    val as u64
+                );
+                return Err(format!(
+                    "mem_store: unhandled GICC write pa={pa:#010x} size={size}"
+                ));
+            }
+            let offset = pa - GICC_BASE;
+            eprintln!(
+                "GIC MMIO write: GICC PA={pa:#010x} offset={offset:#06x} size={size} value={:#010x}",
+                val as u32
+            );
+            match offset {
+                0x0 => self.gic.gicc_ctlr = val as u32,
+                0x4 => self.gic.gicc_pmr = val as u32,
+                // EOIR completes an interrupt; APR writes update active
+                // priority state. No interrupt delivery is wired yet, so
+                // these acknowledge/no-op writes are sufficient for init.
+                0x10 | 0xd0..=0xdc => {}
+                _ => {
+                    return Err(format!(
+                        "mem_store: unhandled GICC write pa={pa:#010x} size={size}"
+                    ));
+                }
+            }
             return Ok(());
         }
         if !matches!(size, 1 | 2 | 4 | 8) {
@@ -4110,6 +4263,9 @@ impl<'a> CanonReader<'a> {
         self.pos += n;
         Some(s)
     }
+    fn remaining(&self) -> usize {
+        self.buf.len() - self.pos
+    }
     fn u8(&mut self) -> Option<u8> {
         self.take(1).map(|s| s[0])
     }
@@ -4200,6 +4356,50 @@ mod tests {
         assert_eq!(o.mmio_read(CONSOLE_RX), Some(0));
         assert_eq!(o.mmio_read(CONSOLE_BASE + 0x200), Some(0));
         assert_eq!(o.mmio_read(RAM_BASE), None);
+    }
+
+    #[test]
+    fn gicd_typer_matches_qemu_virt_gicv2() {
+        let mut p = host_parts(SysRegs::default()); // MMU off: identity
+        let got = with_host(&mut p, |h| h.mem_load(0x0800_0004, 4));
+        assert_eq!(got, Ok(0x8));
+        assert_eq!(with_host(&mut p, |h| h.mem_load(0x0800_0c04, 4)), Ok(0));
+        assert_eq!(with_host(&mut p, |h| h.mem_load(0x0800_0000, 4)), Ok(0));
+        assert_eq!(
+            with_host(&mut p, |h| h.mem_store(0x0800_0000, 4, 1)),
+            Ok(())
+        );
+        assert_eq!(with_host(&mut p, |h| h.mem_load(0x0800_0000, 4)), Ok(1));
+        assert_eq!(with_host(&mut p, |h| h.mem_load(0x0801_00fc, 4)), Ok(0x2043b));
+        assert_eq!(with_host(&mut p, |h| h.mem_load(0x0801_0004, 4)), Ok(0));
+        assert_eq!(
+            with_host(&mut p, |h| h.mem_store(0x0801_0004, 4, 0xf0)),
+            Ok(())
+        );
+        assert_eq!(with_host(&mut p, |h| h.mem_load(0x0801_0004, 4)), Ok(0xf0));
+    }
+
+    #[test]
+    #[ignore = "replays the external 1 GiB T62 checkpoint; run explicitly for boot-boundary verification"]
+    fn gic_t62_checkpoint_replays_gicd_typer_load() {
+        const SNAPSHOT: &str = "/Users/Shared/codex-logs/track62-initboot.snap";
+        const HALT_STEP: u64 = 45_488_345;
+        const HALT_PC: u64 = 0xffff_ff80_0862_1324;
+
+        let bytes = std::fs::read(SNAPSHOT).expect("read T62 checkpoint");
+        assert!(bytes.len() >= 8, "T62 snapshot has a step-count header");
+        let saved_steps = u64::from_le_bytes(bytes[..8].try_into().unwrap());
+        assert_eq!(saved_steps, HALT_STEP);
+        let state = u11_snapshot::restore(&bytes[8..]).expect("restore T62 machine snapshot");
+        assert_eq!(state.cpu[0].pc, HALT_PC);
+
+        let mut o = Orchestrator::new();
+        o.machine = state;
+        o.steps = saved_steps;
+        assert_eq!(o.step_vcpu(), StepOutcome::Continue);
+        assert_eq!(o.steps(), HALT_STEP + 1, "the trapped step completed");
+        assert_eq!(o.machine.cpu[0].regs[8], GICD_TYPER_VALUE as u64);
+        assert_eq!(o.machine.cpu[0].pc, HALT_PC + 4);
     }
 
     /// 2026-10-02 (fam/uart-sandbox): the WASM host path (`mem_store` /
@@ -4356,6 +4556,8 @@ mod tests {
             .unwrap();
         o.console.write_tx(b'X');
         o.console.feed_rx(b"yz");
+        o.gic.gicd_ctlr = 1;
+        o.gic.gicc_pmr = 0xf0;
         o.transport.queue_count = 1;
         o.transport.status = 4;
         o.transport.queues.push(pathn_contracts::device::VirtQueue {
@@ -4379,6 +4581,7 @@ mod tests {
         assert_eq!(r.transport, o.transport);
         assert_eq!(r.gpu, o.gpu);
         assert_eq!(r.console, o.console);
+        assert_eq!(r.gic, o.gic);
         assert_eq!(r.clock_cycles, o.clock_cycles);
         assert_eq!(r.steps, o.steps);
         assert_eq!(r.halted, o.halted);
@@ -4931,6 +5134,7 @@ mod tests {
         ram: Vec<u8>,
         console: ConsoleState,
         gpu_port: GpuPort,
+        gic: GicV2State,
         sysregs: SysRegs,
     }
 
@@ -4939,6 +5143,7 @@ mod tests {
             ram: v01_ram(),
             console: ConsoleState::new(),
             gpu_port: GpuPort::new(),
+            gic: GicV2State::default(),
             sysregs,
         }
     }
@@ -4949,6 +5154,7 @@ mod tests {
             ram: &mut p.ram,
             console: &mut p.console,
             gpu_port: &mut p.gpu_port,
+            gic: &mut p.gic,
             sysregs: &mut p.sysregs,
             code_write: false,
         };
