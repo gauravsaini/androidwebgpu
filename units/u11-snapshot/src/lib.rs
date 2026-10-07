@@ -3,11 +3,11 @@
 //! PURE: deterministic encode/decode. No I/O, no wall-clock, no threads,
 //! no hidden state. A corrupt blob is data ([`SnapshotError`]), never a panic.
 //!
-//! Wire format v8 (all integers little-endian):
+//! Wire format v13 (all integers little-endian):
 //! ```text
-//! u32 version            == SNAPSHOT_VERSION (8)
+//! u32 version            == SNAPSHOT_VERSION (13)
 //! u32 cpu_count
-//! cpu_count × { 31×u64 regs, u64 sp, u64 pc, u64 pstate, 15×u64 sysregs }   (392 bytes each)
+//! cpu_count × { 31×u64 regs, u64 sp, u64 pc, u64 pstate, 133×u64 sysregs } (1336 bytes each)
 //! u64 ttbr0, u64 ttbr1, u64 tcr, u64 sctlr
 //! u32 irq_enabled, u64 irq_pending, u64 timer_count, u64 timer_compare
 //! u64 ram_len, ram_len bytes
@@ -25,7 +25,7 @@ use pathn_contracts::machine::{
 };
 
 /// Encoded size of one [`CpuState`]: 31 regs + sp + pc + pstate + 133 sysregs,
-/// all u64LE. (P4, 2026-10-03: 76 + 91 new P4 sysregs = 167.)
+/// all u64LE (167 values total).
 const CPU_ENCODED_BYTES: usize = 167 * 8;
 /// Minimum encoded size of one [`DeviceState`]: u8 tag + u64 blob length.
 const DEVICE_MIN_BYTES: usize = 1 + 8;
