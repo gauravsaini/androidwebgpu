@@ -1,6 +1,7 @@
 use super::*;
 
 const SVC_1234: u32 = 0xD402_4681;
+const SVC_1234_AARCH32: u32 = 0xEF00_1234;
 const HVC_1234: u32 = 0xD402_4682;
 const SMC_1234: u32 = 0xD402_4683;
 const LDR_X0_X1: u32 = 0xF940_0020;
@@ -167,8 +168,61 @@ fn smc_uses_current_el_sp0_sync_vector_and_syndrome_ec_17() {
 
 #[test]
 fn svc_from_lower_aarch32_uses_sync_vector_at_vbar_plus_600() {
-    let (orch, source, vector, saved) = configure_service_call(SVC_1234, 0x10, 0x600);
+    let (orch, source, vector, saved) = configure_service_call(SVC_1234_AARCH32, 0x10, 0x600);
     assert_service_entry(orch, source, vector, saved, 0x4600_1234);
+}
+
+#[test]
+fn eret_at_el0_takes_undefined_instruction_exception() {
+    let mut orch = Orchestrator::new();
+    let source_pc = RAM_BASE;
+    let vector = TEST_VBAR + 0x400;
+    let saved_pstate = 0xA000_0000 | EL0T_MODE | PSTATE_IRQ_MASK;
+    write_word(&mut orch, source_pc, ERET);
+    install_syndrome_reads(&mut orch, vector);
+    {
+        let cpu = &mut orch.machine.cpu[0];
+        cpu.pc = source_pc;
+        cpu.sp = 0x1111_0000;
+        cpu.sp_el1 = 0x2222_0000;
+        cpu.pstate = saved_pstate;
+        cpu.sysregs.daif = PSTATE_IRQ_MASK;
+        cpu.sysregs.vbar_el1 = TEST_VBAR;
+        cpu.sysregs.elr_el1 = RAM_BASE + 0x80;
+        cpu.sysregs.spsr_el1 = EL1H_MODE;
+    }
+
+    assert_eq!(orch.step_vcpu(), StepOutcome::Continue);
+    let cpu = &orch.machine.cpu[0];
+    assert_eq!(cpu.pc, vector, "undefined-instruction vector");
+    assert_eq!(cpu.sysregs.elr_el1, source_pc, "faulting ERET PC");
+    assert_eq!(cpu.sysregs.spsr_el1, saved_pstate, "saved PSTATE");
+    assert_eq!(cpu.pstate & PSTATE_MODE_MASK, EL1H_MODE);
+    read_syndrome(&mut orch, 0x0200_0000, 0);
+}
+
+#[test]
+fn eret_from_el1_accepts_aarch32_el0_return_mode() {
+    let mut orch = Orchestrator::new();
+    let source_pc = RAM_BASE;
+    let return_pc = RAM_BASE + 0x80;
+    write_word(&mut orch, source_pc, ERET);
+    {
+        let cpu = &mut orch.machine.cpu[0];
+        cpu.pc = source_pc;
+        cpu.sp = 0x2222_0000;
+        cpu.pstate = 0x4000_0005; // EL1h.
+        cpu.sysregs.sp_el0 = 0x1111_0000;
+        cpu.sysregs.elr_el1 = return_pc;
+        cpu.sysregs.spsr_el1 = EL0T_AARCH32_MODE;
+    }
+
+    assert_eq!(orch.step_vcpu(), StepOutcome::Continue);
+    let cpu = &orch.machine.cpu[0];
+    assert_eq!(cpu.pc, return_pc, "ELR_EL1 return address");
+    assert_eq!(cpu.pstate & PSTATE_MODE_MASK, EL0T_AARCH32_MODE);
+    assert_eq!(cpu.sp, 0x1111_0000, "restored EL0 stack");
+    assert_eq!(cpu.sp_el1, 0x2222_0000, "saved EL1 stack");
 }
 
 #[test]
