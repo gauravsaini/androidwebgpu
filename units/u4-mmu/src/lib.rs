@@ -31,7 +31,9 @@
 //! - `SCTLR.M == 0` means the MMU is off: translation is the identity map.
 //! - Granule comes from `TCR.TG0`/`TCR.TG1`; input address size from
 //!   `TCR.T0SZ`/`TCR.T1SZ` (`IA = 64 - TxSZ`, capped at 48 bits — 52-bit LVA
-//!   is not modeled). Reserved granule encodings fault.
+//!   is not modeled). `TBI0`/`TBI1` ignore VA bits [63:56] for the matching
+//!   region, and `EPD0`/`EPD1` disable walks for that region. Reserved
+//!   granule encodings and disabled walks fault.
 //! - A misaligned `TTBR` or table-descriptor base is a `TranslationFault`
 //!   (hardware treats this as a programming error; we make it data).
 //! - Only page-table *reads* are bounds-checked against `ram`. An
@@ -204,17 +206,37 @@ fn translate_impl_status(
         return Ok(va);
     }
 
-    // Region select: TTBR1 serves the top half (bit 63 set).
-    let upper = va >> 63 == 1;
-    let (ttbr, tsz, tg) = if upper {
+    let tbi0 = state.tcr & (1 << 37) != 0;
+    let tbi1 = state.tcr & (1 << 38) != 0;
+    // With TBI enabled, bits [63:56] are tags and cannot select the region.
+    // For IA <= 48 bits, bit 55 carries the TTBR region sign extension.
+    let upper = if tbi0 || tbi1 {
+        va & (1 << 55) != 0
+    } else {
+        va >> 63 == 1
+    };
+    let (ttbr, tsz, tg, tbi, epd) = if upper {
         (
             state.ttbr1,
             (state.tcr >> 16) & 0x3F,
             (state.tcr >> 30) & 0x3,
+            tbi1,
+            state.tcr & (1 << 23) != 0,
         )
     } else {
-        (state.ttbr0, state.tcr & 0x3F, (state.tcr >> 14) & 0x3)
+        (
+            state.ttbr0,
+            state.tcr & 0x3F,
+            (state.tcr >> 14) & 0x3,
+            tbi0,
+            state.tcr & (1 << 7) != 0,
+        )
     };
+    if epd {
+        return Err(MmuFault::translation(va, 0));
+    }
+    let walk_va = if tbi { va & 0x00FF_FFFF_FFFF_FFFF } else { va };
+
     let granule = Granule::decode(tg, upper).ok_or(MmuFault::translation(va, 0))?;
     if !(16..=63).contains(&tsz) {
         return Err(MmuFault::translation(va, 0));
@@ -225,8 +247,17 @@ fn translate_impl_status(
     }
 
     // VA must lie inside its region: low region all-zero top bits,
-    // high region all-one top bits.
-    if upper {
+    // high region all-one top bits. When TBI is active, bits [63:56] are
+    // excluded from this check; bits [55:IA] still select the region.
+    if tbi {
+        let region_width = 56 - ia_bits;
+        let region_mask = (1u64 << region_width) - 1;
+        let region_bits = (va >> ia_bits) & region_mask;
+        let expected = if upper { region_mask } else { 0 };
+        if region_bits != expected {
+            return Err(MmuFault::translation(va, 0));
+        }
+    } else if upper {
         if va >> ia_bits != u64::MAX >> ia_bits {
             return Err(MmuFault::translation(va, 0));
         }
@@ -251,7 +282,7 @@ fn translate_impl_status(
         let (hi, lo) = index_range(granule, level)
             .ok_or(MmuFault::translation(va, level as u8))?;
         let width = hi - lo + 1;
-        let index = (va >> lo) & ((1u64 << width) - 1);
+        let index = (walk_va >> lo) & ((1u64 << width) - 1);
         let entry_pa = table_base
             .checked_add(index * 8)
             .ok_or(MmuFault::translation(va, level as u8))?;
@@ -265,12 +296,30 @@ fn translate_impl_status(
                 if level == 3 {
                     return Err(MmuFault::translation(va, level as u8));
                 }
-                return finish_block(desc, va, lo, access, no_exec, no_write, level as u8);
+                return finish_block(
+                    desc,
+                    va,
+                    walk_va,
+                    lo,
+                    access,
+                    no_exec,
+                    no_write,
+                    level as u8,
+                );
             }
             _ => {
                 if level == 3 {
                     // Page descriptor.
-                    return finish_block(desc, va, lo, access, no_exec, no_write, level as u8);
+                    return finish_block(
+                        desc,
+                        va,
+                        walk_va,
+                        lo,
+                        access,
+                        no_exec,
+                        no_write,
+                        level as u8,
+                    );
                 }
                 // Table descriptor: descend. Bits [1:0] are the type tag;
                 // the remaining low bits of the base must be zero.
@@ -297,6 +346,7 @@ fn translate_impl_status(
 fn finish_block(
     desc: u64,
     va: u64,
+    walk_va: u64,
     lo: u32,
     access: Access,
     no_exec: bool,
@@ -318,7 +368,7 @@ fn finish_block(
         _ => {}
     }
     let block_size = 1u64 << lo;
-    let pa = (desc & !(block_size - 1)) | (va & (block_size - 1));
+    let pa = (desc & !(block_size - 1)) | (walk_va & (block_size - 1));
     Ok(pa & 0x0000_FFFF_FFFF_FFFF)
 }
 
@@ -578,6 +628,87 @@ mod tests {
         w64(&mut ram, 0x7000 + 511 * 8, table(0x8000));
         w64(&mut ram, 0x8000 + 511 * 8, page(0x900000, 0b00));
         assert_eq!(translate(&st, &ram, va, Access::Read), Ok(0x900000));
+    }
+
+    #[test]
+    fn tbi0_ignores_tagged_top_byte_in_ttbr0_region() {
+        let (ram, _) = chain4k();
+        let st = MmuState {
+            tcr: st4k(0x1000).tcr | (1 << 37), // TBI0
+            ..st4k(0x1000)
+        };
+        let tagged_va = 0xAB00_0000_0040_1234;
+
+        assert_eq!(translate(&st, &ram, tagged_va, Access::Read), Ok(0x800234));
+    }
+
+    #[test]
+    fn tbi0_translation_fault_reports_the_original_tagged_va() {
+        let (mut ram, leaf) = chain4k();
+        w64(&mut ram, leaf, 0); // Make the tagged VA's leaf invalid.
+        let st = MmuState {
+            tcr: st4k(0x1000).tcr | (1 << 37), // TBI0
+            ..st4k(0x1000)
+        };
+        let tagged_va = 0xAB00_0000_0040_1234;
+
+        assert_eq!(
+            translate(&st, &ram, tagged_va, Access::Read),
+            Err(MemFault::TranslationFault { va: tagged_va })
+        );
+    }
+
+    #[test]
+    fn tbi1_ignores_tagged_top_byte_in_ttbr1_region() {
+        let st = MmuState {
+            ttbr0: 0,
+            ttbr1: 0x5000,
+            tcr: (16 << 16) | (0b10 << 30) | (1 << 38), // TBI1
+            sctlr: 1,
+        };
+        let mut ram = vec![0u8; 0x10000];
+        let tagged_va = 0xABFF_FFFF_FFFF_F000;
+        w64(&mut ram, 0x5000 + 511 * 8, table(0x6000));
+        w64(&mut ram, 0x6000 + 511 * 8, table(0x7000));
+        w64(&mut ram, 0x7000 + 511 * 8, table(0x8000));
+        w64(&mut ram, 0x8000 + 511 * 8, page(0x900000, 0b00));
+
+        assert_eq!(translate(&st, &ram, tagged_va, Access::Read), Ok(0x900000));
+    }
+
+    #[test]
+    fn epd0_disables_ttbr0_walks() {
+        let (ram, _) = chain4k();
+        let st = MmuState {
+            tcr: st4k(0x1000).tcr | (1 << 7), // EPD0
+            ..st4k(0x1000)
+        };
+
+        assert_eq!(
+            translate(&st, &ram, 0x401234, Access::Read),
+            Err(MemFault::TranslationFault { va: 0x401234 })
+        );
+    }
+
+    #[test]
+    fn epd1_disables_ttbr1_walks() {
+        let st = MmuState {
+            ttbr0: 0,
+            ttbr1: 0x5000,
+            tcr: (16 << 16) | (0b10 << 30) | (1 << 23), // EPD1
+            sctlr: 1,
+        };
+        let mut ram = vec![0u8; 0x10000];
+        let va = 0xFFFF_FFFF_FFFF_F000u64;
+        w64(&mut ram, 0x5000 + 511 * 8, table(0x6000));
+        w64(&mut ram, 0x6000 + 511 * 8, table(0x7000));
+        w64(&mut ram, 0x7000 + 511 * 8, table(0x8000));
+        w64(&mut ram, 0x8000 + 511 * 8, page(0x900000, 0b00));
+
+        assert_eq!(
+            translate(&st, &ram, va, Access::Read),
+            Err(MemFault::TranslationFault { va })
+        );
     }
 
     #[test]
