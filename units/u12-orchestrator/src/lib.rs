@@ -270,6 +270,19 @@ struct ExceptionFault {
 }
 
 impl ExceptionFault {
+    fn alignment(va: u64, access: Access) -> Self {
+        Self {
+            va,
+            access,
+            fault: MemFault::TranslationFault { va },
+            level: 0,
+            dfsc: 0x21,
+            s1ptw: false,
+            ea: false,
+            fnv: false,
+        }
+    }
+
     fn from_mmu(fault: u4_mmu::MmuFault, access: Access) -> Self {
         let va = match fault.fault {
             MemFault::TranslationFault { va } | MemFault::PermissionFault { va } => va,
@@ -3593,28 +3606,11 @@ impl Orchestrator {
                 sctlr & (1 << 3) != 0 // SCTLR_EL1.SA
             };
             if base_is_sp && sa && cpu.sp & 0xF != 0 {
-                self.enter_synchronous_exception(
-                    pc,
-                    pc,
-                    source_mode,
-                    saved_pstate,
-                    (0x26u64 << 26) | (1 << 25),
-                    0,
-                )?;
+                self.enter_abort_exception(pc, ExceptionFault::alignment(address, access))?;
                 return Ok(true);
             }
             if sctlr & (1 << 1) != 0 && size > 1 && address & (size - 1) != 0 {
-                let fault = ExceptionFault {
-                    va: address,
-                    access,
-                    fault: MemFault::TranslationFault { va: address },
-                    level: 0,
-                    dfsc: 0x21,
-                    s1ptw: false,
-                    ea: false,
-                    fnv: false,
-                };
-                self.enter_abort_exception(pc, fault)?;
+                self.enter_abort_exception(pc, ExceptionFault::alignment(address, access))?;
                 return Ok(true);
             }
             if self.watchpoint_match(address, size, access, source_mode) {
