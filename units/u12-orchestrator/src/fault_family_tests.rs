@@ -134,13 +134,16 @@ fn unaligned_data_access_with_sctlr_a_enters_data_abort() {
 }
 
 #[test]
-fn misaligned_sp_access_with_sctlr_sa_enters_sp_alignment_vector() {
+fn misaligned_sp_access_with_sctlr_sa_matches_qemu_data_alignment_abort() {
     let pc = RAM_BASE + 0x100;
     let mut orch = configure(EL1H_MODE, pc, LDR_X0_SP);
     orch.machine.cpu[0].sp = TEST_DATA + 1;
+    orch.machine.cpu[0].sysregs.sctlr_el1 &= !(1 << 1); // SCTLR_EL1.A clear.
     orch.machine.cpu[0].sysregs.sctlr_el1 |= 1 << 3; // SCTLR_EL1.SA
 
-    assert_entry(&mut orch, EL1H_MODE, pc, pc, 0x9A00_0000, 0);
+    // QEMU 11.1.2 -M virt -cpu cortex-a53: EC=0x25, ISS=0x21,
+    // FAR_EL1=the misaligned SP-based access address.
+    assert_entry(&mut orch, EL1H_MODE, pc, pc, 0x9600_0021, TEST_DATA + 1);
 }
 
 #[test]
