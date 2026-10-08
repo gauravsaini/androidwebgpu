@@ -404,10 +404,24 @@ fn main() {
             println!("  ttbr0_el1={:#018x} ttbr1_el1={:#018x} tcr_el1={:#018x} sctlr_el1={:#010x}",
                      sys.ttbr0_el1, sys.ttbr1_el1, sys.tcr_el1, sys.sctlr_el1);
         }
-        None if saved_at_step.is_some() => println!(
-            "[snapshot] Reached --snapshot-at-step {} (saved, exiting)",
-            saved_at_step.unwrap()
-        ),
+        None if saved_at_step.is_some() => {
+            println!(
+                "[snapshot] Reached --snapshot-at-step {} (saved, exiting)",
+                saved_at_step.unwrap()
+            );
+            let cpu = &orch.machine().cpu[0];
+            let sys = &cpu.sysregs;
+            println!(
+                "[snapshot-state] pc={:#018x} pstate={:#010x} esr_el1={:#018x} far_el1={:#018x} ttbr0_el1={:#018x} ttbr1_el1={:#018x} tcr_el1={:#018x}",
+                cpu.pc,
+                cpu.pstate,
+                sys.esr_el1,
+                sys.far_el1,
+                sys.ttbr0_el1,
+                sys.ttbr1_el1,
+                sys.tcr_el1
+            );
+        }
         None => println!("[limit] Step budget ({max_steps}) reached without halt"),
     }
 

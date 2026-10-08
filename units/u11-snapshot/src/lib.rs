@@ -3,11 +3,11 @@
 //! PURE: deterministic encode/decode. No I/O, no wall-clock, no threads,
 //! no hidden state. A corrupt blob is data ([`SnapshotError`]), never a panic.
 //!
-//! Wire format v15 (all integers little-endian):
+//! Wire format v16 (all integers little-endian):
 //! ```text
-//! u32 version            == SNAPSHOT_VERSION (15)
+//! u32 version            == SNAPSHOT_VERSION (16)
 //! u32 cpu_count
-//! cpu_count × { 31×u64 regs, u64 sp, u64 sp_el1, u64 pc, u64 pstate, 135×u64 sysregs } (1360 bytes each)
+//! cpu_count × { 31×u64 regs, u64 sp, u64 sp_el1, u64 pc, u64 pstate, 137×u64 sysregs } (1376 bytes each)
 //! u64 ttbr0, u64 ttbr1, u64 tcr, u64 sctlr
 //! u32 irq_enabled, u64 irq_pending, u64 timer_count, u64 timer_compare
 //! u64 ram_len, ram_len bytes
@@ -24,9 +24,11 @@ use pathn_contracts::machine::{
     SNAPSHOT_VERSION, SysRegs,
 };
 
-/// Encoded size of one [`CpuState`]: 31 regs + sp + sp_el1 + pc + pstate + 135 sysregs,
+/// Encoded size of one [`CpuState`]: 31 regs + sp + sp_el1 + pc + pstate + 137 sysregs,
 /// all u64LE.
-const CPU_ENCODED_BYTES: usize = 170 * 8;
+const CPU_ENCODED_BYTES: usize = 172 * 8;
+const V15_CPU_ENCODED_BYTES: usize = CPU_ENCODED_BYTES - 2 * 8;
+const PREVIOUS_SNAPSHOT_VERSION: u32 = 15;
 /// Minimum encoded size of one [`DeviceState`]: u8 tag + u64 blob length.
 const DEVICE_MIN_BYTES: usize = 1 + 8;
 
@@ -162,6 +164,8 @@ impl Writer {
         self.u64(c.sysregs.zcr_el1);
         self.u64(c.sysregs.elr_el1);
         self.u64(c.sysregs.spsr_el1);
+        self.u64(c.sysregs.esr_el1);
+        self.u64(c.sysregs.far_el1);
     }
 
     fn mmu(&mut self, m: &MmuState) {
@@ -272,7 +276,7 @@ impl<'a> Reader<'a> {
         self.take(n as usize)
     }
 
-    fn cpu(&mut self) -> Result<CpuState, SnapshotError> {
+    fn cpu(&mut self, version: u32) -> Result<CpuState, SnapshotError> {
         let mut regs = [0u64; 31];
         for reg in regs.iter_mut() {
             *reg = self.u64()?;
@@ -357,6 +361,16 @@ impl<'a> Reader<'a> {
                 zcr_el1: self.u64()?,
                 elr_el1: self.u64()?,
                 spsr_el1: self.u64()?,
+                esr_el1: if version >= SNAPSHOT_VERSION {
+                    self.u64()?
+                } else {
+                    0
+                },
+                far_el1: if version >= SNAPSHOT_VERSION {
+                    self.u64()?
+                } else {
+                    0
+                },
             },
         })
     }
@@ -369,7 +383,7 @@ impl<'a> Reader<'a> {
 /// * fewer than 4 bytes, or any truncation mid-field → `Corrupt`;
 /// * declared byte-length past the 2 GiB contract cap → `TooLarge`;
 /// * declared length within cap but beyond the bytes present → `Corrupt`;
-/// * version != [`SNAPSHOT_VERSION`] → `VersionMismatch { found }`;
+/// * versions other than 15 and [`SNAPSHOT_VERSION`] → `VersionMismatch { found }`;
 /// * unknown device tag, or any trailing bytes → `Corrupt`.
 pub fn restore(blob: &[u8]) -> Result<MachineState, SnapshotError> {
     let mut r = Reader::new(blob);
@@ -378,19 +392,24 @@ pub fn restore(blob: &[u8]) -> Result<MachineState, SnapshotError> {
         return Err(SnapshotError::Corrupt);
     }
     let found = r.u32()?;
-    if found != SNAPSHOT_VERSION {
+    if found != SNAPSHOT_VERSION && found != PREVIOUS_SNAPSHOT_VERSION {
         return Err(SnapshotError::VersionMismatch { found });
     }
 
+    let cpu_encoded_bytes = if found == PREVIOUS_SNAPSHOT_VERSION {
+        V15_CPU_ENCODED_BYTES
+    } else {
+        CPU_ENCODED_BYTES
+    };
     let cpu_count = r.u32()? as u64;
-    // Each vCPU costs exactly CPU_ENCODED_BYTES; reject absurd counts up front.
+    // Each vCPU has a version-specific fixed size; reject absurd counts up front.
     // count <= u32::MAX, so the u64 multiply cannot overflow.
-    if cpu_count * CPU_ENCODED_BYTES as u64 > r.remaining() as u64 {
+    if cpu_count * cpu_encoded_bytes as u64 > r.remaining() as u64 {
         return Err(SnapshotError::Corrupt);
     }
     let mut cpu = Vec::new();
     for _ in 0..cpu_count {
-        cpu.push(r.cpu()?);
+        cpu.push(r.cpu(found)?);
     }
 
     let mmu = MmuState {
@@ -545,6 +564,8 @@ mod tests {
                 zcr_el1: seed.wrapping_add(67),
                 elr_el1: seed.wrapping_add(68),
                 spsr_el1: seed.wrapping_add(69),
+                esr_el1: seed.wrapping_add(70),
+                far_el1: seed.wrapping_add(71),
             },
         }
     }
@@ -614,6 +635,21 @@ mod tests {
         assert_eq!(back, s);
         assert_eq!(back.cpu[0].pc, 0x4000 + 42);
         assert_eq!(back.ram.len(), 4096);
+    }
+
+    #[test]
+    fn restores_v15_snapshots_with_zeroed_abort_registers() {
+        let s = machine(42, 1, 4096, vec![]);
+        let mut expected = s.clone();
+        expected.cpu[0].sysregs.esr_el1 = 0;
+        expected.cpu[0].sysregs.far_el1 = 0;
+
+        let mut old_blob = snapshot(&s).0;
+        old_blob[0..4].copy_from_slice(&PREVIOUS_SNAPSHOT_VERSION.to_le_bytes());
+        let cpu_end = 8 + CPU_ENCODED_BYTES;
+        old_blob.drain(cpu_end - 2 * 8..cpu_end);
+
+        assert_eq!(restore(&old_blob), Ok(expected));
     }
 
     #[test]
@@ -711,6 +747,8 @@ mod tests {
                     zcr_el1: u64::MAX,
                     elr_el1: u64::MAX,
                     spsr_el1: u64::MAX,
+                    esr_el1: u64::MAX,
+                    far_el1: u64::MAX,
                 },
             }],
             mmu: MmuState {

@@ -67,6 +67,8 @@ use std::collections::VecDeque;
 
 #[cfg(test)]
 mod irq_wfi_tests;
+#[cfg(test)]
+mod va0_translationfault_tests;
 
 use pathn_contracts::adapters::{BlobStore, InputSource};
 use pathn_contracts::cpu::{
@@ -205,7 +207,9 @@ const PSTATE_MODE_MASK: u64 = 0x1F;
 const EL0T_MODE: u64 = 0x00;
 const EL1T_MODE: u64 = 0x04;
 const EL1H_MODE: u64 = 0x05;
+const EL0T_AARCH32_MODE: u64 = 0x10;
 const IRQ_ENTRY_LOG_CAPACITY: usize = 16;
+const MAX_SYNC_EXCEPTION_DEPTH: usize = 16;
 /// Full emulator snapshot envelope magic and version.
 const FULL_SNAPSHOT_MAGIC: &[u8; 4] = b"PNFS";
 const FULL_SNAPSHOT_VERSION: u32 = 1;
@@ -249,6 +253,39 @@ pub enum HaltReason {
     Svc {
         addr: u64,
     },
+}
+
+/// A stage-1 fault retained until the current instruction is delivered to
+/// the guest as an architectural abort exception.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct ExceptionFault {
+    va: u64,
+    access: Access,
+    fault: MemFault,
+    level: u8,
+}
+
+impl ExceptionFault {
+    fn from_mmu(fault: u4_mmu::MmuFault, access: Access) -> Self {
+        let va = match fault.fault {
+            MemFault::TranslationFault { va } | MemFault::PermissionFault { va } => va,
+        };
+        Self {
+            va,
+            access,
+            fault: fault.fault,
+            level: fault.level,
+        }
+    }
+
+    fn translation(va: u64, access: Access) -> Self {
+        Self {
+            va,
+            access,
+            fault: MemFault::TranslationFault { va },
+            level: 0,
+        }
+    }
 }
 
 /// Image load failure — data, not panic.
@@ -622,6 +659,11 @@ pub struct Orchestrator {
     /// Active IRQ records in nesting order. `None` marks entries beyond the
     /// bounded diagnostic log while still tracking their matching ERET.
     irq_entry_stack: Vec<Option<usize>>,
+    /// IRQ-stack depth at synchronous entries, so a data-abort ERET nested
+    /// in an IRQ handler does not consume the asynchronous IRQ record.
+    sync_entry_irq_depths: Vec<usize>,
+    /// Stage-1 fault retained by direct-interpreter or WASM memory access.
+    pending_abort: Option<ExceptionFault>,
 }
 
 /// Default backend for this target: wasmtime where a JIT is available,
@@ -700,6 +742,8 @@ impl Orchestrator {
             irq_return_count: 0,
             irq_entry_log: Vec::new(),
             irq_entry_stack: Vec::new(),
+            sync_entry_irq_depths: Vec::new(),
+            pending_abort: None,
         };
         #[cfg(not(target_arch = "wasm32"))]
         {
@@ -1036,6 +1080,18 @@ impl Orchestrator {
         }
     }
 
+    /// Step-time fetch preserving the translation level for ESR_EL1.
+    fn fetch_word_for_step(&self, pc: u64) -> Result<u32, ExceptionFault> {
+        let pa = self
+            .translate_va_status(pc, Access::Execute)
+            .map_err(|fault| ExceptionFault::from_mmu(fault, Access::Execute))?;
+        let off = ram_offset_in(&self.machine.ram, pa, 4)
+            .map_err(|_| ExceptionFault::translation(pc, Access::Execute))?;
+        Ok(u32::from_le_bytes(
+            self.machine.ram[off..off + 4].try_into().unwrap(),
+        ))
+    }
+
     /// Translate a fetch VA to a guest-physical address. Mirrors
     /// WasmHost::translate_data but reports FetchFault (the fetch path's
     /// own halt reason) instead of a trap string.
@@ -1044,15 +1100,17 @@ impl Orchestrator {
             .map_err(|_| HaltReason::FetchFault { addr: va })
     }
 
-    /// Translate a data-access VA to a guest-physical address for the
-    /// fast-path interpreter. MMU off: identity. Faults become WasmTrap
-    /// (same surfacing as WasmHost data accesses).
-    fn translate_data_orch(&self, va: u64, access: Access) -> Result<u64, HaltReason> {
-        self.translate_va(va, access)
-            .map_err(|f| HaltReason::WasmTrap {
+    /// Translate a data-access VA for the fast-path interpreter. Preserve
+    /// stage-1 fault status so step_vcpu can enter the guest abort vector.
+    fn translate_data_orch(&mut self, va: u64, access: Access) -> Result<u64, HaltReason> {
+        self.translate_va_status(va, access).map_err(|fault| {
+            let exception_fault = ExceptionFault::from_mmu(fault, access);
+            self.pending_abort = Some(exception_fault);
+            HaltReason::WasmTrap {
                 addr: va,
-                message: format!("mmu_fault: {f:?}"),
-            })
+                message: format!("mmu_fault: {:?}", fault.fault),
+            }
+        })
     }
 
     /// Shared VA->PA translation. MMU off (SCTLR_EL1.M == 0): identity.
@@ -1070,11 +1128,31 @@ impl Orchestrator {
         u4_mmu::translate_with_base(&st, &self.machine.ram, RAM_BASE, va, access)
     }
 
+    /// Stage-1 translation retaining the fault level used by ESR_EL1.
+    fn translate_va_status(
+        &self,
+        va: u64,
+        access: Access,
+    ) -> Result<u64, u4_mmu::MmuFault> {
+        let sysregs = &self.machine.cpu[0].sysregs;
+        let st = MmuState {
+            sctlr: sysregs.sctlr_el1,
+            tcr: sysregs.tcr_el1,
+            ttbr0: sysregs.ttbr0_el1,
+            ttbr1: sysregs.ttbr1_el1,
+        };
+        if st.sctlr & 1 == 0 {
+            return Ok(va);
+        }
+        u4_mmu::translate_with_base_status(&st, &self.machine.ram, RAM_BASE, va, access)
+    }
+
     /// Handle a vmemmap demand-population fault.
     ///
     /// The kernel populates vmemmap on-demand via its data-abort handler
-    /// (`do_page_fault` -> `vmemmap_populate`). Since the emulator does not
-    /// deliver data aborts to the guest, we emulate the population here:
+    /// (`do_page_fault` -> `vmemmap_populate`). For this dedicated vmemmap
+    /// range, emulate population before generic abort entry so the kernel
+    /// can resume the faulting instruction:
     /// allocate zeroed 4K pages from the dedicated vmemmap pool at
     /// VMEMMAP_POOL_BASE, install missing L2/L3 table descriptors and PTEs,
     /// and return true so the faulting instruction can be retried.
@@ -3248,6 +3326,88 @@ impl Orchestrator {
 
     // ---- vCPU ----
 
+    fn synchronous_vector_offset(source_mode: u64) -> Option<u64> {
+        match source_mode {
+            EL1H_MODE => Some(0x200),
+            EL1T_MODE => Some(0x000),
+            EL0T_MODE => Some(0x400),
+            EL0T_AARCH32_MODE => Some(0x600),
+            _ => None,
+        }
+    }
+
+    fn enter_synchronous_exception(
+        &mut self,
+        source_pc: u64,
+        return_pc: u64,
+        source_mode: u64,
+        saved_pstate: u64,
+        esr: u64,
+        far: u64,
+    ) -> Result<(), HaltReason> {
+        if self.sync_entry_irq_depths.len() >= MAX_SYNC_EXCEPTION_DEPTH {
+            return Err(HaltReason::Unsupported {
+                addr: source_pc,
+                reason: "synchronous exception nesting limit exceeded",
+            });
+        }
+        let vector_offset = Self::synchronous_vector_offset(source_mode).ok_or(
+            HaltReason::Unsupported {
+                addr: source_pc,
+                reason: "synchronous exception from an unsupported PSTATE mode",
+            },
+        )?;
+        let cpu = &mut self.machine.cpu[0];
+        let vector_pc = (cpu.sysregs.vbar_el1 & !0x7FF).wrapping_add(vector_offset);
+        cpu.sysregs.elr_el1 = return_pc;
+        cpu.sysregs.spsr_el1 = saved_pstate;
+        cpu.sysregs.esr_el1 = esr;
+        cpu.sysregs.far_el1 = far;
+        if source_mode != EL1H_MODE {
+            cpu.sysregs.sp_el0 = cpu.sp;
+            cpu.sp = cpu.sp_el1;
+        }
+        cpu.sysregs.daif = PSTATE_DAIF_MASK;
+        cpu.pstate = (saved_pstate & !(PSTATE_DAIF_MASK | PSTATE_MODE_MASK))
+            | PSTATE_DAIF_MASK
+            | EL1H_MODE;
+        cpu.pc = vector_pc;
+        self.sync_entry_irq_depths
+            .push(self.irq_entry_stack.len());
+        Ok(())
+    }
+
+    fn enter_abort_exception(
+        &mut self,
+        pc: u64,
+        fault: ExceptionFault,
+    ) -> Result<(), HaltReason> {
+        let cpu = &self.machine.cpu[0];
+        let source_mode = cpu.pstate & PSTATE_MODE_MASK;
+        let saved_pstate =
+            (cpu.pstate & !PSTATE_DAIF_MASK) | (cpu.sysregs.daif & PSTATE_DAIF_MASK);
+        let from_lower_el = source_mode == EL0T_MODE || source_mode == EL0T_AARCH32_MODE;
+        let ec = match (fault.access, from_lower_el) {
+            (Access::Execute, true) => 0x20,
+            (Access::Execute, false) => 0x21,
+            (_, true) => 0x24,
+            (_, false) => 0x25,
+        };
+        let dfsc = match fault.fault {
+            MemFault::TranslationFault { .. } => 0x04u64.saturating_add(fault.level as u64),
+            MemFault::PermissionFault { .. } => 0x0Cu64.saturating_add(fault.level as u64),
+        };
+        let wnr = u64::from(fault.access == Access::Write) << 6;
+        let esr = ((ec as u64) << 26) | (1 << 25) | wnr | dfsc;
+        self.enter_synchronous_exception(pc, pc, source_mode, saved_pstate, esr, fault.va)
+    }
+
+    fn complete_exception_step(&mut self) -> StepOutcome {
+        self.steps += 1;
+        self.tick_clock(TIMER_CYCLES_PER_STEP);
+        StepOutcome::Continue
+    }
+
     fn try_take_irq_exception(&mut self) -> Result<(), HaltReason> {
         let Some(intid) = self.deliverable_irq() else {
             return Ok(());
@@ -3335,7 +3495,9 @@ impl Orchestrator {
         cpu.sysregs.daif = saved_pstate & PSTATE_DAIF_MASK;
         cpu.pc = return_pc;
 
-        if let Some(entry_index) = self.irq_entry_stack.pop() {
+        if self.sync_entry_irq_depths.last().copied() == Some(self.irq_entry_stack.len()) {
+            self.sync_entry_irq_depths.pop();
+        } else if let Some(entry_index) = self.irq_entry_stack.pop() {
             self.irq_return_count = self.irq_return_count.saturating_add(1);
             if let Some(index) = entry_index {
                 self.irq_entry_log[index].return_step = Some(self.steps.saturating_add(1));
@@ -3358,13 +3520,19 @@ impl Orchestrator {
             return StepOutcome::Halted(reason);
         }
         let pc = self.machine.cpu[0].pc;
+        self.pending_abort = None;
 
         // Fetch.
-        let word = match self.fetch_word(pc) {
+        let word = match self.fetch_word_for_step(pc) {
             Ok(w) => w,
-            Err(reason) => {
-                self.halted = Some(reason.clone());
-                return StepOutcome::Halted(reason);
+            Err(fault) => {
+                return match self.enter_abort_exception(pc, fault) {
+                    Ok(()) => self.complete_exception_step(),
+                    Err(reason) => {
+                        self.halted = Some(reason.clone());
+                        StepOutcome::Halted(reason)
+                    }
+                };
             }
         };
         if word == 0xD69F_03E0 {
@@ -3434,6 +3602,15 @@ impl Orchestrator {
                                     return self.step_vcpu();
                                 }
                             }
+                        }
+                        if let Some(fault) = self.pending_abort.take() {
+                            return match self.enter_abort_exception(pc, fault) {
+                                Ok(()) => self.complete_exception_step(),
+                                Err(reason) => {
+                                    self.halted = Some(reason.clone());
+                                    StepOutcome::Halted(reason)
+                                }
+                            };
                         }
                         self.halted = Some(reason.clone());
                         return StepOutcome::Halted(reason);
@@ -3523,12 +3700,23 @@ impl Orchestrator {
             irq,
             sysregs,
             code_write: false,
+            abort_fault: None,
         };
         let (exit_addr, wfi_seen) = match self.executor.run_block(&wasm, regs, &mut host) {
             Ok(pair) => pair,
             Err(message) => {
                 if let Some(read) = feature_mrs {
                     log_id_feature_mrs(read, pc, None, true);
+                }
+                if let Some(fault) = host.abort_fault.take() {
+                    drop(host);
+                    return match self.enter_abort_exception(pc, fault) {
+                        Ok(()) => self.complete_exception_step(),
+                        Err(reason) => {
+                            self.halted = Some(reason.clone());
+                            StepOutcome::Halted(reason)
+                        }
+                    };
                 }
                 let halt = HaltReason::WasmTrap { addr: pc, message };
                 self.halted = Some(halt.clone());
@@ -4231,6 +4419,9 @@ struct WasmHost<'a> {
     /// rewrites kernel text at boot; without invalidation we execute stale
     /// instructions.
     pub code_write: bool,
+    /// Captured stage-1 or RAM-bounds fault, delivered by the orchestrator
+    /// after the current WASM block reports its memory-access error.
+    abort_fault: Option<ExceptionFault>,
 }
 
 impl WasmHost<'_> {
@@ -4250,15 +4441,17 @@ impl WasmHost<'_> {
     /// Translate a data-access VA to a guest-physical address. MMU off
     /// (SCTLR_EL1.M == 0): identity. MMU on: stage-1 walk against the
     /// live registers, rebasing descriptor PAs by RAM_BASE. Faults
-    /// surface as `mmu_fault: <MemFault>` strings, which the executor
-    /// turns into `HaltReason::WasmTrap`.
-    fn translate_data(&self, va: u64, access: Access) -> Result<u64, String> {
+    /// are retained for guest abort delivery; unsupported device accesses
+    /// remain WASM traps.
+    fn translate_data(&mut self, va: u64, access: Access) -> Result<u64, String> {
         let st = self.mmu_state();
         if st.sctlr & 1 == 0 {
             return Ok(va);
         }
-        u4_mmu::translate_with_base(&st, self.ram, RAM_BASE, va, access)
-            .map_err(|f| format!("mmu_fault: {f:?}"))
+        u4_mmu::translate_with_base_status(&st, self.ram, RAM_BASE, va, access).map_err(|f| {
+            self.abort_fault = Some(ExceptionFault::from_mmu(f, access));
+            format!("mmu_fault: {:?}", f.fault)
+        })
     }
 }
 
@@ -4280,7 +4473,8 @@ fn ram_offset_in(ram: &[u8], pa: u64, len: u64) -> Result<usize, MemFault> {
 
 /// `env.mem_load(addr, size) -> value`. Console and GPU MMIO are dispatched
 /// to their device models; everything else goes through the RAM bounds
-/// check. Faults become WASM traps (surfaced as `HaltReason::WasmTrap`).
+/// check. MMU and RAM-bounds faults are retained for EL1 abort delivery;
+/// unsupported device accesses remain WASM traps.
 impl HostOps for WasmHost<'_> {
     fn mem_load(&mut self, addr: i64, size: i64) -> Result<i64, String> {
         // Data VA -> PA first (identity when the MMU is off); the
@@ -4385,8 +4579,18 @@ impl HostOps for WasmHost<'_> {
         if !matches!(size, 1 | 2 | 4 | 8) {
             return Err("mem_load: size must be 1, 2, 4 or 8".to_string());
         }
-        let off = ram_offset_in(self.ram, pa, size as u64)
-            .map_err(|f| format!("mem_load fault: {f:?}"))?;
+        let off = match ram_offset_in(self.ram, pa, size as u64) {
+            Ok(off) => off,
+            Err(fault) => {
+                self.abort_fault = Some(ExceptionFault {
+                    va: addr as u64,
+                    access: Access::Read,
+                    fault,
+                    level: 0,
+                });
+                return Err(format!("mem_load fault: {fault:?}"));
+            }
+        };
         let mut v = 0u64;
         for i in 0..size as usize {
             v |= (self.ram[off + i] as u64) << (8 * i);
@@ -4503,8 +4707,18 @@ impl HostOps for WasmHost<'_> {
         if !matches!(size, 1 | 2 | 4 | 8) {
             return Err("mem_store: size must be 1, 2, 4 or 8".to_string());
         }
-        let off = ram_offset_in(self.ram, pa, size as u64)
-            .map_err(|f| format!("mem_store fault: {f:?}"))?;
+        let off = match ram_offset_in(self.ram, pa, size as u64) {
+            Ok(off) => off,
+            Err(fault) => {
+                self.abort_fault = Some(ExceptionFault {
+                    va: addr as u64,
+                    access: Access::Write,
+                    fault,
+                    level: 0,
+                });
+                return Err(format!("mem_store fault: {fault:?}"));
+            }
+        };
         // QUIRK (2026-10-04, size-bug track): The kernel's memblock_add_range
         // contains a CSINV instruction (0xda818058 at 0xffffff8008354018) that
         // produces ~0x40000000 instead of 0x40000000 for the region size.
@@ -5329,15 +5543,18 @@ mod tests {
     }
 
     #[test]
-    fn wave4_mem_fault_becomes_wasm_trap() {
+    fn wave4_mem_fault_enters_data_abort_vector() {
         let mut o = Orchestrator::new();
         // LDRB W2, [X10] with X10 far outside RAM -> mem_load faults.
         o.load_image(&minimal_image(0x4000_0000, &[0x39400142]))
             .unwrap();
-        o.machine.cpu[0].regs[10] = 0xFFFF_FFFF_0000_0000;
-        let reason = o.run_until_halt(10);
-        assert!(matches!(reason, HaltReason::WasmTrap { .. }));
-        assert_eq!(o.halted(), Some(&reason));
+        let fault_va = 0xFFFF_FFFF_0000_0000;
+        o.machine.cpu[0].regs[10] = fault_va;
+        assert_eq!(o.step_vcpu(), StepOutcome::Continue);
+        assert_eq!(o.machine.cpu[0].pc, 0x400);
+        assert_eq!(o.machine.cpu[0].sysregs.elr_el1, 0x4000_0000);
+        assert_eq!(o.machine.cpu[0].sysregs.esr_el1, 0x9200_0004);
+        assert_eq!(o.machine.cpu[0].sysregs.far_el1, fault_va);
     }
 
     #[test]
@@ -5702,6 +5919,7 @@ mod tests {
             irq: &mut p.irq,
             sysregs: &mut p.sysregs,
             code_write: false,
+            abort_fault: None,
         };
         f(&mut host)
     }
@@ -5836,9 +6054,9 @@ mod tests {
     }
 
     #[test]
-    fn gb22_fetch_unmapped_va_is_fetch_fault() {
-        // GB-22: a fetch VA with no mapping faults honestly as FetchFault
-        // at the VA (not a silent wrong-physical read).
+    fn gb22_fetch_unmapped_va_enters_instruction_abort_vector() {
+        // GB-22: a fetch VA with no mapping takes an EL1 instruction abort,
+        // preserving the fault VA and L1 translation status.
         let mut o = Orchestrator::new();
         {
             let m = o.machine_mut();
@@ -5849,15 +6067,11 @@ mod tests {
             m.cpu[0].pc = 0xffff_ff80_096a_b000;
         }
         let outcome = o.step_vcpu();
-        assert!(
-            matches!(
-                outcome,
-                StepOutcome::Halted(HaltReason::FetchFault {
-                    addr: 0xffff_ff80_096a_b000
-                })
-            ),
-            "expected FetchFault, got: {outcome:?}"
-        );
+        assert_eq!(outcome, StepOutcome::Continue);
+        assert_eq!(o.machine().cpu[0].pc, 0x400);
+        assert_eq!(o.machine().cpu[0].sysregs.elr_el1, 0xffff_ff80_096a_b000);
+        assert_eq!(o.machine().cpu[0].sysregs.esr_el1, 0x8200_0005);
+        assert_eq!(o.machine().cpu[0].sysregs.far_el1, 0xffff_ff80_096a_b000);
     }
 
     /// Helper: fresh Orchestrator with MMU off (identity), PC at `pc`,

@@ -8,6 +8,7 @@
 //! regardless of outcome.
 
 use std::fs;
+use std::path::PathBuf;
 use u12_orchestrator::{Orchestrator, StepOutcome};
 
 const KERNEL_PATH: &str = "/home/hatch/workspace/.cache-aosp/Image";
@@ -18,14 +19,28 @@ const DTB_PA: u64 = 0x4820_0000;
 const RAM_BASE: u64 = 0x4000_0000;
 const FLAG_Z: u64 = 0x4000_0000;
 
+fn configured_asset(env_key: &str, legacy_path: &str) -> PathBuf {
+    std::env::var_os(env_key)
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(legacy_path))
+}
+
 fn find_in_ram(ram: &[u8], needle: &[u8]) -> Option<usize> {
     ram.windows(needle.len()).position(|w| w == needle)
 }
 
 #[test]
 fn test_boot_100m_find_next_halt() {
-    let kernel_bytes = fs::read(KERNEL_PATH).expect("kernel Image not found");
-    let dtb_bytes = fs::read(DTB_PATH).expect("DTB not found");
+    let kernel_path = configured_asset("PATHN_TEST_KERNEL_IMAGE", KERNEL_PATH);
+    let dtb_path = configured_asset("PATHN_TEST_DTB", DTB_PATH);
+    let kernel_bytes = fs::read(&kernel_path).unwrap_or_else(|error| {
+        panic!(
+            "kernel Image not found at {}: {error}",
+            kernel_path.display()
+        )
+    });
+    let dtb_bytes = fs::read(&dtb_path)
+        .unwrap_or_else(|error| panic!("DTB not found at {}: {error}", dtb_path.display()));
     let mut orch = Orchestrator::new();
     {
         let k_off = (KERNEL_LOAD_PA - RAM_BASE) as usize;
