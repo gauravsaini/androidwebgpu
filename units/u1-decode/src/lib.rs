@@ -68,7 +68,8 @@ fn classify(word: u32) -> Option<InsnKind> {
         0b1010 | 0b1011 => branch::decode(word).or_else(|| system::decode(word)),
         0b0101 | 0b1101 => dp_reg::decode(word),
         0b0100 | 0b1100 => ldst::decode(word),
-        0b0111 | 0b1111 | 0b0110 | 0b1110 => fp_simd::decode(word),
+        0b0110 | 0b1110 => ldst::decode(word).or_else(|| fp_simd::decode(word)),
+        0b0111 | 0b1111 => fp_simd::decode(word),
         // 0b000x..0b001x: unallocated; 0b011x/0b111x: SIMD/FP/SVE (out of scope)
         _ => None,
     }
@@ -505,8 +506,8 @@ mod tests {
     }
 
     #[test]
-    fn simd_str_is_illegal() {
-        assert_illegal(0x3D00_0020); // V=1: SIMD, out of scope
+    fn simd_str_is_loadstore() {
+        assert_eq!(ok_kind(0x3D00_0020), InsnKind::LoadStore); // STR B0, [X1]
     }
 
     // ---- GB-1: STP/LDP pair, indexed LDR/STR, literal, LDRSW ----
@@ -532,6 +533,15 @@ mod tests {
         assert_eq!(ok_kind(0x2900_0C02), InsnKind::LoadStore); // stp w2, w3, [x0] (32-bit)
         assert_eq!(ok_kind(0x2940_0C02), InsnKind::LoadStore); // ldp w2, w3, [x0] (32-bit)
         assert_eq!(ok_kind(0x6940_0C02), InsnKind::LoadStore); // ldpsw x2, x3, [x0]
+    }
+
+    #[test]
+    fn fp_simd_pair_and_structure_memory_are_loadstore() {
+        assert_eq!(ok_kind(0x2DE9_2C6F), InsnKind::LoadStore); // LDP S15, S11, [X3, #-0xb8]!
+        assert_eq!(ok_kind(0xAD00_0400), InsnKind::LoadStore); // STP Q0, Q1, [X0]
+        assert_eq!(ok_kind(0xAD40_0400), InsnKind::LoadStore); // LDP Q0, Q1, [X0]
+        assert_eq!(ok_kind(0x4C00_AA74), InsnKind::LoadStore); // ST1 {V20.4S, V21.4S}, [X19]
+        assert_eq!(ok_kind(0x0DFE_E51E), InsnKind::LoadStore); // LD4R {V30.4H-V1.4H}, [X8]
     }
 
     #[test]
@@ -795,6 +805,7 @@ mod tests {
         // ARM ARM — never trap as unallocated (GB-26 hard lesson).
         assert_eq!(ok_kind(0x9A82_E020), InsnKind::DataProc); // CSEL AL
         assert_eq!(ok_kind(0x9A82_F020), InsnKind::DataProc); // CSEL NV
+        assert_eq!(ok_kind(0x9A98_1718), InsnKind::DataProc); // CINC X24, X24, EQ (destination bit 4 set)
     }
 
     #[test]
@@ -853,8 +864,8 @@ mod tests {
     }
 
     #[test]
-    fn simd_group_is_illegal() {
-        assert_illegal(0x0E20_8800); // bits[28:25] = 0b0111: SIMD&FP
+    fn simd_group_is_dataproc() {
+        assert_eq!(ok_kind(0x0E20_8800), InsnKind::DataProc); // ADD V0.8B, V0.8B, V0.8B
     }
 
     #[test]
@@ -983,6 +994,12 @@ mod tests {
         assert_eq!(ok_kind(0xC802_7C20), InsnKind::LoadStore); // STXR W2, X0, [X1]
         assert_eq!(ok_kind(0xC85F_FC20), InsnKind::LoadStore); // LDAXR X0, [X1]
         assert_eq!(ok_kind(0xC802_FC20), InsnKind::LoadStore); // STLXR W2, X0, [X1]
+        assert_eq!(ok_kind(0x0800_0000), InsnKind::LoadStore); // STXRB W0, W0, [X0]
+        assert_eq!(ok_kind(0xC804_6F1D), InsnKind::LoadStore); // STXR W4, X29, [X24]
+
+        // LDAPUR/STLUR unscaled acquire/release loads and stores.
+        assert_eq!(ok_kind(0x59C5_0069), InsnKind::LoadStore); // LDAPURSH W9, [X3, #0x50]
+        assert_eq!(ok_kind(0x5910_12B1), InsnKind::LoadStore); // STLURH W17, [X21, #-0xff]
 
         // LDAR / STLR / LDAPR variants
         assert_eq!(ok_kind(0x88DF_FC20), InsnKind::LoadStore); // LDAR W0, [X1]
