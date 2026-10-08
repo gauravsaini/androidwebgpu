@@ -57,6 +57,99 @@ def resolve(root: Path, value: str) -> Path:
     return path if path.is_absolute() else root / path
 
 
+def read_exact(stream: Any, size: int) -> bytes:
+    data = stream.read(size)
+    if len(data) != size:
+        raise ValueError(f"truncated snapshot: expected {size} bytes, got {len(data)}")
+    return data
+
+
+def full_snapshot_metadata(path: Path, u11_length: int) -> tuple[int, bytes]:
+    with path.open("rb") as stream:
+        stream.seek(16 + u11_length)
+        if read_exact(stream, 4) != b"PN12":
+            raise ValueError("PNFS snapshot is missing its PN12 orchestrator section")
+        transport = read_exact(stream, 15)
+        queue_count = struct.unpack("<I", transport[11:15])[0]
+        if queue_count > 1024:
+            raise ValueError(f"invalid PNFS transport queue count: {queue_count}")
+        stream.seek(queue_count * 31, os.SEEK_CUR)
+        stream.seek(12, os.SEEK_CUR)  # GPU resource and fence counters.
+        tx_length = struct.unpack("<Q", read_exact(stream, 8))[0]
+        if tx_length > 64 * 1024 * 1024:
+            raise ValueError(f"invalid PNFS UART length: {tx_length}")
+        uart = read_exact(stream, tx_length)
+        rx_length = struct.unpack("<I", read_exact(stream, 4))[0]
+        if rx_length > 64 * 1024 * 1024:
+            raise ValueError(f"invalid PNFS UART receive length: {rx_length}")
+        stream.seek(rx_length + 8, os.SEEK_CUR)  # RX bytes and clock cycles.
+        step = struct.unpack("<Q", read_exact(stream, 8))[0]
+        return step, uart
+
+
+def normalize_snapshot(path: Path, temporary: Path) -> tuple[Path, int, bytes]:
+    """Return a snapshot readable by this checkout's T69 runner."""
+    with path.open("rb") as stream:
+        prefix = read_exact(stream, 4)
+        if prefix != b"PNFS":
+            stream.seek(0)
+            step_header = read_exact(stream, 8)
+            step = struct.unpack("<Q", step_header)[0]
+            version = struct.unpack("<I", read_exact(stream, 4))[0]
+            if version != 13:
+                raise ValueError(
+                    f"legacy snapshot has U11 version {version}; this runner requires version 13"
+                )
+            return path, step, b""
+
+        full_version = struct.unpack("<I", read_exact(stream, 4))[0]
+        if full_version != 1:
+            raise ValueError(f"unsupported PNFS full-snapshot version: {full_version}")
+        u11_length = struct.unpack("<Q", read_exact(stream, 8))[0]
+        if u11_length > path.stat().st_size - 16:
+            raise ValueError("PNFS U11 section extends beyond the snapshot file")
+        stream.seek(16)
+        u11_version, cpu_count = struct.unpack("<II", read_exact(stream, 8))
+        cpu_sizes = {13: 167 * 8, 14: 169 * 8, 15: 170 * 8}
+        if u11_version not in cpu_sizes:
+            raise ValueError(f"unsupported PNFS U11 snapshot version: {u11_version}")
+        if cpu_count == 0 or cpu_count > 64:
+            raise ValueError(f"invalid PNFS CPU count: {cpu_count}")
+        source_cpu_size = cpu_sizes[u11_version]
+        if 8 + cpu_count * source_cpu_size > u11_length:
+            raise ValueError("PNFS U11 CPU records exceed the declared section length")
+
+    step, uart = full_snapshot_metadata(path, u11_length)
+    legacy_path = temporary / f"legacy-{path.name}"
+    remaining = u11_length - 8 - cpu_count * source_cpu_size
+    with path.open("rb") as source, legacy_path.open("wb") as target:
+        target.write(struct.pack("<Q", step))
+        source.seek(24)  # Skip the PNFS envelope and U11 version/CPU-count header.
+        target.write(struct.pack("<II", 13, cpu_count))
+        for _ in range(cpu_count):
+            cpu = read_exact(source, source_cpu_size)
+            if u11_version == 15:
+                # v15 added sp_el1 before PC and ELR_EL1/SPSR_EL1 at the end.
+                target.write(cpu[:256])
+                target.write(cpu[264:-16])
+            elif u11_version == 14:
+                # v14 added ELR_EL1/SPSR_EL1 at the end of each CPU record.
+                target.write(cpu[:-16])
+            else:
+                target.write(cpu)
+        while remaining:
+            chunk = source.read(min(1024 * 1024, remaining))
+            if not chunk:
+                raise ValueError("truncated PNFS U11 machine section")
+            target.write(chunk)
+            remaining -= len(chunk)
+    print(
+        f"[adapter] converted PNFS/U11 v{u11_version} to T69/U11 v13 "
+        f"at step {step}; discarded fields are not present in v13"
+    )
+    return legacy_path, step, uart
+
+
 def guest_input(root: Path, variable: str, default: str, override: str | None) -> Path:
     path = resolve(root, override or os.environ.get(variable, default))
     if not path.is_file():
@@ -311,16 +404,34 @@ def main(argv: list[str] | None = None) -> int:
             "--console-output", str(uart_path),
         ]
         snapshot = args.load_snapshot or env.get("BOOT_REPORT_SNAPSHOT")
+        loaded_step = None
+        snapshot_uart = b""
         if snapshot:
             snapshot_path = resolve(root, snapshot)
-            command.extend(["--load-snapshot", str(snapshot_path)])
+            if not snapshot_path.is_file():
+                print(f"run_kernel adapter: snapshot does not exist: {snapshot_path}", file=sys.stderr)
+                return 2
+            try:
+                runner_snapshot, loaded_step, snapshot_uart = normalize_snapshot(snapshot_path, temp_dir)
+            except (OSError, ValueError) as error:
+                print(f"run_kernel adapter: cannot normalize snapshot {snapshot_path}: {error}", file=sys.stderr)
+                return 2
+            command.extend(["--load-snapshot", str(runner_snapshot)])
             snapshot = str(snapshot_path)
+        effective_snapshot_step = args.snapshot_at_step
         if args.save_snapshot:
             save_path = resolve(root, args.save_snapshot)
             save_path.parent.mkdir(parents=True, exist_ok=True)
             command.extend(["--save-snapshot", str(save_path)])
-            if args.snapshot_at_step is not None:
-                command.extend(["--save-at", str(args.snapshot_at_step)])
+            if effective_snapshot_step is not None:
+                if loaded_step is not None and effective_snapshot_step < loaded_step:
+                    effective_snapshot_step = loaded_step + 1
+                    print(
+                        "[adapter] snapshot target precedes loaded checkpoint; "
+                        f"clamping save step to {effective_snapshot_step}",
+                        file=sys.stderr,
+                    )
+                command.extend(["--save-at", str(effective_snapshot_step)])
         if args.max_steps is not None:
             command.extend(["--max-steps", str(args.max_steps)])
         elif env.get("BOOT_REPORT_MAX_STEPS"):
@@ -328,8 +439,8 @@ def main(argv: list[str] | None = None) -> int:
         if args.trace:
             command.extend(["--trace", str(resolve(root, args.trace))])
         if args.boot_report_json:
-            if "--dump-around" in supported:
-                command.extend(["--dump-around", "4"])
+            # The T69 runner parses --dump-around even though its help omits it.
+            command.extend(["--dump-around", "4"])
             if "--spin-detect" in supported:
                 command.append("--spin-detect")
                 env["PATHN_BOOT_REPORT_DIAGNOSTICS"] = "1"
@@ -366,16 +477,17 @@ def main(argv: list[str] | None = None) -> int:
             if not save_path.is_file():
                 print(f"run_kernel adapter: runner did not create snapshot {save_path}", file=sys.stderr)
                 return 1
-            snapshot_bytes = save_path.read_bytes()
-            if len(snapshot_bytes) < 8:
+            with save_path.open("rb") as stream:
+                snapshot_header = stream.read(8)
+            if len(snapshot_header) < 8:
                 print(f"run_kernel adapter: snapshot is missing its step-count header: {save_path}", file=sys.stderr)
                 return 1
-            saved_step = struct.unpack("<Q", snapshot_bytes[:8])[0]
+            saved_step = struct.unpack("<Q", snapshot_header)[0]
             print(f"SNAPSHOT_PATH={save_path}")
             print(f"SNAPSHOT_STEP={saved_step}")
-            if args.snapshot_at_step is not None and saved_step != args.snapshot_at_step:
+            if effective_snapshot_step is not None and saved_step != effective_snapshot_step:
                 print(
-                    f"run_kernel adapter: requested snapshot step {args.snapshot_at_step}, got {saved_step}",
+                    f"run_kernel adapter: requested effective snapshot step {effective_snapshot_step}, got {saved_step}",
                     file=sys.stderr,
                 )
                 return 1
@@ -397,6 +509,8 @@ def main(argv: list[str] | None = None) -> int:
                 uart_seed = env.get("BOOT_REPORT_UART_SEED")
                 if uart_seed:
                     uart = resolve(root, uart_seed).read_bytes() + uart
+                elif snapshot_uart:
+                    uart = snapshot_uart + uart
                 report = report_for_run(
                     output=output,
                     binary=binary,
