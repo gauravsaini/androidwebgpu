@@ -380,9 +380,9 @@ pub enum SysReg {
     ElrEl1 = 136,
     /// Saved Program Status Register, EL1. Captures PSTATE on IRQ entry.
     SpsrEl1 = 137,
-    /// Exception Syndrome Register, EL1, written on synchronous exception entry.
+    /// Exception Syndrome Register, EL1, captures the latest exception syndrome.
     EsrEl1 = 138,
-    /// Fault Address Register, EL1, written on data abort entry.
+    /// Fault Address Register, EL1; SVC entry writes zero for this exception.
     FarEl1 = 139,
 }
 

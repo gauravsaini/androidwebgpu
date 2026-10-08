@@ -238,6 +238,9 @@ fn lift_system(word: u32) -> Vec<IrOp> {
             // pc 0xffffff800839b164, word 0xd5384115). MSR SP_EL0 was
             // already persistent; the MRS read side was missing.
             (3, 0, 4, 1, 0) => SysReg::SpEl0,
+            // Exception status, captured by the orchestrator at exception entry.
+            (3, 0, 5, 2, 0) => SysReg::EsrEl1,
+            (3, 0, 6, 0, 0) => SysReg::FarEl1,
             // Exception return state, read by the Linux IRQ entry/exit path.
             (3, 0, 4, 0, 1) => SysReg::ElrEl1,
             (3, 0, 4, 0, 0) => SysReg::SpsrEl1,
@@ -612,7 +615,7 @@ fn lift_system(word: u32) -> Vec<IrOp> {
                         (3, 3, 13, 0, 3) => 0,
                         // TPIDR_EL0: Thread ID register EL0 (21 static hits)
                         (3, 3, 13, 0, 2) => 0,
-                        // Exception status / syndrome registers
+                        // Exception return and syndrome state is persistent after entry.
                         (3, 0, 4, 0, 1) => 0, // ELR_EL1
                         (3, 0, 4, 0, 0) => 0, // SPSR_EL1
                         // Performance monitors

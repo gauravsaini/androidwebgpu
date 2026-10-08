@@ -133,7 +133,7 @@ pub struct SysRegs {
     /// Exception return state captured by an EL1 exception.
     pub elr_el1: u64,
     pub spsr_el1: u64,
-    /// Syndrome and fault address captured by synchronous EL1 exceptions.
+    /// Syndrome and fault address captured by the latest EL1 exception.
     pub esr_el1: u64,
     pub far_el1: u64,
 }
@@ -919,6 +919,10 @@ mod tests {
         let mut s = s;
         s.store(SysReg::IccPmrEl1, 0xff);
         assert_eq!(s.load(SysReg::IccPmrEl1), 0xff);
+        s.store(SysReg::EsrEl1, 0x5600_0123);
+        s.store(SysReg::FarEl1, 0);
+        assert_eq!(s.load(SysReg::EsrEl1), 0x5600_0123);
+        assert_eq!(s.load(SysReg::FarEl1), 0);
         // from_index pins the new discriminants 27..=44.
         for (idx, reg) in [
             (27, SysReg::IccSreEl1),
