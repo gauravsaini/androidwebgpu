@@ -283,6 +283,8 @@ impl<'a> Reader<'a> {
         }
         Ok(CpuState {
             regs,
+            // Snapshot v15 predates Q-register state; restore it as zero.
+            qregs: [0; 32],
             sp: self.u64()?,
             sp_el1: self.u64()?,
             pc: self.u64()?,
@@ -489,6 +491,7 @@ mod tests {
         }
         CpuState {
             regs,
+            qregs: [0; 32],
             sp: seed.wrapping_add(0x1000),
             sp_el1: seed.wrapping_add(0x1001),
             pc: 0x4000 + seed,
@@ -672,6 +675,7 @@ mod tests {
         let s = MachineState {
             cpu: vec![CpuState {
                 regs: [u64::MAX; 31],
+                qregs: [0; 32],
                 sp: u64::MAX,
                 sp_el1: u64::MAX,
                 pc: u64::MAX,

@@ -380,11 +380,10 @@ pub enum SysReg {
     ElrEl1 = 136,
     /// Saved Program Status Register, EL1. Captures PSTATE on IRQ entry.
     SpsrEl1 = 137,
-    /// Exception Syndrome Register, EL1.
+    /// Exception Syndrome Register, EL1, written on synchronous exception entry.
     EsrEl1 = 138,
-    /// Fault Address Register, EL1.
+    /// Fault Address Register, EL1, written on data abort entry.
     FarEl1 = 139,
-
 }
 
 /// Single IR operation (SSA-style). The lifter (U2) is the only producer.
