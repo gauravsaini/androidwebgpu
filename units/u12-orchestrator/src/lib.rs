@@ -3585,7 +3585,13 @@ impl Orchestrator {
         }
 
         let top4 = (word >> 25) & 0xF;
-        let fp_simd = matches!(top4, 0b0110 | 0b0111 | 0b1110 | 0b1111);
+        // Bit 24 distinguishes the supported FP/SIMD classes from reserved
+        // encodings that share the same high four bits (for example 0xFFFF_FFFF).
+        let fp_simd = match top4 {
+            0b0110 | 0b1110 => word & (1 << 24) != 0,
+            0b0111 | 0b1111 => word & (1 << 24) == 0,
+            _ => false,
+        };
         let fpen = (cpu.sysregs.cpacr_el1 >> 20) & 0x3;
         let fp_enabled = match source_mode {
             EL0T_MODE => fpen == 0b11,
