@@ -17,6 +17,14 @@ fn seed(o: &mut Orchestrator, word: u32) {
     o.machine.ram[..4].copy_from_slice(&word.to_le_bytes());
 }
 
+fn expected_pattern_vector(start: usize, active_bytes: usize) -> u128 {
+    let mut bytes = [0u8; 16];
+    for (index, byte) in bytes.iter_mut().take(active_bytes).enumerate() {
+        *byte = (start + index) as u8;
+    }
+    u128::from_le_bytes(bytes)
+}
+
 fn run_vector(o: &mut Orchestrator, word: u32, v0: &str, v1: &str) -> u128 {
     seed(o, word);
     o.machine.cpu[0].qregs[0] = little_hex(v0);
@@ -245,16 +253,19 @@ fn fcmp_and_fcmpe_match_qemu_nzcv_and_fpsr_bytes() {
     let cases = [
         (0x1e61_2000, 1.0f64.to_bits() as u128, two), // FCMP D0, D1: less
         (0x1e60_2020, 1.0f64.to_bits() as u128, two), // FCMP D1, D0: greater
-        (0x1e60_2010, two, two),                     // FCMPE D0, D0: equal
-        (0x1e61_2000, quiet_nan, two),               // FCMP quiet NaN: unordered
-        (0x1e61_2010, quiet_nan, two),               // FCMPE quiet NaN: invalid
+        (0x1e60_2010, two, two),                      // FCMPE D0, D0: equal
+        (0x1e61_2000, quiet_nan, two),                // FCMP quiet NaN: unordered
+        (0x1e61_2010, quiet_nan, two),                // FCMPE quiet NaN: invalid
     ];
     let mut actual = Vec::with_capacity(48);
     for (word, lhs, rhs) in cases {
         seed(&mut o, word);
         o.machine.cpu[0].qregs[0] = lhs;
         o.machine.cpu[0].qregs[1] = rhs;
-        assert!(matches!(o.step_vcpu(), StepOutcome::Continue), "{word:#010x}");
+        assert!(
+            matches!(o.step_vcpu(), StepOutcome::Continue),
+            "{word:#010x}"
+        );
         actual.extend_from_slice(&(o.machine.cpu[0].pstate & (0xf << 28)).to_le_bytes());
     }
     actual.extend_from_slice(&o.machine.cpu[0].sysregs.fpsr.to_le_bytes());
@@ -273,4 +284,204 @@ fn fcmp_and_fcmpe_match_qemu_nzcv_and_fpsr_bytes() {
     .flat_map(u64::to_le_bytes)
     .collect::<Vec<_>>();
     assert_eq!(actual, expected);
+}
+
+#[test]
+fn ld1_multi_structure_arrangements_and_post_index_match_qemu() {
+    let mut o = Orchestrator::new();
+    let base = RAM_BASE + 0x0100_0000;
+    let data_offset = (base - RAM_BASE) as usize;
+    for (index, byte) in o.machine.ram[data_offset..data_offset + 256]
+        .iter_mut()
+        .enumerate()
+    {
+        *byte = index as u8;
+    }
+
+    // The independent QEMU harness loads the same 0..255 byte pattern and
+    // compares 19 resulting Q-registers plus all eight base values (480 B).
+    let cases = [
+        (0x0c40_7020, 1, 0, 1, 8, 0, None),
+        (0x4cdf_a061, 3, 1, 2, 16, 16, Some((31, 32))),
+        (0x0cdf_64c3, 6, 3, 3, 8, 48, Some((31, 24))),
+        (0x4cca_27e6, 31, 6, 4, 16, 72, Some((10, 64))),
+        (0x0c40_a98a, 12, 10, 2, 8, 136, None),
+        (0x4cdf_2a2d, 17, 13, 4, 16, 144, Some((31, 64))),
+        (0x0cdf_7eb2, 21, 18, 1, 8, 208, Some((31, 8))),
+        (0x4cd7_aed4, 22, 20, 2, 16, 216, Some((23, 32))),
+    ];
+
+    for (word, rn, rt, count, vector_bytes, input_offset, post_index) in cases {
+        seed(&mut o, word);
+        let start = base + input_offset as u64;
+        if rn == 31 {
+            o.machine.cpu[0].sp = start;
+        } else {
+            o.machine.cpu[0].regs[rn] = start;
+        }
+        if let Some((rm, amount)) = post_index {
+            if rm != 31 {
+                o.machine.cpu[0].regs[rm] = amount;
+            }
+        }
+
+        assert!(
+            matches!(o.step_vcpu(), StepOutcome::Continue),
+            "{word:#010x}"
+        );
+        for index in 0..count {
+            assert_eq!(
+                o.machine.cpu[0].qregs[rt + index],
+                expected_pattern_vector(input_offset + index * vector_bytes, vector_bytes),
+                "{word:#010x} V{}",
+                rt + index
+            );
+        }
+        let expected_base = post_index
+            .map(|(_, amount)| start + amount)
+            .unwrap_or(start);
+        let actual_base = if rn == 31 {
+            o.machine.cpu[0].sp
+        } else {
+            o.machine.cpu[0].regs[rn]
+        };
+        assert_eq!(actual_base, expected_base, "{word:#010x} base writeback");
+    }
+}
+
+#[test]
+fn st1_multi_structure_arrangements_and_post_index_match_qemu() {
+    let mut o = Orchestrator::new();
+    let output = RAM_BASE + 0x0100_0200;
+    let output_offset = (output - RAM_BASE) as usize;
+    o.machine.ram[output_offset..output_offset + 280].fill(0xa5);
+
+    // QEMU writes these same 280 data bytes followed by nine base snapshots.
+    let cases = [
+        (0x0c00_7260, 19, 0, 1, 8, 0, None),
+        (0x4c9f_a261, 19, 1, 2, 16, 16, Some((31, 32))),
+        (0x0c9f_6663, 19, 3, 3, 8, 48, Some((31, 24))),
+        (0x4c8a_27e6, 31, 6, 4, 16, 72, Some((10, 64))),
+        (0x0c00_aa6a, 19, 10, 2, 8, 136, None),
+        (0x4c9f_2a6d, 19, 13, 4, 16, 144, Some((31, 64))),
+        (0x0c9f_7e72, 19, 18, 1, 8, 208, Some((31, 8))),
+        (0x4c97_ae74, 19, 20, 2, 16, 216, Some((23, 32))),
+        (0x4c00_aa74, 19, 20, 2, 16, 216, None), // Exact kernel ST1 encoding.
+    ];
+
+    let mut cursor = 0usize;
+    let mut expected = Vec::with_capacity(280);
+    for (word, rn, rt, count, vector_bytes, input_offset, post_index) in cases {
+        seed(&mut o, word);
+        for index in 0..count {
+            let value = expected_pattern_vector(input_offset + index * vector_bytes, vector_bytes);
+            o.machine.cpu[0].qregs[(rt + index) & 31] = value;
+            expected.extend_from_slice(&value.to_le_bytes()[..vector_bytes]);
+        }
+
+        let start = output + cursor as u64;
+        if rn == 31 {
+            o.machine.cpu[0].sp = start;
+        } else {
+            o.machine.cpu[0].regs[rn] = start;
+        }
+        if let Some((rm, amount)) = post_index {
+            if rm != 31 {
+                o.machine.cpu[0].regs[rm] = amount;
+            }
+        }
+
+        assert!(
+            matches!(o.step_vcpu(), StepOutcome::Continue),
+            "{word:#010x}"
+        );
+        let expected_base = post_index
+            .map(|(_, amount)| start + amount)
+            .unwrap_or(start);
+        let actual_base = if rn == 31 {
+            o.machine.cpu[0].sp
+        } else {
+            o.machine.cpu[0].regs[rn]
+        };
+        assert_eq!(actual_base, expected_base, "{word:#010x} base writeback");
+        cursor += count * vector_bytes;
+    }
+
+    assert_eq!(cursor, 280);
+    assert_eq!(
+        &o.machine.ram[output_offset..output_offset + cursor],
+        expected
+    );
+}
+
+#[test]
+fn rev16_rev32_and_kernel_rev64_match_qemu_bytes() {
+    let mut o = Orchestrator::new();
+    let source = little_hex("000102030405060708090a0b0c0d0e0f");
+    let cases = [
+        (0x0e20_1b19, "01000302050407060000000000000000"), // REV16 .8B
+        (0x4e20_1b19, "010003020504070609080b0a0d0c0f0e"), // REV16 .16B
+        (0x2e20_0b19, "03020100070605040000000000000000"), // REV32 .8B
+        (0x6e20_0b19, "03020100070605040b0a09080f0e0d0c"), // REV32 .16B
+        (0x2e60_0b19, "02030001060704050000000000000000"), // REV32 .4H
+        (0x6e60_0b19, "02030001060704050a0b08090e0f0c0d"), // REV32 .8H
+        (0x4e60_0b19, "06070405020300010e0f0c0d0a0b0809"), // REV64 .8H
+    ];
+
+    for (word, expected) in cases {
+        seed(&mut o, word);
+        o.machine.cpu[0].qregs[24] = source;
+        assert!(
+            matches!(o.step_vcpu(), StepOutcome::Continue),
+            "{word:#010x}"
+        );
+        assert_eq!(
+            o.machine.cpu[0].qregs[25],
+            little_hex(expected),
+            "{word:#010x}"
+        );
+    }
+}
+
+#[test]
+fn sha256_crypto_instructions_match_qemu_bytes() {
+    let mut o = Orchestrator::new();
+    let vectors = [
+        "0822cdfffeda5cbce9dacc3d1e171679",
+        "d208e65695e2f20ef4233775db87c3fa",
+        "2ecc1eaa5c2ed72736628fff04d87d21",
+        "30f4adc81b89a27ec50798b8db34e4fd",
+        "c420951ef9f9fcddab7efbbdc9b9652b",
+        "275c0b2b313dcad1684a14fd7d9cc019",
+        "78ecc4819f160802cb2f10cec751ac6c",
+        "5e3c087c04e01fd629ba91b982b6b12b",
+        "3343f25910c72acb3419b6405b11ba69",
+        "5e3587f783db713e9f9a0f82e8e152eb",
+        "ce500d21560cf64eea80281d4cd7577a",
+    ]
+    .map(little_hex);
+
+    for (register, value) in vectors.into_iter().enumerate() {
+        o.machine.cpu[0].qregs[register] = value;
+    }
+
+    let cases = [
+        (0x5e28_2820, 0, "05b019dc9928d59f714be4f3d0af5ba5"), // SHA256SU0 V0.4S, V1.4S
+        (0x5e04_4062, 2, "2d41f399db2891ba64b21cbe115b4d09"), // SHA256H Q2, Q3, V4.4S
+        (0x5e07_50c5, 5, "ceca3fc5b1553771a5807d0e99a87a75"), // SHA256H2 Q5, Q6, V7.4S
+        (0x5e0a_6128, 8, "c725d3e843898b5ed6386a229fc86540"), // SHA256SU1 V8.4S, V9.4S, V10.4S
+    ];
+
+    for (word, destination, expected) in cases {
+        seed(&mut o, word);
+        assert!(
+            matches!(o.step_vcpu(), StepOutcome::Continue),
+            "{word:#010x}"
+        );
+        assert_eq!(
+            o.machine.cpu[0].qregs[destination],
+            little_hex(expected),
+            "{word:#010x}"
+        );
+    }
 }

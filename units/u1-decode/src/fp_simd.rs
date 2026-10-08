@@ -13,6 +13,9 @@ pub fn decode(word: u32) -> Option<InsnKind> {
     if let Some(kind) = decode_fp_simd_load_store(word) {
         return Some(kind);
     }
+    if decode_ld1_st1_multiple(word) {
+        return Some(InsnKind::LoadStore);
+    }
     if decode_q_pair(word) {
         return Some(InsnKind::LoadStore);
     }
@@ -22,6 +25,8 @@ pub fn decode(word: u32) -> Option<InsnKind> {
 
     // Three-same arithmetic, DUP, and EXT from the characterized NEON subset.
     if decode_neon_three_same(word)
+        || decode_vector_reverse(word)
+        || decode_sha256(word)
         || decode_dup(word)
         || decode_ext(word)
         || decode_vector_mov(word)
@@ -197,6 +202,43 @@ fn decode_fp_simd_load_store(word: u32) -> Option<InsnKind> {
     } else {
         None
     }
+}
+
+fn decode_ld1_st1_multiple(word: u32) -> bool {
+    if word >> 31 != 0 || ((word >> 24) & 0x3f) != 0b001100 || ((word >> 21) & 1) != 0 {
+        return false;
+    }
+
+    let post_index = (word >> 23) & 1 != 0;
+    let rm = (word >> 16) & 0x1f;
+    if !post_index && rm != 0 {
+        return false;
+    }
+
+    matches!((word >> 12) & 0xf, 0b0010 | 0b0110 | 0b0111 | 0b1010)
+}
+
+fn decode_vector_reverse(word: u32) -> bool {
+    if ((word >> 24) & 0x1f) != 0b01110 || ((word >> 21) & 1) != 1 || ((word >> 16) & 0x1f) != 0 {
+        return false;
+    }
+
+    let size = (word >> 22) & 0x3;
+    let u = (word >> 29) & 1;
+    match (word >> 10) & 0x3f {
+        0b000110 => u == 0 && size == 0, // REV16, byte arrangements only
+        0b000010 => (u == 1 && size <= 1) || (u == 0 && size <= 2), // REV32 / REV64
+        _ => false,
+    }
+}
+
+fn decode_sha256(word: u32) -> bool {
+    let three_register_mask = !((0x1f << 16) | (0x1f << 5) | 0x1f);
+    let two_register_mask = !((0x1f << 5) | 0x1f);
+    matches!(
+        word & three_register_mask,
+        0x5e00_4000 | 0x5e00_5000 | 0x5e00_6000
+    ) || word & two_register_mask == 0x5e28_2800
 }
 
 fn decode_q_pair(word: u32) -> bool {
@@ -492,6 +534,84 @@ fn decode_fp_data_proc_3source(word: u32) -> Option<InsnKind> {
     }
 
     Some(InsnKind::DataProc)
+}
+
+#[cfg(test)]
+mod structure_and_reverse_tests {
+    use super::decode;
+    use pathn_contracts::cpu::InsnKind;
+
+    #[test]
+    fn ld1_multi_structure_decodes_each_vector_arrangement() {
+        for word in [
+            0x0c40_7020, // LD1 {V0.8B}, [X1]
+            0x4cdf_a061, // LD1 {V1.16B,V2.16B}, [X3], #32
+            0x0cdf_64c3, // LD1 {V3.4H,V4.4H,V5.4H}, [X6], #24
+            0x4cca_27e6, // LD1 {V6.8H,...,V9.8H}, [SP], X10
+            0x0c40_a98a, // LD1 {V10.2S,V11.2S}, [X12]
+            0x4cdf_2a2d, // LD1 {V13.4S,...,V16.4S}, [X17], #64
+            0x0cdf_7e72, // LD1 {V18.1D}, [X19], #8
+            0x4cd7_aed4, // LD1 {V20.2D,V21.2D}, [X22], X23
+            0x4cdf_2900, // Kernel: LD1 {V0.4S,...,V3.4S}, [X8], #64
+        ] {
+            assert_eq!(decode(word), Some(InsnKind::LoadStore), "{word:#010x}");
+        }
+
+        assert_eq!(decode(0x0c41_7020), None); // no post-index with nonzero Rm
+        assert_eq!(decode(0x0c40_3020), None); // reserved LD1 register-count opcode
+    }
+
+    #[test]
+    fn st1_multi_structure_decodes_each_vector_arrangement() {
+        for word in [
+            0x0c00_7260, // ST1 {V0.8B}, [X19]
+            0x4c9f_a261, // ST1 {V1.16B,V2.16B}, [X19], #32
+            0x0c9f_6663, // ST1 {V3.4H,V4.4H,V5.4H}, [X19], #24
+            0x4c8a_27e6, // ST1 {V6.8H,...,V9.8H}, [SP], X10
+            0x0c00_aa6a, // ST1 {V10.2S,V11.2S}, [X19]
+            0x4c9f_2a6d, // ST1 {V13.4S,...,V16.4S}, [X19], #64
+            0x0c9f_7e72, // ST1 {V18.1D}, [X19], #8
+            0x4c97_ae74, // ST1 {V20.2D,V21.2D}, [X19], X23
+            0x4c00_aa74, // Kernel: ST1 {V20.4S,V21.4S}, [X19]
+        ] {
+            assert_eq!(decode(word), Some(InsnKind::LoadStore), "{word:#010x}");
+        }
+    }
+
+    #[test]
+    fn vector_reverse_decodes_rev16_rev32_and_kernel_rev64() {
+        for word in [
+            0x0e20_1b38, // REV16 V24.8B, V25.8B
+            0x4e20_1b7a, // REV16 V26.16B, V27.16B
+            0x2e20_0bbc, // REV32 V28.8B, V29.8B
+            0x6e20_0bfe, // REV32 V30.16B, V31.16B
+            0x6e20_0a10, // Kernel: REV32 V16.16B, V16.16B
+            0x4e60_09a7, // Kernel .text: REV64 V7.8H, V13.8H
+        ] {
+            assert_eq!(decode(word), Some(InsnKind::DataProc), "{word:#010x}");
+        }
+
+        assert_eq!(decode(0x6ea0_0bbc), None); // REV32 .4S is unallocated
+        assert_eq!(decode(0x0e20_0bbc), Some(InsnKind::DataProc)); // REV64 .8B
+    }
+
+    #[test]
+    fn sha256_crypto_class_decodes_kernel_encodings() {
+        for word in [
+            0x5e28_2a30, // SHA256SU0 V16.4S, V17.4S
+            0x5e16_4338, // SHA256H Q24, Q25, V22.4S
+            0x5e16_5359, // SHA256H2 Q25, Q26, V22.4S
+            0x5e13_6250, // SHA256SU1 V16.4S, V18.4S, V19.4S
+            0x5e1f_43ff, // three-register fields may name V31
+            0x5e1f_53ff,
+            0x5e1f_63ff,
+            0x5e28_2bff, // SHA256SU0 with V31 operands
+        ] {
+            assert_eq!(decode(word), Some(InsnKind::DataProc), "{word:#010x}");
+        }
+
+        assert_eq!(decode(0x5e28_0a30), None); // SHA256SU0 reserved opcode
+    }
 }
 
 #[cfg(test)]

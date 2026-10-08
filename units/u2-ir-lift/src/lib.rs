@@ -244,9 +244,6 @@ fn lift_system(word: u32) -> Vec<IrOp> {
             // Exception return state, read by the Linux IRQ entry/exit path.
             (3, 0, 4, 0, 1) => SysReg::ElrEl1,
             (3, 0, 4, 0, 0) => SysReg::SpsrEl1,
-            // Synchronous exception syndrome and data fault address.
-            (3, 0, 5, 2, 0) => SysReg::EsrEl1,
-            (3, 0, 6, 0, 0) => SysReg::FarEl1,
             // CNTHCTL_EL2
             (3, 4, 14, 1, 0) => SysReg::CnthctlEl2,
             // CNTPCT_EL0 (fam/devices): physical counter, live value

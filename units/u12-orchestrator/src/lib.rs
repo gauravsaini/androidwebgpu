@@ -271,6 +271,14 @@ const FULL_SNAPSHOT_VERSION: u32 = 1;
 
 #[derive(Debug, Clone, Copy)]
 enum FpSimdInstruction {
+    StructureAccess {
+        load: bool,
+        q: bool,
+        count: u8,
+        rt: u8,
+        rn: u8,
+        post_index_rm: Option<u8>,
+    },
     QPair {
         load: bool,
         rt: u8,
@@ -293,6 +301,19 @@ enum FpSimdInstruction {
     Movi16B {
         rd: u8,
         immediate: u8,
+    },
+    VectorReverse {
+        group_bytes: u8,
+        element_bytes: u8,
+        q: bool,
+        rd: u8,
+        rn: u8,
+    },
+    Sha256 {
+        operation: Sha256Operation,
+        rd: u8,
+        rn: u8,
+        rm: u8,
     },
     ThreeSame {
         op: VectorArithmetic,
@@ -332,7 +353,60 @@ enum VectorArithmetic {
     Mul,
 }
 
+#[derive(Debug, Clone, Copy)]
+enum Sha256Operation {
+    HashPart1,
+    HashPart2,
+    ScheduleUpdate0,
+    ScheduleUpdate1,
+}
+
 fn decode_fp_simd_instruction(word: u32) -> Option<FpSimdInstruction> {
+    if word >> 31 == 0
+        && ((word >> 24) & 0x3f) == 0b001100
+        && ((word >> 21) & 1) == 0
+    {
+        let post_index = (word >> 23) & 1 != 0;
+        let rm = ((word >> 16) & 0x1f) as u8;
+        let count = match (word >> 12) & 0xf {
+            0b0010 => 4,
+            0b0110 => 3,
+            0b0111 => 1,
+            0b1010 => 2,
+            _ => 0,
+        };
+        if count != 0 && (post_index || rm == 0) {
+            return Some(FpSimdInstruction::StructureAccess {
+                load: (word >> 22) & 1 != 0,
+                q: (word >> 30) & 1 != 0,
+                count,
+                rt: (word & 0x1f) as u8,
+                rn: ((word >> 5) & 0x1f) as u8,
+                post_index_rm: post_index.then_some(rm),
+            });
+        }
+    }
+
+    let three_register_mask = !((0x1f << 16) | (0x1f << 5) | 0x1f);
+    let two_register_mask = !((0x1f << 5) | 0x1f);
+    let sha256_operation = match word & three_register_mask {
+        0x5e00_4000 => Some(Sha256Operation::HashPart1),
+        0x5e00_5000 => Some(Sha256Operation::HashPart2),
+        0x5e00_6000 => Some(Sha256Operation::ScheduleUpdate1),
+        _ if word & two_register_mask == 0x5e28_2800 => {
+            Some(Sha256Operation::ScheduleUpdate0)
+        }
+        _ => None,
+    };
+    if let Some(operation) = sha256_operation {
+        return Some(FpSimdInstruction::Sha256 {
+            operation,
+            rd: (word & 0x1f) as u8,
+            rn: ((word >> 5) & 0x1f) as u8,
+            rm: ((word >> 16) & 0x1f) as u8,
+        });
+    }
+
     if ((word >> 25) & 0x1f) == 0b10110 && ((word >> 30) & 0x3) == 0b10 && ((word >> 23) & 0x3) != 0
     {
         let raw_imm = ((word >> 15) & 0x7f) as u8;
@@ -382,6 +456,29 @@ fn decode_fp_simd_instruction(word: u32) -> Option<FpSimdInstruction> {
             rd: (word & 0x1f) as u8,
             immediate,
         });
+    }
+
+    if ((word >> 24) & 0x1f) == 0b01110
+        && ((word >> 21) & 1) == 1
+        && ((word >> 16) & 0x1f) == 0
+    {
+        let size = (word >> 22) & 0x3;
+        let u = (word >> 29) & 1;
+        let group_bytes = match (word >> 10) & 0x3f {
+            0b000110 if u == 0 && size == 0 => Some(2),
+            0b000010 if u == 1 && size <= 1 => Some(4),
+            0b000010 if u == 0 && size <= 2 => Some(8),
+            _ => None,
+        };
+        if let Some(group_bytes) = group_bytes {
+            return Some(FpSimdInstruction::VectorReverse {
+                group_bytes,
+                element_bytes: 1 << size,
+                q: (word >> 30) & 1 != 0,
+                rd: (word & 0x1f) as u8,
+                rn: ((word >> 5) & 0x1f) as u8,
+            });
+        }
     }
 
     // The T112 ldstq harness uses MOV Vd.16B, Vn.16B, the same-register
@@ -488,6 +585,102 @@ fn decode_fp_simd_instruction(word: u32) -> Option<FpSimdInstruction> {
         }
     }
     None
+}
+
+fn q_words(value: u128) -> [u32; 4] {
+    [
+        value as u32,
+        (value >> 32) as u32,
+        (value >> 64) as u32,
+        (value >> 96) as u32,
+    ]
+}
+
+fn words_q(words: [u32; 4]) -> u128 {
+    words[0] as u128
+        | ((words[1] as u128) << 32)
+        | ((words[2] as u128) << 64)
+        | ((words[3] as u128) << 96)
+}
+
+fn sha256_small_sigma0(value: u32) -> u32 {
+    value.rotate_right(7) ^ value.rotate_right(18) ^ (value >> 3)
+}
+
+fn sha256_small_sigma1(value: u32) -> u32 {
+    value.rotate_right(17) ^ value.rotate_right(19) ^ (value >> 10)
+}
+
+fn sha256_big_sigma0(value: u32) -> u32 {
+    value.rotate_right(2) ^ value.rotate_right(13) ^ value.rotate_right(22)
+}
+
+fn sha256_big_sigma1(value: u32) -> u32 {
+    value.rotate_right(6) ^ value.rotate_right(11) ^ value.rotate_right(25)
+}
+
+fn sha256_choose(x: u32, y: u32, z: u32) -> u32 {
+    ((y ^ z) & x) ^ z
+}
+
+fn sha256_majority(x: u32, y: u32, z: u32) -> u32 {
+    (x & y) ^ (x & z) ^ (y & z)
+}
+
+fn sha256_hash(
+    mut x: [u32; 4],
+    mut y: [u32; 4],
+    schedule: [u32; 4],
+    part1: bool,
+) -> [u32; 4] {
+    for word in schedule {
+        let choice = sha256_choose(y[0], y[1], y[2]);
+        let majority = sha256_majority(x[0], x[1], x[2]);
+        let t = y[3]
+            .wrapping_add(sha256_big_sigma1(y[0]))
+            .wrapping_add(choice)
+            .wrapping_add(word);
+        x[3] = t.wrapping_add(x[3]);
+        y[3] = t
+            .wrapping_add(sha256_big_sigma0(x[0]))
+            .wrapping_add(majority);
+
+        // Rotate the concatenated Y:X state left by one 32-bit word.
+        (x, y) = ([y[3], x[0], x[1], x[2]], [x[3], y[0], y[1], y[2]]);
+    }
+
+    if part1 { x } else { y }
+}
+
+fn sha256_schedule_update0(destination: u128, source_n: u128) -> [u32; 4] {
+    let input = q_words(destination);
+    let next = q_words(source_n);
+    let schedule = [input[1], input[2], input[3], next[0]];
+    std::array::from_fn(|index| {
+        sha256_small_sigma0(schedule[index]).wrapping_add(input[index])
+    })
+}
+
+fn sha256_schedule_update1(destination: u128, source_n: u128, source_m: u128) -> [u32; 4] {
+    let input = q_words(destination);
+    let next = q_words(source_n);
+    let later = q_words(source_m);
+    let schedule = [next[1], next[2], next[3], later[0]];
+    let mut result = [0; 4];
+
+    result[0] = sha256_small_sigma1(later[2])
+        .wrapping_add(input[0])
+        .wrapping_add(schedule[0]);
+    result[1] = sha256_small_sigma1(later[3])
+        .wrapping_add(input[1])
+        .wrapping_add(schedule[1]);
+    result[2] = sha256_small_sigma1(result[0])
+        .wrapping_add(input[2])
+        .wrapping_add(schedule[2]);
+    result[3] = sha256_small_sigma1(result[1])
+        .wrapping_add(input[3])
+        .wrapping_add(schedule[3]);
+    result
 }
 
 fn float_nzcv(less: bool, equal: bool, unordered: bool) -> u8 {
@@ -3939,6 +4132,87 @@ impl Orchestrator {
         }
 
         match op {
+            FpSimdInstruction::StructureAccess {
+                load,
+                q,
+                count,
+                rt,
+                rn,
+                post_index_rm,
+            } => {
+                let vector_bytes = if q { 16usize } else { 8usize };
+                let total_bytes = vector_bytes * count as usize;
+                let cpu = &self.machine.cpu[0];
+                let base = if rn == 31 {
+                    cpu.sp
+                } else {
+                    cpu.regs[rn as usize]
+                };
+                let writeback_amount = post_index_rm.map(|rm| {
+                    if rm == 31 {
+                        total_bytes as u64
+                    } else {
+                        self.machine.cpu[0].regs[rm as usize]
+                    }
+                });
+                let mut loaded = [0u128; 4];
+                let mut stored = [[0u8; 16]; 4];
+                let mut memory_offsets = [0usize; 4];
+                for index in 0..count as usize {
+                    let address = base.wrapping_add((index * vector_bytes) as u64);
+                    let access = if load { Access::Read } else { Access::Write };
+                    let pa = match self.translate_data_orch(address, access) {
+                        Ok(pa) => pa,
+                        Err(reason) => {
+                            self.halted = Some(reason.clone());
+                            return Some(StepOutcome::Halted(reason));
+                        }
+                    };
+                    let memory_offset = match self.ram_offset(pa, vector_bytes as u64) {
+                        Ok(offset) => offset,
+                        Err(fault) => {
+                            let reason = HaltReason::WasmTrap {
+                                addr: address,
+                                message: format!("structure memory fault: {fault:?}"),
+                            };
+                            self.halted = Some(reason.clone());
+                            return Some(StepOutcome::Halted(reason));
+                        }
+                    };
+                    memory_offsets[index] = memory_offset;
+                    if load {
+                        let mut bytes = [0u8; 16];
+                        bytes[..vector_bytes].copy_from_slice(
+                            &self.machine.ram[memory_offset..memory_offset + vector_bytes],
+                        );
+                        loaded[index] = u128::from_le_bytes(bytes);
+                    } else {
+                        let register = (rt as usize + index) & 31;
+                        stored[index] = self.machine.cpu[0].qregs[register].to_le_bytes();
+                    }
+                }
+
+                if load {
+                    for (index, value) in loaded.iter().copied().take(count as usize).enumerate() {
+                        let register = (rt as usize + index) & 31;
+                        self.machine.cpu[0].qregs[register] = value;
+                    }
+                } else {
+                    for index in 0..count as usize {
+                        let offset = memory_offsets[index];
+                        self.machine.ram[offset..offset + vector_bytes]
+                            .copy_from_slice(&stored[index][..vector_bytes]);
+                    }
+                }
+                if let Some(amount) = writeback_amount {
+                    let updated_base = base.wrapping_add(amount);
+                    if rn == 31 {
+                        self.machine.cpu[0].sp = updated_base;
+                    } else {
+                        self.machine.cpu[0].regs[rn as usize] = updated_base;
+                    }
+                }
+            }
             FpSimdInstruction::QPair {
                 load,
                 rt,
@@ -4106,6 +4380,58 @@ impl Orchestrator {
             FpSimdInstruction::Movi16B { rd, immediate } => {
                 self.machine.cpu[0].qregs[rd as usize] =
                     u128::from_le_bytes([immediate; 16]);
+            }
+            FpSimdInstruction::VectorReverse {
+                group_bytes,
+                element_bytes,
+                q,
+                rd,
+                rn,
+            } => {
+                let source = self.machine.cpu[0].qregs[rn as usize].to_le_bytes();
+                let active_bytes = if q { 16usize } else { 8usize };
+                let group_bytes = group_bytes as usize;
+                let element_bytes = element_bytes as usize;
+                let mut result = [0u8; 16];
+                for group_start in (0..active_bytes).step_by(group_bytes) {
+                    for element_start in (0..group_bytes).step_by(element_bytes) {
+                        let source_start = group_start + group_bytes - element_start - element_bytes;
+                        result[group_start + element_start..group_start + element_start + element_bytes]
+                            .copy_from_slice(&source[source_start..source_start + element_bytes]);
+                    }
+                }
+                self.machine.cpu[0].qregs[rd as usize] = u128::from_le_bytes(result);
+            }
+            FpSimdInstruction::Sha256 {
+                operation,
+                rd,
+                rn,
+                rm,
+            } => {
+                let destination = self.machine.cpu[0].qregs[rd as usize];
+                let source_n = self.machine.cpu[0].qregs[rn as usize];
+                let source_m = self.machine.cpu[0].qregs[rm as usize];
+                let result = match operation {
+                    Sha256Operation::HashPart1 => sha256_hash(
+                        q_words(destination),
+                        q_words(source_n),
+                        q_words(source_m),
+                        true,
+                    ),
+                    Sha256Operation::HashPart2 => sha256_hash(
+                        q_words(source_n),
+                        q_words(destination),
+                        q_words(source_m),
+                        false,
+                    ),
+                    Sha256Operation::ScheduleUpdate0 => {
+                        sha256_schedule_update0(destination, source_n)
+                    }
+                    Sha256Operation::ScheduleUpdate1 => {
+                        sha256_schedule_update1(destination, source_n, source_m)
+                    }
+                };
+                self.machine.cpu[0].qregs[rd as usize] = words_q(result);
             }
             FpSimdInstruction::ThreeSame {
                 op,
