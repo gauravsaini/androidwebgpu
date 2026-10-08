@@ -23,6 +23,7 @@ use u12_orchestrator::{
 };
 use pathn_contracts::cpu::{Access, MmuState};
 use pathn_contracts::machine::SysRegs;
+mod common;
 
 const KERNEL_CANDIDATES: &[&str] = &[
     "/mnt/sdb1/aosp/Image",
@@ -43,8 +44,12 @@ const FLAG_Z: u64 = 0x4000_0000;
 // Step at which the kernel halted on the L1 descriptor gap before the fix.
 pub const L1_GAP_HALT_STEP: u64 = 121_480_531;
 
-fn find_file(candidates: &[&str]) -> Option<String> {
-    for c in candidates {
+fn find_file(variable: &str, candidates: &[&str]) -> Option<String> {
+    let configured = common::input_path(variable, candidates[0]);
+    if configured.exists() {
+        return Some(configured.to_string_lossy().into_owned());
+    }
+    for c in candidates.iter().skip(1) {
         if Path::new(c).exists() {
             return Some(c.to_string());
         }
@@ -137,14 +142,14 @@ fn test_vmemmap_l1_gap_demand_population_allocates_tables() {
 
 #[test]
 fn test_boot_past_vmemmap_l1_gap_halt_no_panic() {
-    let kernel_path = match find_file(KERNEL_CANDIDATES) {
+    let kernel_path = match find_file("BOOT_REPORT_KERNEL", KERNEL_CANDIDATES) {
         Some(p) => p,
         None => {
             eprintln!("Skipping full boot test: kernel Image not found");
             return;
         }
     };
-    let dtb_path = match find_file(DTB_CANDIDATES) {
+    let dtb_path = match find_file("BOOT_REPORT_DTB", DTB_CANDIDATES) {
         Some(p) => p,
         None => {
             eprintln!("Skipping full boot test: DTB not found");
@@ -174,6 +179,7 @@ fn test_boot_past_vmemmap_l1_gap_halt_no_panic() {
         let d_off = (DTB_PA - RAM_BASE) as usize;
         orch.machine_mut().ram[d_off..d_off + dtb_bytes.len()].copy_from_slice(&dtb_bytes);
     }
+    common::load_initrd(&mut orch.machine_mut().ram, RAM_BASE);
     {
         let cpu = &mut orch.machine_mut().cpu[0];
         cpu.pc = KERNEL_LOAD_PA;

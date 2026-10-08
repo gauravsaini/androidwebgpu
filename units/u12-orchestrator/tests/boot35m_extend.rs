@@ -9,6 +9,7 @@
 
 use std::fs;
 use u12_orchestrator::{Orchestrator, StepOutcome};
+mod common;
 
 const KERNEL_PATH: &str = "/home/hatch/workspace/.cache-aosp/Image";
 const DTB_PATH: &str = "/home/hatch/workspace/androidwebgpu/guest-image/minimal-virt.dtb";
@@ -24,8 +25,10 @@ fn find_in_ram(ram: &[u8], needle: &[u8]) -> Option<usize> {
 
 #[test]
 fn test_boot_100m_find_next_halt() {
-    let kernel_bytes = fs::read(KERNEL_PATH).expect("kernel Image not found");
-    let dtb_bytes = fs::read(DTB_PATH).expect("DTB not found");
+    let kernel_path = common::input_path("BOOT_REPORT_KERNEL", KERNEL_PATH);
+    let dtb_path = common::input_path("BOOT_REPORT_DTB", DTB_PATH);
+    let kernel_bytes = fs::read(&kernel_path).expect("kernel Image not found");
+    let dtb_bytes = fs::read(&dtb_path).expect("DTB not found");
     let mut orch = Orchestrator::new();
     {
         let k_off = (KERNEL_LOAD_PA - RAM_BASE) as usize;
@@ -33,6 +36,7 @@ fn test_boot_100m_find_next_halt() {
         let d_off = (DTB_PA - RAM_BASE) as usize;
         orch.machine_mut().ram[d_off..d_off + dtb_bytes.len()].copy_from_slice(&dtb_bytes);
     }
+    common::load_initrd(&mut orch.machine_mut().ram, RAM_BASE);
     {
         let cpu = &mut orch.machine_mut().cpu[0];
         cpu.pc = KERNEL_LOAD_PA;
