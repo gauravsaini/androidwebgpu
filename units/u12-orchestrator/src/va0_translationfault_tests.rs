@@ -124,3 +124,34 @@ fn wasm_memory_fault_enters_el1_data_abort_vector() {
     assert_eq!(orch.machine.cpu[0].sysregs.esr_el1, 0x9600_0007);
     assert_eq!(orch.machine.cpu[0].sysregs.far_el1, 0);
 }
+
+#[test]
+fn instruction_translation_fault_enters_el1_instruction_abort_vector() {
+    let mut machine = faulting_ldxr_machine();
+    machine.cpu[0].pc = 0; // VA 0 is invalid in TTBR0's level-1 table.
+    let mut orch = Orchestrator::with_machine(machine);
+
+    assert_eq!(orch.step_vcpu(), StepOutcome::Continue);
+    assert_eq!(orch.machine.cpu[0].pc, VBAR + 0x200);
+    assert_eq!(orch.machine.cpu[0].sysregs.elr_el1, 0);
+    assert_eq!(orch.machine.cpu[0].sysregs.spsr_el1, 0x3c5);
+    assert_eq!(orch.machine.cpu[0].sysregs.esr_el1, 0x8600_0005);
+    assert_eq!(orch.machine.cpu[0].sysregs.far_el1, 0);
+}
+
+#[test]
+fn instruction_permission_fault_enters_el1_instruction_abort_vector() {
+    let mut machine = faulting_ldxr_machine();
+    let l1 = (TTBR0 - RAM_BASE) as usize;
+    let descriptor = u64::from_le_bytes(machine.ram[l1 + 8..l1 + 16].try_into().unwrap());
+    machine.ram[l1 + 8..l1 + 16]
+        .copy_from_slice(&(descriptor | (1 << 53)).to_le_bytes()); // PXN denies EL1 execute.
+    let mut orch = Orchestrator::with_machine(machine);
+
+    assert_eq!(orch.step_vcpu(), StepOutcome::Continue);
+    assert_eq!(orch.machine.cpu[0].pc, VBAR + 0x200);
+    assert_eq!(orch.machine.cpu[0].sysregs.elr_el1, TEST_PC);
+    assert_eq!(orch.machine.cpu[0].sysregs.spsr_el1, 0x3c5);
+    assert_eq!(orch.machine.cpu[0].sysregs.esr_el1, 0x8600_000d);
+    assert_eq!(orch.machine.cpu[0].sysregs.far_el1, TEST_PC);
+}

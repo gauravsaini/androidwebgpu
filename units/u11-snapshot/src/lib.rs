@@ -641,6 +641,17 @@ mod tests {
     }
 
     #[test]
+    fn exception_syndrome_and_fault_address_survive_snapshot_roundtrip() {
+        let mut s = machine(42, 1, 4096, vec![]);
+        s.cpu[0].sysregs.esr_el1 = 0x9600_0005;
+        s.cpu[0].sysregs.far_el1 = 0x1234_5678;
+
+        let blob = snapshot(&s).0;
+        assert_eq!(u32::from_le_bytes(blob[0..4].try_into().unwrap()), 16);
+        assert_eq!(restore(&blob), Ok(s));
+    }
+
+    #[test]
     fn restores_v15_snapshots_with_zeroed_abort_registers() {
         let s = machine(42, 1, 4096, vec![]);
         let mut expected = s.clone();
