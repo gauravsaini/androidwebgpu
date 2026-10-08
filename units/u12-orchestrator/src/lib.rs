@@ -3828,8 +3828,19 @@ impl WasmHost<'_> {
         if st.sctlr & 1 == 0 {
             return Ok(va);
         }
-        u4_mmu::translate_with_base(&st, self.ram, RAM_BASE, va, access)
-            .map_err(|f| format!("mmu_fault: {f:?}"))
+        let access_name = match access {
+            Access::Read => "read",
+            Access::Write => "write",
+            Access::Execute => "execute",
+        };
+        u4_mmu::translate_with_base(&st, self.ram, RAM_BASE, va, access).map_err(|f| {
+            if std::env::var_os("PATHN_BOOT_REPORT_DIAGNOSTICS").is_some() {
+                eprintln!(
+                    "[boot-report-access] op={access_name} va=0x{va:016x} fault={f:?}"
+                );
+            }
+            format!("mmu_fault: {f:?}")
+        })
     }
 }
 
@@ -3888,8 +3899,17 @@ impl HostOps for WasmHost<'_> {
         if !matches!(size, 1 | 2 | 4 | 8) {
             return Err("mem_load: size must be 1, 2, 4 or 8".to_string());
         }
-        let off = ram_offset_in(self.ram, pa, size as u64)
-            .map_err(|f| format!("mem_load fault: {f:?}"))?;
+        let off = match ram_offset_in(self.ram, pa, size as u64) {
+            Ok(off) => off,
+            Err(fault) => {
+                if std::env::var_os("PATHN_BOOT_REPORT_DIAGNOSTICS").is_some() {
+                    eprintln!(
+                        "[boot-report-access] op=read pa=0x{pa:016x} width_bytes={size} fault={fault:?}"
+                    );
+                }
+                return Err(format!("mem_load fault: {fault:?}"));
+            }
+        };
         let mut v = 0u64;
         for i in 0..size as usize {
             v |= (self.ram[off + i] as u64) << (8 * i);
@@ -3941,8 +3961,17 @@ impl HostOps for WasmHost<'_> {
         if !matches!(size, 1 | 2 | 4 | 8) {
             return Err("mem_store: size must be 1, 2, 4 or 8".to_string());
         }
-        let off = ram_offset_in(self.ram, pa, size as u64)
-            .map_err(|f| format!("mem_store fault: {f:?}"))?;
+        let off = match ram_offset_in(self.ram, pa, size as u64) {
+            Ok(off) => off,
+            Err(fault) => {
+                if std::env::var_os("PATHN_BOOT_REPORT_DIAGNOSTICS").is_some() {
+                    eprintln!(
+                        "[boot-report-access] op=write pa=0x{pa:016x} width_bytes={size} fault={fault:?}"
+                    );
+                }
+                return Err(format!("mem_store fault: {fault:?}"));
+            }
+        };
         // QUIRK (2026-10-04, size-bug track): The kernel's memblock_add_range
         // contains a CSINV instruction (0xda818058 at 0xffffff8008354018) that
         // produces ~0x40000000 instead of 0x40000000 for the region size.
