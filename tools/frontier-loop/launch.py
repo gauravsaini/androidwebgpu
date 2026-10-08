@@ -156,6 +156,7 @@ def main(argv: list[str] | None = None) -> int:
         prompt = template
         for token, replacement in replacements.items():
             prompt = prompt.replace(token, replacement)
+        prompt = prompt.replace("/Users/Shared/codex-track-REGISTRY.md", str(REGISTRY))
         prompt += (
             "\n\n## Driver handoff\n"
             f"Write the final findings to `{findings}`. The driver waits for this file. "
