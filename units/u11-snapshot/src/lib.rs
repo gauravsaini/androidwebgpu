@@ -357,6 +357,10 @@ impl<'a> Reader<'a> {
                 zcr_el1: self.u64()?,
                 elr_el1: self.u64()?,
                 spsr_el1: self.u64()?,
+                // Keep the existing snapshot byte layout: these exception
+                // syndrome registers reset after restoring a snapshot.
+                esr_el1: 0,
+                far_el1: 0,
             },
         })
     }
@@ -545,6 +549,10 @@ mod tests {
                 zcr_el1: seed.wrapping_add(67),
                 elr_el1: seed.wrapping_add(68),
                 spsr_el1: seed.wrapping_add(69),
+                // ESR_EL1 and FAR_EL1 are intentionally outside the frozen
+                // snapshot byte layout.
+                esr_el1: 0,
+                far_el1: 0,
             },
         }
     }
@@ -711,6 +719,8 @@ mod tests {
                     zcr_el1: u64::MAX,
                     elr_el1: u64::MAX,
                     spsr_el1: u64::MAX,
+                    esr_el1: 0,
+                    far_el1: 0,
                 },
             }],
             mmu: MmuState {

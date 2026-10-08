@@ -168,17 +168,72 @@ struct GicV2State {
     gicc_pmr: u32,
     gicd_isenabler0: u32,
     gicd_ppi27_priority: u8,
+    /// Group1 assignment is packed into the existing active-state word so
+    /// the full-snapshot layout remains unchanged. A Group1/no-active marker
+    /// uses an otherwise impossible active ID.
     gicc_active: Option<u32>,
 }
 
+const GIC_PPI27: u32 = 1 << 27;
+const GIC_GROUP1_ACTIVE: u32 = 1 << 31;
+const GIC_NO_ACTIVE: u32 = 1 << 30;
+const GIC_INTID_MASK: u32 = 0x3ff;
+const GIC_GROUP1_NO_ACTIVE: u32 = GIC_GROUP1_ACTIVE | GIC_NO_ACTIVE | GIC_INTID_MASK;
+const GIC_IAR_SPURIOUS: u32 = 1023;
+const GIC_IAR_GROUP1_SPURIOUS: u32 = 1022;
+
+impl GicV2State {
+    fn ppi27_group1(&self) -> bool {
+        self.gicc_active
+            .is_some_and(|state| state & GIC_GROUP1_ACTIVE != 0)
+    }
+
+    fn ppi27_active(&self) -> bool {
+        self.gicc_active.is_some_and(|state| {
+            state & GIC_NO_ACTIVE == 0 && state & GIC_INTID_MASK == 27
+        })
+    }
+
+    fn set_ppi27_group1(&mut self, group1: bool) {
+        match (group1, self.gicc_active) {
+            (true, None) => self.gicc_active = Some(GIC_GROUP1_NO_ACTIVE),
+            (true, Some(state)) => self.gicc_active = Some(state | GIC_GROUP1_ACTIVE),
+            (false, Some(state)) if state & GIC_GROUP1_ACTIVE != 0 => {
+                self.gicc_active = if state & GIC_NO_ACTIVE != 0 {
+                    None
+                } else {
+                    Some(state & !GIC_GROUP1_ACTIVE)
+                };
+            }
+            (false, _) => {}
+        }
+    }
+
+    fn set_ppi27_active(&mut self) {
+        self.gicc_active = Some(if self.ppi27_group1() {
+            GIC_GROUP1_ACTIVE | 27
+        } else {
+            27
+        });
+    }
+
+    fn clear_ppi27_active(&mut self) {
+        self.gicc_active = if self.ppi27_group1() {
+            Some(GIC_GROUP1_NO_ACTIVE)
+        } else {
+            None
+        };
+    }
+}
+
 fn highest_pending_gic_irq(gic: &GicV2State, pending: u64) -> Option<u32> {
-    const PPI27: u32 = 1 << 27;
     let priority_mask = gic.gicc_pmr as u8;
-    (gic.gicd_ctlr & 1 != 0
-        && gic.gicc_ctlr & 1 != 0
-        && gic.gicd_isenabler0 & PPI27 != 0
-        && pending & (PPI27 as u64) != 0
-        && gic.gicc_active != Some(27)
+    let group_enable = if gic.ppi27_group1() { 1 << 1 } else { 1 };
+    (gic.gicd_ctlr & group_enable != 0
+        && gic.gicc_ctlr & group_enable != 0
+        && gic.gicd_isenabler0 & GIC_PPI27 != 0
+        && pending & (GIC_PPI27 as u64) != 0
+        && !gic.ppi27_active()
         && gic.gicd_ppi27_priority < priority_mask)
         .then_some(27)
 }
@@ -3307,6 +3362,42 @@ impl Orchestrator {
         Ok(())
     }
 
+    fn take_svc_exception(&mut self, source_pc: u64, svc_word: u32) -> Result<(), HaltReason> {
+        let cpu = &self.machine.cpu[0];
+        let saved_pstate =
+            (cpu.pstate & !PSTATE_DAIF_MASK) | (cpu.sysregs.daif & PSTATE_DAIF_MASK);
+        let source_mode = saved_pstate & PSTATE_MODE_MASK;
+        let vector_offset = match source_mode {
+            EL0T_MODE => 0x400, // lower EL using AArch64
+            EL1T_MODE => 0x000, // current EL using SP_EL0
+            EL1H_MODE => 0x200, // current EL using SP_EL1
+            _ => {
+                return Err(HaltReason::Unsupported {
+                    addr: source_pc,
+                    reason: "SVC exception from an unsupported PSTATE mode",
+                })
+            }
+        };
+        let vector_pc = (cpu.sysregs.vbar_el1 & !0x7FF).wrapping_add(vector_offset);
+        let cpu = &mut self.machine.cpu[0];
+
+        cpu.sysregs.elr_el1 = source_pc.wrapping_add(4);
+        cpu.sysregs.spsr_el1 = saved_pstate;
+        let imm16 = (svc_word >> 5) & 0xFFFF;
+        cpu.sysregs.esr_el1 = (0x15u64 << 26) | (1 << 25) | u64::from(imm16);
+        cpu.sysregs.far_el1 = 0;
+        if source_mode != EL1H_MODE {
+            cpu.sysregs.sp_el0 = cpu.sp;
+            cpu.sp = cpu.sp_el1;
+        }
+        cpu.sysregs.daif = PSTATE_DAIF_MASK;
+        cpu.pstate = (saved_pstate & !(PSTATE_DAIF_MASK | PSTATE_MODE_MASK))
+            | PSTATE_DAIF_MASK
+            | EL1H_MODE;
+        cpu.pc = vector_pc;
+        Ok(())
+    }
+
     fn execute_eret(&mut self, pc: u64) -> StepOutcome {
         let cpu = &mut self.machine.cpu[0];
         let return_pc = cpu.sysregs.elr_el1;
@@ -3459,6 +3550,16 @@ impl Orchestrator {
             word,
             kind,
         };
+
+        if kind == InsnKind::Svc {
+            if let Err(reason) = self.take_svc_exception(pc, word) {
+                self.halted = Some(reason.clone());
+                return StepOutcome::Halted(reason);
+            }
+            self.steps += 1;
+            self.tick_clock(TIMER_CYCLES_PER_STEP);
+            return StepOutcome::Continue;
+        }
 
         // Lift (U2).
         let ops = u2_ir_lift::lift(&insn);
@@ -4328,6 +4429,7 @@ impl HostOps for WasmHost<'_> {
             let value = match offset {
                 0x0 => self.gic.gicd_ctlr,
                 0x4 => GICD_TYPER_VALUE,
+                0x80 => u32::from(self.gic.ppi27_group1()) << 27,
                 // QEMU virt's single-vCPU GICv2 returns RAZ for the
                 // read-only SGI/PPI target register block (ITARGETSR0-7).
                 0x800..=0x81c => 0,
@@ -4352,15 +4454,24 @@ impl HostOps for WasmHost<'_> {
             let offset = pa - GICC_BASE;
             if size == 4 {
                 if offset == 0x0c {
-                    let irq = highest_pending_gic_irq(self.gic, self.irq.pending).unwrap_or(1023);
-                    if irq != 1023 {
-                        self.gic.gicc_active = Some(irq);
-                        self.irq.pending &= !(1u64 << irq);
+                    let intid = highest_pending_gic_irq(self.gic, self.irq.pending)
+                        .unwrap_or(GIC_IAR_SPURIOUS);
+                    let iar = if intid == 27
+                        && self.gic.ppi27_group1()
+                        && self.gic.gicc_ctlr & (1 << 2) == 0
+                    {
+                        GIC_IAR_GROUP1_SPURIOUS
+                    } else {
+                        intid
+                    };
+                    if intid != GIC_IAR_SPURIOUS {
+                        self.gic.set_ppi27_active();
+                        self.irq.pending &= !(1u64 << intid);
                     }
                     eprintln!(
-                        "GIC MMIO read: GICC PA={pa:#010x} offset={offset:#06x} size={size} value={irq:#010x}"
+                        "GIC MMIO read: GICC PA={pa:#010x} offset={offset:#06x} size={size} value={iar:#010x}"
                     );
-                    return Ok(irq as i64);
+                    return Ok(iar as i64);
                 }
                 let value = match offset {
                     0x0 => Some(self.gic.gicc_ctlr),
@@ -4453,6 +4564,8 @@ impl HostOps for WasmHost<'_> {
             );
             if offset == 0 {
                 self.gic.gicd_ctlr = val as u32;
+            } else if offset == 0x80 {
+                self.gic.set_ppi27_group1(val as u32 & GIC_PPI27 != 0);
             } else if offset == 0x100 {
                 self.gic.gicd_isenabler0 |= val as u32;
             } else if offset == 0x180 {
@@ -4485,8 +4598,14 @@ impl HostOps for WasmHost<'_> {
                 0x0 => self.gic.gicc_ctlr = val as u32,
                 0x4 => self.gic.gicc_pmr = val as u32,
                 0x10 => {
-                    if self.gic.gicc_active == Some((val as u32) & 0x3ff) {
-                        self.gic.gicc_active = None;
+                    let eoi = val as u32 & GIC_INTID_MASK;
+                    if self.gic.ppi27_active()
+                        && (eoi == 27
+                            || (self.gic.ppi27_group1()
+                                && self.gic.gicc_ctlr & (1 << 2) == 0
+                                && eoi == GIC_IAR_GROUP1_SPURIOUS))
+                    {
+                        self.gic.clear_ppi27_active();
                     }
                 }
                 // APR writes update active priority state. Priority-drop

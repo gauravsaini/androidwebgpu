@@ -130,6 +130,9 @@ pub struct SysRegs {
     /// Exception return state captured by an EL1 exception.
     pub elr_el1: u64,
     pub spsr_el1: u64,
+    /// Exception syndrome and fault address captured by the latest EL1 exception.
+    pub esr_el1: u64,
+    pub far_el1: u64,
 
 }
 
@@ -234,6 +237,8 @@ impl Default for SysRegs {
             zcr_el1: 0,
             elr_el1: 0,
             spsr_el1: 0,
+            esr_el1: 0,
+            far_el1: 0,
 
         }
     }
@@ -404,6 +409,8 @@ impl SysRegs {
             SysReg::ZcrEl1 => self.zcr_el1,
             SysReg::ElrEl1 => self.elr_el1,
             SysReg::SpsrEl1 => self.spsr_el1,
+            SysReg::EsrEl1 => self.esr_el1,
+            SysReg::FarEl1 => self.far_el1,
 
         }
     }
@@ -565,6 +572,8 @@ impl SysRegs {
             SysReg::ZcrEl1 => self.zcr_el1 = val,
             SysReg::ElrEl1 => self.elr_el1 = val,
             SysReg::SpsrEl1 => self.spsr_el1 = val,
+            SysReg::EsrEl1 => self.esr_el1 = val,
+            SysReg::FarEl1 => self.far_el1 = val,
 
         }
     }
@@ -715,6 +724,8 @@ impl SysRegs {
             135 => Some(SysReg::ZcrEl1),
             136 => Some(SysReg::ElrEl1),
             137 => Some(SysReg::SpsrEl1),
+            138 => Some(SysReg::EsrEl1),
+            139 => Some(SysReg::FarEl1),
 
             _ => None,
         }
@@ -908,6 +919,10 @@ mod tests {
         let mut s = s;
         s.store(SysReg::IccPmrEl1, 0xff);
         assert_eq!(s.load(SysReg::IccPmrEl1), 0xff);
+        s.store(SysReg::EsrEl1, 0x5600_0123);
+        s.store(SysReg::FarEl1, 0);
+        assert_eq!(s.load(SysReg::EsrEl1), 0x5600_0123);
+        assert_eq!(s.load(SysReg::FarEl1), 0);
         // from_index pins the new discriminants 27..=44.
         for (idx, reg) in [
             (27, SysReg::IccSreEl1),
@@ -918,7 +933,7 @@ mod tests {
         ] {
             assert_eq!(SysRegs::from_index(idx), Some(reg));
         }
-        assert_eq!(SysRegs::from_index(136), None);
+        assert_eq!(SysRegs::from_index(136), Some(SysReg::ElrEl1));
     }
 
     #[test]
@@ -974,6 +989,9 @@ mod tests {
         ] {
             assert_eq!(SysRegs::from_index(idx), Some(reg));
         }
-        assert_eq!(SysRegs::from_index(136), None);
+        assert_eq!(SysRegs::from_index(136), Some(SysReg::ElrEl1));
+        assert_eq!(SysRegs::from_index(137), Some(SysReg::SpsrEl1));
+        assert_eq!(SysRegs::from_index(138), Some(SysReg::EsrEl1));
+        assert_eq!(SysRegs::from_index(139), Some(SysReg::FarEl1));
     }
 }
