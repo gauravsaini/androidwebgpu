@@ -3641,8 +3641,10 @@ impl Orchestrator {
             return Ok(true);
         }
 
-        let top4 = (word >> 25) & 0xF;
-        let fp_simd = matches!(top4, 0b0110 | 0b0111 | 0b1110 | 0b1111);
+        // Gate CPACR traps on a recognized FP/SIMD encoding. The major opcode
+        // groups also contain reserved words (for example 0xFFFFFFFF), which
+        // must continue to reach U1's IllegalInstruction result.
+        let fp_simd = u1_decode::fp_simd::decode(word).is_some();
         let fpen = (cpu.sysregs.cpacr_el1 >> 20) & 0x3;
         let fp_enabled = match source_mode {
             EL0T_MODE => fpen == 0b11,

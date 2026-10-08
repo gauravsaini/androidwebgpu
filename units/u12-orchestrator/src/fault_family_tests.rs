@@ -115,6 +115,23 @@ fn fp_access_trap_enters_lower_el_vector_with_ec_07() {
 }
 
 #[test]
+fn unallocated_fp_group_word_remains_illegal() {
+    // The top-level encoding group alone does not make this a valid FP/SIMD
+    // instruction. With FP disabled, 0xFFFFFFFF must still reach U1's illegal
+    // instruction result instead of taking an FP access trap.
+    let pc = RAM_BASE + 0x100;
+    let mut orch = configure(EL1H_MODE, pc, 0xFFFF_FFFF);
+
+    assert_eq!(
+        orch.step_vcpu(),
+        StepOutcome::Halted(HaltReason::IllegalInstruction {
+            addr: pc,
+            word: 0xFFFF_FFFF,
+        })
+    );
+}
+
+#[test]
 fn misaligned_pc_enters_pc_alignment_vector_with_far() {
     let pc = RAM_BASE + 0x101;
     let mut orch = configure(EL1H_MODE, pc, 0xD503_201F);
