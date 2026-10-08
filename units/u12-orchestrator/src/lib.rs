@@ -210,6 +210,451 @@ const IRQ_ENTRY_LOG_CAPACITY: usize = 16;
 const FULL_SNAPSHOT_MAGIC: &[u8; 4] = b"PNFS";
 const FULL_SNAPSHOT_VERSION: u32 = 1;
 
+#[derive(Debug, Clone, Copy)]
+enum FpSimdInstruction {
+    StructureAccess {
+        load: bool,
+        q: bool,
+        count: u8,
+        rt: u8,
+        rn: u8,
+        post_index_rm: Option<u8>,
+    },
+    QPair {
+        load: bool,
+        rt: u8,
+        rt2: u8,
+        rn: u8,
+        mode: u8,
+        offset: i64,
+    },
+    QSingle {
+        load: bool,
+        rt: u8,
+        rn: u8,
+        mode: u8,
+        offset: i64,
+    },
+    VectorMove {
+        rd: u8,
+        rn: u8,
+    },
+    Movi16B {
+        rd: u8,
+        immediate: u8,
+    },
+    VectorReverse {
+        group_bytes: u8,
+        element_bytes: u8,
+        q: bool,
+        rd: u8,
+        rn: u8,
+    },
+    Sha256 {
+        operation: Sha256Operation,
+        rd: u8,
+        rn: u8,
+        rm: u8,
+    },
+    ThreeSame {
+        op: VectorArithmetic,
+        q: bool,
+        element_log2: u8,
+        rd: u8,
+        rn: u8,
+        rm: u8,
+    },
+    Dup {
+        q: bool,
+        rd: u8,
+        rn: u8,
+        imm5: u8,
+        from_gpr: bool,
+    },
+    Ext {
+        q: bool,
+        rd: u8,
+        rn: u8,
+        rm: u8,
+        byte_offset: u8,
+    },
+    Fcmp {
+        double: bool,
+        signaling: bool,
+        zero: bool,
+        rn: u8,
+        rm: u8,
+    },
+}
+
+#[derive(Debug, Clone, Copy)]
+enum VectorArithmetic {
+    Add,
+    Sub,
+    Mul,
+}
+
+#[derive(Debug, Clone, Copy)]
+enum Sha256Operation {
+    HashPart1,
+    HashPart2,
+    ScheduleUpdate0,
+    ScheduleUpdate1,
+}
+
+fn decode_fp_simd_instruction(word: u32) -> Option<FpSimdInstruction> {
+    if word >> 31 == 0
+        && ((word >> 24) & 0x3f) == 0b001100
+        && ((word >> 21) & 1) == 0
+    {
+        let post_index = (word >> 23) & 1 != 0;
+        let rm = ((word >> 16) & 0x1f) as u8;
+        let count = match (word >> 12) & 0xf {
+            0b0010 => 4,
+            0b0110 => 3,
+            0b0111 => 1,
+            0b1010 => 2,
+            _ => 0,
+        };
+        if count != 0 && (post_index || rm == 0) {
+            return Some(FpSimdInstruction::StructureAccess {
+                load: (word >> 22) & 1 != 0,
+                q: (word >> 30) & 1 != 0,
+                count,
+                rt: (word & 0x1f) as u8,
+                rn: ((word >> 5) & 0x1f) as u8,
+                post_index_rm: post_index.then_some(rm),
+            });
+        }
+    }
+
+    let three_register_mask = !((0x1f << 16) | (0x1f << 5) | 0x1f);
+    let two_register_mask = !((0x1f << 5) | 0x1f);
+    let sha256_operation = match word & three_register_mask {
+        0x5e00_4000 => Some(Sha256Operation::HashPart1),
+        0x5e00_5000 => Some(Sha256Operation::HashPart2),
+        0x5e00_6000 => Some(Sha256Operation::ScheduleUpdate1),
+        _ if word & two_register_mask == 0x5e28_2800 => {
+            Some(Sha256Operation::ScheduleUpdate0)
+        }
+        _ => None,
+    };
+    if let Some(operation) = sha256_operation {
+        return Some(FpSimdInstruction::Sha256 {
+            operation,
+            rd: (word & 0x1f) as u8,
+            rn: ((word >> 5) & 0x1f) as u8,
+            rm: ((word >> 16) & 0x1f) as u8,
+        });
+    }
+
+    if ((word >> 25) & 0x1f) == 0b10110 && ((word >> 30) & 0x3) == 0b10 && ((word >> 23) & 0x3) != 0
+    {
+        let raw_imm = ((word >> 15) & 0x7f) as u8;
+        let offset = (((raw_imm as i32) << 25) >> 25) as i64 * 16;
+        return Some(FpSimdInstruction::QPair {
+            load: (word >> 22) & 1 != 0,
+            rt: (word & 0x1f) as u8,
+            rt2: ((word >> 10) & 0x1f) as u8,
+            rn: ((word >> 5) & 0x1f) as u8,
+            mode: ((word >> 23) & 0x3) as u8,
+            offset,
+        });
+    }
+
+    if ((word >> 24) & 0x3f) == 0b111101 && ((word >> 21) & 1) == 0 {
+        let opc = (word >> 22) & 0x3;
+        if (word >> 30) & 0x3 == 0 && matches!(opc, 0b10 | 0b11) {
+            return Some(FpSimdInstruction::QSingle {
+                load: opc == 0b11,
+                rt: (word & 0x1f) as u8,
+                rn: ((word >> 5) & 0x1f) as u8,
+                mode: 0,
+                offset: (((word >> 10) & 0xfff) as i64) * 16,
+            });
+        }
+    }
+
+    if ((word >> 24) & 0x3f) == 0b111100 && ((word >> 21) & 1) == 0 {
+        let opc = (word >> 22) & 0x3;
+        let mode = ((word >> 10) & 0x3) as u8;
+        if (word >> 30) & 0x3 == 0 && matches!(opc, 0b10 | 0b11) && matches!(mode, 0 | 1 | 3) {
+            let raw_imm = ((word >> 12) & 0x1ff) as u16;
+            let offset = (((raw_imm as i32) << 23) >> 23) as i64;
+            return Some(FpSimdInstruction::QSingle {
+                load: opc == 0b11,
+                rt: (word & 0x1f) as u8,
+                rn: ((word >> 5) & 0x1f) as u8,
+                mode,
+                offset,
+            });
+        }
+    }
+
+    if word & !((0x7 << 16) | (0x1f << 5) | 0x1f) == 0x4f00_e400 {
+        let immediate = ((((word >> 16) & 0x7) << 5) | ((word >> 5) & 0x1f)) as u8;
+        return Some(FpSimdInstruction::Movi16B {
+            rd: (word & 0x1f) as u8,
+            immediate,
+        });
+    }
+
+    if ((word >> 24) & 0x1f) == 0b01110
+        && ((word >> 21) & 1) == 1
+        && ((word >> 16) & 0x1f) == 0
+    {
+        let size = (word >> 22) & 0x3;
+        let u = (word >> 29) & 1;
+        let group_bytes = match (word >> 10) & 0x3f {
+            0b000110 if u == 0 && size == 0 => Some(2),
+            0b000010 if u == 1 && size <= 1 => Some(4),
+            0b000010 if u == 0 && size <= 2 => Some(8),
+            _ => None,
+        };
+        if let Some(group_bytes) = group_bytes {
+            return Some(FpSimdInstruction::VectorReverse {
+                group_bytes,
+                element_bytes: 1 << size,
+                q: (word >> 30) & 1 != 0,
+                rd: (word & 0x1f) as u8,
+                rn: ((word >> 5) & 0x1f) as u8,
+            });
+        }
+    }
+
+    // The T112 ldstq harness uses MOV Vd.16B, Vn.16B, the same-register
+    // ORR alias, to seed the following intentionally unaligned pair access.
+    if word & !((0x1f << 16) | (0x1f << 5) | 0x1f) == 0x4ea0_1c00
+        && ((word >> 16) & 0x1f) == ((word >> 5) & 0x1f)
+    {
+        return Some(FpSimdInstruction::VectorMove {
+            rd: (word & 0x1f) as u8,
+            rn: ((word >> 5) & 0x1f) as u8,
+        });
+    }
+
+    if ((word >> 24) & 0x1f) == 0b01110 && ((word >> 21) & 1) == 1 {
+        let op = (word >> 11) & 0x1f;
+        let q = (word >> 30) & 1 != 0;
+        let size = ((word >> 22) & 0x3) as u8;
+        let valid_arrangement = q || size != 3;
+        let arithmetic = match op {
+            0b10000 if valid_arrangement => Some(if (word >> 29) & 1 != 0 {
+                VectorArithmetic::Sub
+            } else {
+                VectorArithmetic::Add
+            }),
+            0b10011 if (word >> 29) & 1 == 0 && size != 3 => Some(VectorArithmetic::Mul),
+            _ => None,
+        };
+        if let Some(op) = arithmetic {
+            return Some(FpSimdInstruction::ThreeSame {
+                op,
+                q,
+                element_log2: size,
+                rd: (word & 0x1f) as u8,
+                rn: ((word >> 5) & 0x1f) as u8,
+                rm: ((word >> 16) & 0x1f) as u8,
+            });
+        }
+    }
+
+    if ((word >> 24) & 0x1f) == 0b01110 && ((word >> 29) & 1) == 0 && ((word >> 21) & 1) == 0 {
+        let q = (word >> 30) & 1 != 0;
+        let imm5 = ((word >> 16) & 0x1f) as u8;
+        match (word >> 10) & 0x3f {
+            0b000011 if matches!(imm5, 1 | 2 | 4 | 8) => {
+                return Some(FpSimdInstruction::Dup {
+                    q,
+                    rd: (word & 0x1f) as u8,
+                    rn: ((word >> 5) & 0x1f) as u8,
+                    imm5,
+                    from_gpr: true,
+                });
+            }
+            0b000001 if imm5 != 0 && imm5.trailing_zeros() <= 3 => {
+                let log2 = imm5.trailing_zeros();
+                let lane = imm5 >> (log2 + 1);
+                if lane < (16 >> log2) {
+                    return Some(FpSimdInstruction::Dup {
+                        q,
+                        rd: (word & 0x1f) as u8,
+                        rn: ((word >> 5) & 0x1f) as u8,
+                        imm5,
+                        from_gpr: false,
+                    });
+                }
+            }
+            _ => {}
+        }
+    }
+
+    if ((word >> 24) & 0x1f) == 0b01110
+        && ((word >> 29) & 1) == 1
+        && ((word >> 21) & 1) == 0
+        && ((word >> 10) & 0x3) == 0b10
+    {
+        let q = (word >> 30) & 1 != 0;
+        let byte_offset = ((word >> 11) & 0xf) as u8;
+        if q || byte_offset <= 7 {
+            return Some(FpSimdInstruction::Ext {
+                q,
+                rd: (word & 0x1f) as u8,
+                rn: ((word >> 5) & 0x1f) as u8,
+                rm: ((word >> 16) & 0x1f) as u8,
+                byte_offset,
+            });
+        }
+    }
+
+    if (word >> 24) == 0x1e
+        && ((word >> 21) & 1) == 1
+        && ((word >> 22) & 0x3) <= 1
+        && ((word >> 10) & 0x3f) == 0b001000
+        && word & 0x7 == 0
+    {
+        let zero = (word >> 3) & 1 != 0;
+        let rm = ((word >> 16) & 0x1f) as u8;
+        if !zero || rm == 0 {
+            return Some(FpSimdInstruction::Fcmp {
+                double: (word >> 22) & 1 != 0,
+                signaling: (word >> 4) & 1 != 0,
+                zero,
+                rn: ((word >> 5) & 0x1f) as u8,
+                rm,
+            });
+        }
+    }
+    None
+}
+
+fn q_words(value: u128) -> [u32; 4] {
+    [
+        value as u32,
+        (value >> 32) as u32,
+        (value >> 64) as u32,
+        (value >> 96) as u32,
+    ]
+}
+
+fn words_q(words: [u32; 4]) -> u128 {
+    words[0] as u128
+        | ((words[1] as u128) << 32)
+        | ((words[2] as u128) << 64)
+        | ((words[3] as u128) << 96)
+}
+
+fn sha256_small_sigma0(value: u32) -> u32 {
+    value.rotate_right(7) ^ value.rotate_right(18) ^ (value >> 3)
+}
+
+fn sha256_small_sigma1(value: u32) -> u32 {
+    value.rotate_right(17) ^ value.rotate_right(19) ^ (value >> 10)
+}
+
+fn sha256_big_sigma0(value: u32) -> u32 {
+    value.rotate_right(2) ^ value.rotate_right(13) ^ value.rotate_right(22)
+}
+
+fn sha256_big_sigma1(value: u32) -> u32 {
+    value.rotate_right(6) ^ value.rotate_right(11) ^ value.rotate_right(25)
+}
+
+fn sha256_choose(x: u32, y: u32, z: u32) -> u32 {
+    ((y ^ z) & x) ^ z
+}
+
+fn sha256_majority(x: u32, y: u32, z: u32) -> u32 {
+    (x & y) ^ (x & z) ^ (y & z)
+}
+
+fn sha256_hash(
+    mut x: [u32; 4],
+    mut y: [u32; 4],
+    schedule: [u32; 4],
+    part1: bool,
+) -> [u32; 4] {
+    for word in schedule {
+        let choice = sha256_choose(y[0], y[1], y[2]);
+        let majority = sha256_majority(x[0], x[1], x[2]);
+        let t = y[3]
+            .wrapping_add(sha256_big_sigma1(y[0]))
+            .wrapping_add(choice)
+            .wrapping_add(word);
+        x[3] = t.wrapping_add(x[3]);
+        y[3] = t
+            .wrapping_add(sha256_big_sigma0(x[0]))
+            .wrapping_add(majority);
+
+        // Rotate the concatenated Y:X state left by one 32-bit word.
+        (x, y) = ([y[3], x[0], x[1], x[2]], [x[3], y[0], y[1], y[2]]);
+    }
+
+    if part1 { x } else { y }
+}
+
+fn sha256_schedule_update0(destination: u128, source_n: u128) -> [u32; 4] {
+    let input = q_words(destination);
+    let next = q_words(source_n);
+    let schedule = [input[1], input[2], input[3], next[0]];
+    std::array::from_fn(|index| {
+        sha256_small_sigma0(schedule[index]).wrapping_add(input[index])
+    })
+}
+
+fn sha256_schedule_update1(destination: u128, source_n: u128, source_m: u128) -> [u32; 4] {
+    let input = q_words(destination);
+    let next = q_words(source_n);
+    let later = q_words(source_m);
+    let schedule = [next[1], next[2], next[3], later[0]];
+    let mut result = [0; 4];
+
+    result[0] = sha256_small_sigma1(later[2])
+        .wrapping_add(input[0])
+        .wrapping_add(schedule[0]);
+    result[1] = sha256_small_sigma1(later[3])
+        .wrapping_add(input[1])
+        .wrapping_add(schedule[1]);
+    result[2] = sha256_small_sigma1(result[0])
+        .wrapping_add(input[2])
+        .wrapping_add(schedule[2]);
+    result[3] = sha256_small_sigma1(result[1])
+        .wrapping_add(input[3])
+        .wrapping_add(schedule[3]);
+    result
+}
+
+fn float_nzcv(less: bool, equal: bool, unordered: bool) -> u8 {
+    if unordered {
+        0b0011
+    } else if less {
+        0b1000
+    } else if equal {
+        0b0110
+    } else {
+        0b0010
+    }
+}
+
+fn is_snan32(bits: u32) -> bool {
+    bits & 0x7f80_0000 == 0x7f80_0000 && bits & 0x007f_ffff != 0 && bits & 0x0040_0000 == 0
+}
+
+fn is_snan64(bits: u64) -> bool {
+    bits & 0x7ff0_0000_0000_0000 == 0x7ff0_0000_0000_0000
+        && bits & 0x000f_ffff_ffff_ffff != 0
+        && bits & 0x0008_0000_0000_0000 == 0
+}
+
+fn is_unallocated_neon_mul_2d(word: u32) -> bool {
+    ((word >> 24) & 0x1f) == 0b01110
+        && ((word >> 21) & 1) == 1
+        && ((word >> 22) & 0x3) == 0b11
+        && ((word >> 30) & 1) == 1
+        && ((word >> 29) & 1) == 0
+        && ((word >> 11) & 0x1f) == 0b10011
+}
+
 // ---------------------------------------------------------------------------
 // Errors / halt reasons — data, never panics
 // ---------------------------------------------------------------------------
@@ -642,6 +1087,7 @@ impl Orchestrator {
         Self::with_machine(MachineState {
             cpu: vec![CpuState {
                 regs: [0; 31],
+                qregs: [0; 32],
                 // Shelf Job 2 (2026-10-05): SP moved from 0x4800_0000 to
                 // 0x4830_0000 to avoid initrd (0x4800_0000) and DTB (0x4820_0000).
                 sp: 0x4830_0000,
@@ -992,6 +1438,7 @@ impl Orchestrator {
         cpu.sp = 0;
         cpu.sp_el1 = 0;
         cpu.regs = [0; 31];
+        cpu.qregs = [0; 32];
         cpu.pstate = 0;
         self.invalidate_code_cache();
         Ok(())
@@ -1196,7 +1643,7 @@ impl Orchestrator {
         };
         // Page descriptor: PA | AF (bit 10) | SH=01 (bits 9:8) | AP=00 (bits 7:6, RW EL1)
         // | UXN (bit 54) | PXN (bit 53) | AttrIndx=000 (bits 4:2, normal memory).
-        // 0x00500000_00000793? Let's construct: 
+        // 0x00500000_00000793? Let's construct:
         // bits[1:0]=11 (page), bit10=1 (AF), bits[9:8]=01 (inner shareable),
         // bits[7:6]=00 (RW), bits[5]=0, bits[4:2]=000, bit54=1 (UXN), bit53=1 (PXN).
         let desc = (data_pa & 0x0000_FFFF_FFFF_F000)
@@ -1204,7 +1651,7 @@ impl Orchestrator {
             | (1 << 8)   // SH[0], inner shareable
             | (1 << 54)  // UXN
             | (1 << 53)  // PXN
-            | 0b11;      // page descriptor
+            | 0b11; // page descriptor
         if !write_u64(&mut self.machine.ram, l3_pa, desc) {
             return false;
         }
@@ -1749,8 +2196,7 @@ impl Orchestrator {
                 let imm3 = (word >> 10) & 0x7;
                 let rn = ((word >> 5) & 0x1F) as usize;
                 let rd = (word & 0x1F) as usize;
-                let valid_option =
-                    matches!(option, 0b000 | 0b001 | 0b010 | 0b100 | 0b101 | 0b110);
+                let valid_option = matches!(option, 0b000 | 0b001 | 0b010 | 0b100 | 0b101 | 0b110);
                 if imm3 <= 4 && valid_option {
                     let w = if rm == 31 {
                         0u32
@@ -1758,12 +2204,12 @@ impl Orchestrator {
                         self.machine.cpu[0].regs[rm] as u32
                     };
                     let extended: u32 = match option {
-                        0b000 => w as u8 as u32,   // UXTB
-                        0b001 => w as u16 as u32,  // UXTH
-                        0b010 => w,                // UXTW
-                        0b100 => (w as i8) as i32 as u32,   // SXTB
-                        0b101 => (w as i16) as i32 as u32,  // SXTH
-                        _ => (w as i32) as u32,             // SXTW (0b110)
+                        0b000 => w as u8 as u32,           // UXTB
+                        0b001 => w as u16 as u32,          // UXTH
+                        0b010 => w,                        // UXTW
+                        0b100 => (w as i8) as i32 as u32,  // SXTB
+                        0b101 => (w as i16) as i32 as u32, // SXTH
+                        _ => (w as i32) as u32,            // SXTW (0b110)
                     };
                     let op2 = extended << imm3;
                     // Rn=31: WSP for S=0 (ADD/SUB), WZR for S=1 (CMP/CMN).
@@ -1898,9 +2344,21 @@ impl Orchestrator {
             let rn = ((word >> 5) & 0x1F) as usize;
             let rd = (word & 0x1F) as usize;
             let val = if sf == 1 {
-                let n = if rn == 31 { 0 } else { self.machine.cpu[0].regs[rn] };
-                let m = if rm == 31 { 0 } else { self.machine.cpu[0].regs[rm] };
-                let a = if ra == 31 { 0 } else { self.machine.cpu[0].regs[ra] };
+                let n = if rn == 31 {
+                    0
+                } else {
+                    self.machine.cpu[0].regs[rn]
+                };
+                let m = if rm == 31 {
+                    0
+                } else {
+                    self.machine.cpu[0].regs[rm]
+                };
+                let a = if ra == 31 {
+                    0
+                } else {
+                    self.machine.cpu[0].regs[ra]
+                };
                 let prod = n.wrapping_mul(m);
                 if is_sub {
                     a.wrapping_sub(prod)
@@ -2055,9 +2513,7 @@ impl Orchestrator {
         // flags from pstate, which the WASM path cannot see.
         {
             let b30_21 = (word >> 21) & 0x3FF;
-            if (b30_21 == 0x3D2 || b30_21 == 0x1D2)
-                && (word >> 10) & 1 == 0
-                && (word >> 4) & 1 == 0
+            if (b30_21 == 0x3D2 || b30_21 == 0x1D2) && (word >> 10) & 1 == 0 && (word >> 4) & 1 == 0
             {
                 let sf = (word >> 31) & 1;
                 let op = (word >> 30) & 1; // 0 = CCMN, 1 = CCMP
@@ -2070,7 +2526,11 @@ impl Orchestrator {
                 let n_val = if rn == 31 { 0 } else { cpu.regs[rn] };
                 let operand = if is_reg {
                     let rm = imm5_rm as usize;
-                    if rm == 31 { 0 } else { cpu.regs[rm] }
+                    if rm == 31 {
+                        0
+                    } else {
+                        cpu.regs[rm]
+                    }
                 } else {
                     imm5_rm as u64
                 };
@@ -2316,10 +2776,11 @@ impl Orchestrator {
                         Ok(pa) => pa,
                         Err(reason) => return Some(Err(reason)),
                     };
-                    let pa1 = match self.translate_data_orch(va.wrapping_add(elem_bytes), Access::Read) {
-                        Ok(pa) => pa,
-                        Err(reason) => return Some(Err(reason)),
-                    };
+                    let pa1 =
+                        match self.translate_data_orch(va.wrapping_add(elem_bytes), Access::Read) {
+                            Ok(pa) => pa,
+                            Err(reason) => return Some(Err(reason)),
+                        };
                     let off0 = match self.ram_offset(pa0, elem_bytes) {
                         Ok(off) => off,
                         Err(_) => {
@@ -2340,13 +2801,19 @@ impl Orchestrator {
                     };
                     let (val0, val1) = if elem_bytes == 8 {
                         (
-                            u64::from_le_bytes(self.machine.ram[off0..off0 + 8].try_into().unwrap()),
-                            u64::from_le_bytes(self.machine.ram[off1..off1 + 8].try_into().unwrap()),
+                            u64::from_le_bytes(
+                                self.machine.ram[off0..off0 + 8].try_into().unwrap(),
+                            ),
+                            u64::from_le_bytes(
+                                self.machine.ram[off1..off1 + 8].try_into().unwrap(),
+                            ),
                         )
                     } else {
                         (
-                            u32::from_le_bytes(self.machine.ram[off0..off0 + 4].try_into().unwrap()) as u64,
-                            u32::from_le_bytes(self.machine.ram[off1..off1 + 4].try_into().unwrap()) as u64,
+                            u32::from_le_bytes(self.machine.ram[off0..off0 + 4].try_into().unwrap())
+                                as u64,
+                            u32::from_le_bytes(self.machine.ram[off1..off1 + 4].try_into().unwrap())
+                                as u64,
                         )
                     };
                     if rt != 31 {
@@ -2364,7 +2831,9 @@ impl Orchestrator {
                             Ok(pa) => pa,
                             Err(reason) => return Some(Err(reason)),
                         };
-                        let pa1 = match self.translate_data_orch(va.wrapping_add(elem_bytes), Access::Write) {
+                        let pa1 = match self
+                            .translate_data_orch(va.wrapping_add(elem_bytes), Access::Write)
+                        {
                             Ok(pa) => pa,
                             Err(reason) => return Some(Err(reason)),
                         };
@@ -2386,8 +2855,16 @@ impl Orchestrator {
                                 }))
                             }
                         };
-                        let d0 = if rt == 31 { 0 } else { self.machine.cpu[0].regs[rt] };
-                        let d1 = if rt2 == 31 { 0 } else { self.machine.cpu[0].regs[rt2] };
+                        let d0 = if rt == 31 {
+                            0
+                        } else {
+                            self.machine.cpu[0].regs[rt]
+                        };
+                        let d1 = if rt2 == 31 {
+                            0
+                        } else {
+                            self.machine.cpu[0].regs[rt2]
+                        };
                         // ICACHE-FIX: invalidate on kernel text writes (alternatives patching).
                         if is_kernel_text_va(va) {
                             self.invalidate_code_cache();
@@ -2396,8 +2873,10 @@ impl Orchestrator {
                             self.machine.ram[off0..off0 + 8].copy_from_slice(&d0.to_le_bytes());
                             self.machine.ram[off1..off1 + 8].copy_from_slice(&d1.to_le_bytes());
                         } else {
-                            self.machine.ram[off0..off0 + 4].copy_from_slice(&(d0 as u32).to_le_bytes());
-                            self.machine.ram[off1..off1 + 4].copy_from_slice(&(d1 as u32).to_le_bytes());
+                            self.machine.ram[off0..off0 + 4]
+                                .copy_from_slice(&(d0 as u32).to_le_bytes());
+                            self.machine.ram[off1..off1 + 4]
+                                .copy_from_slice(&(d1 as u32).to_le_bytes());
                         }
                     }
                     self.exclusive = None;
@@ -2985,12 +3464,11 @@ impl Orchestrator {
                 } else if is_ldpsw {
                     // GB-27: LDPSW sign-extends each 32-bit word to 64 bits
                     // (plain LDP zero-extends).
-                    let v1 = i32::from_le_bytes(
-                        self.machine.ram[off..off + 4].try_into().unwrap(),
-                    ) as i64 as u64;
-                    let v2 = i32::from_le_bytes(
-                        self.machine.ram[off2..off2 + 4].try_into().unwrap(),
-                    ) as i64 as u64;
+                    let v1 = i32::from_le_bytes(self.machine.ram[off..off + 4].try_into().unwrap())
+                        as i64 as u64;
+                    let v2 =
+                        i32::from_le_bytes(self.machine.ram[off2..off2 + 4].try_into().unwrap())
+                            as i64 as u64;
                     if rt1 != 31 {
                         self.machine.cpu[0].regs[rt1] = v1;
                     }
@@ -3253,8 +3731,7 @@ impl Orchestrator {
             return Ok(());
         };
         let cpu = &self.machine.cpu[0];
-        let saved_pstate =
-            (cpu.pstate & !PSTATE_DAIF_MASK) | (cpu.sysregs.daif & PSTATE_DAIF_MASK);
+        let saved_pstate = (cpu.pstate & !PSTATE_DAIF_MASK) | (cpu.sysregs.daif & PSTATE_DAIF_MASK);
         if saved_pstate & PSTATE_IRQ_MASK != 0 {
             return Ok(());
         }
@@ -3283,9 +3760,8 @@ impl Orchestrator {
             cpu.sp = cpu.sp_el1;
         }
         cpu.sysregs.daif = PSTATE_DAIF_MASK;
-        cpu.pstate = (saved_pstate & !(PSTATE_DAIF_MASK | PSTATE_MODE_MASK))
-            | PSTATE_DAIF_MASK
-            | EL1H_MODE;
+        cpu.pstate =
+            (saved_pstate & !(PSTATE_DAIF_MASK | PSTATE_MODE_MASK)) | PSTATE_DAIF_MASK | EL1H_MODE;
         cpu.pc = vector_pc;
 
         self.irq_entry_count = self.irq_entry_count.saturating_add(1);
@@ -3347,6 +3823,491 @@ impl Orchestrator {
         StepOutcome::Continue
     }
 
+    fn enter_sync_el1_exception(
+        &mut self,
+        fault_pc: u64,
+        esr: u64,
+        far: Option<u64>,
+    ) -> Result<(), HaltReason> {
+        let cpu = &self.machine.cpu[0];
+        let saved_pstate = (cpu.pstate & !PSTATE_DAIF_MASK) | (cpu.sysregs.daif & PSTATE_DAIF_MASK);
+        let source_mode = saved_pstate & PSTATE_MODE_MASK;
+        let vector_offset = match source_mode {
+            EL1H_MODE => 0x200,
+            EL1T_MODE => 0x000,
+            EL0T_MODE => 0x400,
+            _ => {
+                return Err(HaltReason::Unsupported {
+                    addr: fault_pc,
+                    reason: "synchronous exception from an unsupported PSTATE mode",
+                });
+            }
+        };
+        let vector_pc = (cpu.sysregs.vbar_el1 & !0x7ff).wrapping_add(vector_offset);
+        let cpu = &mut self.machine.cpu[0];
+        cpu.sysregs.elr_el1 = fault_pc;
+        cpu.sysregs.spsr_el1 = saved_pstate;
+        cpu.sysregs.esr_el1 = esr;
+        cpu.sysregs.far_el1 = far.unwrap_or(0);
+        if source_mode != EL1H_MODE {
+            cpu.sysregs.sp_el0 = cpu.sp;
+            cpu.sp = cpu.sp_el1;
+        }
+        cpu.sysregs.daif = PSTATE_DAIF_MASK;
+        cpu.pstate =
+            (saved_pstate & !(PSTATE_DAIF_MASK | PSTATE_MODE_MASK)) | PSTATE_DAIF_MASK | EL1H_MODE;
+        cpu.pc = vector_pc;
+        Ok(())
+    }
+
+    fn finish_fp_simd_step(&mut self) -> StepOutcome {
+        self.steps += 1;
+        self.tick_clock(TIMER_CYCLES_PER_STEP);
+        StepOutcome::Continue
+    }
+
+    /// Execute the characterized FP/SIMD subset in the architectural host
+    /// interpreter. This keeps the existing integer WASM register ABI intact.
+    fn execute_fp_simd(&mut self, pc: u64, word: u32) -> Option<StepOutcome> {
+        let op = decode_fp_simd_instruction(word)?;
+        if (self.machine.cpu[0].sysregs.cpacr_el1 >> 20) & 1 == 0 {
+            if let Err(reason) = self.enter_sync_el1_exception(pc, 0x1fe0_0000, None) {
+                self.halted = Some(reason.clone());
+                return Some(StepOutcome::Halted(reason));
+            }
+            return Some(self.finish_fp_simd_step());
+        }
+
+        match op {
+            FpSimdInstruction::StructureAccess {
+                load,
+                q,
+                count,
+                rt,
+                rn,
+                post_index_rm,
+            } => {
+                let vector_bytes = if q { 16usize } else { 8usize };
+                let total_bytes = vector_bytes * count as usize;
+                let cpu = &self.machine.cpu[0];
+                let base = if rn == 31 {
+                    cpu.sp
+                } else {
+                    cpu.regs[rn as usize]
+                };
+                let writeback_amount = post_index_rm.map(|rm| {
+                    if rm == 31 {
+                        total_bytes as u64
+                    } else {
+                        self.machine.cpu[0].regs[rm as usize]
+                    }
+                });
+                let mut loaded = [0u128; 4];
+                let mut stored = [[0u8; 16]; 4];
+                let mut memory_offsets = [0usize; 4];
+                for index in 0..count as usize {
+                    let address = base.wrapping_add((index * vector_bytes) as u64);
+                    let access = if load { Access::Read } else { Access::Write };
+                    let pa = match self.translate_data_orch(address, access) {
+                        Ok(pa) => pa,
+                        Err(reason) => {
+                            self.halted = Some(reason.clone());
+                            return Some(StepOutcome::Halted(reason));
+                        }
+                    };
+                    let memory_offset = match self.ram_offset(pa, vector_bytes as u64) {
+                        Ok(offset) => offset,
+                        Err(fault) => {
+                            let reason = HaltReason::WasmTrap {
+                                addr: address,
+                                message: format!("structure memory fault: {fault:?}"),
+                            };
+                            self.halted = Some(reason.clone());
+                            return Some(StepOutcome::Halted(reason));
+                        }
+                    };
+                    memory_offsets[index] = memory_offset;
+                    if load {
+                        let mut bytes = [0u8; 16];
+                        bytes[..vector_bytes].copy_from_slice(
+                            &self.machine.ram[memory_offset..memory_offset + vector_bytes],
+                        );
+                        loaded[index] = u128::from_le_bytes(bytes);
+                    } else {
+                        let register = (rt as usize + index) & 31;
+                        stored[index] = self.machine.cpu[0].qregs[register].to_le_bytes();
+                    }
+                }
+
+                if load {
+                    for (index, value) in loaded.iter().copied().take(count as usize).enumerate() {
+                        let register = (rt as usize + index) & 31;
+                        self.machine.cpu[0].qregs[register] = value;
+                    }
+                } else {
+                    for index in 0..count as usize {
+                        let offset = memory_offsets[index];
+                        self.machine.ram[offset..offset + vector_bytes]
+                            .copy_from_slice(&stored[index][..vector_bytes]);
+                    }
+                }
+                if let Some(amount) = writeback_amount {
+                    let updated_base = base.wrapping_add(amount);
+                    if rn == 31 {
+                        self.machine.cpu[0].sp = updated_base;
+                    } else {
+                        self.machine.cpu[0].regs[rn as usize] = updated_base;
+                    }
+                }
+            }
+            FpSimdInstruction::QPair {
+                load,
+                rt,
+                rt2,
+                rn,
+                mode,
+                offset,
+            } => {
+                let cpu = &self.machine.cpu[0];
+                let base = if rn == 31 {
+                    cpu.sp
+                } else {
+                    cpu.regs[rn as usize]
+                };
+                let effective = if mode == 1 {
+                    base
+                } else {
+                    base.wrapping_add(offset as u64)
+                };
+                if effective & 0xf != 0 {
+                    if let Err(reason) = self.enter_sync_el1_exception(
+                        pc,
+                        if load { 0x9600_0021 } else { 0x9600_0061 },
+                        Some(effective),
+                    ) {
+                        self.halted = Some(reason.clone());
+                        return Some(StepOutcome::Halted(reason));
+                    }
+                    return Some(self.finish_fp_simd_step());
+                }
+
+                let access = if load { Access::Read } else { Access::Write };
+                let first_pa = match self.translate_data_orch(effective, access) {
+                    Ok(pa) => pa,
+                    Err(reason) => {
+                        self.halted = Some(reason.clone());
+                        return Some(StepOutcome::Halted(reason));
+                    }
+                };
+                let second_va = effective.wrapping_add(16);
+                let second_pa = match self.translate_data_orch(second_va, access) {
+                    Ok(pa) => pa,
+                    Err(reason) => {
+                        self.halted = Some(reason.clone());
+                        return Some(StepOutcome::Halted(reason));
+                    }
+                };
+                let first_off = match self.ram_offset(first_pa, 16) {
+                    Ok(off) => off,
+                    Err(fault) => {
+                        let reason = HaltReason::WasmTrap {
+                            addr: effective,
+                            message: format!("qpair memory fault: {fault:?}"),
+                        };
+                        self.halted = Some(reason.clone());
+                        return Some(StepOutcome::Halted(reason));
+                    }
+                };
+                let second_off = match self.ram_offset(second_pa, 16) {
+                    Ok(off) => off,
+                    Err(fault) => {
+                        let reason = HaltReason::WasmTrap {
+                            addr: second_va,
+                            message: format!("qpair memory fault: {fault:?}"),
+                        };
+                        self.halted = Some(reason.clone());
+                        return Some(StepOutcome::Halted(reason));
+                    }
+                };
+
+                if load {
+                    let first = u128::from_le_bytes(
+                        self.machine.ram[first_off..first_off + 16]
+                            .try_into()
+                            .unwrap(),
+                    );
+                    let second = u128::from_le_bytes(
+                        self.machine.ram[second_off..second_off + 16]
+                            .try_into()
+                            .unwrap(),
+                    );
+                    self.machine.cpu[0].qregs[rt as usize] = first;
+                    self.machine.cpu[0].qregs[rt2 as usize] = second;
+                } else {
+                    let first = self.machine.cpu[0].qregs[rt as usize].to_le_bytes();
+                    let second = self.machine.cpu[0].qregs[rt2 as usize].to_le_bytes();
+                    self.machine.ram[first_off..first_off + 16].copy_from_slice(&first);
+                    self.machine.ram[second_off..second_off + 16].copy_from_slice(&second);
+                    if is_kernel_text_va(effective) || is_kernel_text_va(second_va) {
+                        self.invalidate_code_cache();
+                    }
+                }
+
+                if matches!(mode, 1 | 3) {
+                    let writeback = base.wrapping_add(offset as u64);
+                    if rn == 31 {
+                        self.machine.cpu[0].sp = writeback;
+                    } else {
+                        self.machine.cpu[0].regs[rn as usize] = writeback;
+                    }
+                }
+            }
+            FpSimdInstruction::QSingle {
+                load,
+                rt,
+                rn,
+                mode,
+                offset,
+            } => {
+                let cpu = &self.machine.cpu[0];
+                let base = if rn == 31 {
+                    cpu.sp
+                } else {
+                    cpu.regs[rn as usize]
+                };
+                let effective = if mode == 1 {
+                    base
+                } else {
+                    base.wrapping_add(offset as u64)
+                };
+                let access = if load { Access::Read } else { Access::Write };
+                let pa = match self.translate_data_orch(effective, access) {
+                    Ok(pa) => pa,
+                    Err(reason) => {
+                        self.halted = Some(reason.clone());
+                        return Some(StepOutcome::Halted(reason));
+                    }
+                };
+                let memory_offset = match self.ram_offset(pa, 16) {
+                    Ok(off) => off,
+                    Err(fault) => {
+                        let reason = HaltReason::WasmTrap {
+                            addr: effective,
+                            message: format!("Q-register memory fault: {fault:?}"),
+                        };
+                        self.halted = Some(reason.clone());
+                        return Some(StepOutcome::Halted(reason));
+                    }
+                };
+                if load {
+                    self.machine.cpu[0].qregs[rt as usize] = u128::from_le_bytes(
+                        self.machine.ram[memory_offset..memory_offset + 16]
+                            .try_into()
+                            .unwrap(),
+                    );
+                } else {
+                    let bytes = self.machine.cpu[0].qregs[rt as usize].to_le_bytes();
+                    self.machine.ram[memory_offset..memory_offset + 16].copy_from_slice(&bytes);
+                    if is_kernel_text_va(effective) {
+                        self.invalidate_code_cache();
+                    }
+                }
+                if matches!(mode, 1 | 3) {
+                    let writeback = base.wrapping_add(offset as u64);
+                    if rn == 31 {
+                        self.machine.cpu[0].sp = writeback;
+                    } else {
+                        self.machine.cpu[0].regs[rn as usize] = writeback;
+                    }
+                }
+            }
+            FpSimdInstruction::VectorMove { rd, rn } => {
+                self.machine.cpu[0].qregs[rd as usize] = self.machine.cpu[0].qregs[rn as usize];
+            }
+            FpSimdInstruction::Movi16B { rd, immediate } => {
+                self.machine.cpu[0].qregs[rd as usize] =
+                    u128::from_le_bytes([immediate; 16]);
+            }
+            FpSimdInstruction::VectorReverse {
+                group_bytes,
+                element_bytes,
+                q,
+                rd,
+                rn,
+            } => {
+                let source = self.machine.cpu[0].qregs[rn as usize].to_le_bytes();
+                let active_bytes = if q { 16usize } else { 8usize };
+                let group_bytes = group_bytes as usize;
+                let element_bytes = element_bytes as usize;
+                let mut result = [0u8; 16];
+                for group_start in (0..active_bytes).step_by(group_bytes) {
+                    for element_start in (0..group_bytes).step_by(element_bytes) {
+                        let source_start = group_start + group_bytes - element_start - element_bytes;
+                        result[group_start + element_start..group_start + element_start + element_bytes]
+                            .copy_from_slice(&source[source_start..source_start + element_bytes]);
+                    }
+                }
+                self.machine.cpu[0].qregs[rd as usize] = u128::from_le_bytes(result);
+            }
+            FpSimdInstruction::Sha256 {
+                operation,
+                rd,
+                rn,
+                rm,
+            } => {
+                let destination = self.machine.cpu[0].qregs[rd as usize];
+                let source_n = self.machine.cpu[0].qregs[rn as usize];
+                let source_m = self.machine.cpu[0].qregs[rm as usize];
+                let result = match operation {
+                    Sha256Operation::HashPart1 => sha256_hash(
+                        q_words(destination),
+                        q_words(source_n),
+                        q_words(source_m),
+                        true,
+                    ),
+                    Sha256Operation::HashPart2 => sha256_hash(
+                        q_words(source_n),
+                        q_words(destination),
+                        q_words(source_m),
+                        false,
+                    ),
+                    Sha256Operation::ScheduleUpdate0 => {
+                        sha256_schedule_update0(destination, source_n)
+                    }
+                    Sha256Operation::ScheduleUpdate1 => {
+                        sha256_schedule_update1(destination, source_n, source_m)
+                    }
+                };
+                self.machine.cpu[0].qregs[rd as usize] = words_q(result);
+            }
+            FpSimdInstruction::ThreeSame {
+                op,
+                q,
+                element_log2,
+                rd,
+                rn,
+                rm,
+            } => {
+                let lhs = self.machine.cpu[0].qregs[rn as usize];
+                let rhs = self.machine.cpu[0].qregs[rm as usize];
+                let element_bytes = 1usize << element_log2;
+                let active_bytes = if q { 16 } else { 8 };
+                let lane_mask = (1u128 << (element_bytes * 8)) - 1;
+                let mut result = 0u128;
+                for byte_offset in (0..active_bytes).step_by(element_bytes) {
+                    let shift = byte_offset * 8;
+                    let a = (lhs >> shift) & lane_mask;
+                    let b = (rhs >> shift) & lane_mask;
+                    let lane = match op {
+                        VectorArithmetic::Add => a.wrapping_add(b),
+                        VectorArithmetic::Sub => a.wrapping_sub(b),
+                        VectorArithmetic::Mul => a.wrapping_mul(b),
+                    } & lane_mask;
+                    result |= lane << shift;
+                }
+                self.machine.cpu[0].qregs[rd as usize] = result;
+            }
+            FpSimdInstruction::Dup {
+                q,
+                rd,
+                rn,
+                imm5,
+                from_gpr,
+            } => {
+                let element_log2 = imm5.trailing_zeros() as usize;
+                let element_bytes = 1usize << element_log2;
+                let active_bytes = if q { 16 } else { 8 };
+                let lane_mask = (1u128 << (element_bytes * 8)) - 1;
+                let scalar = if from_gpr {
+                    let value = if rn == 31 {
+                        0
+                    } else {
+                        self.machine.cpu[0].regs[rn as usize]
+                    };
+                    (value as u128) & lane_mask
+                } else {
+                    let lane = (imm5 as usize) >> (element_log2 + 1);
+                    (self.machine.cpu[0].qregs[rn as usize] >> (lane * element_bytes * 8))
+                        & lane_mask
+                };
+                let mut result = 0u128;
+                for byte_offset in (0..active_bytes).step_by(element_bytes) {
+                    result |= scalar << (byte_offset * 8);
+                }
+                self.machine.cpu[0].qregs[rd as usize] = result;
+            }
+            FpSimdInstruction::Ext {
+                q,
+                rd,
+                rn,
+                rm,
+                byte_offset,
+            } => {
+                let first = self.machine.cpu[0].qregs[rn as usize];
+                let second = self.machine.cpu[0].qregs[rm as usize];
+                let active_bytes = if q { 16 } else { 8 };
+                let mut result = 0u128;
+                for index in 0..active_bytes {
+                    let source = byte_offset as usize + index;
+                    let byte = if source < 16 {
+                        (first >> (source * 8)) & 0xff
+                    } else {
+                        (second >> ((source - 16) * 8)) & 0xff
+                    };
+                    result |= byte << (index * 8);
+                }
+                self.machine.cpu[0].qregs[rd as usize] = result;
+            }
+            FpSimdInstruction::Fcmp {
+                double,
+                signaling,
+                zero,
+                rn,
+                rm,
+            } => {
+                let a_bits = self.machine.cpu[0].qregs[rn as usize];
+                let b_bits = if zero {
+                    0
+                } else {
+                    self.machine.cpu[0].qregs[rm as usize]
+                };
+                let (nzcv, unordered, invalid) = if double {
+                    let a_bits = a_bits as u64;
+                    let b_bits = b_bits as u64;
+                    let a = f64::from_bits(a_bits);
+                    let b = f64::from_bits(b_bits);
+                    let unordered = a.is_nan() || b.is_nan();
+                    let invalid = if signaling {
+                        unordered
+                    } else {
+                        is_snan64(a_bits) || (!zero && is_snan64(b_bits))
+                    };
+                    (float_nzcv(a < b, a == b, unordered), unordered, invalid)
+                } else {
+                    let a_bits = a_bits as u32;
+                    let b_bits = b_bits as u32;
+                    let a = f32::from_bits(a_bits);
+                    let b = f32::from_bits(b_bits);
+                    let unordered = a.is_nan() || b.is_nan();
+                    let invalid = if signaling {
+                        unordered
+                    } else {
+                        is_snan32(a_bits) || (!zero && is_snan32(b_bits))
+                    };
+                    (float_nzcv(a < b, a == b, unordered), unordered, invalid)
+                };
+                let cpu = &mut self.machine.cpu[0];
+                cpu.pstate = (cpu.pstate & !(0xf << 28)) | ((nzcv as u64) << 28);
+                if unordered && invalid {
+                    cpu.sysregs.fpsr |= 1;
+                }
+            }
+        }
+
+        self.machine.cpu[0].pc = pc.wrapping_add(4);
+        Some(self.finish_fp_simd_step())
+    }
+
     /// One vCPU step: fetch → U1 decode → U2 lift → U3 compile → wasmtime.
     /// Never panics: every failure becomes a typed [`HaltReason`].
     pub fn step_vcpu(&mut self) -> StepOutcome {
@@ -3369,6 +4330,16 @@ impl Orchestrator {
         };
         if word == 0xD69F_03E0 {
             return self.execute_eret(pc);
+        }
+        if let Some(outcome) = self.execute_fp_simd(pc, word) {
+            return outcome;
+        }
+        if is_unallocated_neon_mul_2d(word) {
+            if let Err(reason) = self.enter_sync_el1_exception(pc, 0x0200_0000, None) {
+                self.halted = Some(reason.clone());
+                return StepOutcome::Halted(reason);
+            }
+            return self.finish_fp_simd_step();
         }
         let feature_mrs = id_feature_mrs(word);
 
@@ -4523,13 +5494,13 @@ impl HostOps for WasmHost<'_> {
         // See PANIC_REAL_NOTE.md for full analysis.
         let mut val_u64 = val as u64;
         if size == 8 && val_u64 == 0xffffffffbfffffff && off >= 8 {
-            let prev = u64::from_le_bytes(self.ram[off-8..off].try_into().unwrap());
+            let prev = u64::from_le_bytes(self.ram[off - 8..off].try_into().unwrap());
             if prev == 0x40000000 {
                 // rgn->size corruption pattern
                 val_u64 = 0x40000000;
             } else if off >= 16 {
                 // Check for total_size pattern: cnt==1 at off-16, max==0x80 at off-8
-                let cnt = u64::from_le_bytes(self.ram[off-16..off-8].try_into().unwrap());
+                let cnt = u64::from_le_bytes(self.ram[off - 16..off - 8].try_into().unwrap());
                 if cnt == 1 && prev == 0x80 {
                     // memblock_type.total_size corruption pattern
                     val_u64 = 0x40000000;
@@ -4842,7 +5813,10 @@ mod tests {
             Ok(())
         );
         assert_eq!(with_host(&mut p, |h| h.mem_load(0x0800_0000, 4)), Ok(1));
-        assert_eq!(with_host(&mut p, |h| h.mem_load(0x0801_00fc, 4)), Ok(0x2043b));
+        assert_eq!(
+            with_host(&mut p, |h| h.mem_load(0x0801_00fc, 4)),
+            Ok(0x2043b)
+        );
         assert_eq!(with_host(&mut p, |h| h.mem_load(0x0801_0004, 4)), Ok(0));
         assert_eq!(
             with_host(&mut p, |h| h.mem_store(0x0801_0004, 4, 0xf0)),
@@ -4881,9 +5855,7 @@ mod tests {
     #[test]
     fn uart_tx_captures_low_byte_of_word_store() {
         let mut p = host_parts(SysRegs::default()); // MMU off: identity
-        let r = with_host(&mut p, |h| {
-            h.mem_store(CONSOLE_TX as i64, 4, 0x0000_0041)
-        });
+        let r = with_host(&mut p, |h| h.mem_store(CONSOLE_TX as i64, 4, 0x0000_0041));
         assert_eq!(r, Ok(()));
         assert_eq!(p.console.tx_bytes, vec![b'A']);
         // Halfword store also captures the low byte.
@@ -5908,7 +6880,9 @@ mod tests {
 
         assert_eq!(o.step_vcpu(), StepOutcome::Continue);
 
-        assert!(o.machine().ram[0x1000..0x1040].iter().all(|&byte| byte == 0));
+        assert!(o.machine().ram[0x1000..0x1040]
+            .iter()
+            .all(|&byte| byte == 0));
         assert!(o.machine().ram[0x0FC0..0x1000]
             .iter()
             .all(|&byte| byte == 0xA5));
@@ -6498,7 +7472,8 @@ mod tests {
             "expected Continue, got: {outcome:?}"
         );
         assert_eq!(
-            o.machine().cpu[0].sp, sp,
+            o.machine().cpu[0].sp,
+            sp,
             "SP must be unchanged: Rd=31 is XZR (discard), not SP"
         );
     }
@@ -7129,7 +8104,10 @@ mod tests {
             matches!(outcome, StepOutcome::Continue),
             "expected Continue, got: {outcome:?}"
         );
-        assert_eq!(o.machine().cpu[0].regs[9], 0x8000_0000_0000_0001u64.reverse_bits());
+        assert_eq!(
+            o.machine().cpu[0].regs[9],
+            0x8000_0000_0000_0001u64.reverse_bits()
+        );
         assert_eq!(o.machine().cpu[0].pc, pc + 4);
     }
 
@@ -7146,7 +8124,10 @@ mod tests {
             "expected Continue, got: {outcome:?}"
         );
         // Only low 32 bits reversed, upper 32 zeroed.
-        assert_eq!(o.machine().cpu[0].regs[9], 0x8000_0001u32.reverse_bits() as u64);
+        assert_eq!(
+            o.machine().cpu[0].regs[9],
+            0x8000_0001u32.reverse_bits() as u64
+        );
         assert_eq!(o.machine().cpu[0].pc, pc + 4);
     }
 
@@ -7730,11 +8711,19 @@ mod tests {
         let sp = RAM_BASE + 0x2000;
         let mut o = sp_test_orchestrator(pc, sp, 0x7A5F_1044);
         o.machine_mut().cpu[0].regs[2] = 0; // null byte
-        o.machine_mut().cpu[0].pstate = 0;  // Z=0, so NE condition holds
+        o.machine_mut().cpu[0].pstate = 0; // Z=0, so NE condition holds
         assert_eq!(o.step_vcpu(), StepOutcome::Continue);
         let nzcv = o.machine().cpu[0].pstate & 0xF000_0000;
-        assert_eq!(nzcv & 0x4000_0000, 0x4000_0000, "Z flag must be set on null byte compare with wzr");
-        assert_eq!(nzcv & 0x2000_0000, 0x2000_0000, "C flag must be set (0 - 0 no borrow)");
+        assert_eq!(
+            nzcv & 0x4000_0000,
+            0x4000_0000,
+            "Z flag must be set on null byte compare with wzr"
+        );
+        assert_eq!(
+            nzcv & 0x2000_0000,
+            0x2000_0000,
+            "C flag must be set (0 - 0 no borrow)"
+        );
         assert_eq!(o.machine().cpu[0].pc, pc + 4);
     }
 
@@ -7851,13 +8840,8 @@ mod tests {
             ttbr0: sysregs.ttbr0_el1,
             ttbr1: sysregs.ttbr1_el1,
         };
-        let translated = u4_mmu::translate_with_base(
-            &st,
-            &orch.machine().ram,
-            RAM_BASE,
-            fault_va,
-            Access::Read,
-        );
+        let translated =
+            u4_mmu::translate_with_base(&st, &orch.machine().ram, RAM_BASE, fault_va, Access::Read);
         assert_eq!(translated, Ok(data_page_pa));
 
         // Subsequent fault on next page in same L3 table (0xffffffbf00001000):
@@ -7902,7 +8886,7 @@ mod tests {
         let cpu = &mut orch.machine_mut().cpu[0];
         cpu.pc = code_va;
         cpu.regs[0] = 0xffffffbf00000000; // x0 = fault VA
-        cpu.regs[2] = 0xbeef;             // w2 poisoned
+        cpu.regs[2] = 0xbeef; // w2 poisoned
 
         let outcome = orch.step_vcpu();
         assert_eq!(outcome, StepOutcome::Continue);

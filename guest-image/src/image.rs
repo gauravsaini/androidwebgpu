@@ -157,6 +157,7 @@ pub fn parse_header(image: &[u8]) -> Option<(u32, u64, u64)> {
 pub fn initial_cpu_state(manifest: &GuestManifest) -> CpuState {
     CpuState {
         regs: [0u64; 31],
+        qregs: [0u128; 32],
         sp: STACK_TOP,
         sp_el1: 0,
         pc: manifest.load_addr,

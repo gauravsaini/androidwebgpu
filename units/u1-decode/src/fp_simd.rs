@@ -10,6 +10,28 @@ use pathn_contracts::cpu::InsnKind;
 ///
 /// Dispatched from `lib.rs` when bits[28:25] in {0b0111, 0b1111, 0b0110, 0b1110}.
 pub fn decode(word: u32) -> Option<InsnKind> {
+    if decode_ld1_st1_multiple(word) {
+        return Some(InsnKind::LoadStore);
+    }
+    if decode_q_pair(word) {
+        return Some(InsnKind::LoadStore);
+    }
+    if decode_q_single(word) {
+        return Some(InsnKind::LoadStore);
+    }
+
+    // Three-same arithmetic, DUP, and EXT from the characterized NEON subset.
+    if decode_neon_three_same(word)
+        || decode_vector_reverse(word)
+        || decode_sha256(word)
+        || decode_dup(word)
+        || decode_ext(word)
+        || decode_vector_mov(word)
+        || decode_movi_16b(word)
+    {
+        return Some(InsnKind::DataProc);
+    }
+
     // 1. Conversion between floating-point and integer (ARM ARM C7.2.14)
     // sf 00 11110 type 1 rmode opcode Rn Rd
     if let Some(kind) = decode_float_int_conversion(word) {
@@ -54,6 +76,121 @@ pub fn decode(word: u32) -> Option<InsnKind> {
     }
 
     None
+}
+
+fn decode_ld1_st1_multiple(word: u32) -> bool {
+    if word >> 31 != 0 || ((word >> 24) & 0x3f) != 0b001100 || ((word >> 21) & 1) != 0 {
+        return false;
+    }
+
+    let post_index = (word >> 23) & 1 != 0;
+    let rm = (word >> 16) & 0x1f;
+    if !post_index && rm != 0 {
+        return false;
+    }
+
+    matches!((word >> 12) & 0xf, 0b0010 | 0b0110 | 0b0111 | 0b1010)
+}
+
+fn decode_vector_reverse(word: u32) -> bool {
+    if ((word >> 24) & 0x1f) != 0b01110 || ((word >> 21) & 1) != 1 || ((word >> 16) & 0x1f) != 0 {
+        return false;
+    }
+
+    let size = (word >> 22) & 0x3;
+    let u = (word >> 29) & 1;
+    match (word >> 10) & 0x3f {
+        0b000110 => u == 0 && size == 0, // REV16, byte arrangements only
+        0b000010 => (u == 1 && size <= 1) || (u == 0 && size <= 2), // REV32 / REV64
+        _ => false,
+    }
+}
+
+fn decode_sha256(word: u32) -> bool {
+    let three_register_mask = !((0x1f << 16) | (0x1f << 5) | 0x1f);
+    let two_register_mask = !((0x1f << 5) | 0x1f);
+    matches!(
+        word & three_register_mask,
+        0x5e00_4000 | 0x5e00_5000 | 0x5e00_6000
+    ) || word & two_register_mask == 0x5e28_2800
+}
+
+fn decode_q_pair(word: u32) -> bool {
+    // V=1 pair load/store. Q registers require opc=10; non-temporal mode 00
+    // is intentionally outside the characterized LDP/STP subset.
+    ((word >> 25) & 0x1f) == 0b10110 && ((word >> 30) & 0x3) == 0b10 && ((word >> 23) & 0x3) != 0
+}
+
+fn decode_q_single(word: u32) -> bool {
+    let opc = (word >> 22) & 0x3;
+    let size = (word >> 30) & 0x3;
+    let simd_imm = (word >> 24) & 0x3f;
+    if size != 0 || !matches!(opc, 0b10 | 0b11) || ((word >> 21) & 1) != 0 {
+        return false;
+    }
+
+    // Q LDR/STR unsigned offset (scaled by 16 bytes).
+    if simd_imm == 0b111101 {
+        return true;
+    }
+
+    // Q LDR/STR unscaled, pre-indexed, and post-indexed forms.
+    simd_imm == 0b111100 && matches!((word >> 10) & 0x3, 0 | 1 | 3)
+}
+
+fn decode_neon_three_same(word: u32) -> bool {
+    if ((word >> 24) & 0x1f) != 0b01110 || ((word >> 21) & 1) != 1 {
+        return false;
+    }
+    let q = (word >> 30) & 1;
+    let size = (word >> 22) & 0x3;
+    let op = (word >> 11) & 0x1f;
+    match op {
+        0b10000 => q == 1 || size != 0b11, // ADD/SUB: 8B..2D
+        0b10011 => size != 0b11,           // MUL: no 2D arrangement
+        _ => false,
+    }
+}
+
+fn decode_dup(word: u32) -> bool {
+    if ((word >> 24) & 0x1f) != 0b01110 || ((word >> 21) & 1) != 0 || (word >> 29) & 1 != 0 {
+        return false;
+    }
+    let imm5 = (word >> 16) & 0x1f;
+    match (word >> 10) & 0x3f {
+        0b000011 => matches!(imm5, 1 | 2 | 4 | 8), // DUP from W/X register
+        0b000001 => {
+            if imm5 == 0 {
+                return false;
+            }
+            let element_log2 = imm5.trailing_zeros();
+            if element_log2 > 3 {
+                return false;
+            }
+            let lane = imm5 >> (element_log2 + 1);
+            lane < (16 >> element_log2)
+        }
+        _ => false,
+    }
+}
+
+fn decode_ext(word: u32) -> bool {
+    ((word >> 24) & 0x1f) == 0b01110
+        && ((word >> 29) & 1) == 1
+        && ((word >> 21) & 1) == 0
+        && ((word >> 10) & 0x3) == 0b10
+        && (((word >> 30) & 1) == 1 || ((word >> 11) & 0xf) <= 7)
+}
+
+fn decode_vector_mov(word: u32) -> bool {
+    // MOV Vd.16B, Vn.16B is ORR Vd.16B, Vn.16B, Vn.16B.
+    word & !((0x1f << 16) | (0x1f << 5) | 0x1f) == 0x4ea0_1c00
+        && ((word >> 16) & 0x1f) == ((word >> 5) & 0x1f)
+}
+
+fn decode_movi_16b(word: u32) -> bool {
+    // MOVI Vd.16B, #imm8 (the immediate form used to seed T112's illegal-MUL control).
+    word & !((0x7 << 16) | (0x1f << 5) | 0x1f) == 0x4f00_e400
 }
 
 /// Decode conversion between floating-point and integer:
@@ -264,6 +401,84 @@ fn decode_fp_data_proc_3source(word: u32) -> Option<InsnKind> {
 }
 
 #[cfg(test)]
+mod structure_and_reverse_tests {
+    use super::decode;
+    use pathn_contracts::cpu::InsnKind;
+
+    #[test]
+    fn ld1_multi_structure_decodes_each_vector_arrangement() {
+        for word in [
+            0x0c40_7020, // LD1 {V0.8B}, [X1]
+            0x4cdf_a061, // LD1 {V1.16B,V2.16B}, [X3], #32
+            0x0cdf_64c3, // LD1 {V3.4H,V4.4H,V5.4H}, [X6], #24
+            0x4cca_27e6, // LD1 {V6.8H,...,V9.8H}, [SP], X10
+            0x0c40_a98a, // LD1 {V10.2S,V11.2S}, [X12]
+            0x4cdf_2a2d, // LD1 {V13.4S,...,V16.4S}, [X17], #64
+            0x0cdf_7e72, // LD1 {V18.1D}, [X19], #8
+            0x4cd7_aed4, // LD1 {V20.2D,V21.2D}, [X22], X23
+            0x4cdf_2900, // Kernel: LD1 {V0.4S,...,V3.4S}, [X8], #64
+        ] {
+            assert_eq!(decode(word), Some(InsnKind::LoadStore), "{word:#010x}");
+        }
+
+        assert_eq!(decode(0x0c41_7020), None); // no post-index with nonzero Rm
+        assert_eq!(decode(0x0c40_3020), None); // reserved LD1 register-count opcode
+    }
+
+    #[test]
+    fn st1_multi_structure_decodes_each_vector_arrangement() {
+        for word in [
+            0x0c00_7260, // ST1 {V0.8B}, [X19]
+            0x4c9f_a261, // ST1 {V1.16B,V2.16B}, [X19], #32
+            0x0c9f_6663, // ST1 {V3.4H,V4.4H,V5.4H}, [X19], #24
+            0x4c8a_27e6, // ST1 {V6.8H,...,V9.8H}, [SP], X10
+            0x0c00_aa6a, // ST1 {V10.2S,V11.2S}, [X19]
+            0x4c9f_2a6d, // ST1 {V13.4S,...,V16.4S}, [X19], #64
+            0x0c9f_7e72, // ST1 {V18.1D}, [X19], #8
+            0x4c97_ae74, // ST1 {V20.2D,V21.2D}, [X19], X23
+            0x4c00_aa74, // Kernel: ST1 {V20.4S,V21.4S}, [X19]
+        ] {
+            assert_eq!(decode(word), Some(InsnKind::LoadStore), "{word:#010x}");
+        }
+    }
+
+    #[test]
+    fn vector_reverse_decodes_rev16_rev32_and_kernel_rev64() {
+        for word in [
+            0x0e20_1b38, // REV16 V24.8B, V25.8B
+            0x4e20_1b7a, // REV16 V26.16B, V27.16B
+            0x2e20_0bbc, // REV32 V28.8B, V29.8B
+            0x6e20_0bfe, // REV32 V30.16B, V31.16B
+            0x6e20_0a10, // Kernel: REV32 V16.16B, V16.16B
+            0x4e60_09a7, // Kernel .text: REV64 V7.8H, V13.8H
+        ] {
+            assert_eq!(decode(word), Some(InsnKind::DataProc), "{word:#010x}");
+        }
+
+        assert_eq!(decode(0x6ea0_0bbc), None); // REV32 .4S is unallocated
+        assert_eq!(decode(0x0e20_0bbc), Some(InsnKind::DataProc)); // REV64 .8B
+    }
+
+    #[test]
+    fn sha256_crypto_class_decodes_kernel_encodings() {
+        for word in [
+            0x5e28_2a30, // SHA256SU0 V16.4S, V17.4S
+            0x5e16_4338, // SHA256H Q24, Q25, V22.4S
+            0x5e16_5359, // SHA256H2 Q25, Q26, V22.4S
+            0x5e13_6250, // SHA256SU1 V16.4S, V18.4S, V19.4S
+            0x5e1f_43ff, // three-register fields may name V31
+            0x5e1f_53ff,
+            0x5e1f_63ff,
+            0x5e28_2bff, // SHA256SU0 with V31 operands
+        ] {
+            assert_eq!(decode(word), Some(InsnKind::DataProc), "{word:#010x}");
+        }
+
+        assert_eq!(decode(0x5e28_0a30), None); // SHA256SU0 reserved opcode
+    }
+}
+
+#[cfg(test)]
 mod tests {
     use super::*;
 
@@ -302,7 +517,9 @@ mod tests {
     #[test]
     fn test_decode_fcmp_fccmp() {
         assert_eq!(decode(0x1E21_2000), Some(InsnKind::DataProc)); // FCMP S0, S1
+        assert_eq!(decode(0x1E21_2010), Some(InsnKind::DataProc)); // FCMPE S0, S1
         assert_eq!(decode(0x1E61_2000), Some(InsnKind::DataProc)); // FCMP D0, D1
+        assert_eq!(decode(0x1E61_2010), Some(InsnKind::DataProc)); // FCMPE D0, D1
         assert_eq!(decode(0x1E20_2008), Some(InsnKind::DataProc)); // FCMP S0, #0.0
         assert_eq!(decode(0x1E60_2008), Some(InsnKind::DataProc)); // FCMP D0, #0.0
         assert_eq!(decode(0x1E21_0400), Some(InsnKind::DataProc)); // FCCMP S0, S1, #0, EQ
@@ -390,5 +607,66 @@ mod tests {
         assert_eq!(decode(0x1E60_2008), Some(InsnKind::DataProc));
         // FRINTA D0, D1 (2.5 => 3.0 = 0x4008000000000000)
         assert_eq!(decode(0x1E66_4020), Some(InsnKind::DataProc));
+    }
+
+    #[test]
+    fn test_t112_q_pair_and_neon_encodings() {
+        for word in [
+            0xAD40_0520,
+            0xACC1_0520,
+            0xADC0_8520,
+            0xAD40_07E0,
+            0xACC1_07E0,
+            0xAD00_0520,
+            0xAD80_8520,
+            0xAD01_0520,
+            0xAC81_0520,
+        ] {
+            assert_eq!(decode(word), Some(InsnKind::LoadStore), "{word:#010x}");
+        }
+
+        for word in [
+            0x3DC0_0120, // LDR Q0, [X9]
+            0x3DC0_0521, // LDR Q1, [X9, #16]
+            0x3D80_0A60, // STR Q0, [X19, #32]
+            0x3C81_0662, // STR Q2, [X19], #16
+        ] {
+            assert_eq!(decode(word), Some(InsnKind::LoadStore), "{word:#010x}");
+        }
+
+        for word in [
+            0x0E21_8402,
+            0x4E21_8402,
+            0x0E61_8402,
+            0x4E61_8402,
+            0x0EA1_8402,
+            0x4EA1_8402,
+            0x4EE1_8402,
+            0x2E21_8402,
+            0x6E21_8402,
+            0x2E61_8402,
+            0x6E61_8402,
+            0x2EA1_8402,
+            0x6EA1_8402,
+            0x6EE1_8402,
+            0x0E21_9C02,
+            0x4E21_9C02,
+            0x0E61_9C02,
+            0x4E61_9C02,
+            0x0EA1_9C02,
+            0x4EA1_9C02,
+            0x4E01_0C22,
+            0x4E0E_0402,
+            0x4E18_0402,
+            0x4E08_0CA2,
+            0x4EA0_1C08,
+            0x4F00_E440,
+            0x4F00_E461,
+            0x6E01_3802,
+            0x6E01_7802,
+        ] {
+            assert_eq!(decode(word), Some(InsnKind::DataProc), "{word:#010x}");
+        }
+        assert_eq!(decode(0x4EE1_9C02), None); // MUL Vd.2D is unallocated
     }
 }
