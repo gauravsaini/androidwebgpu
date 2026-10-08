@@ -76,6 +76,33 @@ def update_registry(track_id: int, row: str, replacement: str | None = None) -> 
         fcntl.flock(stream.fileno(), fcntl.LOCK_UN)
 
 
+def codex_environment(track_id: int) -> dict[str, str]:
+    """Give Codex writable runtime state without copying user credentials."""
+    env = os.environ.copy()
+    if env.get("CODEX_HOME"):
+        return env
+
+    home = Path.home()
+    runtime_root = Path(
+        env.get("FRONTIER_CODEX_HOME", home / ".cache" / "frontier-loop")
+    ).expanduser()
+    runtime_home = runtime_root / f"track-{track_id}"
+    runtime_home.mkdir(parents=True, exist_ok=True)
+
+    # Codex writes aliases and session state under CODEX_HOME. The managed
+    # task sandbox blocks writes to ~/.codex, so point the worker at a private
+    # writable directory while retaining the user's read-only auth/config.
+    source_home = home / ".codex"
+    for name in ("auth.json", "config.toml"):
+        source = source_home / name
+        destination = runtime_home / name
+        if source.is_file() and not destination.exists():
+            destination.symlink_to(source)
+
+    env["CODEX_HOME"] = str(runtime_home)
+    return env
+
+
 def parse_classification(value: str) -> dict[str, str]:
     candidate = Path(value)
     try:
@@ -165,6 +192,7 @@ def main(argv: list[str] | None = None) -> int:
         )
         prompt_path.write_text(prompt, encoding="utf-8")
 
+        worker_env = codex_environment(track_id)
         with log_path.open("ab", buffering=0) as log:
             process = subprocess.Popen(
                 [
@@ -186,6 +214,7 @@ def main(argv: list[str] | None = None) -> int:
                 stdin=subprocess.DEVNULL,
                 stdout=log,
                 stderr=subprocess.STDOUT,
+                env=worker_env,
                 start_new_session=True,
                 close_fds=True,
             )
