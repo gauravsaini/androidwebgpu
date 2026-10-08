@@ -607,7 +607,16 @@ pub fn is_guest_trap_word(word: u32) -> bool {
 
 /// Decode SVC/HVC/SMC exception-generating instructions. HVC #0 is reserved
 /// for the emulator's existing PSCI call shim and continues through U2/U3.
-fn service_exception_word(word: u32) -> Option<(u8, u16)> {
+fn service_exception_word(word: u32, source_mode: u64) -> Option<(u8, u16)> {
+    if source_mode == EL0T_AARCH32_MODE {
+        if word & 0x0F00_0000 == 0x0F00_0000 {
+            return Some((0x15, (word & 0xFFFF) as u16));
+        }
+        return None;
+    }
+    if !matches!(source_mode, EL0T_MODE | EL1T_MODE | EL1H_MODE) {
+        return None;
+    }
     if word & 0xFFE0_001C != 0xD400_0000 {
         return None;
     }
@@ -3394,6 +3403,15 @@ impl Orchestrator {
         self.enter_synchronous_exception(pc, pc, source_mode, saved_pstate, esr, fault.va)
     }
 
+    fn enter_undefined_instruction_exception(&mut self, pc: u64) -> Result<(), HaltReason> {
+        let cpu = &self.machine.cpu[0];
+        let source_mode = cpu.pstate & PSTATE_MODE_MASK;
+        let saved_pstate =
+            (cpu.pstate & !PSTATE_DAIF_MASK) | (cpu.sysregs.daif & PSTATE_DAIF_MASK);
+        let esr = 1 << 25; // EC 0x00 (unknown/undefined), IL=1 for a 32-bit instruction.
+        self.enter_synchronous_exception(pc, pc, source_mode, saved_pstate, esr, 0)
+    }
+
     fn complete_exception_step(&mut self) -> StepOutcome {
         self.steps += 1;
         self.tick_clock(TIMER_CYCLES_PER_STEP);
@@ -3470,7 +3488,10 @@ impl Orchestrator {
         let return_pc = cpu.sysregs.elr_el1;
         let saved_pstate = cpu.sysregs.spsr_el1;
         let return_mode = saved_pstate & PSTATE_MODE_MASK;
-        if !matches!(return_mode, EL0T_MODE | EL1T_MODE | EL1H_MODE) {
+        if !matches!(
+            return_mode,
+            EL0T_MODE | EL1T_MODE | EL1H_MODE | EL0T_AARCH32_MODE
+        ) {
             let halt = HaltReason::Unsupported {
                 addr: pc,
                 reason: "ERET: unsupported SPSR_EL1 return mode",
@@ -3533,7 +3554,8 @@ impl Orchestrator {
                 };
             }
         };
-        if let Some((exception_class, immediate)) = service_exception_word(word) {
+        let source_mode = self.machine.cpu[0].pstate & PSTATE_MODE_MASK;
+        if let Some((exception_class, immediate)) = service_exception_word(word, source_mode) {
             return match self.enter_service_exception(pc, exception_class, immediate) {
                 Ok(()) => self.complete_exception_step(),
                 Err(reason) => {
@@ -3543,7 +3565,27 @@ impl Orchestrator {
             };
         }
         if word == 0xD69F_03E0 {
-            return self.execute_eret(pc);
+            let current_mode = self.machine.cpu[0].pstate & PSTATE_MODE_MASK;
+            return match current_mode {
+                EL1T_MODE | EL1H_MODE => self.execute_eret(pc),
+                EL0T_MODE | EL0T_AARCH32_MODE => {
+                    match self.enter_undefined_instruction_exception(pc) {
+                        Ok(()) => self.complete_exception_step(),
+                        Err(reason) => {
+                            self.halted = Some(reason.clone());
+                            StepOutcome::Halted(reason)
+                        }
+                    }
+                }
+                _ => {
+                    let reason = HaltReason::Unsupported {
+                        addr: pc,
+                        reason: "ERET: unsupported current PSTATE mode",
+                    };
+                    self.halted = Some(reason.clone());
+                    StepOutcome::Halted(reason)
+                }
+            };
         }
         let feature_mrs = id_feature_mrs(word);
 
