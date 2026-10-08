@@ -18,10 +18,10 @@ from zoneinfo import ZoneInfo
 from classify import load_and_validate
 
 
-SHARED = Path("/Users/Shared")
+SHARED = Path(os.environ.get("FRONTIER_SHARED_ROOT", "/Users/Shared"))
 REGISTRY = Path(os.environ.get("FRONTIER_REGISTRY_PATH", SHARED / "codex-track-REGISTRY.md"))
 LOG_DIR = Path(os.environ.get("FRONTIER_LOG_DIR", SHARED / "codex-logs"))
-CODEX = Path("/Users/ektasaini/.local/bin/codex")
+CODEX = Path(os.environ.get("FRONTIER_CODEX", "/Users/ektasaini/.local/bin/codex"))
 ORACLES = {
     "unmapped_mmio": "/Users/Shared/codex-logs/track66-qemu-mmio.trace",
     "unknown_insn": "aarch64 objdump + capstone on the Image",
@@ -135,6 +135,7 @@ def main(argv: list[str] | None = None) -> int:
         subprocess.run(
             ["git", "-C", str(repo), "worktree", "add", "--detach", str(worktree), base_commit],
             check=True,
+            stdout=sys.stderr,
         )
         row = (
             f"| {track_id} | frontier-{category} | {worktree} | {findings} | running | "
@@ -155,6 +156,12 @@ def main(argv: list[str] | None = None) -> int:
         prompt = template
         for token, replacement in replacements.items():
             prompt = prompt.replace(token, replacement)
+        prompt += (
+            "\n\n## Driver handoff\n"
+            f"Write the final findings to `{findings}`. The driver waits for this file. "
+            "Start it with `VERDICT: PASS`, `VERDICT: FAIL`, or `VERDICT: BLOCKED` and "
+            "include the exact `FIX_COMMIT: <full commit sha>` line when a passing fix is committed.\n"
+        )
         prompt_path.write_text(prompt, encoding="utf-8")
 
         with log_path.open("ab", buffering=0) as log:
