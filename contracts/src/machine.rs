@@ -8,6 +8,9 @@ use crate::cpu::{IrqState, MmuState, SysReg};
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CpuState {
     pub regs: [u64; 31],
+    /// 128-bit Advanced SIMD / FP register bank (V0..V31, also named Q0..Q31).
+    /// Values use architectural bit numbering: byte 0 is bits 7:0.
+    pub qregs: [u128; 32],
     /// Currently selected stack pointer; `sp_el1` stores the banked EL1 stack.
     pub sp: u64,
     pub sp_el1: u64,
@@ -130,7 +133,9 @@ pub struct SysRegs {
     /// Exception return state captured by an EL1 exception.
     pub elr_el1: u64,
     pub spsr_el1: u64,
-
+    /// Exception syndrome and fault address captured by synchronous EL1 traps.
+    pub esr_el1: u64,
+    pub far_el1: u64,
 }
 
 impl Default for SysRegs {
@@ -234,7 +239,8 @@ impl Default for SysRegs {
             zcr_el1: 0,
             elr_el1: 0,
             spsr_el1: 0,
-
+            esr_el1: 0,
+            far_el1: 0,
         }
     }
 }
@@ -404,7 +410,8 @@ impl SysRegs {
             SysReg::ZcrEl1 => self.zcr_el1,
             SysReg::ElrEl1 => self.elr_el1,
             SysReg::SpsrEl1 => self.spsr_el1,
-
+            SysReg::EsrEl1 => self.esr_el1,
+            SysReg::FarEl1 => self.far_el1,
         }
     }
 
@@ -565,7 +572,8 @@ impl SysRegs {
             SysReg::ZcrEl1 => self.zcr_el1 = val,
             SysReg::ElrEl1 => self.elr_el1 = val,
             SysReg::SpsrEl1 => self.spsr_el1 = val,
-
+            SysReg::EsrEl1 => self.esr_el1 = val,
+            SysReg::FarEl1 => self.far_el1 = val,
         }
     }
 
@@ -715,6 +723,8 @@ impl SysRegs {
             135 => Some(SysReg::ZcrEl1),
             136 => Some(SysReg::ElrEl1),
             137 => Some(SysReg::SpsrEl1),
+            138 => Some(SysReg::EsrEl1),
+            139 => Some(SysReg::FarEl1),
 
             _ => None,
         }
@@ -805,6 +815,7 @@ mod tests {
         let s = MachineState {
             cpu: vec![CpuState {
                 regs: [0; 31],
+                qregs: [0; 32],
                 sp: 0,
                 sp_el1: 0,
                 pc: 0x4000,
@@ -918,7 +929,11 @@ mod tests {
         ] {
             assert_eq!(SysRegs::from_index(idx), Some(reg));
         }
-        assert_eq!(SysRegs::from_index(136), None);
+        assert_eq!(SysRegs::from_index(136), Some(SysReg::ElrEl1));
+        assert_eq!(SysRegs::from_index(137), Some(SysReg::SpsrEl1));
+        assert_eq!(SysRegs::from_index(138), Some(SysReg::EsrEl1));
+        assert_eq!(SysRegs::from_index(139), Some(SysReg::FarEl1));
+        assert_eq!(SysRegs::from_index(140), None);
     }
 
     #[test]
@@ -952,7 +967,7 @@ mod tests {
         assert_eq!(s.load(SysReg::IccAp0r1El1), 0);
         assert_eq!(s.load(SysReg::ZcrEl1), 0x700);
         assert_eq!(s.load(SysReg::IccSgi1rEl1), 0x1);
-        // from_index pins the new discriminants 45..=135.
+        // from_index pins the new discriminants 45..=139.
         for (idx, reg) in [
             (45, SysReg::Dbgbvr0),
             (60, SysReg::Dbgbvr15),
@@ -974,6 +989,7 @@ mod tests {
         ] {
             assert_eq!(SysRegs::from_index(idx), Some(reg));
         }
-        assert_eq!(SysRegs::from_index(136), None);
+        assert_eq!(SysRegs::from_index(139), Some(SysReg::FarEl1));
+        assert_eq!(SysRegs::from_index(140), None);
     }
 }

@@ -279,6 +279,8 @@ impl<'a> Reader<'a> {
         }
         Ok(CpuState {
             regs,
+            // Snapshot v15 predates Q-register state; restore it as zero.
+            qregs: [0; 32],
             sp: self.u64()?,
             sp_el1: self.u64()?,
             pc: self.u64()?,
@@ -357,6 +359,8 @@ impl<'a> Reader<'a> {
                 zcr_el1: self.u64()?,
                 elr_el1: self.u64()?,
                 spsr_el1: self.u64()?,
+                esr_el1: 0,
+                far_el1: 0,
             },
         })
     }
@@ -470,6 +474,7 @@ mod tests {
         }
         CpuState {
             regs,
+            qregs: [0; 32],
             sp: seed.wrapping_add(0x1000),
             sp_el1: seed.wrapping_add(0x1001),
             pc: 0x4000 + seed,
@@ -545,6 +550,8 @@ mod tests {
                 zcr_el1: seed.wrapping_add(67),
                 elr_el1: seed.wrapping_add(68),
                 spsr_el1: seed.wrapping_add(69),
+                esr_el1: 0,
+                far_el1: 0,
             },
         }
     }
@@ -636,6 +643,7 @@ mod tests {
         let s = MachineState {
             cpu: vec![CpuState {
                 regs: [u64::MAX; 31],
+                qregs: [0; 32],
                 sp: u64::MAX,
                 sp_el1: u64::MAX,
                 pc: u64::MAX,
@@ -711,6 +719,9 @@ mod tests {
                     zcr_el1: u64::MAX,
                     elr_el1: u64::MAX,
                     spsr_el1: u64::MAX,
+                    // ESR/FAR are exception-time state, outside snapshot v15.
+                    esr_el1: 0,
+                    far_el1: 0,
                 },
             }],
             mmu: MmuState {
