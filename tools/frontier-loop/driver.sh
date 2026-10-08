@@ -6,8 +6,15 @@ REPO_ROOT=$(git -C "$SCRIPT_DIR/../.." rev-parse --show-toplevel)
 LOCK="$SCRIPT_DIR/.lock"
 RUN_DIR=${FRONTIER_RUN_DIR:-/Users/Shared/codex-logs/frontier-loop}
 EXCEPTION_FILE=${FRONTIER_EXCEPTION_FILE:-/Users/Shared/codex-track71-exceptions.md}
+MAX_CYCLES=${FRONTIER_MAX_CYCLES:-0}
 PYTHON_BIN=$(command -v python3)
 ACTIVE_AGENT_PID=""
+MERGED_CYCLES=0
+
+if [[ ! "$MAX_CYCLES" =~ ^[0-9]+$ ]]; then
+  printf 'frontier loop refused: FRONTIER_MAX_CYCLES must be a nonnegative integer\n' >&2
+  exit 1
+fi
 
 if [[ -e "$LOCK" ]]; then
   printf 'frontier loop refused: lock exists at %s\n' "$LOCK" >&2
@@ -166,6 +173,11 @@ while true; do
     break
   fi
 
+  if (( MAX_CYCLES > 0 && MERGED_CYCLES >= MAX_CYCLES )); then
+    printf 'frontier loop cycle limit reached after %s merged cycle(s) and post-merge rerun\n' "$MERGED_CYCLES"
+    break
+  fi
+
   REPORT_REV=$(jq -r '.binary.git_rev' "$REPORT")
   if [[ "$REPORT_REV" != "$REV" ]]; then
     record_exception 'boot report binary revision differs from integration HEAD' "$REPORT" "head=$REV report_git_rev=$REPORT_REV"
@@ -227,6 +239,7 @@ while true; do
     record_exception 'fix merge failed' "$REPORT2" "fix=$FIXREV"
     break
   fi
+  MERGED_CYCLES=$((MERGED_CYCLES + 1))
   REV=$(git -C "$REPO_ROOT" rev-parse HEAD)
   printf 'integrated %s; new integration HEAD is %s\n' "$FIXREV" "$REV"
 
