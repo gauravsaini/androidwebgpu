@@ -994,8 +994,12 @@ mod tests {
         assert_eq!(ok_kind(0xC802_7C20), InsnKind::LoadStore); // STXR W2, X0, [X1]
         assert_eq!(ok_kind(0xC85F_FC20), InsnKind::LoadStore); // LDAXR X0, [X1]
         assert_eq!(ok_kind(0xC802_FC20), InsnKind::LoadStore); // STLXR W2, X0, [X1]
-        assert_eq!(ok_kind(0x0800_0000), InsnKind::LoadStore); // STXRB W0, W0, [X0]
-        assert_eq!(ok_kind(0xC804_6F1D), InsnKind::LoadStore); // STXR W4, X29, [X24]
+        assert_eq!(ok_kind(0x0801_7C00), InsnKind::LoadStore); // STXRB W0, W1, [X0]
+        assert_eq!(
+            decode(0x0800_0000),
+            DecodeResult::Illegal { word: 0x0800_0000 }
+        ); // Reserved: STXRB Rt2 must be 11111.
+        assert_eq!(ok_kind(0xC804_7F1D), InsnKind::LoadStore); // STXR W4, X29, [X24]
 
         // LDAPUR/STLUR unscaled acquire/release loads and stores.
         assert_eq!(ok_kind(0x59C5_0069), InsnKind::LoadStore); // LDAPURSH W9, [X3, #0x50]

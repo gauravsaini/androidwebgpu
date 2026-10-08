@@ -135,7 +135,7 @@ pub fn decode(word: u32) -> Option<InsnKind> {
         let rs = (word >> 16) & 0x1F;
         let rt2 = (word >> 10) & 0x1F;
         let valid = match op {
-            0 => true,                          // STXR / STLXR (single-register store)
+            0 => rt2 == 0x1F,                   // STXR / STLXR: Rt2 is fixed to 11111
             1 => size >= 0b10,                  // STXP / STLXP
             2 => rs == 0x1F && rt2 == 0x1F,     // LDXR / LDAXR
             3 => size >= 0b10,                  // LDXP / LDAXP

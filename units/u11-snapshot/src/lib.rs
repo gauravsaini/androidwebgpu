@@ -3,11 +3,11 @@
 //! PURE: deterministic encode/decode. No I/O, no wall-clock, no threads,
 //! no hidden state. A corrupt blob is data ([`SnapshotError`]), never a panic.
 //!
-//! Wire format v16 (all integers little-endian):
+//! Wire format v17 (all integers little-endian):
 //! ```text
-//! u32 version            == SNAPSHOT_VERSION (16)
+//! u32 version            == SNAPSHOT_VERSION (17)
 //! u32 cpu_count
-//! cpu_count × { 31×u64 regs, u64 sp, u64 sp_el1, u64 pc, u64 pstate, 137×u64 sysregs } (1376 bytes each)
+//! cpu_count × { 31×u64 regs, 32×u128 qregs, u64 sp, u64 sp_el1, u64 pc, u64 pstate, 137×u64 sysregs } (1888 bytes each)
 //! u64 ttbr0, u64 ttbr1, u64 tcr, u64 sctlr
 //! u32 irq_enabled, u64 irq_pending, u64 timer_count, u64 timer_compare
 //! u64 ram_len, ram_len bytes
@@ -24,11 +24,13 @@ use pathn_contracts::machine::{
     SNAPSHOT_VERSION, SysRegs,
 };
 
-/// Encoded size of one [`CpuState`]: 31 regs + sp + sp_el1 + pc + pstate + 137 sysregs,
-/// all u64LE.
-const CPU_ENCODED_BYTES: usize = 172 * 8;
-const V15_CPU_ENCODED_BYTES: usize = CPU_ENCODED_BYTES - 2 * 8;
-const PREVIOUS_SNAPSHOT_VERSION: u32 = 15;
+/// Snapshot v16 stored 31 integer registers, four scalar CPU fields, and 137
+/// system registers. Version 17 adds 32 128-bit Q registers.
+const V16_CPU_ENCODED_BYTES: usize = 172 * 8;
+const V15_CPU_ENCODED_BYTES: usize = V16_CPU_ENCODED_BYTES - 2 * 8;
+const CPU_ENCODED_BYTES: usize = V16_CPU_ENCODED_BYTES + 32 * 16;
+const V15_SNAPSHOT_VERSION: u32 = 15;
+const V16_SNAPSHOT_VERSION: u32 = 16;
 /// Minimum encoded size of one [`DeviceState`]: u8 tag + u64 blob length.
 const DEVICE_MIN_BYTES: usize = 1 + 8;
 
@@ -74,6 +76,10 @@ impl Writer {
         self.buf.extend_from_slice(&v.to_le_bytes());
     }
 
+    fn u128(&mut self, v: u128) {
+        self.buf.extend_from_slice(&v.to_le_bytes());
+    }
+
     fn bytes(&mut self, b: &[u8]) {
         self.buf.extend_from_slice(b);
     }
@@ -81,6 +87,9 @@ impl Writer {
     fn cpu(&mut self, c: &CpuState) {
         for r in c.regs {
             self.u64(r);
+        }
+        for qreg in c.qregs {
+            self.u128(qreg);
         }
         self.u64(c.sp);
         self.u64(c.sp_el1);
@@ -248,6 +257,13 @@ impl<'a> Reader<'a> {
         Ok(u64::from_le_bytes(a))
     }
 
+    fn u128(&mut self) -> Result<u128, SnapshotError> {
+        let b = self.take(16)?;
+        let mut a = [0u8; 16];
+        a.copy_from_slice(b);
+        Ok(u128::from_le_bytes(a))
+    }
+
     /// P4 (2026-10-03): read 16 (debug arrays) or 4 (AP0R/AP1R) u64s.
     fn u64x16(&mut self) -> Result<[u64; 16], SnapshotError> {
         let mut a = [0u64; 16];
@@ -281,10 +297,16 @@ impl<'a> Reader<'a> {
         for reg in regs.iter_mut() {
             *reg = self.u64()?;
         }
+        let mut qregs = [0u128; 32];
+        if version >= SNAPSHOT_VERSION {
+            for qreg in qregs.iter_mut() {
+                *qreg = self.u128()?;
+            }
+        }
         Ok(CpuState {
             regs,
-            // Snapshot v15 predates Q-register state; restore it as zero.
-            qregs: [0; 32],
+            // Snapshots before v17 predate Q-register state; restore it as zero.
+            qregs,
             sp: self.u64()?,
             sp_el1: self.u64()?,
             pc: self.u64()?,
@@ -363,12 +385,12 @@ impl<'a> Reader<'a> {
                 zcr_el1: self.u64()?,
                 elr_el1: self.u64()?,
                 spsr_el1: self.u64()?,
-                esr_el1: if version >= SNAPSHOT_VERSION {
+                esr_el1: if version >= V16_SNAPSHOT_VERSION {
                     self.u64()?
                 } else {
                     0
                 },
-                far_el1: if version >= SNAPSHOT_VERSION {
+                far_el1: if version >= V16_SNAPSHOT_VERSION {
                     self.u64()?
                 } else {
                     0
@@ -385,7 +407,7 @@ impl<'a> Reader<'a> {
 /// * fewer than 4 bytes, or any truncation mid-field → `Corrupt`;
 /// * declared byte-length past the 2 GiB contract cap → `TooLarge`;
 /// * declared length within cap but beyond the bytes present → `Corrupt`;
-/// * versions other than 15 and [`SNAPSHOT_VERSION`] → `VersionMismatch { found }`;
+/// * versions other than 15, 16, and [`SNAPSHOT_VERSION`] → `VersionMismatch { found }`;
 /// * unknown device tag, or any trailing bytes → `Corrupt`.
 pub fn restore(blob: &[u8]) -> Result<MachineState, SnapshotError> {
     let mut r = Reader::new(blob);
@@ -394,14 +416,14 @@ pub fn restore(blob: &[u8]) -> Result<MachineState, SnapshotError> {
         return Err(SnapshotError::Corrupt);
     }
     let found = r.u32()?;
-    if found != SNAPSHOT_VERSION && found != PREVIOUS_SNAPSHOT_VERSION {
+    if !matches!(found, V15_SNAPSHOT_VERSION | V16_SNAPSHOT_VERSION | SNAPSHOT_VERSION) {
         return Err(SnapshotError::VersionMismatch { found });
     }
 
-    let cpu_encoded_bytes = if found == PREVIOUS_SNAPSHOT_VERSION {
-        V15_CPU_ENCODED_BYTES
-    } else {
-        CPU_ENCODED_BYTES
+    let cpu_encoded_bytes = match found {
+        V15_SNAPSHOT_VERSION => V15_CPU_ENCODED_BYTES,
+        V16_SNAPSHOT_VERSION => V16_CPU_ENCODED_BYTES,
+        _ => CPU_ENCODED_BYTES,
     };
     let cpu_count = r.u32()? as u64;
     // Each vCPU has a version-specific fixed size; reject absurd counts up front.
@@ -489,9 +511,14 @@ mod tests {
                 .wrapping_mul(0x9E37_79B9_7F4A_7C15)
                 .wrapping_add(i as u64);
         }
+        let mut qregs = [0u128; 32];
+        for (i, qreg) in qregs.iter_mut().enumerate() {
+            let lane = seed.wrapping_mul(0xD6E8_FEB8_6659_FD93).wrapping_add(i as u64);
+            *qreg = ((seed.wrapping_add(i as u64) as u128) << 64) | lane as u128;
+        }
         CpuState {
             regs,
-            qregs: [0; 32],
+            qregs,
             sp: seed.wrapping_add(0x1000),
             sp_el1: seed.wrapping_add(0x1001),
             pc: 0x4000 + seed,
@@ -647,20 +674,37 @@ mod tests {
         s.cpu[0].sysregs.far_el1 = 0x1234_5678;
 
         let blob = snapshot(&s).0;
-        assert_eq!(u32::from_le_bytes(blob[0..4].try_into().unwrap()), 16);
+        assert_eq!(u32::from_le_bytes(blob[0..4].try_into().unwrap()), SNAPSHOT_VERSION);
         assert_eq!(restore(&blob), Ok(s));
     }
 
     #[test]
-    fn restores_v15_snapshots_with_zeroed_abort_registers() {
+    fn restores_v16_snapshots_with_zeroed_qregs() {
         let s = machine(42, 1, 4096, vec![]);
         let mut expected = s.clone();
+        expected.cpu[0].qregs = [0; 32];
+
+        let mut old_blob = snapshot(&s).0;
+        old_blob[0..4].copy_from_slice(&V16_SNAPSHOT_VERSION.to_le_bytes());
+        let qregs_start = 8 + 31 * 8;
+        old_blob.drain(qregs_start..qregs_start + 32 * 16);
+
+        assert_eq!(restore(&old_blob), Ok(expected));
+    }
+
+    #[test]
+    fn restores_v15_snapshots_with_zeroed_qregs_and_abort_registers() {
+        let s = machine(42, 1, 4096, vec![]);
+        let mut expected = s.clone();
+        expected.cpu[0].qregs = [0; 32];
         expected.cpu[0].sysregs.esr_el1 = 0;
         expected.cpu[0].sysregs.far_el1 = 0;
 
         let mut old_blob = snapshot(&s).0;
-        old_blob[0..4].copy_from_slice(&PREVIOUS_SNAPSHOT_VERSION.to_le_bytes());
-        let cpu_end = 8 + CPU_ENCODED_BYTES;
+        old_blob[0..4].copy_from_slice(&V15_SNAPSHOT_VERSION.to_le_bytes());
+        let qregs_start = 8 + 31 * 8;
+        old_blob.drain(qregs_start..qregs_start + 32 * 16);
+        let cpu_end = 8 + V16_CPU_ENCODED_BYTES;
         old_blob.drain(cpu_end - 2 * 8..cpu_end);
 
         assert_eq!(restore(&old_blob), Ok(expected));
@@ -800,7 +844,7 @@ mod tests {
     // --- corruption matrix: every hostile shape maps to an exact variant ---
 
     /// Byte offset of the ram_len u64 for a state with `cpus` vCPUs:
-    /// version(4) + cpu_count(4) + cpus*392 + mmu(32) + irq(28).
+    /// version(4) + cpu_count(4) + encoded CPUs + mmu(32) + irq(28).
     fn ram_len_offset(cpus: usize) -> usize {
         4 + 4 + cpus * CPU_ENCODED_BYTES + 4 * 8 + (4 + 3 * 8)
     }

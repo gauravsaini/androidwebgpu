@@ -51,6 +51,15 @@ fn faulting_ldxr_machine() -> MachineState {
     }
 }
 
+fn faulting_fp_machine(instruction: u32) -> MachineState {
+    let mut machine = faulting_ldxr_machine();
+    let pc_offset = (TEST_PC - RAM_BASE) as usize;
+    machine.ram[pc_offset..pc_offset + 4].copy_from_slice(&instruction.to_le_bytes());
+    machine.cpu[0].regs[10] = 0; // FP/SIMD memory operand faults at unmapped VA 0.
+    machine.cpu[0].sysregs.cpacr_el1 = 3 << 20;
+    machine
+}
+
 fn wasm_faulting_literal_machine() -> MachineState {
     let mut ram = vec![0; 0x10_0000];
     // Map VA 0x4000 (code and vectors) through L1/L2 tables to the first
@@ -154,4 +163,36 @@ fn instruction_permission_fault_enters_el1_instruction_abort_vector() {
     assert_eq!(orch.machine.cpu[0].sysregs.spsr_el1, 0x3c5);
     assert_eq!(orch.machine.cpu[0].sysregs.esr_el1, 0x8600_000d);
     assert_eq!(orch.machine.cpu[0].sysregs.far_el1, TEST_PC);
+}
+
+#[test]
+fn fp_simd_memory_translation_faults_enter_el1_data_abort_vector() {
+    // LDR Q0, [X10], LDP Q0, Q1, [X10], and LD1 {V0.16B}, [X10].
+    for instruction in [0x3dc0_0140, 0xad40_0540, 0x4c40_7140] {
+        let mut orch = Orchestrator::with_machine(faulting_fp_machine(instruction));
+
+        assert_eq!(orch.step_vcpu(), StepOutcome::Continue, "{instruction:#010x}");
+        assert_eq!(orch.machine.cpu[0].pc, VBAR + 0x200, "{instruction:#010x}");
+        assert_eq!(orch.machine.cpu[0].sysregs.elr_el1, TEST_PC);
+        assert_eq!(orch.machine.cpu[0].sysregs.esr_el1, 0x9600_0005);
+        assert_eq!(orch.machine.cpu[0].sysregs.far_el1, 0);
+        assert_eq!(orch.halted(), None);
+    }
+}
+
+#[test]
+fn physical_instruction_fetch_bounds_fault_halts_without_guest_abort() {
+    let mut machine = faulting_ldxr_machine();
+    machine.cpu[0].sysregs.sctlr_el1 &= !1; // MMU off: physical identity fetch.
+    let bad_pc = RAM_BASE + machine.ram.len() as u64;
+    machine.cpu[0].pc = bad_pc;
+    let mut orch = Orchestrator::with_machine(machine);
+
+    assert_eq!(
+        orch.step_vcpu(),
+        StepOutcome::Halted(HaltReason::FetchFault { addr: bad_pc })
+    );
+    assert_eq!(orch.machine.cpu[0].pc, bad_pc);
+    assert_eq!(orch.machine.cpu[0].sysregs.esr_el1, 0);
+    assert_eq!(orch.machine.cpu[0].sysregs.far_el1, 0);
 }

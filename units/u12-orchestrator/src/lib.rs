@@ -765,6 +765,12 @@ struct ExceptionFault {
     level: u8,
 }
 
+#[derive(Debug)]
+enum FetchStepFault {
+    GuestAbort(ExceptionFault),
+    Halt(HaltReason),
+}
+
 impl ExceptionFault {
     fn from_mmu(fault: u4_mmu::MmuFault, access: Access) -> Self {
         let va = match fault.fault {
@@ -778,14 +784,6 @@ impl ExceptionFault {
         }
     }
 
-    fn translation(va: u64, access: Access) -> Self {
-        Self {
-            va,
-            access,
-            fault: MemFault::TranslationFault { va },
-            level: 0,
-        }
-    }
 }
 
 /// Image load failure — data, not panic.
@@ -1582,13 +1580,16 @@ impl Orchestrator {
         }
     }
 
-    /// Step-time fetch preserving the translation level for ESR_EL1.
-    fn fetch_word_for_step(&self, pc: u64) -> Result<u32, ExceptionFault> {
+    /// Step-time fetch preserving guest translation faults for ESR_EL1 while
+    /// keeping a translated PA outside RAM as a host-side FetchFault.
+    fn fetch_word_for_step(&self, pc: u64) -> Result<u32, FetchStepFault> {
         let pa = self
             .translate_va_status(pc, Access::Execute)
-            .map_err(|fault| ExceptionFault::from_mmu(fault, Access::Execute))?;
+            .map_err(|fault| {
+                FetchStepFault::GuestAbort(ExceptionFault::from_mmu(fault, Access::Execute))
+            })?;
         let off = ram_offset_in(&self.machine.ram, pa, 4)
-            .map_err(|_| ExceptionFault::translation(pc, Access::Execute))?;
+            .map_err(|_| FetchStepFault::Halt(HaltReason::FetchFault { addr: pc }))?;
         Ok(u32::from_le_bytes(
             self.machine.ram[off..off + 4].try_into().unwrap(),
         ))
@@ -4164,7 +4165,6 @@ impl Orchestrator {
                     let pa = match self.translate_data_orch(address, access) {
                         Ok(pa) => pa,
                         Err(reason) => {
-                            self.halted = Some(reason.clone());
                             return Some(StepOutcome::Halted(reason));
                         }
                     };
@@ -4248,7 +4248,6 @@ impl Orchestrator {
                 let first_pa = match self.translate_data_orch(effective, access) {
                     Ok(pa) => pa,
                     Err(reason) => {
-                        self.halted = Some(reason.clone());
                         return Some(StepOutcome::Halted(reason));
                     }
                 };
@@ -4256,7 +4255,6 @@ impl Orchestrator {
                 let second_pa = match self.translate_data_orch(second_va, access) {
                     Ok(pa) => pa,
                     Err(reason) => {
-                        self.halted = Some(reason.clone());
                         return Some(StepOutcome::Halted(reason));
                     }
                 };
@@ -4337,7 +4335,6 @@ impl Orchestrator {
                 let pa = match self.translate_data_orch(effective, access) {
                     Ok(pa) => pa,
                     Err(reason) => {
-                        self.halted = Some(reason.clone());
                         return Some(StepOutcome::Halted(reason));
                     }
                 };
@@ -4577,7 +4574,7 @@ impl Orchestrator {
         // Fetch.
         let word = match self.fetch_word_for_step(pc) {
             Ok(w) => w,
-            Err(fault) => {
+            Err(FetchStepFault::GuestAbort(fault)) => {
                 return match self.enter_abort_exception(pc, fault) {
                     Ok(()) => self.complete_exception_step(),
                     Err(reason) => {
@@ -4586,11 +4583,24 @@ impl Orchestrator {
                     }
                 };
             }
+            Err(FetchStepFault::Halt(reason)) => {
+                self.halted = Some(reason.clone());
+                return StepOutcome::Halted(reason);
+            }
         };
         if word == 0xD69F_03E0 {
             return self.execute_eret(pc);
         }
         if let Some(outcome) = self.execute_fp_simd(pc, word) {
+            if let Some(fault) = self.pending_abort.take() {
+                return match self.enter_abort_exception(pc, fault) {
+                    Ok(()) => self.complete_exception_step(),
+                    Err(reason) => {
+                        self.halted = Some(reason.clone());
+                        StepOutcome::Halted(reason)
+                    }
+                };
+            }
             return outcome;
         }
         if is_unallocated_neon_mul_2d(word) {

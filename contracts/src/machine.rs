@@ -770,8 +770,9 @@ pub const MAX_GUEST_RAM_BYTES: usize = 2 * 1024 * 1024 * 1024;
 pub struct Snapshot(pub Vec<u8>);
 
 /// Current snapshot format version. Bump on any format change.
-pub const SNAPSHOT_VERSION: u32 = 16;
-/// v14 adds ELR_EL1/SPSR_EL1, v15 adds SP_EL1, and v16 adds ESR_EL1/FAR_EL1.
+pub const SNAPSHOT_VERSION: u32 = 17;
+/// v14 adds ELR_EL1/SPSR_EL1, v15 adds SP_EL1, v16 adds ESR_EL1/FAR_EL1,
+/// and v17 adds the FP/SIMD Q-register bank.
 
 /// Snapshot restore failure. Data, not panic — corrupt input never crashes the host.
 #[derive(Debug, Clone, PartialEq, Eq)]
