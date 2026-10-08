@@ -203,7 +203,7 @@ const PSTATE_MODE_MASK: u64 = 0x1F;
 const EL0T_MODE: u64 = 0x00;
 const EL1T_MODE: u64 = 0x04;
 const EL1H_MODE: u64 = 0x05;
-const IRQ_ENTRY_LOG_CAPACITY: usize = 16;
+const IRQ_ENTRY_LOG_CAPACITY: usize = 20_000;
 
 // ---------------------------------------------------------------------------
 // Errors / halt reasons — data, never panics

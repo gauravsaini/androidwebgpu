@@ -263,6 +263,7 @@ fn main() {
     let mut halt_reason = None;
     let mut saved_at_step: Option<u64> = None;
     for _ in 0..max_steps {
+        let pc_before = orch.machine().cpu[0].pc;
         match orch.step_vcpu() {
             StepOutcome::Continue => {}
             StepOutcome::WfiYield { addr } => {
@@ -275,6 +276,56 @@ fn main() {
             }
         }
         let s = orch.steps();
+        if (60_000_001..=60_000_128).contains(&s) {
+            let cpu = &orch.machine().cpu[0];
+            let fetched = orch
+                .debug_fetch_around(pc_before, 1)
+                .into_iter()
+                .next()
+                .map(|(_, word)| word);
+            println!(
+                "[postirq-trace] step={s} pc_before={pc_before:#018x} fetched={fetched:?} pc_after={:#018x} pstate={:#x} sp={:#x} sp_el1={:#x} elr={:#x} spsr={:#x} regs={:x?}",
+                cpu.pc,
+                cpu.pstate,
+                cpu.sp,
+                cpu.sp_el1,
+                cpu.sysregs.elr_el1,
+                cpu.sysregs.spsr_el1,
+                cpu.regs
+            );
+        }
+        if s == 60_000_000 {
+            let cpu = &orch.machine().cpu[0];
+            println!(
+                "[postirq-checkpoint] entries={} eret_returns={} pc={:#018x} pstate={:#x} sp={:#x} sp_el1={:#x} elr={:#018x} spsr={:#x} daif={:#x} irq_pending={:#x} regs={:x?}",
+                orch.irq_entry_count(),
+                orch.irq_return_count(),
+                cpu.pc,
+                cpu.pstate,
+                cpu.sp,
+                cpu.sp_el1,
+                cpu.sysregs.elr_el1,
+                cpu.sysregs.spsr_el1,
+                cpu.sysregs.daif,
+                orch.machine().irq.pending,
+                cpu.regs
+            );
+            for (index, entry) in orch
+                .irq_entry_log()
+                .iter()
+                .enumerate()
+                .filter(|(_, entry)| entry.return_step.is_none())
+            {
+                println!(
+                    "[postirq-open-frame] log_index={index} step={} intid={} source_pc={:#018x} vector_pc={:#018x} source_mode={:#x}",
+                    entry.step,
+                    entry.intid,
+                    entry.source_pc,
+                    entry.vector_pc,
+                    entry.source_mode
+                );
+            }
+        }
         if s > 0 && s % 10_000_000 == 0 {
             let pc = orch.machine().cpu[0].pc;
             println!("[progress] step {s} ({}M), PC={pc:#018x}", s / 1_000_000);
