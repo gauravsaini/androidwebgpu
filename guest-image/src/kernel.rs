@@ -219,6 +219,7 @@ pub fn initial_kernel_cpu_state(manifest: &KernelManifest) -> CpuState {
     }
     CpuState {
         regs,
+        qregs: [[0; 2]; 32],
         sp: STACK_TOP,
         sp_el1: 0,
         pc: manifest.load_addr,

@@ -3,11 +3,11 @@
 //! PURE: deterministic encode/decode. No I/O, no wall-clock, no threads,
 //! no hidden state. A corrupt blob is data ([`SnapshotError`]), never a panic.
 //!
-//! Wire format v15 (all integers little-endian):
+//! Wire format v16 (all integers little-endian):
 //! ```text
-//! u32 version            == SNAPSHOT_VERSION (15)
+//! u32 version            == SNAPSHOT_VERSION (16)
 //! u32 cpu_count
-//! cpu_count × { 31×u64 regs, u64 sp, u64 sp_el1, u64 pc, u64 pstate, 135×u64 sysregs } (1360 bytes each)
+//! cpu_count × { 31×u64 regs, 64×u64 qregs, u64 sp, u64 sp_el1, u64 pc, u64 pstate, 137×u64 sysregs } (1888 bytes each)
 //! u64 ttbr0, u64 ttbr1, u64 tcr, u64 sctlr
 //! u32 irq_enabled, u64 irq_pending, u64 timer_count, u64 timer_compare
 //! u64 ram_len, ram_len bytes
@@ -24,9 +24,9 @@ use pathn_contracts::machine::{
     SNAPSHOT_VERSION, SysRegs,
 };
 
-/// Encoded size of one [`CpuState`]: 31 regs + sp + sp_el1 + pc + pstate + 135 sysregs,
+/// Encoded size of one [`CpuState`]: 31 regs + 64 Q halves + sp + sp_el1 + pc + pstate + 137 sysregs,
 /// all u64LE.
-const CPU_ENCODED_BYTES: usize = 170 * 8;
+const CPU_ENCODED_BYTES: usize = 236 * 8;
 /// Minimum encoded size of one [`DeviceState`]: u8 tag + u64 blob length.
 const DEVICE_MIN_BYTES: usize = 1 + 8;
 
@@ -79,6 +79,10 @@ impl Writer {
     fn cpu(&mut self, c: &CpuState) {
         for r in c.regs {
             self.u64(r);
+        }
+        for q in c.qregs {
+            self.u64(q[0]);
+            self.u64(q[1]);
         }
         self.u64(c.sp);
         self.u64(c.sp_el1);
@@ -162,6 +166,8 @@ impl Writer {
         self.u64(c.sysregs.zcr_el1);
         self.u64(c.sysregs.elr_el1);
         self.u64(c.sysregs.spsr_el1);
+        self.u64(c.sysregs.esr_el1);
+        self.u64(c.sysregs.far_el1);
     }
 
     fn mmu(&mut self, m: &MmuState) {
@@ -277,8 +283,14 @@ impl<'a> Reader<'a> {
         for reg in regs.iter_mut() {
             *reg = self.u64()?;
         }
+        let mut qregs = [[0u64; 2]; 32];
+        for q in qregs.iter_mut() {
+            q[0] = self.u64()?;
+            q[1] = self.u64()?;
+        }
         Ok(CpuState {
             regs,
+            qregs,
             sp: self.u64()?,
             sp_el1: self.u64()?,
             pc: self.u64()?,
@@ -357,6 +369,8 @@ impl<'a> Reader<'a> {
                 zcr_el1: self.u64()?,
                 elr_el1: self.u64()?,
                 spsr_el1: self.u64()?,
+                esr_el1: self.u64()?,
+                far_el1: self.u64()?,
             },
         })
     }
@@ -470,6 +484,7 @@ mod tests {
         }
         CpuState {
             regs,
+            qregs: std::array::from_fn(|i| [seed.wrapping_add(i as u64), seed ^ (i as u64 + 1)]),
             sp: seed.wrapping_add(0x1000),
             sp_el1: seed.wrapping_add(0x1001),
             pc: 0x4000 + seed,
@@ -545,6 +560,8 @@ mod tests {
                 zcr_el1: seed.wrapping_add(67),
                 elr_el1: seed.wrapping_add(68),
                 spsr_el1: seed.wrapping_add(69),
+                esr_el1: seed.wrapping_add(70),
+                far_el1: seed.wrapping_add(71),
             },
         }
     }
@@ -636,6 +653,7 @@ mod tests {
         let s = MachineState {
             cpu: vec![CpuState {
                 regs: [u64::MAX; 31],
+                qregs: [[u64::MAX; 2]; 32],
                 sp: u64::MAX,
                 sp_el1: u64::MAX,
                 pc: u64::MAX,
@@ -711,6 +729,8 @@ mod tests {
                     zcr_el1: u64::MAX,
                     elr_el1: u64::MAX,
                     spsr_el1: u64::MAX,
+                    esr_el1: u64::MAX,
+                    far_el1: u64::MAX,
                 },
             }],
             mmu: MmuState {
@@ -747,7 +767,7 @@ mod tests {
     // --- corruption matrix: every hostile shape maps to an exact variant ---
 
     /// Byte offset of the ram_len u64 for a state with `cpus` vCPUs:
-    /// version(4) + cpu_count(4) + cpus*392 + mmu(32) + irq(28).
+    /// version(4) + cpu_count(4) + cpus*1888 + mmu(32) + irq(28).
     fn ram_len_offset(cpus: usize) -> usize {
         4 + 4 + cpus * CPU_ENCODED_BYTES + 4 * 8 + (4 + 3 * 8)
     }

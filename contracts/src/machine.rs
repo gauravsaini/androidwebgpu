@@ -8,6 +8,8 @@ use crate::cpu::{IrqState, MmuState, SysReg};
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CpuState {
     pub regs: [u64; 31],
+    /// SIMD/FP Q registers, each stored as low and high 64-bit halves.
+    pub qregs: [[u64; 2]; 32],
     /// Currently selected stack pointer; `sp_el1` stores the banked EL1 stack.
     pub sp: u64,
     pub sp_el1: u64,
@@ -130,6 +132,9 @@ pub struct SysRegs {
     /// Exception return state captured by an EL1 exception.
     pub elr_el1: u64,
     pub spsr_el1: u64,
+    /// Syndrome and fault address from the most recent EL1 exception.
+    pub esr_el1: u64,
+    pub far_el1: u64,
 
 }
 
@@ -234,6 +239,8 @@ impl Default for SysRegs {
             zcr_el1: 0,
             elr_el1: 0,
             spsr_el1: 0,
+            esr_el1: 0,
+            far_el1: 0,
 
         }
     }
@@ -404,6 +411,8 @@ impl SysRegs {
             SysReg::ZcrEl1 => self.zcr_el1,
             SysReg::ElrEl1 => self.elr_el1,
             SysReg::SpsrEl1 => self.spsr_el1,
+            SysReg::EsrEl1 => self.esr_el1,
+            SysReg::FarEl1 => self.far_el1,
 
         }
     }
@@ -565,6 +574,7 @@ impl SysRegs {
             SysReg::ZcrEl1 => self.zcr_el1 = val,
             SysReg::ElrEl1 => self.elr_el1 = val,
             SysReg::SpsrEl1 => self.spsr_el1 = val,
+            SysReg::EsrEl1 | SysReg::FarEl1 => {}, // Architecturally read-only here.
 
         }
     }
@@ -715,6 +725,8 @@ impl SysRegs {
             135 => Some(SysReg::ZcrEl1),
             136 => Some(SysReg::ElrEl1),
             137 => Some(SysReg::SpsrEl1),
+            138 => Some(SysReg::EsrEl1),
+            139 => Some(SysReg::FarEl1),
 
             _ => None,
         }
@@ -760,8 +772,8 @@ pub const MAX_GUEST_RAM_BYTES: usize = 2 * 1024 * 1024 * 1024;
 pub struct Snapshot(pub Vec<u8>);
 
 /// Current snapshot format version. Bump on any format change.
-pub const SNAPSHOT_VERSION: u32 = 15;
-/// v14 adds ELR_EL1 and SPSR_EL1; v15 adds the banked SP_EL1 value.
+pub const SNAPSHOT_VERSION: u32 = 16;
+/// v14 adds ELR_EL1 and SPSR_EL1; v15 adds banked SP_EL1; v16 adds Q regs, ESR_EL1, FAR_EL1.
 
 /// Snapshot restore failure. Data, not panic — corrupt input never crashes the host.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -805,6 +817,7 @@ mod tests {
         let s = MachineState {
             cpu: vec![CpuState {
                 regs: [0; 31],
+                qregs: [[0; 2]; 32],
                 sp: 0,
                 sp_el1: 0,
                 pc: 0x4000,
@@ -918,7 +931,7 @@ mod tests {
         ] {
             assert_eq!(SysRegs::from_index(idx), Some(reg));
         }
-        assert_eq!(SysRegs::from_index(136), None);
+        assert_eq!(SysRegs::from_index(136), Some(SysReg::ElrEl1));
     }
 
     #[test]
@@ -974,6 +987,8 @@ mod tests {
         ] {
             assert_eq!(SysRegs::from_index(idx), Some(reg));
         }
-        assert_eq!(SysRegs::from_index(136), None);
+        assert_eq!(SysRegs::from_index(136), Some(SysReg::ElrEl1));
+        assert_eq!(SysRegs::from_index(138), Some(SysReg::EsrEl1));
+        assert_eq!(SysRegs::from_index(139), Some(SysReg::FarEl1));
     }
 }

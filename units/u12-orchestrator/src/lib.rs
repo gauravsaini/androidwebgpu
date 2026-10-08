@@ -639,6 +639,7 @@ impl Orchestrator {
             machine: MachineState {
                 cpu: vec![CpuState {
                     regs: [0; 31],
+                    qregs: [[0; 2]; 32],
                     // Shelf Job 2 (2026-10-05): SP moved from 0x4800_0000 to
                     // 0x4830_0000 to avoid initrd (0x4800_0000) and DTB (0x4820_0000).
                     sp: 0x4830_0000,
@@ -3301,6 +3302,145 @@ impl Orchestrator {
         StepOutcome::Continue
     }
 
+    fn take_sync_exception(
+        &mut self,
+        esr: u64,
+        return_pc: u64,
+        far: Option<u64>,
+    ) -> StepOutcome {
+        let cpu = &self.machine.cpu[0];
+        let saved_pstate =
+            (cpu.pstate & !PSTATE_DAIF_MASK) | (cpu.sysregs.daif & PSTATE_DAIF_MASK);
+        let source_mode = saved_pstate & PSTATE_MODE_MASK;
+        let vector_offset = match source_mode {
+            EL0T_MODE => 0x400,
+            EL1T_MODE => 0x000,
+            EL1H_MODE => 0x200,
+            _ => {
+                let halt = HaltReason::Unsupported {
+                    addr: cpu.pc,
+                    reason: "synchronous exception from an unsupported PSTATE mode",
+                };
+                self.halted = Some(halt.clone());
+                return StepOutcome::Halted(halt);
+            }
+        };
+        let vector_pc = (cpu.sysregs.vbar_el1 & !0x7ff).wrapping_add(vector_offset);
+        let cpu = &mut self.machine.cpu[0];
+        cpu.sysregs.elr_el1 = return_pc;
+        cpu.sysregs.spsr_el1 = saved_pstate;
+        cpu.sysregs.esr_el1 = esr;
+        if let Some(fault_address) = far {
+            cpu.sysregs.far_el1 = fault_address;
+        }
+        if source_mode != EL1H_MODE {
+            cpu.sysregs.sp_el0 = cpu.sp;
+            cpu.sp = cpu.sp_el1;
+        }
+        cpu.sysregs.daif = PSTATE_DAIF_MASK;
+        cpu.pstate = (saved_pstate & !(PSTATE_DAIF_MASK | PSTATE_MODE_MASK))
+            | PSTATE_DAIF_MASK
+            | EL1H_MODE;
+        cpu.pc = vector_pc;
+        self.steps = self.steps.saturating_add(1);
+        self.tick_clock(TIMER_CYCLES_PER_STEP);
+        StepOutcome::Continue
+    }
+
+    fn execute_q_pair(&mut self, pc: u64, word: u32) -> StepOutcome {
+        let is_load = (word >> 22) & 1 != 0;
+        let mode = (word >> 23) & 0x3;
+        let rt = (word & 0x1f) as usize;
+        let rn = ((word >> 5) & 0x1f) as usize;
+        let rt2 = ((word >> 10) & 0x1f) as usize;
+        let imm7 = ((word >> 15) & 0x7f) as i64;
+        let offset = ((imm7 << 57) >> 57) * 16;
+        let cpu = &self.machine.cpu[0];
+        let base = if rn == 31 { cpu.sp } else { cpu.regs[rn] };
+        let address = if mode == 0b01 {
+            base
+        } else {
+            base.wrapping_add(offset as u64)
+        };
+
+        // QEMU faults on misaligned Q pairs even when SCTLR_EL1.A is clear.
+        if address & 0xf != 0 {
+            let write_not_read = if is_load { 0 } else { 1 << 6 };
+            return self.take_sync_exception(0x9600_0021 | write_not_read, pc, Some(address));
+        }
+        let access = if is_load { Access::Read } else { Access::Write };
+        let pa = match self.translate_data_orch(address, access) {
+            Ok(pa) => pa,
+            Err(reason) => {
+                self.halted = Some(reason.clone());
+                return StepOutcome::Halted(reason);
+            }
+        };
+        let pa2 = match self.translate_data_orch(address.wrapping_add(16), access) {
+            Ok(pa) => pa,
+            Err(reason) => {
+                self.halted = Some(reason.clone());
+                return StepOutcome::Halted(reason);
+            }
+        };
+        let off = match self.ram_offset(pa, 16) {
+            Ok(off) => off,
+            Err(_) => {
+                let halt = HaltReason::WasmTrap {
+                    addr: address,
+                    message: "Q-pair access outside RAM".to_string(),
+                };
+                self.halted = Some(halt.clone());
+                return StepOutcome::Halted(halt);
+            }
+        };
+        let off2 = match self.ram_offset(pa2, 16) {
+            Ok(off) => off,
+            Err(_) => {
+                let halt = HaltReason::WasmTrap {
+                    addr: address.wrapping_add(16),
+                    message: "Q-pair access outside RAM".to_string(),
+                };
+                self.halted = Some(halt.clone());
+                return StepOutcome::Halted(halt);
+            }
+        };
+        if is_load {
+            let first = [
+                u64::from_le_bytes(self.machine.ram[off..off + 8].try_into().unwrap()),
+                u64::from_le_bytes(self.machine.ram[off + 8..off + 16].try_into().unwrap()),
+            ];
+            let second = [
+                u64::from_le_bytes(self.machine.ram[off2..off2 + 8].try_into().unwrap()),
+                u64::from_le_bytes(self.machine.ram[off2 + 8..off2 + 16].try_into().unwrap()),
+            ];
+            self.machine.cpu[0].qregs[rt] = first;
+            self.machine.cpu[0].qregs[rt2] = second;
+        } else {
+            let first = self.machine.cpu[0].qregs[rt];
+            let second = self.machine.cpu[0].qregs[rt2];
+            if is_kernel_text_va(address) {
+                self.invalidate_code_cache();
+            }
+            self.machine.ram[off..off + 8].copy_from_slice(&first[0].to_le_bytes());
+            self.machine.ram[off + 8..off + 16].copy_from_slice(&first[1].to_le_bytes());
+            self.machine.ram[off2..off2 + 8].copy_from_slice(&second[0].to_le_bytes());
+            self.machine.ram[off2 + 8..off2 + 16].copy_from_slice(&second[1].to_le_bytes());
+        }
+        if matches!(mode, 0b01 | 0b11) {
+            let writeback = base.wrapping_add(offset as u64);
+            if rn == 31 {
+                self.machine.cpu[0].sp = writeback;
+            } else {
+                self.machine.cpu[0].regs[rn] = writeback;
+            }
+        }
+        self.machine.cpu[0].pc = pc.wrapping_add(4);
+        self.steps = self.steps.saturating_add(1);
+        self.tick_clock(TIMER_CYCLES_PER_STEP);
+        StepOutcome::Continue
+    }
+
     /// One vCPU step: fetch → U1 decode → U2 lift → U3 compile → wasmtime.
     /// Never panics: every failure becomes a typed [`HaltReason`].
     pub fn step_vcpu(&mut self) -> StepOutcome {
@@ -3322,7 +3462,15 @@ impl Orchestrator {
             }
         };
         if word == 0xD69F_03E0 {
+            if self.machine.cpu[0].pstate & PSTATE_MODE_MASK == EL0T_MODE {
+                return self.take_sync_exception(0x0200_0000, pc, None);
+            }
             return self.execute_eret(pc);
+        }
+        if word & 0xFFE0_001F == 0xD400_0001 {
+            let immediate = (word >> 5) & 0xffff;
+            let esr = (0x15u64 << 26) | (1 << 25) | immediate as u64;
+            return self.take_sync_exception(esr, pc.wrapping_add(4), None);
         }
         let feature_mrs = id_feature_mrs(word);
 
@@ -3338,6 +3486,17 @@ impl Orchestrator {
                 }
                 let _ = writeln!(w, " 0x{:016x} 0x{:x}", cpu.sp, nzcv);
             }
+        }
+
+        let mode = self.machine.cpu[0].pstate & PSTATE_MODE_MASK;
+        let top4 = (word >> 25) & 0xf;
+        let is_fp_simd = matches!(top4, 0b0111 | 0b1111 | 0b0110 | 0b1110);
+        let fpen = (self.machine.cpu[0].sysregs.cpacr_el1 >> 20) & 0x3;
+        if is_fp_simd && (fpen == 0 || (fpen == 1 && mode == EL0T_MODE)) {
+            return self.take_sync_exception(0x1fe0_0000, pc, None);
+        }
+        if (word >> 25) & 0x1f == 0b10110 && (word >> 30) & 0x3 == 0b10 {
+            return self.execute_q_pair(pc, word);
         }
 
         // Fast path first (GB-23): handles SP-relative and other forms that

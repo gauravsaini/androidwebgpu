@@ -63,6 +63,11 @@ pub fn decode(word: u32) -> DecodeResult {
 /// 0x9AC32042 (LSLV) → 1101,
 /// 0xB9000020 (STR) / 0xF9400020 (LDR) → 1100.
 fn classify(word: u32) -> Option<InsnKind> {
+    // SIMD load/store pairs share the FP/SIMD major group but are memory
+    // operations; route them before the FP decoder. opc=11 is unallocated.
+    if (word >> 25) & 0x1F == 0b10110 && ((word >> 30) & 0x3) <= 0b10 {
+        return Some(InsnKind::LoadStore);
+    }
     match (word >> 25) & 0xF {
         0b1000 | 0b1001 => dp_imm::decode(word),
         0b1010 | 0b1011 => branch::decode(word).or_else(|| system::decode(word)),
@@ -562,6 +567,12 @@ mod tests {
         assert_eq!(ok_kind(0xB980_0420), InsnKind::LoadStore); // ldrsw x0, [x1, #4] (unsigned offset)
         assert_eq!(ok_kind(0xB880_4C20), InsnKind::LoadStore); // ldrsw x0, [x1, #4]! (pre-index)
         assert_eq!(ok_kind(0xB880_4420), InsnKind::LoadStore); // ldrsw x0, [x1], #4 (post-index)
+    }
+
+    #[test]
+    fn q_register_pairs_are_loadstore() {
+        assert_eq!(ok_kind(0xAD40_0400), InsnKind::LoadStore); // LDP Q0, Q1, [X0]
+        assert_eq!(ok_kind(0xAD80_8420), InsnKind::LoadStore); // STP Q0, Q1, [X1, #16]!
     }
 
     #[test]
