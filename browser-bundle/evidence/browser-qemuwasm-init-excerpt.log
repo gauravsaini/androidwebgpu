@@ -1,0 +1,35 @@
+[   54.936134] registered taskstats version 1
+[   54.944179] Loading compiled-in X.509 certificates
+[   54.992354] Key type ._fscrypt registered
+[   54.999594] Key type .fscrypt registered
+[   55.010684] Key type fscrypt-provisioning registered
+[   55.131374] cfg80211: Loading compiled-in X.509 certificates for regulatory database
+[   55.348719] kworker/u2:0 (98): highest shadow stack usage: 136 bytes
+[   55.508509] kworker/u2:0 (99): highest shadow stack usage: 160 bytes
+[   55.663634] cryptomgr_probe (101): highest shadow stack usage: 176 bytes
+[   55.819409] cfg80211: Loaded X.509 cert 'sforshee: 00b28ddf47aef9cea7'
+[   55.884104] ALSA device list:
+[   55.915079]   No soundcards found.
+[   55.959554] platform regulatory.0: Direct firmware load for regulatory.db failed with error -2
+[   55.992634] platform regulatory.0: Falling back to syfs fallback for: regulatory.db
+[   56.079944] uart-pl011 9000000.pl011: no DMA platform data
+[   57.419949] Freeing unused kernel memory: 1024K
+[   57.459359] Run /init as init process
+
+============================================================
+[PATHN-TRACK-B] ARM64 STATIC /INIT LAUNCHED (PID 1)
+[PATHN-TRACK-B] UART MARKER: PL011 TTYAMA0 DRIVER AT 0x09000000 OK
+[PATHN-TRACK-B] RAM MARKER: MAGIC 0x504154484E5F5241 0x4D5F4D41524B4552 OK
+[PATHN-TRACK-B] INITRAMFS ROOTFS MOUNTED AT / OK
+[PATHN-TRACK-B] STATUS: PASS - USERSPACE INITIALIZATION COMPLETE
+============================================================
+
+
+============================================================
+[PATHN-TRACK-B] ARM64 STATIC /INIT LAUNCHED (PID 1)
+[PATHN-TRACK-B] UART MARKER: PL011 TTYAMA0 DRIVER AT 0x09000000 OK
+[PATHN-TRACK-B] RAM MARKER: MAGIC 0x504154484E5F5241 0x4D5F4D41524B4552 OK
+[PATHN-TRACK-B] INITRAMFS ROOTFS MOUNTED AT / OK
+[PATHN-TRACK-B] STATUS: PASS - USERSPACE INITIALIZATION COMPLETE
+============================================================
+
