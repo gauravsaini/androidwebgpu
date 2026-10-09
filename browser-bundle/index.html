@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>QEMU wasm64 ARM64 checkpoint</title>
+  <style>
+    body { margin: 1rem; background: #111; color: #ddd; font: 14px monospace; }
+    #status { display: inline-block; margin-left: 1rem; padding: .25rem .6rem; border: 1px solid #666; }
+    #status[data-state="init-seen"] { color: #0f0; border-color: #0f0; }
+    #status[data-state^="error"] { color: #f66; border-color: #f66; }
+    #serial { height: 78vh; overflow: auto; padding: .75rem; background: #000; color: #cfc; white-space: pre-wrap; overflow-wrap: anywhere; }
+  </style>
+</head>
+<body>
+  <h1>QEMU wasm64 ARM64 guest</h1>
+  <button id="start">Start guest</button>
+  <span id="status" data-state="idle">idle</span>
+  <pre id="serial" aria-live="polite"></pre>
+  <script type="module" src="launch.js"></script>
+</body>
+</html>

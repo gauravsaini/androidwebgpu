@@ -1,0 +1,7 @@
+# Large and binary artifacts stay OUT of git per project policy
+# Binaries live locally on Mac at /Users/Shared/wt-track157-qemuwasm/browser-bundle/assets/
+assets/
+
+# Allow small evidence excerpt log
+!evidence/browser-qemuwasm-init-excerpt.log
+
