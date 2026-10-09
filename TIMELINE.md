@@ -50,3 +50,12 @@
 - The first release boot entered the timer vector for INTID 27 and reached the guest GICC IAR/EOIR accesses, then stopped at step 45,730,665 because the active-handler guard rejected a nested timer IRQ before ERET. This isolated a nested-exception gap in the boot path.
 - Added nested EL1 IRQ stack tracking so nested entry may overwrite ELR/SPSR and ERET returns unwind in order. Focused IRQ/WFI tests passed (6 passed, 1 ignored); the full orchestrator library suite passed (153 passed, 2 ignored). The second release boot reached the 60M step budget with `IRQ_ENTRIES=4951` and `IRQ_ERET_RETURNS=4949`; UART was 2,562 bytes and `INIT_MARKER=haan` because the kernel command line printed `rdinit=/init`. There was no `STATUS: PASS`, so this marker does not prove `/init` launched. The boot report ended at `PC=0xffffff80082430c0` without a guest halt.
 - Runtime logs recorded 5,775 GICC IAR reads for INTID 27 and 5,774 EOIs. The ISR now runs repeatedly and returns through ERET; two entries were still active at the step cap.
+
+## UPDATED ON : 2026-10-10
+
+### feat (2026-10-10) — T157 QEMU 11.1.2 wasm64 browser boot milestone sync
+
+1. **QEMU wasm64 Browser Sync**: Synced T157 evidence and deliverables into git (source-only, binaries excluded). Includes browser harness (`launch.js`, `index.html`, `serve.py`) with 15 ROM staging + `-L /qemu-data`, wasm64 TCI reproducible build recipe (`BUILD_RECIPE.md`, `build-qemu-wasm.sh`), SHA-256 artifact manifest, and 36-line boot evidence excerpt proving `Run /init as init process` (PID 1) in headless Chromium.
+2. **Tests** (before → after): Unpatched upstream QEMU 11.1.2 booted in browser to `/init` in 57.4s (PASS).
+3. **Files changed**: `browser-bundle/index.html`, `browser-bundle/launch.js`, `browser-bundle/serve.py`, `browser-bundle/build/*`, `browser-bundle/README.md`, `browser-bundle/MANIFEST.md`, `browser-bundle/evidence/*`, `TIMELINE.md`.
+
