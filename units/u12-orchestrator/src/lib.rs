@@ -64,6 +64,8 @@
 //! → identical hash, twice. No wall clock, no threads, no FP in the path.
 
 use std::collections::VecDeque;
+#[cfg(not(target_arch = "wasm32"))]
+use std::path::Path;
 
 #[cfg(test)]
 mod irq_wfi_tests;
@@ -81,7 +83,11 @@ use pathn_contracts::machine::{CpuState, MachineState, SysRegs, MAX_GUEST_RAM_BY
 use sha2::{Digest, Sha256};
 
 pub mod arm64;
+#[cfg(not(target_arch = "wasm32"))]
+mod virtio_blk;
 use arm64::*;
+#[cfg(not(target_arch = "wasm32"))]
+use virtio_blk::{AttachedVirtioBlk, VirtioBlkDevice};
 
 #[cfg(target_arch = "wasm32")]
 use u15_exec_wasmi::WasmiExecutor;
@@ -168,76 +174,111 @@ struct GicV2State {
     gicd_ctlr: u32,
     gicc_ctlr: u32,
     gicc_pmr: u32,
+    gicd_igroupr0: u32,
     gicd_isenabler0: u32,
     gicd_ppi27_priority: u8,
-    /// Group1 assignment is packed into the existing active-state word so
-    /// the full-snapshot layout remains unchanged. A Group1/no-active marker
-    /// uses an otherwise impossible active ID.
+    /// The first SPI bank covers INTIDs 32–63, including virtio IRQs 49/50.
+    gicd_igroupr1: u32,
+    gicd_isenabler1: u32,
+    gicd_spi_priorities: [u32; 8],
     gicc_active: Option<u32>,
 }
 
 const GIC_PPI27: u32 = 1 << 27;
-const GIC_GROUP1_ACTIVE: u32 = 1 << 31;
-const GIC_NO_ACTIVE: u32 = 1 << 30;
+const LEGACY_GIC_GROUP1_ACTIVE: u32 = 1 << 31;
+const LEGACY_GIC_NO_ACTIVE: u32 = 1 << 30;
 const GIC_INTID_MASK: u32 = 0x3ff;
-const GIC_GROUP1_NO_ACTIVE: u32 = GIC_GROUP1_ACTIVE | GIC_NO_ACTIVE | GIC_INTID_MASK;
+const LEGACY_GIC_GROUP1_NO_ACTIVE: u32 =
+    LEGACY_GIC_GROUP1_ACTIVE | LEGACY_GIC_NO_ACTIVE | GIC_INTID_MASK;
 const GIC_IAR_SPURIOUS: u32 = 1023;
-const GIC_IAR_GROUP1_SPURIOUS: u32 = 1022;
 
 impl GicV2State {
     fn ppi27_group1(&self) -> bool {
-        self.gicc_active
-            .is_some_and(|state| state & GIC_GROUP1_ACTIVE != 0)
+        self.gicd_igroupr0 & GIC_PPI27 != 0
     }
 
     fn ppi27_active(&self) -> bool {
-        self.gicc_active.is_some_and(|state| {
-            state & GIC_NO_ACTIVE == 0 && state & GIC_INTID_MASK == 27
-        })
+        self.gicc_active == Some(27)
     }
 
     fn set_ppi27_group1(&mut self, group1: bool) {
-        match (group1, self.gicc_active) {
-            (true, None) => self.gicc_active = Some(GIC_GROUP1_NO_ACTIVE),
-            (true, Some(state)) => self.gicc_active = Some(state | GIC_GROUP1_ACTIVE),
-            (false, Some(state)) if state & GIC_GROUP1_ACTIVE != 0 => {
-                self.gicc_active = if state & GIC_NO_ACTIVE != 0 {
-                    None
-                } else {
-                    Some(state & !GIC_GROUP1_ACTIVE)
-                };
-            }
-            (false, _) => {}
+        if group1 {
+            self.gicd_igroupr0 |= GIC_PPI27;
+        } else {
+            self.gicd_igroupr0 &= !GIC_PPI27;
         }
     }
 
-    fn set_ppi27_active(&mut self) {
-        self.gicc_active = Some(if self.ppi27_group1() {
-            GIC_GROUP1_ACTIVE | 27
-        } else {
-            27
-        });
+    fn clear_ppi27_active(&mut self) {
+        if self.ppi27_active() {
+            self.gicc_active = None;
+        }
     }
 
-    fn clear_ppi27_active(&mut self) {
-        self.gicc_active = if self.ppi27_group1() {
-            Some(GIC_GROUP1_NO_ACTIVE)
-        } else {
-            None
-        };
+    fn spi_group1(&self, intid: u32) -> bool {
+        (32..64).contains(&intid) && self.gicd_igroupr1 & (1 << (intid - 32)) != 0
     }
+
+    fn irq_group1(&self, intid: u32) -> bool {
+        if intid == 27 {
+            self.ppi27_group1()
+        } else {
+            self.spi_group1(intid)
+        }
+    }
+
+    fn irq_enabled(&self, intid: u32) -> bool {
+        match intid {
+            27 => self.gicd_isenabler0 & GIC_PPI27 != 0,
+            32..64 => self.gicd_isenabler1 & (1 << (intid - 32)) != 0,
+            _ => false,
+        }
+    }
+
+    fn irq_priority(&self, intid: u32) -> u8 {
+        if intid == 27 {
+            self.gicd_ppi27_priority
+        } else if (32..64).contains(&intid) {
+            let index = ((intid - 32) / 4) as usize;
+            let shift = ((intid - 32) % 4) * 8;
+            (self.gicd_spi_priorities[index] >> shift) as u8
+        } else {
+            u8::MAX
+        }
+    }
+
+    fn irq_active(&self, intid: u32) -> bool {
+        self.gicc_active == Some(intid)
+    }
+
+    fn set_irq_active(&mut self, intid: u32) {
+        self.gicc_active = Some(intid);
+    }
+
+    fn clear_irq_active(&mut self, intid: u32) {
+        if self.gicc_active == Some(intid) {
+            self.gicc_active = None;
+        }
+    }
+
 }
 
 fn highest_pending_gic_irq(gic: &GicV2State, pending: u64) -> Option<u32> {
     let priority_mask = gic.gicc_pmr as u8;
-    let group_enable = if gic.ppi27_group1() { 1 << 1 } else { 1 };
-    (gic.gicd_ctlr & group_enable != 0
-        && gic.gicc_ctlr & group_enable != 0
-        && gic.gicd_isenabler0 & GIC_PPI27 != 0
-        && pending & (GIC_PPI27 as u64) != 0
-        && !gic.ppi27_active()
-        && gic.gicd_ppi27_priority < priority_mask)
-        .then_some(27)
+    let deliverable = |intid: u32| {
+        let group_enable = if gic.irq_group1(intid) { 1 << 1 } else { 1 };
+        gic.gicd_ctlr & group_enable != 0
+            && gic.gicc_ctlr & group_enable != 0
+            && gic.irq_enabled(intid)
+            && pending & (1u64 << intid) != 0
+            && !gic.irq_active(intid)
+            && gic.irq_priority(intid) < priority_mask
+    };
+    if deliverable(27) {
+        Some(27)
+    } else {
+        (32..64).find(|intid| deliverable(*intid))
+    }
 }
 
 /// Platform IRQ number the orchestrator raises for virtio-gpu completion.
@@ -1119,6 +1160,9 @@ pub struct Orchestrator {
     pub gpu_port: GpuPort,
     /// Minimal GICv2 distributor / CPU-interface state.
     gic: GicV2State,
+    /// File-backed virtio-blk devices exposed through native guest MMIO.
+    #[cfg(not(target_arch = "wasm32"))]
+    virtio_blk: Vec<AttachedVirtioBlk>,
     /// Injected cycle counter — the only "clock". Never wall time.
     pub clock_cycles: u64,
     pub steps: u64,
@@ -1225,6 +1269,8 @@ impl Orchestrator {
             console: ConsoleState::new(),
             gpu_port: GpuPort::new(),
             gic: GicV2State::default(),
+            #[cfg(not(target_arch = "wasm32"))]
+            virtio_blk: Vec::new(),
             clock_cycles: 0,
             steps: 0,
             halted: None,
@@ -1253,6 +1299,36 @@ impl Orchestrator {
             }
         }
         orch
+    }
+
+    /// Attach a raw disk image at a virtio-MMIO address and guest interrupt.
+    #[cfg(not(target_arch = "wasm32"))]
+    pub fn attach_virtio_blk(
+        &mut self,
+        base: u64,
+        irq: u32,
+        path: &Path,
+        read_only: bool,
+    ) -> std::io::Result<()> {
+        if irq >= 64
+            || self.virtio_blk.iter().any(|existing| {
+                base < existing.base + 0x200 && existing.base < base.saturating_add(0x200)
+            })
+        {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidInput,
+                "virtio-blk MMIO ranges must not overlap and IRQs must be below 64",
+            ));
+        }
+        let device = VirtioBlkDevice::open(path, read_only)?;
+        self.virtio_blk.push(AttachedVirtioBlk { base, irq, device });
+        Ok(())
+    }
+
+    /// Create a new sparse raw image for a writable virtio-blk disk.
+    #[cfg(not(target_arch = "wasm32"))]
+    pub fn create_sparse_virtio_blk_image(path: &Path, size_bytes: u64) -> std::io::Result<()> {
+        VirtioBlkDevice::create_sparse_image(path, size_bytes)
     }
 
     /// Enable instruction tracing to the specified file path.
@@ -4774,6 +4850,8 @@ impl Orchestrator {
         let gic: &mut GicV2State = &mut self.gic;
         let irq: &mut IrqState = &mut self.machine.irq;
         let sysregs: &mut SysRegs = &mut cpu.sysregs;
+        #[cfg(not(target_arch = "wasm32"))]
+        let virtio_blk: &mut [AttachedVirtioBlk] = &mut self.virtio_blk;
         let mut host = WasmHost {
             ram,
             console,
@@ -4781,6 +4859,8 @@ impl Orchestrator {
             gic,
             irq,
             sysregs,
+            #[cfg(not(target_arch = "wasm32"))]
+            virtio_blk,
             code_write: false,
             abort_fault: None,
         };
@@ -5148,12 +5228,18 @@ impl Orchestrator {
         write_survey_misses(&mut w, &self.survey_first_miss);
         write_survey_misses(&mut w, &self.survey_traps);
         out.extend_from_slice(&w.buf);
-        out.extend_from_slice(b"GIC3");
+        out.extend_from_slice(b"GIC4");
         out.extend_from_slice(&self.gic.gicd_ctlr.to_le_bytes());
         out.extend_from_slice(&self.gic.gicc_ctlr.to_le_bytes());
         out.extend_from_slice(&self.gic.gicc_pmr.to_le_bytes());
+        out.extend_from_slice(&self.gic.gicd_igroupr0.to_le_bytes());
         out.extend_from_slice(&self.gic.gicd_isenabler0.to_le_bytes());
         out.extend_from_slice(&(self.gic.gicd_ppi27_priority as u32).to_le_bytes());
+        out.extend_from_slice(&self.gic.gicd_igroupr1.to_le_bytes());
+        out.extend_from_slice(&self.gic.gicd_isenabler1.to_le_bytes());
+        for priority_word in self.gic.gicd_spi_priorities {
+            out.extend_from_slice(&priority_word.to_le_bytes());
+        }
         out.extend_from_slice(&self.gic.gicc_active.unwrap_or(u32::MAX).to_le_bytes());
         out
     }
@@ -5293,10 +5379,27 @@ impl Orchestrator {
         };
         o.survey_first_miss = read_survey_misses(&mut r).ok_or(RestoreError::BadFormat)?;
         o.survey_traps = read_survey_misses(&mut r).ok_or(RestoreError::BadFormat)?;
-        if matches!(r.remaining(), 8 | 16 | 28) {
+        if matches!(r.remaining(), 8 | 16 | 28 | 72) {
             let extension_len = r.remaining();
             let marker = r.take(4).ok_or(RestoreError::BadFormat)?;
-            if extension_len == 28 {
+            if extension_len == 72 {
+                if marker != b"GIC4" {
+                    return Err(RestoreError::BadFormat);
+                }
+                o.gic.gicd_ctlr = r.u32().ok_or(RestoreError::BadFormat)?;
+                o.gic.gicc_ctlr = r.u32().ok_or(RestoreError::BadFormat)?;
+                o.gic.gicc_pmr = r.u32().ok_or(RestoreError::BadFormat)?;
+                o.gic.gicd_igroupr0 = r.u32().ok_or(RestoreError::BadFormat)?;
+                o.gic.gicd_isenabler0 = r.u32().ok_or(RestoreError::BadFormat)?;
+                o.gic.gicd_ppi27_priority = r.u32().ok_or(RestoreError::BadFormat)? as u8;
+                o.gic.gicd_igroupr1 = r.u32().ok_or(RestoreError::BadFormat)?;
+                o.gic.gicd_isenabler1 = r.u32().ok_or(RestoreError::BadFormat)?;
+                for priority_word in &mut o.gic.gicd_spi_priorities {
+                    *priority_word = r.u32().ok_or(RestoreError::BadFormat)?;
+                }
+                let active = r.u32().ok_or(RestoreError::BadFormat)?;
+                o.gic.gicc_active = (active != u32::MAX).then_some(active);
+            } else if extension_len == 28 {
                 if marker != b"GIC3" {
                     return Err(RestoreError::BadFormat);
                 }
@@ -5306,7 +5409,17 @@ impl Orchestrator {
                 o.gic.gicd_isenabler0 = r.u32().ok_or(RestoreError::BadFormat)?;
                 o.gic.gicd_ppi27_priority = r.u32().ok_or(RestoreError::BadFormat)? as u8;
                 let active = r.u32().ok_or(RestoreError::BadFormat)?;
-                o.gic.gicc_active = (active != u32::MAX).then_some(active);
+                if active == LEGACY_GIC_GROUP1_NO_ACTIVE {
+                    o.gic.set_ppi27_group1(true);
+                } else if active != u32::MAX && active & LEGACY_GIC_GROUP1_ACTIVE != 0 {
+                    let intid = active & GIC_INTID_MASK;
+                    if intid == 27 {
+                        o.gic.set_ppi27_group1(true);
+                    }
+                    o.gic.gicc_active = Some(intid);
+                } else {
+                    o.gic.gicc_active = (active != u32::MAX).then_some(active);
+                }
             } else {
                 if marker != b"GIC2" {
                     return Err(RestoreError::BadFormat);
@@ -5495,6 +5608,8 @@ struct WasmHost<'a> {
     gic: &'a mut GicV2State,
     irq: &'a mut IrqState,
     sysregs: &'a mut SysRegs,
+    #[cfg(not(target_arch = "wasm32"))]
+    virtio_blk: &'a mut [AttachedVirtioBlk],
     /// Set when a guest store writes to kernel text VA range (icache-fix).
     /// The orchestrator checks this after run_block and invalidates the
     /// WASM JIT code cache if set. Linux ARM64 alternatives patching
@@ -5583,6 +5698,13 @@ impl HostOps for WasmHost<'_> {
             // Defined MMIO region, other offsets: reads return 0.
             return Ok(0);
         }
+        #[cfg(not(target_arch = "wasm32"))]
+        if let Some(device) = self.virtio_blk.iter().find(|device| device.contains(pa)) {
+            if size != 4 {
+                return Err("mem_load: virtio-mmio register access must be 32-bit".to_string());
+            }
+            return Ok(device.device.read_mmio((pa - device.base) as u32) as i64);
+        }
         if (GPU_BASE..GPU_BASE + GPU_SIZE).contains(&pa) {
             if size != 1 {
                 return Err("mem_load: GPU MMIO is byte-only".to_string());
@@ -5604,7 +5726,13 @@ impl HostOps for WasmHost<'_> {
             let value = match offset {
                 0x0 => self.gic.gicd_ctlr,
                 0x4 => GICD_TYPER_VALUE,
-                0x80 => u32::from(self.gic.ppi27_group1()) << 27,
+                0x80 => self.gic.gicd_igroupr0,
+                0x84 => self.gic.gicd_igroupr1,
+                0x100 => self.gic.gicd_isenabler0,
+                0x104 => self.gic.gicd_isenabler1,
+                0x420..=0x43c if (offset - 0x420) % 4 == 0 => {
+                    self.gic.gicd_spi_priorities[((offset - 0x420) / 4) as usize]
+                }
                 // QEMU virt's single-vCPU GICv2 returns RAZ for the
                 // read-only SGI/PPI target register block (ITARGETSR0-7).
                 0x800..=0x81c => 0,
@@ -5631,16 +5759,11 @@ impl HostOps for WasmHost<'_> {
                 if offset == 0x0c {
                     let intid = highest_pending_gic_irq(self.gic, self.irq.pending)
                         .unwrap_or(GIC_IAR_SPURIOUS);
-                    let iar = if intid == 27
-                        && self.gic.ppi27_group1()
-                        && self.gic.gicc_ctlr & (1 << 2) == 0
-                    {
-                        GIC_IAR_GROUP1_SPURIOUS
-                    } else {
-                        intid
-                    };
+                    // This board exposes the GIC to a non-secure Linux guest;
+                    // QEMU returns Group 1 INTIDs to non-secure IAR reads.
+                    let iar = intid;
                     if intid != GIC_IAR_SPURIOUS {
-                        self.gic.set_ppi27_active();
+                        self.gic.set_irq_active(intid);
                         self.irq.pending &= !(1u64 << intid);
                     }
                     eprintln!(
@@ -5718,6 +5841,24 @@ impl HostOps for WasmHost<'_> {
             // Writes to other console offsets are acknowledged, no effect.
             return Ok(());
         }
+        #[cfg(not(target_arch = "wasm32"))]
+        if let Some(device) = self.virtio_blk.iter_mut().find(|device| device.contains(pa)) {
+            if size != 4 {
+                return Err("mem_store: virtio-mmio register access must be 32-bit".to_string());
+            }
+            let offset = (pa - device.base) as u32;
+            let irq_bit = 1u64 << device.irq;
+            device
+                .device
+                .write_mmio(offset, val as u32, self.ram)
+                .map_err(|error| format!("virtio-blk MMIO write failed: {error}"))?;
+            if device.device.interrupt_line_asserted() {
+                self.irq.pending |= irq_bit;
+            } else {
+                self.irq.pending &= !irq_bit;
+            }
+            return Ok(());
+        }
         if (GPU_BASE..GPU_BASE + GPU_SIZE).contains(&pa) {
             if size != 1 {
                 return Err("mem_store: GPU MMIO is byte-only".to_string());
@@ -5750,14 +5891,22 @@ impl HostOps for WasmHost<'_> {
             if offset == 0 {
                 self.gic.gicd_ctlr = val as u32;
             } else if offset == 0x80 {
-                self.gic.set_ppi27_group1(val as u32 & GIC_PPI27 != 0);
+                self.gic.gicd_igroupr0 = val as u32;
+            } else if offset == 0x84 {
+                self.gic.gicd_igroupr1 = val as u32;
             } else if offset == 0x100 {
                 self.gic.gicd_isenabler0 |= val as u32;
+            } else if offset == 0x104 {
+                self.gic.gicd_isenabler1 |= val as u32;
             } else if offset == 0x180 {
                 self.gic.gicd_isenabler0 &= !(val as u32);
+            } else if offset == 0x184 {
+                self.gic.gicd_isenabler1 &= !(val as u32);
             } else if offset == 0x418 {
                 // IDs 24–27 occupy the final four bytes of this word.
                 self.gic.gicd_ppi27_priority = (val as u32 >> 24) as u8;
+            } else if (0x420..=0x43c).contains(&offset) && (offset - 0x420) % 4 == 0 {
+                self.gic.gicd_spi_priorities[((offset - 0x420) / 4) as usize] = val as u32;
             }
             // Other distributor programming registers are write-only on this
             // boot path and are acknowledged without side effects.
@@ -5784,13 +5933,10 @@ impl HostOps for WasmHost<'_> {
                 0x4 => self.gic.gicc_pmr = val as u32,
                 0x10 => {
                     let eoi = val as u32 & GIC_INTID_MASK;
-                    if self.gic.ppi27_active()
-                        && (eoi == 27
-                            || (self.gic.ppi27_group1()
-                                && self.gic.gicc_ctlr & (1 << 2) == 0
-                                && eoi == GIC_IAR_GROUP1_SPURIOUS))
-                    {
+                    if self.gic.ppi27_active() && eoi == 27 {
                         self.gic.clear_ppi27_active();
+                    } else {
+                        self.gic.clear_irq_active(eoi);
                     }
                 }
                 // APR writes update active priority state. Priority-drop
@@ -6288,6 +6434,30 @@ mod tests {
         assert!(o.pending_irqs().is_empty());
     }
 
+    #[test]
+    fn virtio_spi_irq49_is_acknowledged_by_guest_gic_registers() {
+        let mut parts = host_parts(SysRegs::default());
+        let pending = 1u64 << 49;
+        parts.irq.pending |= pending;
+        with_host(&mut parts, |host| {
+            host.mem_store(GICD_BASE as i64, 4, 1)?;
+            host.mem_store(GICC_BASE as i64, 4, 1)?;
+            host.mem_store((GICC_BASE + 4) as i64, 4, 0xf0)?;
+            host.mem_store((GICD_BASE + 0x104) as i64, 4, 1 << 17)?;
+            Ok::<_, String>(())
+        })
+        .unwrap();
+
+        let iar = with_host(&mut parts, |host| host.mem_load((GICC_BASE + 0x0c) as i64, 4));
+        assert_eq!(iar, Ok(49));
+        assert_eq!(parts.irq.pending & pending, 0);
+        assert_eq!(parts.gic.gicc_active, Some(49));
+
+        with_host(&mut parts, |host| host.mem_store((GICC_BASE + 0x10) as i64, 4, 49))
+            .unwrap();
+        assert_eq!(parts.gic.gicc_active, None);
+    }
+
     // ---- image loading ----
 
     fn minimal_image(entry: u64, words: &[u32]) -> Vec<u8> {
@@ -6348,6 +6518,11 @@ mod tests {
         o.console.feed_rx(b"yz");
         o.gic.gicd_ctlr = 1;
         o.gic.gicc_pmr = 0xf0;
+        o.gic.gicd_igroupr0 = GIC_PPI27;
+        o.gic.gicd_igroupr1 = (1 << 17) | (1 << 18);
+        o.gic.gicd_isenabler1 = (1 << 17) | (1 << 18);
+        o.gic.gicd_spi_priorities = [0x8080_8080; 8];
+        o.gic.gicc_active = Some(49);
         o.transport.queue_count = 1;
         o.transport.status = 4;
         o.transport.queues.push(pathn_contracts::device::VirtQueue {
@@ -7012,6 +7187,8 @@ mod tests {
 
     /// Split-borrow helper: build a WasmHost over the parts.
     fn with_host<T>(p: &mut HostParts, f: impl FnOnce(&mut WasmHost) -> T) -> T {
+        #[cfg(not(target_arch = "wasm32"))]
+        let mut virtio_blk = Vec::new();
         let mut host = WasmHost {
             ram: &mut p.ram,
             console: &mut p.console,
@@ -7019,10 +7196,55 @@ mod tests {
             gic: &mut p.gic,
             irq: &mut p.irq,
             sysregs: &mut p.sysregs,
+            #[cfg(not(target_arch = "wasm32"))]
+            virtio_blk: &mut virtio_blk,
             code_write: false,
             abort_fault: None,
         };
         f(&mut host)
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    fn with_host_and_virtio_blk<T>(
+        p: &mut HostParts,
+        disks: &mut [AttachedVirtioBlk],
+        f: impl FnOnce(&mut WasmHost) -> T,
+    ) -> T {
+        let mut host = WasmHost {
+            ram: &mut p.ram,
+            console: &mut p.console,
+            gpu_port: &mut p.gpu_port,
+            gic: &mut p.gic,
+            irq: &mut p.irq,
+            sysregs: &mut p.sysregs,
+            virtio_blk: disks,
+            code_write: false,
+            abort_fault: None,
+        };
+        f(&mut host)
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    #[test]
+    fn virtio_blk_mmio_is_reachable_through_guest_memory_dispatch() {
+        use crate::virtio_blk::{MMIO_MAGIC_VALUE, MMIO_STATUS};
+        use std::path::Path;
+
+        let image = Path::new("/Users/Shared/android14-gsi/system.img");
+        let device = VirtioBlkDevice::open(image, true).unwrap();
+        let mut disks = vec![AttachedVirtioBlk {
+            base: 0x0a00_0200,
+            irq: 49,
+            device,
+        }];
+        let mut parts = host_parts(SysRegs::default());
+        let values = with_host_and_virtio_blk(&mut parts, &mut disks, |host| {
+            let magic = host.mem_load(0x0a00_0200 + MMIO_MAGIC_VALUE as i64, 4)?;
+            host.mem_store(0x0a00_0200 + MMIO_STATUS as i64, 4, 1)?;
+            let status = host.mem_load(0x0a00_0200 + MMIO_STATUS as i64, 4)?;
+            Ok::<_, String>((magic, status))
+        });
+        assert_eq!(values, Ok((0x7472_6976, 1)));
     }
 
     #[test]
