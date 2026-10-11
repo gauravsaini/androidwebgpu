@@ -1,0 +1,11 @@
+T271 device-model search and mapping notes
+
+Destination repository/worktree: `/Users/Shared/wt-track271-rustblk`.
+
+- Rust guest physical MMIO host callbacks are `WasmHost::mem_load` and `WasmHost::mem_store` in `units/u12-orchestrator/src/lib.rs` (current lines 5676+ and 5819+).
+- Existing UART/console MMIO model is handled first in those callbacks; console base is `0x09000000` at `units/u12-orchestrator/src/lib.rs:128`.
+- Search in `units/u12-orchestrator/src/lib.rs` found no `simplefb` name and no `0x5f000000` device implementation. The supplied brief's simplefb address therefore is not a Rust device model reference here; the GPU pseudo-MMIO path is separately handled at `GPU_BASE`.
+- Before T271, search in `units/u12-orchestrator/src/` found no Rust `virtio_blk` or `virtio-mmio` model. T271 adds `units/u12-orchestrator/src/virtio_blk.rs` and routes it through `WasmHost` before GPU dispatch because the existing GPU pseudo-MMIO range overlaps these DTB transport windows.
+- Prior GSI DTB source `/Users/Shared/wt-track269-gsi2/assets/minimal-virt-virtio-t269.dts` maps transport 0 to base `0x0a000200`, size `0x200`, SPI 49 and transport 1 to base `0x0a000400`, size `0x200`, SPI 50.
+
+The full tree search was limited to the Rust orchestrator source and prior T268/T269 worktree DTB/log artifacts; it was not a search of every filesystem path.

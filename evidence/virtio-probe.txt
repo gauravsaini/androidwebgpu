@@ -1,0 +1,182 @@
+warning: constant `R_ADD32_IMM` is never used
+  --> units/u2-ir-lift/src/lib.rs:68:7
+   |
+68 | const R_ADD32_IMM: &str = "DataProc: 32-bit ADD immediate width is not expressible in IrOp::Add";
+   |       ^^^^^^^^^^^
+   |
+   = note: `#[warn(dead_code)]` on by default
+
+warning: constant `R_SUB32_IMM` is never used
+  --> units/u2-ir-lift/src/lib.rs:69:7
+   |
+69 | const R_SUB32_IMM: &str = "DataProc: 32-bit SUB immediate width is not expressible in IrOp::Sub";
+   |       ^^^^^^^^^^^
+
+warning: constant `R_SUB32_REG` is never used
+  --> units/u2-ir-lift/src/lib.rs:70:7
+   |
+70 | const R_SUB32_REG: &str = "DataProc: 32-bit SUB register width is not expressible in IrOp::Sub";
+   |       ^^^^^^^^^^^
+
+warning: constant `R_ADD32_REG` is never used
+  --> units/u2-ir-lift/src/lib.rs:87:7
+   |
+87 | const R_ADD32_REG: &str = "DataProc: 32-bit ADD register width is not expressible in IrOp::Add";
+   |       ^^^^^^^^^^^
+
+warning: unreachable pattern
+  --> units/u1-decode/src/dp_imm.rs:79:9
+   |
+26 |         0b1001000 | 0b1001001 => {
+   |         --------------------- matches all the relevant values
+...
+79 |         0b1001000 | 0b1001001 => {
+   |         ^^^^^^^^^^^^^^^^^^^^^ no value can reach this
+   |
+   = note: `#[warn(unreachable_patterns)]` on by default
+
+warning: `u2-ir-lift` (lib) generated 4 warnings
+warning: `u1-decode` (lib) generated 1 warning
+   Compiling u12-orchestrator v0.1.0 (/Users/Shared/wt-track271-rustblk/units/u12-orchestrator)
+warning: methods `read_ram_u64`, `read_ram_u32`, `write_ram_u64`, and `write_ram_u32` are never used
+    --> units/u12-orchestrator/src/lib.rs:1928:8
+     |
+1224 | impl Orchestrator {
+     | ----------------- methods in this implementation
+...
+1928 |     fn read_ram_u64(&self, pa: u64) -> Result<u64, HaltReason> {
+     |        ^^^^^^^^^^^^
+...
+1937 |     fn read_ram_u32(&self, pa: u64) -> Result<u32, HaltReason> {
+     |        ^^^^^^^^^^^^
+...
+1946 |     fn write_ram_u64(&mut self, pa: u64, val: u64) -> Result<(), HaltReason> {
+     |        ^^^^^^^^^^^^^
+...
+1954 |     fn write_ram_u32(&mut self, pa: u64, val: u32) -> Result<(), HaltReason> {
+     |        ^^^^^^^^^^^^^
+     |
+     = note: `#[warn(dead_code)]` on by default
+
+warning: function `test_condition_codes_eq_ne` is never used
+   --> units/u12-orchestrator/src/arm64.rs:270:8
+    |
+270 |     fn test_condition_codes_eq_ne() {
+    |        ^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: `u12-orchestrator` (lib) generated 1 warning
+warning: `u12-orchestrator` (lib test) generated 2 warnings (1 duplicate)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 7.33s
+     Running unittests src/lib.rs (target/debug/deps/u12_orchestrator-e08115e2e84478c3)
+
+running 4 tests
+GIC MMIO write: GICD PA=0x08000000 offset=0x0000 size=4 value=0x00000001
+GIC MMIO write: GICC PA=0x08010000 offset=0xtest tests::virtio_blk_mmio_is_reachable_through_guest_memory_dispatch ... ok
+0000 size=4 value=0x00000001
+GIC MMIO write: GICC PA=0x08010004 offset=0x0004 size=4 value=0x000000f0
+GIC MMIO write: GICD PA=0x08000104 offset=0x0104 size=4 value=0x00020000
+GIC MMIO read: GICC PA=0x0801000c offset=0x000c size=4 value=0x00000031
+GIC MMIO write: GICC PA=0xtest virtio_blk::tests::writable_sparse_data_disk_completes_write_request ... ok
+08010010 offset=0x0010 size=4 value=0x00000031
+test tests::virtio_spi_irq49_is_acknowledged_by_guest_gic_registers ... ok
+T271_LBA0_PROOF_JSON={"bytes":512,"expected_hex":"0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000","expected_sha256":"076a27c79e5ace2a3d47f9dd2e83e4ff6ea8872b3c2218f66c92b89b55f36560","image_path":"/Users/Shared/android14-gsi/system.img","interrupt_status":1,"lba":0,"lba8_expected_hex":"0200000003000000040000000000000061000000000000000000000000000b17028000000380000004800000000000000f000000000000000000000000005596000001000100010002000100000000000b0000000000000000000000000014160280010003800100048001000000000004000000000000000000000000003d03000002000100020002000200000000000400000000000000000000000000bdfb0280020003800200048002000000000005000000000000000000000000009b200000030001000300020003000000000086000000000000000000000000005d2702800300038003000480030000000000680000000000000000000000000095d3000004000100040002000400000000005400000000000000000000000000a22e028004000380040004800400000000007000000000000000000000000000a0100000050001000500020005000000000007000000000000000000000000009323008005000180050002800500000000000500000000000000000000000000a1ce00000600010006000200060000000000060000000000000000000000000035000080060001800600028006000000000009000000000000000000000000000b200000070001000700020007002b3300002200000000000000000000000000ee69008007000180070002800700070d4e002b00000000000000000000004e00ee8e","lba8_expected_sha256":"fdba49b6d02a1ccf4648386ac13187665578028388f7b12575adaa840d914c84","lba8_returned_hex":"0200000003000000040000000000000061000000000000000000000000000b17028000000380000004800000000000000f000000000000000000000000005596000001000100010002000100000000000b0000000000000000000000000014160280010003800100048001000000000004000000000000000000000000003d03000002000100020002000200000000000400000000000000000000000000bdfb0280020003800200048002000000000005000000000000000000000000009b200000030001000300020003000000000086000000000000000000000000005d2702800300038003000480030000000000680000000000000000000000000095d3000004000100040002000400000000005400000000000000000000000000a22e028004000380040004800400000000007000000000000000000000000000a0100000050001000500020005000000000007000000000000000000000000009323008005000180050002800500000000000500000000000000000000000000a1ce00000600010006000200060000000000060000000000000000000000000035000080060001800600028006000000000009000000000000000000000000000b200000070001000700020007002b3300002200000000000000000000000000ee69008007000180070002800700070d4e002b00000000000000000000004e00ee8e","lba8_returned_sha256":"fdba49b6d02a1ccf4648386ac13187665578028388f7b12575adaa840d914c84","returned_hex":"0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000","returned_sha256":"076a27c79e5ace2a3d47f9dd2e83e4ff6ea8872b3c2218f66c92b89b55f36560","status":0,"used_idx":2}
+test virtio_blk::tests::qemu_mmio_init_and_read_lba0_from_real_system_image ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 167 filtered out; finished in 0.00s
+
+     Running unittests src/bin/run_kernel.rs (target/debug/deps/run_kernel-5e31569f7799a1b9)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/boot.rs (target/debug/deps/boot-4752b0867a60fd31)
+
+running 1 test
+test boot_virtio_gpu_submit3d_path ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 10 filtered out; finished in 0.00s
+
+     Running tests/boot35m_extend.rs (target/debug/deps/boot35m_extend-a7263769a69c441f)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.00s
+
+     Running tests/boot_panic_verify.rs (target/debug/deps/boot_panic_verify-dfb1ca41e8816135)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.00s
+
+     Running tests/fetchfault_boot_verify.rs (target/debug/deps/fetchfault_boot_verify-fcf1388451713710)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.00s
+
+     Running tests/fetchfault_debug.rs (target/debug/deps/fetchfault_debug-fbc2602e8a17ae05)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.00s
+
+     Running tests/fpsimd.rs (target/debug/deps/fpsimd-771fbf91fccdf113)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 10 filtered out; finished in 0.00s
+
+     Running tests/gpu_port.rs (target/debug/deps/gpu_port-38ed5b72182f3f1c)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 8 filtered out; finished in 0.00s
+
+     Running tests/kernel_boot_attempt.rs (target/debug/deps/kernel_boot_attempt-410c56f9079c95be)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.00s
+
+     Running tests/sp_ldpsw_boot_verify.rs (target/debug/deps/sp_ldpsw_boot_verify-35ff440ddb5c861d)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.00s
+
+     Running tests/sysreg_p3.rs (target/debug/deps/sysreg_p3-00d54a99c6a3e03a)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 5 filtered out; finished in 0.00s
+
+     Running tests/sysreg_p4.rs (target/debug/deps/sysreg_p4-70e5870ca80b8751)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 6 filtered out; finished in 0.00s
+
+     Running tests/testgen_vectors.rs (target/debug/deps/testgen_vectors-1908b56495535a8c)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 10 filtered out; finished in 0.00s
+
+     Running tests/translationfault_boot_verify.rs (target/debug/deps/translationfault_boot_verify-b6320f35da93029a)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.00s
+
+     Running tests/vmemmap_l2_verify.rs (target/debug/deps/vmemmap_l2_verify-6204659eb9b64187)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 2 filtered out; finished in 0.00s
+
+     Running tests/wasmi_parity.rs (target/debug/deps/wasmi_parity-1c8c6c3c5c296db8)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 5 filtered out; finished in 0.00s

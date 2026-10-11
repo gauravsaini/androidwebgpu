@@ -1,0 +1,18 @@
+QEMU oracle: local source tree `/Users/Shared/toolchain/qemu-11.1.2`.
+
+| Register / behavior | QEMU source | Rust implementation / observed probe |
+|---|---|---|
+| MagicValue @ `0x000` = `0x74726976` (`virt`) | `include/hw/virtio/virtio-mmio.h:39`; read path `hw/virtio/virtio-mmio.c:150-161` | `virtio_blk.rs::read_mmio`; asserted by real-image queue probe and guest `WasmHost` dispatch test |
+| Version @ `0x004` = `2` for modern transport | QEMU header `include/hw/virtio/virtio-mmio.h:40-41`; `hw/virtio/virtio-mmio.c:152-157` | Rust returns 2; asserted by `qemu_mmio_init_and_read_lba0_from_real_system_image` |
+| DeviceID @ `0x008` = block `2` | `hw/virtio/virtio-mmio.c:158-159`; `include/standard-headers/linux/virtio_ids.h:33` | Rust returns 2; asserted by real-image queue probe |
+| VendorID @ `0x00c` = `0x554d4551` (`QEMU`) | QEMU header `include/hw/virtio/virtio-mmio.h:42`; read path `hw/virtio/virtio-mmio.c:160-161` | Rust returns `0x554d4551`; asserted by real-image queue probe |
+| DeviceFeatures @ `0x010`, selector @ `0x014` | offsets `include/standard-headers/linux/virtio_mmio.h:54-59`; feature-selector read `hw/virtio/virtio-mmio.c:162-173` | Rust exposes low/high feature words; offers VERSION_1 + BLK_SIZE, plus RO for readonly system disk; probe negotiates and status FEATURES_OK remains set |
+| DriverFeatures @ `0x020`, selector @ `0x024` | offsets `include/standard-headers/linux/virtio_mmio.h:61-66`; QEMU accepts set via `virtio_set_features` at `hw/virtio/virtio-mmio.c:317` | Rust accepts low/high feature words and rejects unoffered bits when FEATURES_OK is set |
+| QueueSel `0x030`, QueueNumMax `0x034`, QueueNum `0x038`, QueueReady `0x044`, QueueNotify `0x050` | `include/standard-headers/linux/virtio_mmio.h:77-102`; QEMU max/ready reads `hw/virtio/virtio-mmio.c:174-175, 186-193`; queue-size default `hw/block/virtio-blk.c:1906` | Rust provides queue 0 max 256, split rings, queue ready, and queue notify; test configures size 8 and processes two requests |
+| Split ring addresses `0x080-0x0a4` | `include/standard-headers/linux/virtio_mmio.h:113-120` plus continuation through line 126 | Rust stores low/high descriptor, available, and used ring addresses and reads/writes split-ring entries |
+| InterruptStatus `0x060`, InterruptACK `0x064`, Status `0x070` | `include/standard-headers/linux/virtio_mmio.h:104-111`; QEMU reads at `hw/virtio/virtio-mmio.c:194-197` and handles status at `hw/virtio/virtio-mmio.c:434` | Rust completes requests with status byte 0, sets used index to 2 and interrupt status 1; ACK clears status and line |
+| Config @ `0x100`: capacity in 512-byte sectors; block size at config +20 | config dispatch `hw/virtio/virtio-mmio.c:117-141`; blk config write `hw/block/virtio-blk.c:1183-1192` | Rust reports capacity 4,023,080 sectors and block size 512 for the actual system image; both asserted by the probe |
+
+QEMU feature reference: `hw/block/virtio-blk.c:1281-1300` advertises BLK_SIZE and RO for a readonly backend, alongside other optional features. The Rust model advertises only the implemented interoperable subset (VERSION_1, BLK_SIZE, and RO for the system image). Queue-size 256 is QEMU's default property, not a requirement that the guest select 256; the Rust probe selects 8 and gets correct completions.
+
+DTB address/IRQ reference: `/Users/Shared/wt-track269-gsi2/assets/minimal-virt-virtio-t269.dts:73-84` defines `0x0a000200` with IRQ 49 and `0x0a000400` with IRQ 50.

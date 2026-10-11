@@ -1,0 +1,15 @@
+System backing image:
+- Path: `/Users/Shared/android14-gsi/system.img`
+- Format: raw ext filesystem image (`file` reports Linux rev 1.0 ext2 filesystem data)
+- Length: 2,059,816,960 bytes = 4,023,080 512-byte sectors
+- Device open mode: read-only (`OpenOptions::read(true)`)
+- LBA0 expected and returned SHA-256: `076a27c79e5ace2a3d47f9dd2e83e4ff6ea8872b3c2218f66c92b89b55f36560`
+- LBA8 expected and returned SHA-256: `fdba49b6d02a1ccf4648386ac13187665578028388f7b12575adaa840d914c84`
+
+Fresh writable `/data` backing image:
+- Path: `/Users/Shared/wt-track271-rustblk/data-t271.img`
+- Logical length: 4,294,967,296 bytes (4 GiB) = 8,388,608 sectors
+- Allocation observed immediately after creation on this filesystem: 0 allocated 512-byte blocks; `du -h` reports 0B, confirming sparse allocation
+- Rust `create_sparse_image` uses `create_new`, so it refuses to truncate/replace an existing file.
+
+Proof artifact hash: `evidence/lba0-proof.json` SHA-256 `1dad0dc589e738ad187da60a8e137dcb085721def55ea42d9613595289879805`.

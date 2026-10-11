@@ -1,0 +1,4 @@
+# OKF log
+
+- 2026-10-12: Added branch `branches/t271-rust-virtio-blk-mmio.md`. The native Rust virtio-blk MMIO device accepts the QEMU-compatible v2 register/feature/queue sequence and returns exact sector bytes from the supplied Android system image for LBA0 and nonzero LBA8. It also persists a virtqueue write to a fresh sparse writable image. Raw probe, QEMU comparison, image metadata, and device-search evidence remain outside `okf/` under `evidence/`.
+- 2026-10-12: Built `run_kernel` and smoke-launched it with the real readonly system image and the fresh writable sparse data image attached at the DTB addresses/IRQs. The full package run passed 169 library tests and all 11 `boot.rs` tests before Cargo failed to launch the next target because its test executable was absent; `boot35m_extend` compiles with `--no-run` but requires external kernel/DTB inputs and was not executed.

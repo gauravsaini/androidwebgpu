@@ -1,0 +1,61 @@
+warning: unreachable pattern
+  --> units/u1-decode/src/dp_imm.rs:79:9
+   |
+26 |         0b1001000 | 0b1001001 => {
+   |         --------------------- matches all the relevant values
+...
+79 |         0b1001000 | 0b1001001 => {
+   |         ^^^^^^^^^^^^^^^^^^^^^ no value can reach this
+   |
+   = note: `#[warn(unreachable_patterns)]` on by default
+
+warning: constant `R_ADD32_IMM` is never used
+  --> units/u2-ir-lift/src/lib.rs:68:7
+   |
+68 | const R_ADD32_IMM: &str = "DataProc: 32-bit ADD immediate width is not expressible in IrOp::Add";
+   |       ^^^^^^^^^^^
+   |
+   = note: `#[warn(dead_code)]` on by default
+
+warning: constant `R_SUB32_IMM` is never used
+  --> units/u2-ir-lift/src/lib.rs:69:7
+   |
+69 | const R_SUB32_IMM: &str = "DataProc: 32-bit SUB immediate width is not expressible in IrOp::Sub";
+   |       ^^^^^^^^^^^
+
+warning: constant `R_SUB32_REG` is never used
+  --> units/u2-ir-lift/src/lib.rs:70:7
+   |
+70 | const R_SUB32_REG: &str = "DataProc: 32-bit SUB register width is not expressible in IrOp::Sub";
+   |       ^^^^^^^^^^^
+
+warning: constant `R_ADD32_REG` is never used
+  --> units/u2-ir-lift/src/lib.rs:87:7
+   |
+87 | const R_ADD32_REG: &str = "DataProc: 32-bit ADD register width is not expressible in IrOp::Add";
+   |       ^^^^^^^^^^^
+
+warning: `u1-decode` (lib) generated 1 warning
+warning: `u2-ir-lift` (lib) generated 4 warnings
+warning: methods `read_ram_u64`, `read_ram_u32`, `write_ram_u64`, and `write_ram_u32` are never used
+    --> units/u12-orchestrator/src/lib.rs:1928:8
+     |
+1224 | impl Orchestrator {
+     | ----------------- methods in this implementation
+...
+1928 |     fn read_ram_u64(&self, pa: u64) -> Result<u64, HaltReason> {
+     |        ^^^^^^^^^^^^
+...
+1937 |     fn read_ram_u32(&self, pa: u64) -> Result<u32, HaltReason> {
+     |        ^^^^^^^^^^^^
+...
+1946 |     fn write_ram_u64(&mut self, pa: u64, val: u64) -> Result<(), HaltReason> {
+     |        ^^^^^^^^^^^^^
+...
+1954 |     fn write_ram_u32(&mut self, pa: u64, val: u32) -> Result<(), HaltReason> {
+     |        ^^^^^^^^^^^^^
+     |
+     = note: `#[warn(dead_code)]` on by default
+
+warning: `u12-orchestrator` (lib) generated 1 warning
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.30s

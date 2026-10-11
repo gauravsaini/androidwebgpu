@@ -1,0 +1,290 @@
+warning: unreachable pattern
+  --> units/u1-decode/src/dp_imm.rs:79:9
+   |
+26 |         0b1001000 | 0b1001001 => {
+   |         --------------------- matches all the relevant values
+...
+79 |         0b1001000 | 0b1001001 => {
+   |         ^^^^^^^^^^^^^^^^^^^^^ no value can reach this
+   |
+   = note: `#[warn(unreachable_patterns)]` on by default
+
+warning: `u1-decode` (lib) generated 1 warning
+warning: constant `R_ADD32_IMM` is never used
+  --> units/u2-ir-lift/src/lib.rs:68:7
+   |
+68 | const R_ADD32_IMM: &str = "DataProc: 32-bit ADD immediate width is not expressible in IrOp::Add";
+   |       ^^^^^^^^^^^
+   |
+   = note: `#[warn(dead_code)]` on by default
+
+warning: constant `R_SUB32_IMM` is never used
+  --> units/u2-ir-lift/src/lib.rs:69:7
+   |
+69 | const R_SUB32_IMM: &str = "DataProc: 32-bit SUB immediate width is not expressible in IrOp::Sub";
+   |       ^^^^^^^^^^^
+
+warning: constant `R_SUB32_REG` is never used
+  --> units/u2-ir-lift/src/lib.rs:70:7
+   |
+70 | const R_SUB32_REG: &str = "DataProc: 32-bit SUB register width is not expressible in IrOp::Sub";
+   |       ^^^^^^^^^^^
+
+warning: constant `R_ADD32_REG` is never used
+  --> units/u2-ir-lift/src/lib.rs:87:7
+   |
+87 | const R_ADD32_REG: &str = "DataProc: 32-bit ADD register width is not expressible in IrOp::Add";
+   |       ^^^^^^^^^^^
+
+warning: `u2-ir-lift` (lib) generated 4 warnings
+warning: methods `read_ram_u64`, `read_ram_u32`, `write_ram_u64`, and `write_ram_u32` are never used
+    --> units/u12-orchestrator/src/lib.rs:1928:8
+     |
+1224 | impl Orchestrator {
+     | ----------------- methods in this implementation
+...
+1928 |     fn read_ram_u64(&self, pa: u64) -> Result<u64, HaltReason> {
+     |        ^^^^^^^^^^^^
+...
+1937 |     fn read_ram_u32(&self, pa: u64) -> Result<u32, HaltReason> {
+     |        ^^^^^^^^^^^^
+...
+1946 |     fn write_ram_u64(&mut self, pa: u64, val: u64) -> Result<(), HaltReason> {
+     |        ^^^^^^^^^^^^^
+...
+1954 |     fn write_ram_u32(&mut self, pa: u64, val: u32) -> Result<(), HaltReason> {
+     |        ^^^^^^^^^^^^^
+     |
+     = note: `#[warn(dead_code)]` on by default
+
+warning: function `test_condition_codes_eq_ne` is never used
+   --> units/u12-orchestrator/src/arm64.rs:270:8
+    |
+270 |     fn test_condition_codes_eq_ne() {
+    |        ^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: `u12-orchestrator` (lib) generated 1 warning
+warning: `u12-orchestrator` (lib test) generated 2 warnings (1 duplicate)
+   Compiling u12-orchestrator v0.1.0 (/Users/Shared/wt-track271-rustblk/units/u12-orchestrator)
+warning: unused import: `std::io::Read`
+  --> units/u12-orchestrator/examples/verify_initrd.rs:78:9
+   |
+78 |     use std::io::Read;
+   |         ^^^^^^^^^^^^^
+   |
+   = note: `#[warn(unused_imports)]` on by default
+
+warning: `u12-orchestrator` (example "verify_initrd") generated 1 warning (run `cargo fix --example "verify_initrd"` to apply 1 suggestion)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.58s
+     Running unittests src/lib.rs (target/debug/deps/u12_orchestrator-e08115e2e84478c3)
+
+running 171 tests
+test arm64::tests::test_condition_codes_hi_ls ... ok
+test arm64::tests::test_condition_codes_cs_cc ... ok
+test arm64::tests::test_condition_codes_gt_le ... ok
+test arm64::tests::test_condition_codes_al ... ok
+test arm64::tests::test_condition_codes_ge_lt ... ok
+test arm64::tests::test_condition_codes_vs_vc ... ok
+test arm64::tests::test_condition_codes_mi_pl ... ok
+test arm64::tests::test_add_with_carry_and_sub_with_borrow ... ok
+test arm64::tests::test_nzcv_add64_cmn ... ok
+test arm64::tests::test_nzcv_and64_tst ... ok
+test arm64::tests::test_nzcv_sub64_cmp ... ok
+test arm64::tests::test_decode_logical_imm ... ok
+test arm64::tests::decode_logical_immediate_n0_ranges ... ok
+test irq_wfi_tests::t63_boot_wfi_wakes_and_advances_past_the_saved_wfi_step ... ignored, uses the saved T63 boot snapshot at the shared guest-input path
+test arm64::tests::decode_logical_immediate_matches_reference ... ok
+test tests::adc_register_w_form_zero_extends_and_preserves_nzcv ... ok
+test tests::adc_sbc_register_execution_uses_live_carry_flag ... ok
+test tests::adcs_register_w_form_updates_overflow_flags ... ok
+test tests::bic_w_shifted_clears_bits_from_the_shifted_operand ... ok
+test tests::bics_w_shifted_sets_flags_from_the_inverted_operand_result ... ok
+test tests::ccmn_imm_cond_true_sets_adds_flags ... ok
+test tests::ccmp_imm_cond_false_sets_nzcv_imm ... ok
+test tests::ccmp_imm_cond_true_sets_subs_flags ... ok
+test tests::ccmp_reg_cond_true ... ok
+test tests::ccmp_reg_wzr_strchr_null_terminator ... ok
+test tests::console_poll_input_takes_key_bytes_only ... ok
+test tests::console_tx_appends_and_rx_reads_fifo ... ok
+test tests::eon_w_shifted_inverts_the_shifted_operand ... ok
+test tests::f2_b_cond_all_16_conditions_taken_and_not_taken ... ok
+test tests::f2_b_cond_negative_offset ... ok
+test irq_wfi_tests::masked_irq_does_not_take_exception ... ok
+test irq_wfi_tests::nested_irq_unwinds_through_eret_after_guest_restores_outer_state ... ok
+test irq_wfi_tests::el1h_irq_enters_vector_saves_state_and_returns_through_eret ... ok
+test irq_wfi_tests::el1t_irq_uses_sp0_vector_and_switches_to_banked_el1_stack ... ok
+test tests::f2_tbz_tbnz_exhaustive_widths_and_edges ... ok
+test tests::gb15_csel_cond_nv_executes_always ... ok
+test tests::gb15_csinc_csinv_csneg_else_transforms ... ok
+test tests::gb20_host_mmu_off_is_identity ... ok
+test tests::gb15_csel_hi_true_selects_rn ... ok
+test tests::gb15_csel_hi_false_selects_rm ... ok
+test irq_wfi_tests::virtual_timer_compare_pends_ppi27_and_gicc_iar_acknowledges_it ... ok
+test tests::gb20_host_translated_read ... ok
+test tests::gb20_host_translated_store ... ok
+test tests::gb20_host_translation_fault_surfaces_as_err ... ok
+test tests::gb22_fetch_unmapped_va_enters_instruction_abort_vector ... ok
+test tests::gb23_sp_ldp_pair ... ok
+test tests::gb23_sp_ldr_imm_64 ... ok
+test tests::gb23_sp_store_does_not_clobber_xzr ... ok
+test tests::gb23_sp_stp_pair ... ok
+test tests::gb23_sp_str_imm_32 ... ok
+test tests::gb23_sp_str_imm_64 ... ok
+test tests::gb24_add_sp_imm_updates_sp ... ok
+test tests::gb24_add_x0_sp_imm_reads_sp ... ok
+test tests::gb24_sub_sp_imm_updates_sp ... ok
+test tests::gb25_orr_32 ... ok
+test tests::gb25_orr_32_shifted ... ok
+test tests::gb25_orr_64 ... ok
+test tests::gb26_add_extended_sxtw ... ok
+test tests::gb26_ccmn_immediate ... ok
+test tests::gb26_ccmp_immediate ... ok
+test tests::gb26_ccmp_rn31_is_xzr ... ok
+test tests::gb26_cmp_extended_rn31_is_xzr ... ok
+test tests::gb26_cmp_extended_sxtw ... ok
+test tests::gb26_csel_32bit_executes ... ok
+test tests::gb26_csel_always ... ok
+test tests::gb26_csel_csinc_csneg_32bit ... ok
+test tests::gb26_csinv_kernel_word_hs_not_taken ... ok
+test tests::gb26_csinv_kernel_word_hs_taken ... ok
+test tests::gb26_ldrh_post_index ... ok
+test tests::gb26_ldrh_register_offset ... ok
+test tests::gb26_ldrh_sp_imm ... ok
+test tests::gb26_ldrh_unsigned_imm_nonsp ... ok
+test tests::gb26_ldrsw_sign_extends ... ok
+test tests::gb26_ldxr_stxr_pair ... ok
+test tests::gb26_madd32 ... ok
+test tests::gb26_msub32 ... ok
+test tests::gb26_prfm_is_nop ... ok
+test tests::gb26_rev_64bit ... ok
+test tests::gb26_ror_extr_alias ... ok
+test tests::gb26_sp_ldp_preindex_writeback ... ok
+test tests::gb26_sp_stp32_signed_offset ... ok
+test tests::gb26_sp_stp_postindex_writeback ... ok
+test tests::gb26_sp_stp_signed_offset ... ok
+test tests::gb22_fetch_translates_kernel_va ... ok
+test tests::gb21_exact_sentinel_still_exits_vm ... ok
+test tests::gb26_sp_str_imm_64_halt_word ... ok
+test tests::gb26_stlr_basic ... ok
+test tests::gb26_str_preindex_sp ... ok
+test tests::gb21_blr_to_kernel_va_does_not_exit_vm ... ok
+test tests::gb26_strb_register_offset ... ok
+test tests::gb26_stlxr_release_variant ... ok
+test tests::gb26_sturh_unscaled ... ok
+test tests::gb26_strb_sp_imm ... ok
+test tests::gb26_sub32_register_s0 ... ok
+test tests::gb26_subs_imm_rn31_is_xzr ... ok
+test tests::gb27_add_extended_sxtb_32 ... ok
+test tests::gb26_stxr_fails_without_monitor ... ok
+test tests::gb27_rbit_32bit ... ok
+test tests::gb27_sp_ldpsw_preindex_writeback ... ok
+test tests::gb27_sp_ldpsw_sign_extends ... ok
+test tests::gb27_rbit_64bit ... ok
+test tests::gb27_sub_extended_uxtw_32_zero_extends ... ok
+test tests::gb27_subs_extended_uxtb_32 ... ok
+test tests::gb28_adds_extended_uxtb_64 ... ok
+test tests::gb28_clz_32bit ... ok
+test tests::gb28_ldxp_stxp_pair ... ok
+test tests::gb28_msub64 ... ok
+test irq_wfi_tests::timer_wfi_wake_runs_gic_handler_and_returns_via_eret ... ok
+test tests::gb2_tbz_and_tbnz_execution ... ok
+test tests::gic_t62_checkpoint_replays_gicd_typer_load ... ignored, replays the external 1 GiB T62 checkpoint; run explicitly for boot-boundary verification
+test tests::gb2_cmn_and_tst_execution ... ok
+test tests::gicd_typer_matches_qemu_virt_gicv2 ... ok
+test tests::load_image_rejects_bad_magic_and_truncation ... ok
+test tests::load_image_sets_entry_contract ... ok
+test tests::mmio_dispatch_routes_console_range ... ok
+test tests::orn_w_shifted_inverts_the_shifted_operand ... ok
+test tests::orn_w_mvn_w8_w8_inverts_the_operand ... ok
+test tests::queue_notify_no_queues_is_noop ... ok
+test tests::queue_notify_not_ready_is_noop ... ok
+test tests::restore_full_rejects_corrupt_input ... ok
+test tests::restore_full_rejects_version_mismatch_with_details ... ok
+test tests::scripted_input_feeds_console ... ok
+test tests::gb2_cmp_and_b_cond_eq_ne ... ok
+test tests::snapshot_full_roundtrips_all_state ... ok
+test tests::test_survey_mode_skips_illegal_word_and_continues ... ok
+test tests::gb4_bfxil_32bit_preserves_destination_bits_outside_field ... ok
+test tests::timer_disabled_never_fires ... ok
+test tests::timer_fires_intid_27_on_injected_ticks_only ... ok
+test tests::gb2_cmp_and_b_cond_not_taken ... ok
+test tests::track44_dc_zva_zeros_exactly_one_aligned_64_byte_block ... ok
+test tests::track20_mvn_x24_x24_produces_fffffffffffffffc ... ok
+test tests::test_udiv_sdiv_variants ... ok
+test tests::track49_extr_64bit_concatenates_rn_then_rm ... ok
+test tests::track44_w_form_orr_shift_32_is_rejected_before_fast_path_execution ... ok
+test tests::track60_extr_hand_verified_32bit_pair ... ok
+test tests::f2_unconditional_b_bl_br_blr_ret ... ok
+test tests::track60_extr_hand_verified_64bit_pair ... ok
+test tests::track60_extr_matches_t59_ttbr_root_case ... ok
+test tests::uart_tx_captures_low_byte_of_word_store ... ok
+test tests::uart_fr_read_reports_txfe_rxfe ... ok
+test tests::uart_rx_still_byte_oriented ... ok
+test tests::uart_rejects_8byte_accesses ... ok
+test tests::vmemmap_l1_gap_demand_population_allocates_l2_l3_and_page ... ok
+test tests::uart_word_store_to_other_offsets_acknowledged ... ok
+test tests::virtio_spi_irq49_is_acknowledged_by_guest_gic_registers ... ok
+test tests::virtio_blk_mmio_is_reachable_through_guest_memory_dispatch ... ok
+test tests::vmemmap_l1_gap_step_vcpu_instruction_retry ... ok
+test tests::wave4_match_static_reason_covers_new_traps ... ok
+test tests::wave4_adrp_executes_past_wave3_halt ... ok
+test tests::wave4_mem_fault_enters_data_abort_vector ... ok
+test tests::f2_cbz_cbnz_32_and_64_bit ... ok
+test tests::wave4_cbz_taken_skips_strb ... ok
+test tests::wave4_wfi_does_not_busy_spin ... ok
+test tests::wave4_wfi_with_pending_irq_continues ... ok
+test tests::wave4_registers_persist_across_blocks ... ok
+test tests::wave4_cbnz_path_runs_strb ... ok
+test tests::wave4_wfi_yield_is_resumable ... ok
+test va0_translationfault_tests::fp_simd_memory_translation_faults_enter_el1_data_abort_vector ... ok
+test va0_translationfault_tests::instruction_permission_fault_enters_el1_instruction_abort_vector ... ok
+test va0_translationfault_tests::instruction_translation_fault_enters_el1_instruction_abort_vector ... ok
+test va0_translationfault_tests::physical_instruction_fetch_bounds_fault_halts_without_guest_abort ... ok
+test va0_translationfault_tests::va0_translation_fault_enters_el1_data_abort_vector ... ok
+test virtio_blk::tests::qemu_mmio_init_and_read_lba0_from_real_system_image ... ok
+test virtio_blk::tests::writable_sparse_data_disk_completes_write_request ... ok
+test va0_translationfault_tests::wasm_memory_fault_enters_el1_data_abort_vector ... ok
+test tests::wave5_bl_ret_link_register_roundtrip ... ok
+test tests::wave5_real_guest_reaches_shell_prompt ... ok
+test irq_wfi_tests::timer_counter_uses_qemu_calibrated_cycles_per_guest_step ... ok
+test tests::persist_uses_blobstore_contract has been running for over 60 seconds
+test tests::state_hash_changes_with_state has been running for over 60 seconds
+test tests::wave4_snapshot_wfi_tag_roundtrips has been running for over 60 seconds
+test tests::wave4_snapshot_wfi_tag_roundtrips ... ok
+test tests::persist_uses_blobstore_contract ... ok
+test tests::state_hash_changes_with_state ... ok
+
+test result: ok. 169 passed; 0 failed; 2 ignored; 0 measured; 0 filtered out; finished in 380.86s
+
+     Running unittests src/bin/run_kernel.rs (target/debug/deps/run_kernel-5e31569f7799a1b9)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/boot.rs (target/debug/deps/boot-4752b0867a60fd31)
+
+running 11 tests
+test boot_virtio_gpu_submit3d_path ... ok
+test boot_pipeline_chains_blocks_through_wasmtime ... ok
+test boot_real_image_reaches_shell_prompt ... ok
+test key_echo_command_prints_args ... ok
+test rx_echo_command_prints_args ... ok
+test key_help_command_prints_help_text ... ok
+test key_unknown_command_reports_word ... ok
+test key_echo_uppercase_bytes_survive ... ok
+test rx_help_command_prints_help_text ... ok
+test rx_unknown_command_reports_word ... ok
+test boot_determinism_same_inputs_same_hash has been running for over 60 seconds
+test boot_determinism_same_inputs_same_hash ... ok
+
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 185.08s
+
+     Running tests/boot35m_extend.rs (target/debug/deps/boot35m_extend-a7263769a69c441f)
+error: test failed, to rerun pass `-p u12-orchestrator --test boot35m_extend`
+
+Caused by:
+  could not execute process `/Users/Shared/wt-track271-rustblk/target/debug/deps/boot35m_extend-a7263769a69c441f` (never executed)
+
+Caused by:
+  No such file or directory (os error 2)

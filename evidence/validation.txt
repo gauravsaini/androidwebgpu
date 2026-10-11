@@ -1,0 +1,7 @@
+Additional validation
+
+- `rustfmt --edition 2021 --check units/u12-orchestrator/src/virtio_blk.rs`: exit 0.
+- `git diff --check`: exit 0.
+- `cargo fmt --all --check`: reports formatting differences already present across unrelated workspace crates (including U2/U3/U4); no workspace-wide formatting was applied to avoid unrelated edits.
+- `jq -e '.expected_hex == .returned_hex and .lba8_expected_hex == .lba8_returned_hex and .bytes == 512' evidence/lba0-proof.json`: true.
+- No `tools/validate_okf.py` is present in this worktree, so the repository-specific OKF validator is unavailable.

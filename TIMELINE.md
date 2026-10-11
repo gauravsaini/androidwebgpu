@@ -50,3 +50,12 @@
 - The first release boot entered the timer vector for INTID 27 and reached the guest GICC IAR/EOIR accesses, then stopped at step 45,730,665 because the active-handler guard rejected a nested timer IRQ before ERET. This isolated a nested-exception gap in the boot path.
 - Added nested EL1 IRQ stack tracking so nested entry may overwrite ELR/SPSR and ERET returns unwind in order. Focused IRQ/WFI tests passed (6 passed, 1 ignored); the full orchestrator library suite passed (153 passed, 2 ignored). The second release boot reached the 60M step budget with `IRQ_ENTRIES=4951` and `IRQ_ERET_RETURNS=4949`; UART was 2,562 bytes and `INIT_MARKER=haan` because the kernel command line printed `rdinit=/init`. There was no `STATUS: PASS`, so this marker does not prove `/init` launched. The boot report ended at `PC=0xffffff80082430c0` without a guest halt.
 - Runtime logs recorded 5,775 GICC IAR reads for INTID 27 and 5,774 EOIs. The ISR now runs repeatedly and returns through ERET; two entries were still active at the step cap.
+
+## UPDATED ON : 2026-10-12
+
+### Track T271 (Rust virtio-blk MMIO device model)
+
+- Added a native file-backed virtio-blk MMIO device with split virtqueues, read-only system disk support, writable sparse `/data` support, and guest-memory dispatch at the T268/T269 DTB transport addresses. Added SPI IRQ 49/50 delivery through the GIC state used by the guest.
+- The focused probe initializes the QEMU-compatible v2 registers and queue, reads LBA0 from the real `system.img` with exact 512-byte equality, then repeats at nonzero LBA8; a separate write probe persists a sector to a sparse image.
+- `run_kernel` builds and its zero-step runner smoke test attaches the real system image read-only and the 4 GiB sparse data image writable at the expected MMIO/IRQ locations. The full package run passed 169 library tests and 11 boot integration tests, then Cargo could not execute the next test target because its binary was missing; that target builds independently with `--no-run` and requires external guest assets.
+- Curated branch and evidence index: `okf/branches/t271-rust-virtio-blk-mmio.md`; raw proof and logs are in `evidence/`. Full Android boot was not run for this device-model lane.

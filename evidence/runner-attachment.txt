@@ -1,0 +1,12 @@
+BINARY_GIT_REV=28d1e4e9ea5a68b8a398bfbed0d100a00bbe2f08
+[virtio-blk] Attached read-only system image at 0x0a000200 / IRQ 49: /Users/Shared/android14-gsi/system.img
+[virtio-blk] Created sparse 4 GiB data image: data-t271.img
+[virtio-blk] Attached writable data image at 0x0a000400 / IRQ 50: data-t271.img
+[boot] Loaded 4 bytes at 0x40080000. Running up to 0 steps...
+[done] Executed 0 steps. PC=0x0000000040080000
+IRQ_ENTRIES=0
+IRQ_ERET_RETURNS=0
+[limit] Step budget (0) reached without halt
+[ram-search] Scanning 1 GiB guest RAM for panic strings...
+  [CLEAN] No dynamic occurrences of 'Failed to allocate'
+  [CLEAN] No dynamic occurrences of 'Kernel panic - not syncing'
