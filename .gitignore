@@ -3,5 +3,6 @@
 .agents/
 node_modules/
 *.log
+data-t271.img
 .DS_Store
 .unlazy/

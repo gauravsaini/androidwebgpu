@@ -19,6 +19,9 @@ fn print_help() {
     println!("  --max-steps <N>       Step budget cap (default: 2000000)");
     println!("  --trace <FILE>        Enable per-step execution tracing to file");
     println!("  --console-output <FILE>  Write all captured UART bytes to FILE");
+    println!("  --system-disk <FILE>  Attach a read-only raw virtio-blk disk at 0x0a000200 (IRQ 49)");
+    println!("  --data-disk <FILE>    Attach a writable raw virtio-blk disk at 0x0a000400 (IRQ 50)");
+    println!("                        Create a new sparse 4 GiB image if FILE does not exist");
     println!("  --survey              Enable survey mode (discovery only, never progress)");
     println!("  --save-snapshot <PATH>  Write a full emulator snapshot to PATH after the run");
     println!("  --snapshot-at-step <N>  With --save-snapshot: save at absolute step N and exit");
@@ -47,6 +50,8 @@ fn main() {
     let mut max_steps: u64 = 2_000_000;
     let mut trace_file: Option<String> = None;
     let mut console_output: Option<String> = None;
+    let mut system_disk: Option<String> = None;
+    let mut data_disk: Option<String> = None;
     let mut dump_around: Option<usize> = None;
     let mut dump_console = false;
     let mut survey = false;
@@ -99,6 +104,18 @@ fn main() {
                 i += 1;
                 if i < args.len() {
                     console_output = Some(args[i].clone());
+                }
+            }
+            "--system-disk" => {
+                i += 1;
+                if i < args.len() {
+                    system_disk = Some(args[i].clone());
+                }
+            }
+            "--data-disk" => {
+                i += 1;
+                if i < args.len() {
+                    data_disk = Some(args[i].clone());
                 }
             }
             "--dump-around" => {
@@ -189,6 +206,23 @@ fn main() {
     } else {
         Orchestrator::new()
     };
+
+    if let Some(path) = system_disk.as_deref() {
+        orch.attach_virtio_blk(0x0a00_0200, 49, Path::new(path), true)
+            .unwrap_or_else(|error| panic!("failed to attach read-only system disk {path}: {error}"));
+        println!("[virtio-blk] Attached read-only system image at 0x0a000200 / IRQ 49: {path}");
+    }
+    if let Some(path) = data_disk.as_deref() {
+        let data_path = Path::new(path);
+        if !data_path.exists() {
+            Orchestrator::create_sparse_virtio_blk_image(data_path, 4 * 1024 * 1024 * 1024)
+                .unwrap_or_else(|error| panic!("failed to create sparse data image {path}: {error}"));
+            println!("[virtio-blk] Created sparse 4 GiB data image: {path}");
+        }
+        orch.attach_virtio_blk(0x0a00_0400, 50, data_path, false)
+            .unwrap_or_else(|error| panic!("failed to attach writable data disk {path}: {error}"));
+        println!("[virtio-blk] Attached writable data image at 0x0a000400 / IRQ 50: {path}");
+    }
 
     if let Some(ref tf) = trace_file {
         orch.enable_trace_file(tf)
