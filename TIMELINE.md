@@ -64,3 +64,11 @@
 - Opened a separate full-boot branch from T503's `ec0a017` fixed revision; all three T499 manifest input hashes match.
 - Gate protocol requires guest quirks disabled, a guest-originating exact PID-1 UART marker, and ten consecutive fresh runs for any reproducibility claim. Boot outcome is pending.
 - Carried forward T503's 349/350 workspace test result and its unrelated LDRB/MMU translation failure.
+
+## UPDATED ON : 2026-10-16
+
+### Feature (2026-10-16) — Harness UART streaming and PID-1 detection
+
+1. **Harness UART & Diagnostics**: Added `--console-output` support, 2M progress cadencing with live `console_bytes` monitoring, stdout flushing, full console dumping, and exact PID-1 UART marker early break in `run_kernel.rs`.
+2. **Tests** (before → after): Unstreamed buffered UART → Live console monitoring and automated PID-1 witness detection.
+3. **Files changed**: `units/u12-orchestrator/src/bin/run_kernel.rs`

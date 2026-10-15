@@ -53,6 +53,7 @@ fn main() {
     let mut guest_quirks_enabled = false;
     let mut dump_around: Option<usize> = None;
     let mut dump_console = false;
+    let mut console_output: Option<String> = None;
     let mut survey = false;
     let mut save_snapshot: Option<String> = None;
     let mut save_at: Option<u64> = None;
@@ -136,6 +137,12 @@ fn main() {
             }
             "--dump-console" => {
                 dump_console = true;
+            }
+            "--console-output" => {
+                i += 1;
+                if i < args.len() {
+                    console_output = Some(args[i].clone());
+                }
             }
             "--survey" => {
                 // HARD RULE: Survey mode is discovery only — it must NEVER be used
@@ -355,9 +362,19 @@ fn main() {
             }
         }
         let s = orch.steps();
-        if s > 0 && s % 10_000_000 == 0 {
+        if s > 0 && s % 2_000_000 == 0 {
             let pc = orch.machine().cpu[0].pc;
-            println!("[progress] step {s} ({}M), PC={pc:#018x}", s / 1_000_000);
+            let c_bytes = orch.console().tx_bytes.len();
+            println!("[progress] step {s} ({}M), PC={pc:#018x}, console_bytes={c_bytes}", s / 1_000_000);
+            use std::io::Write;
+            std::io::stdout().flush().ok();
+        }
+        const PID1_MARKER: &[u8] = b"[PATHN-TRACK-B] ARM64 STATIC /INIT LAUNCHED (PID 1)";
+        if orch.console().tx_bytes.windows(PID1_MARKER.len()).any(|w| w == PID1_MARKER) {
+            println!("[marker] EXACT PID-1 MARKER OBSERVED at step {s}!");
+            use std::io::Write;
+            std::io::stdout().flush().ok();
+            break;
         }
         // --save-at: snapshot as soon as the step counter reaches the target.
         if let Some(target) = save_at {
@@ -409,13 +426,16 @@ fn main() {
             }
         }
     }
+    if let Some(ref path) = console_output {
+        fs::write(path, &orch.console().tx_bytes)
+            .unwrap_or_else(|e| eprintln!("Warning: failed to write console output: {e}"));
+        println!("[console] Wrote {} UART bytes to {path}", orch.console().tx_bytes.len());
+    }
     if dump_console {
         let bytes = &orch.console().tx_bytes;
         println!("[console] {} bytes:", bytes.len());
         if let Ok(s) = std::str::from_utf8(bytes) {
-            // Print last 2KB to avoid flooding
-            let start = s.len().saturating_sub(2048);
-            println!("{}", &s[start..]);
+            println!("{}", s);
         } else {
             println!("<non-UTF8 output>");
         }
