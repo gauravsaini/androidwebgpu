@@ -72,3 +72,11 @@
 1. **Harness UART & Diagnostics**: Added `--console-output` support, 2M progress cadencing with live `console_bytes` monitoring, stdout flushing, full console dumping, and exact PID-1 UART marker early break in `run_kernel.rs`.
 2. **Tests** (before → after): Unstreamed buffered UART → Live console monitoring and automated PID-1 witness detection.
 3. **Files changed**: `units/u12-orchestrator/src/bin/run_kernel.rs`
+
+## UPDATED ON : 2026-10-16
+
+### Diagnostics (2026-10-16) — T506 fresh Rust boot outcome & first divergence
+
+1. **Boot Outcome & First Divergence**: Ran fresh boot from reset with pinned inputs (Image, DTB, initramfs) and quirks disabled. Guest executed 44,738,735 steps, emitting 1,950 UART bytes, then halted at PC `0xffffff800946a438` on `BRK #0x800` (`BUG()`). Divergence traced to `kasprintf` returning NULL in `X0` at `0xffffff800946a3d8` where QEMU returns allocated buffer `0xffffffc03d803000`. PID-1 marker not reached; Verdict FAIL.
+2. **Tests** (before → after): Unverified boot outcome → Completed boot run, 44.74M steps measured, first divergence localized; G506-1 MET, G506-2 NOT MET, G506-3 MET.
+3. **Files changed**: `GATES-T506.md`, `TIMELINE.md`, `codex-track506-rustinit.md`

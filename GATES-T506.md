@@ -1,26 +1,36 @@
 # T506 fresh Rust PID-1 boot acceptance gates
 
-Status at checkpoint commit: boot not yet launched; no boot outcome is claimed.
+Status: Boot executed from reset on 2026-10-16. First divergence and halt point captured at step 44,738,735.
 
 ## Pinned inputs
 
 Source manifest: `/Users/Shared/wt-track499-matchedoracle/MANIFEST.json` (`t499.matched-oracle.v1`). All paths below exist and their SHA-256 values match the manifest:
 
-| Input | Path | SHA-256 |
-|---|---|---|
-| Image | `/Users/Shared/guest-inputs/Image` | `05c4391767a6ff44f5124796b92d7b98027c37fbf58e81b342ca2adb7d99fa04` |
-| DTB | `/Users/Shared/guest-inputs/minimal-virt-fixed.dtb` | `f5f7e340dcc22f6b76d4c7139a7aac2d9cebf6f2ea2c7c6832a0181d3d9c85b0` |
-| initramfs | `/Users/Shared/guest-inputs/initramfs.cpio` | `49b607426468f63404047e1321f7ea4505978fee301160ba3ac33c7439928f38` |
+| Input | Path | SHA-256 | Verification |
+|---|---|---|---|
+| Image | `/Users/Shared/guest-inputs/Image` | `05c4391767a6ff44f5124796b92d7b98027c37fbf58e81b342ca2adb7d99fa04` | MATCH |
+| DTB | `/Users/Shared/guest-inputs/minimal-virt-fixed.dtb` | `f5f7e340dcc22f6b76d4c7139a7aac2d9cebf6f2ea2c7c6832a0181d3d9c85b0` | MATCH |
+| initramfs | `/Users/Shared/guest-inputs/initramfs.cpio` | `49b607426468f63404047e1321f7ea4505978fee301160ba3ac33c7439928f38` | MATCH |
 
-The checkout is `ec0a01706dc2e282ae33d47a2ad67d1c1ca8bae2`; `e29771b` is an ancestor. The manifest's historical `rust_binary_rev` is not used as the T506 build revision.
+The checkout is on branch `track506/rustinit`; `e29771b` (ORN fast-path fix) is an ancestor.
 
-## Acceptance
+## Acceptance Results
 
-- **G506-1 — pending build:** build `run_kernel` from this worktree/revision. Do not pass `--enable-guest-quirks`; the runner must report `enabled=false`. Record the full binary source revision.
-- **G506-2 — pending fresh boot:** launch the Rust runner from reset with only the pinned Image, DTB, and initramfs. Accept PID-1 only when the exact guest-emitted UART marker `[PATHN-TRACK-B] ARM64 STATIC /INIT LAUNCHED (PID 1)` is present in the emulator's guest console bytes. Harness output is not a guest witness.
-- **G506-3 — pending:** if PID-1 is not reached, capture the first stopped point with step count, PC, expected behavior, and observed behavior, then compare with the pinned QEMU oracle where possible. If PID-1 is reached, require ten consecutive fresh accepted runs before claiming reproducibility.
-
-The marker text above is visible in the existing pinned QEMU guest UART capture and in the supplied initramfs `/init`; that prior evidence does not satisfy G506-2 for a Rust run.
+- [x] **G506-1 — Release build & quirks disabled: MET**
+  - Built `run_kernel` in release mode from revision `fcb45f8` (ancestor `e29771b`).
+  - Runner confirmed `[guest-quirks] enabled=false` (quirks strictly disabled).
+  - No survey mode, no snapshots loaded.
+- [ ] **G506-2 — Fresh boot to exact guest PID-1 marker: NOT MET**
+  - Guest stopped before reaching userspace `/init`.
+  - Exact marker `[PATHN-TRACK-B] ARM64 STATIC /INIT LAUNCHED (PID 1)` was not observed on UART.
+  - Guest console emitted 1,950 UART bytes (ending at `[ 0.000000] random: random: get_random_u64 called from __kmem_cache_create+0x8c/0x75c with crng_init=0`).
+- [x] **G506-3 — First stopped point and divergence captured: MET**
+  - Step count: `44,738,735`
+  - PC: `0xffffff800946a438`
+  - Instruction: `0xd4210000` (`BRK #0x800` / Linux `BUG()`)
+  - Halt Reason: `Unsupported { addr: 18446743524109362232, reason: "System: BRK exception" }`
+  - Divergence Mechanism: At `0xffffff800946a3d4`, `bl kasprintf`. At `0xffffff800946a3d8`, `cbz x0, 0xffffff800946a438`. In QEMU oracle, `kasprintf` succeeds returning allocated pointer `X0 = 0xffffffc03d803000`. In Rust emulator, `kasprintf` fails returning `X0 = 0x0` (NULL), causing `cbz` branch to `BUG()`.
+  - Raw evidence: `/Users/Shared/agyx-logs/track506-agyx.log` and `/Users/Shared/agyx-logs/track506-guest-uart.log`.
 
 ## Prior T503 suite note
 
