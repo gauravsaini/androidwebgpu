@@ -1,0 +1,42 @@
+[guest-quirks] enabled=false
+[boot] Loaded initrd (6656 bytes) at 0x48000000
+[boot] Loaded DTB (1465 bytes) at 0x48200000, x0 set
+[boot] Loaded 23073280 bytes at 0x40080000. Running up to 10000000 steps...
+[break] before pc=0xffffff8008354018 word=0xda818058
+[break] before x1=0x0000000040000000 x2=0x0000000040000000 x8=0x0000000040000000 x24=0xffffff8009512000 pstate=0x60000000
+[break] after pc=0xffffff800835401c x1=0x0000000040000000 x2=0x0000000040000000 x8=0x0000000040000000 x24=0xffffffffbfffffff pstate=0x60000000
+[done] Executed 102125 steps. PC=0xffffff800835401c
+[break] Captured one instruction at the requested PC.
+[ram-search] Scanning 1 GiB guest RAM for panic strings...
+  Found 'Failed to allocate' at PA 0x4120c5e8 (rodata=true)
+  Found 'Failed to allocate' at PA 0x4120daaf (rodata=true)
+  Found 'Failed to allocate' at PA 0x4121a4cb (rodata=true)
+  Found 'Failed to allocate' at PA 0x41220732 (rodata=true)
+  Found 'Failed to allocate' at PA 0x4122ba6b (rodata=true)
+  Found 'Failed to allocate' at PA 0x4122fa03 (rodata=true)
+  Found 'Failed to allocate' at PA 0x4123f776 (rodata=true)
+  Found 'Failed to allocate' at PA 0x412406d9 (rodata=true)
+  Found 'Failed to allocate' at PA 0x4124572c (rodata=true)
+  Found 'Failed to allocate' at PA 0x41246465 (rodata=true)
+  Found 'Failed to allocate' at PA 0x412492d1 (rodata=true)
+  Found 'Failed to allocate' at PA 0x41253cc3 (rodata=true)
+  Found 'Failed to allocate' at PA 0x4125d346 (rodata=true)
+  Found 'Failed to allocate' at PA 0x4125e0e7 (rodata=true)
+  Found 'Failed to allocate' at PA 0x4125ebdd (rodata=true)
+  Found 'Failed to allocate' at PA 0x4126cdb2 (rodata=true)
+  Found 'Failed to allocate' at PA 0x4126f4b0 (rodata=true)
+  Found 'Failed to allocate' at PA 0x41271b78 (rodata=true)
+  Found 'Failed to allocate' at PA 0x412729ce (rodata=true)
+  Found 'Failed to allocate' at PA 0x41276a6e (rodata=true)
+  Found 'Failed to allocate' at PA 0x41279d2e (rodata=true)
+  Found 'Failed to allocate' at PA 0x4128abec (rodata=true)
+  Found 'Failed to allocate' at PA 0x4128be0b (rodata=true)
+  Found 'Failed to allocate' at PA 0x4129123a (rodata=true)
+  Found 'Failed to allocate' at PA 0x4129215b (rodata=true)
+  Found 'Failed to allocate' at PA 0x412ab9eb (rodata=true)
+  Found 'Failed to allocate' at PA 0x413f6ad4 (rodata=true)
+  Found 'Failed to allocate' at PA 0x415134af (rodata=true)
+  [CLEAN] No dynamic occurrences of 'Failed to allocate'
+  Found 'Kernel panic - not syncing' at PA 0x412671ca (rodata=true)
+  Found 'Kernel panic - not syncing' at PA 0x412a9bd9 (rodata=true)
+  [CLEAN] No dynamic occurrences of 'Kernel panic - not syncing'

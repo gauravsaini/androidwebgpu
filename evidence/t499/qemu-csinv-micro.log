@@ -1,0 +1,9 @@
+GDB features: PacketSize=20020;qXfer:features:read+;vContSupported+;multiprocess+
+Initial stop: T05core:01;
+QEMU instruction bytes at 0x40354018: 588081da
+QEMU BEFORE: pc=0x0000000040354018 pstate=0xa00001c5 x1=0x0000000040000000 x2=0x0000000040000000 x8=0xffffffffbfffffff x24=0xffffff8009512000
+Single-step stop: T05thread:p01.01;
+QEMU AFTER: pc=0x000000004035401c pstate=0xa00001c5 x1=0x0000000040000000 x2=0x0000000040000000 x8=0xffffffffbfffffff x24=0x0000000040000000
+CSINV vector: 0xda818058; X24 0xffffff8009512000 -> 0x0000000040000000
+QEMU stderr: qemu-system-aarch64: terminating on signal 15 from pid 44968 (<unknown process>)
+

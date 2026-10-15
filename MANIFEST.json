@@ -1,0 +1,39 @@
+{
+  "schema": "t499.matched-oracle.v1",
+  "cpu": "cortex-a53",
+  "ram_mb": 1024,
+  "ram_base": "0x40000000",
+  "bootargs": "console=ttyAMA0,115200 earlycon rdinit=/init",
+  "kernel_path": "/Users/Shared/guest-inputs/Image",
+  "kernel_sha256": "05c4391767a6ff44f5124796b92d7b98027c37fbf58e81b342ca2adb7d99fa04",
+  "dtb_path": "/Users/Shared/guest-inputs/minimal-virt-fixed.dtb",
+  "dtb_sha256": "f5f7e340dcc22f6b76d4c7139a7aac2d9cebf6f2ea2c7c6832a0181d3d9c85b0",
+  "initramfs_path": "/Users/Shared/guest-inputs/initramfs.cpio",
+  "initramfs_sha256": "49b607426468f63404047e1321f7ea4505978fee301160ba3ac33c7439928f38",
+  "initramfs_size_bytes": 6656,
+  "kernel_load_pa": "0x40080000",
+  "dtb_load_pa": "0x48200000",
+  "initramfs_load_pa": "0x48000000",
+  "csinv": {
+    "guest_va": "0xffffff8008354018",
+    "image_file_offset": "0x2d4018",
+    "word": "0xda818058"
+  },
+  "mmio_map": {
+    "framebuffer": "0x5F000000",
+    "gpu_port": "0x0A000000",
+    "pl011": "0x09000000"
+  },
+  "mmio_notes": {
+    "framebuffer": "0x5F000000 is within the 1 GiB RAM aperture on this virt machine.",
+    "gpu_port": "virtio-gpu is attached to the first virtio-mmio slot at 0x0A000000; the supplied DTB has no virtio-mmio node.",
+    "pl011": "QEMU virt PL011 at 0x09000000; guest serial output is captured directly."
+  },
+  "qemu_binary": "/opt/homebrew/bin/qemu-system-aarch64",
+  "qemu_version": "QEMU emulator version 11.1.2",
+  "qemu_machine": "virt,gic-version=2,virtio-mmio-transports=1",
+  "qemu_accel": "tcg,thread=single",
+  "dtb_gic_compatible": "arm,cortex-a15-gic",
+  "qemu_gpu_device": "virtio-gpu-device,id=gpu0",
+  "rust_binary_rev": "bebb568cb2862a49a82f1eb8933959929b2439b4"
+}

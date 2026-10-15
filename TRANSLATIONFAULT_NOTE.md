@@ -1,5 +1,10 @@
 # TranslationFault at 0xffffffbefea00000 — vmemmap Demand-Population (u12)
 
+> **T499 status (2026-10-15):** The host-side vmemmap population handler is
+> retained as a compatibility intervention but is disabled in normal runs.
+> It is enabled only by `--enable-guest-quirks`; see the T499 findings for the
+> pinned manifest and scope.
+
 ## Summary
 
 After the MMU UXN/PXN fix (db5ab78), the kernel halted at **step

@@ -1,5 +1,14 @@
 # Size Bug Investigation — CSINV Analysis
 
+> **T499 status (2026-10-15):** The diagnosis below is a historical hypothesis,
+> not a matched-oracle result. Native QEMU and Rust agree when the same guest
+> bytes and register inputs are supplied. In a live boot, the engines arrive
+> at the instruction with different X8/NZCV state and produce different X24
+> values; T499 classifies that observed divergence as **EMULATOR-BUG**. The
+> memblock store rewrite is now disabled by default behind
+> `--enable-guest-quirks`. See `evidence/t499/` and
+> `/Users/Shared/codex-track499-matchedoracle.md`.
+
 **Date:** 2026-10-04  
 **Worktree:** `~/workspace/wt-size-bug`, branch `feat/size-bug`  
 **Base:** 4619701  

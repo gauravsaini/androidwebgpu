@@ -1,5 +1,11 @@
 # Panic Real Root Cause — Investigation
 
+> **T499 status (2026-10-15):** The CSINV-based corruption explanation below
+> was not validated against a matched QEMU state. T499 observed QEMU store
+> `0x40000000` for the 1 GiB region and a Rust pre-instruction state mismatch;
+> the memblock rewrite is now disabled by default behind
+> `--enable-guest-quirks`. Treat this note's quirk diagnosis as historical.
+
 **Date:** 2026-10-04  
 **Worktree:** `~/workspace/wt-panic-real`, branch `feat/panic-real`  
 **Base:** ae97fd7  

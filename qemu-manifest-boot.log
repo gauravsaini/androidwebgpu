@@ -1,0 +1,196 @@
+[    0.000000] Booting Linux on physical CPU 0x0000000000 [0x410fd034]
+[    0.000000] Linux version 4.19.130-00651-g4da740c10dc0-ab6640132 (android-build@abfarm-01180) (Android (6443078 based on r383902) clang version 11.0.1 (https://android.googlesource.com/toolchain/llvm-project b397f81060ce6d701042b782172ed13bee898b79), LLD 11.0.1 (/buildbot/tmp/tmp6_m7QH b397f81060ce6d701042b782172ed13bee898b79)) #2 SMP PREEMPT Tue Jun 30 06:03:01 UTC 2020
+[    0.000000] Machine model: arm,virt
+[    0.000000] earlycon: pl11 at MMIO 0x0000000009000000 (options '')
+[    0.000000] bootconsole [pl11] enabled
+[    0.000000] efi: Getting EFI parameters from FDT:
+[    0.000000] efi: UEFI not found.
+[    0.000000] cma: Reserved 16 MiB at 0x000000007f000000
+[    0.000000] psci: probing for conduit method from DT.
+[    0.000000] psci: PSCIv1.1 detected in firmware.
+[    0.000000] psci: Using standard PSCI v0.2 function IDs
+[    0.000000] psci: Trusted OS migration not required
+[    0.000000] psci: SMC Calling Convention v1.0
+[    0.000000] percpu: Embedded 25 pages/cpu s61784 r8192 d32424 u102400
+[    0.000000] Detected VIPT I-cache on CPU0
+[    0.000000] CPU features: enabling workaround for ARM erratum 845719
+[    0.000000] Built 1 zonelists, mobility grouping on.  Total pages: 258048
+[    0.000000] Kernel command line: console=ttyAMA0,115200 earlycon rdinit=/init
+[    0.000000] Dentry cache hash table entries: 131072 (order: 8, 1048576 bytes)
+[    0.000000] Inode-cache hash table entries: 65536 (order: 7, 524288 bytes)
+[    0.000000] mem auto-init: stack:all, heap alloc:on, heap free:off
+[    0.000000] Memory: 991000K/1048576K available (12412K kernel code, 1284K rwdata, 7792K rodata, 1024K init, 396K bss, 41192K reserved, 16384K cma-reserved)
+[    0.000000] random: random: get_random_u64 called from __kmem_cache_create+0x8c/0x75c with crng_init=0
+[    0.000000] SLUB: HWalign=64, Order=0-3, MinObjects=0, CPUs=1, Nodes=1
+[    0.000000] rcu: Preemptible hierarchical RCU implementation.
+[    0.000000] rcu: 	RCU restricting CPUs from NR_CPUS=32 to nr_cpu_ids=1.
+[    0.000000] 	Tasks RCU enabled.
+[    0.000000] rcu: Adjusting geometry for rcu_fanout_leaf=16, nr_cpu_ids=1
+[    0.000000] NR_IRQS: 64, nr_irqs: 64, preallocated irqs: 0
+[    0.000000] arch_timer: cp15 timer(s) running at 62.50MHz (virt).
+[    0.000000] clocksource: arch_sys_counter: mask: 0xffffffffffffff max_cycles: 0x1cd42e208c, max_idle_ns: 881590405314 ns
+[    0.000049] sched_clock: 56 bits at 62MHz, resolution 16ns, wraps every 4398046511096ns
+[    0.002690] Calibrating delay loop (skipped), value calculated using timer frequency.. 125.00 BogoMIPS (lpj=250000)
+[    0.003165] pid_max: default: 32768 minimum: 301
+[    0.006637] Security Framework initialized
+[    0.007004] SELinux:  Initializing.
+[    0.007743] Mount-cache hash table entries: 2048 (order: 2, 16384 bytes)
+[    0.008017] Mountpoint-cache hash table entries: 2048 (order: 2, 16384 bytes)
+[    0.057267] ASID allocator initialised with 32768 entries
+[    0.066312] rcu: Hierarchical SRCU implementation.
+[    0.077607] EFI services will not be available.
+[    0.091620] smp: Bringing up secondary CPUs ...
+[    0.091863] smp: Brought up 1 node, 1 CPU
+[    0.092035] SMP: Total of 1 processors activated.
+[    0.092287] CPU features: detected: 32-bit EL0 Support
+[    0.103216] CPU features: emulated: Privileged Access Never (PAN) using TTBR0_EL1 switching
+[    0.103671] CPU: All CPU(s) started at EL1
+[    0.103969] alternatives: patching kernel code
+[    0.105385] CPU0: update max cpu_capacity 1024
+[    0.113152] Registered cp15_barrier emulation handler
+[    0.113393] Registered setend emulation handler
+[    0.114548] clocksource: jiffies: mask: 0xffffffff max_cycles: 0xffffffff, max_idle_ns: 7645041785100000 ns
+[    0.115001] futex hash table entries: 256 (order: 2, 16384 bytes)
+[    0.118537] pinctrl core: initialized pinctrl subsystem
+[    0.125269] NET: Registered protocol family 16
+[    0.126955] schedtune: configured to support 6 boost groups
+[    0.127472] audit: initializing netlink subsys (disabled)
+[    0.130496] cpuidle: using governor menu
+[    0.131263] hw-breakpoint: found 6 breakpoint and 4 watchpoint registers.
+[    0.131897] audit: type=2000 audit(0.100:1): state=initialized audit_enabled=0 res=1
+[    0.136369] DMA: preallocated 256 KiB pool for atomic allocations
+[    0.136999] Serial: AMBA PL011 UART driver
+[    0.137654] DMA: preallocated 256 KiB pool for atomic allocations
+[    0.144270] 9000000.pl011: ttyAMA0 at MMIO 0x9000000 (irq = 5, base_baud = 0) is a PL011 rev1
+[    0.145343] console [ttyAMA0] enabled
+[    0.145343] console [ttyAMA0] enabled
+[    0.145746] bootconsole [pl11] disabled
+[    0.145746] bootconsole [pl11] disabled
+[    0.168111] cryptd: max_cpu_qlen set to 1000
+[    0.185290] SCSI subsystem initialized
+[    0.185846] usbcore: registered new interface driver usbfs
+[    0.186127] usbcore: registered new interface driver hub
+[    0.186424] usbcore: registered new device driver usb
+[    0.186907] media: Linux media interface: v0.10
+[    0.187105] videodev: Linux video capture interface: v2.00
+[    0.187411] EDAC MC: Ver: 3.0.0
+[    0.193982] Advanced Linux Sound Architecture Driver Initialized.
+[    0.198966] Bluetooth: Core ver 2.22
+[    0.199141] NET: Registered protocol family 31
+[    0.199271] Bluetooth: HCI device and connection manager initialized
+[    0.199537] Bluetooth: HCI socket layer initialized
+[    0.199714] Bluetooth: L2CAP socket layer initialized
+[    0.199933] Bluetooth: SCO socket layer initialized
+[    0.202778] clocksource: Switched to clocksource arch_sys_counter
+[    0.296759] VFS: Disk quotas dquot_6.6.0
+[    0.297060] VFS: Dquot-cache hash table entries: 512 (order 0, 4096 bytes)
+[    0.299791] NET: Registered protocol family 2
+[    0.304290] tcp_listen_portaddr_hash hash table entries: 512 (order: 1, 8192 bytes)
+[    0.304607] TCP established hash table entries: 8192 (order: 4, 65536 bytes)
+[    0.304966] TCP bind hash table entries: 8192 (order: 5, 131072 bytes)
+[    0.305259] TCP: Hash tables configured (established 8192 bind 8192)
+[    0.306279] UDP hash table entries: 512 (order: 2, 16384 bytes)
+[    0.306599] UDP-Lite hash table entries: 512 (order: 2, 16384 bytes)
+[    0.307535] NET: Registered protocol family 1
+[    0.314040] NET: Registered protocol family 44
+[    0.319645] Trying to unpack rootfs image as initramfs...
+[    0.324996] Freeing initrd memory: 4K
+[    0.329157] cryptomgr_test (30) used greatest stack depth: 14880 bytes left
+[    0.335348] Initialise system trusted keyrings
+[    0.336363] workingset: timestamp_bits=45 max_order=18 bucket_order=0
+[    0.341028] cryptomgr_test (30): highest shadow stack usage: 112 bytes
+[    0.348720] fuse init (API version 7.27)
+[    0.357861] cryptomgr_test (78) used greatest stack depth: 14832 bytes left
+[    0.361615] Key type asymmetric registered
+[    0.361794] Asymmetric key parser 'x509' registered
+[    0.362073] Block layer SCSI generic (bsg) driver version 0.4 loaded (major 246)
+[    0.362353] io scheduler noop registered
+[    0.362496] io scheduler deadline registered
+[    0.362842] io scheduler cfq registered (default)
+[    0.362997] io scheduler mq-deadline registered
+[    0.363135] io scheduler kyber registered
+[    0.365267] Serial: 8250/16550 driver, 4 ports, IRQ sharing disabled
+[    0.367927] cacheinfo: Unable to detect cache hierarchy for CPU 0
+[    0.383703] brd: module loaded
+[    0.394552] loop: module loaded
+[    0.395318] zram: Added device: zram0
+[    0.398157] libphy: Fixed MDIO Bus: probed
+[    0.398313] tun: Universal TUN/TAP device driver, 1.6
+[    0.398669] PPP generic driver version 2.4.2
+[    0.399026] PPP BSD Compression module registered
+[    0.399240] PPP Deflate Compression module registered
+[    0.399540] PPP MPPE Compression module registered
+[    0.399685] NET: Registered protocol family 24
+[    0.399817] PPTP driver version 0.8.5
+[    0.400378] usbcore: registered new interface driver r8152
+[    0.401946] usbcore: registered new interface driver xpad
+[    0.402259] i2c /dev entries driver
+[    0.402851] device-mapper: uevent: version 1.0.3
+[    0.403497] device-mapper: ioctl: 4.39.0-ioctl (2018-04-03) initialised: dm-devel@redhat.com
+[    0.409908] device-mapper: verity-avb: AVB error handler initialized with vbmeta device: 
+[    0.410693] sdhci: Secure Digital Host Controller Interface driver
+[    0.410872] sdhci: Copyright(c) Pierre Ossman
+[    0.411001] sdhci-pltfm: SDHCI platform and OF driver helper
+[    0.411406] hidraw: raw HID events driver (C) Jiri Kosina
+[    0.412395] usbcore: registered new interface driver usbhid
+[    0.412552] usbhid: USB HID core driver
+[    0.412955] ashmem: initialized
+[    0.413349] gnss: GNSS driver registered with major 241
+[    0.414336] usbcore: registered new interface driver snd-usb-audio
+[    0.415714] u32 classifier
+[    0.415834]     Actions configured
+[    0.421084] xt_time: kernel timezone is -0000
+[    0.421443] ipip: IPv4 and MPLS over IPv4 tunneling driver
+[    0.422843] gre: GRE over IPv4 demultiplexor driver
+[    0.423004] ip_gre: GRE over IPv4 tunneling driver
+[    0.424844] IPv4 over IPsec tunneling driver
+[    0.430280] Initializing XFRM netlink socket
+[    0.430565] IPsec XFRM device driver
+[    0.431568] NET: Registered protocol family 10
+[    0.442696] Segment Routing with IPv6
+[    0.443373] mip6: Mobile IPv6
+[    0.446275] sit: IPv6, IPv4 and MPLS over IPv4 tunneling driver
+[    0.448482] ip6_gre: GRE over IPv6 tunneling driver
+[    0.449670] NET: Registered protocol family 17
+[    0.449974] NET: Registered protocol family 15
+[    0.450567] l2tp_core: L2TP core driver, V2.0
+[    0.450753] l2tp_ppp: PPPoL2TP kernel driver, V2.0
+[    0.450903] tipc: Activated (version 2.0.0)
+[    0.451864] NET: Registered protocol family 30
+[    0.453309] tipc: Started in single node mode
+[    0.453984] registered taskstats version 1
+[    0.454116] Loading compiled-in X.509 certificates
+[    0.454464] Key type ._fscrypt registered
+[    0.454584] Key type .fscrypt registered
+[    0.454698] Key type fscrypt-provisioning registered
+[    0.456859] cfg80211: Loading compiled-in X.509 certificates for regulatory database
+[    0.469620] kworker/u2:0 (98) used greatest stack depth: 14352 bytes left
+[    0.474521] cfg80211: Loaded X.509 cert 'sforshee: 00b28ddf47aef9cea7'
+[    0.475835] platform regulatory.0: Direct firmware load for regulatory.db failed with error -2
+[    0.476175] platform regulatory.0: Falling back to syfs fallback for: regulatory.db
+[    0.476811] cryptomgr_probe (100) used greatest stack depth: 14288 bytes left
+[    0.477642] ALSA device list:
+[    0.477755]   No soundcards found.
+[    0.480487] uart-pl011 9000000.pl011: no DMA platform data
+[    0.484383] kworker/u2:0 (98): highest shadow stack usage: 136 bytes
+[    0.484678] cryptomgr_probe (100): highest shadow stack usage: 176 bytes
+[    0.519998] Freeing unused kernel memory: 1024K
+[    0.520673] Run /init as init process
+
+============================================================
+[PATHN-TRACK-B] ARM64 STATIC /INIT LAUNCHED (PID 1)
+[PATHN-TRACK-B] UART MARKER: PL011 TTYAMA0 DRIVER AT 0x09000000 OK
+[PATHN-TRACK-B] RAM MARKER: MAGIC 0x504154484E5F5241 0x4D5F4D41524B4552 OK
+[PATHN-TRACK-B] INITRAMFS ROOTFS MOUNTED AT / OK
+[PATHN-TRACK-B] STATUS: PASS - USERSPACE INITIALIZATION COMPLETE
+============================================================
+
+
+============================================================
+[PATHN-TRACK-B] ARM64 STATIC /INIT LAUNCHED (PID 1)
+[PATHN-TRACK-B] UART MARKER: PL011 TTYAMA0 DRIVER AT 0x09000000 OK
+[PATHN-TRACK-B] RAM MARKER: MAGIC 0x504154484E5F5241 0x4D5F4D41524B4552 OK
+[PATHN-TRACK-B] INITRAMFS ROOTFS MOUNTED AT / OK
+[PATHN-TRACK-B] STATUS: PASS - USERSPACE INITIALIZATION COMPLETE
+============================================================
+

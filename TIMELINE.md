@@ -41,3 +41,12 @@
 1. **Kernel Halt-Chasing & Emulator Fixes**: Fixed CCMP register decode bit (bit 11 vs 10) resolving runaway `strchr` loop; added UDIV/SDIV decoding to `u1-decode` and `u12-orchestrator`; resolved LDP/LDPSW base register clobber (`rn == rt`) in `u2-ir-lift`; supported 64-bit ADD/SUB extended UXTB, 32/64-bit CLZ, 64-bit MADD/MSUB, and LDXP/LDAXP/STXP/STLXP atomic pairs; booted AOSP kernel to 200M steps halt-free with clean 1 GiB guest RAM panic search.
 2. **Tests** (before → after): u1-decode 104 → 105 passed, u2-ir-lift 126 → 127 passed, u12-orchestrator 127 → 133 passed.
 3. **Files changed**: `units/u1-decode/src/dp_reg.rs`, `units/u1-decode/src/lib.rs`, `units/u2-ir-lift/src/lib.rs`, `units/u12-orchestrator/src/lib.rs`, `units/u12-orchestrator/src/bin/run_kernel.rs`.
+
+## T499 matched-oracle — 2026-10-15
+
+- Started the matched-oracle lane and verified the actual `guest-inputs` hashes; pinned cortex-a53, 1024 MiB, exact DTB bootargs, input hashes, QEMU 11.1.2, and Rust source revision in `MANIFEST.json`.
+- Matched the QEMU GIC version to the provided DTB's `arm,cortex-a15-gic` controller (GICv2). The first GICv3 run faulted before init because that machine setting contradicted the DTB; it was retained as raw setup evidence, not tagged as a guest wall.
+- Native QEMU's guest-only UART reached `Run /init as init process`; the kernel unpacked the initramfs and PID 1 printed its rootfs and PASS markers.
+- Captured the dynamic CSINV at `0xffffff8008354018` in both engines. The live second hit differs before the instruction (QEMU X8/NZCV `0xffffffffbfffffff`/`0xA`; Rust X8/NZCV `0x40000000`/`0x6`) and produces QEMU X24 `0x40000000` versus Rust X24 `0xffffffffbfffffff`.
+- Matched-state control: QEMU and Rust execute the exact Image word `0xda818058` with identical relevant registers and PSTATE and both produce X24 `0x40000000`. The live divergence is in emulator state before CSINV, not the instruction's conditional-select result.
+- Gated the memblock store rewrite and vmemmap-on-fault handler behind `--enable-guest-quirks`; default is off. Raw captures are in `evidence/t499/`; curated branch is `okf/branches/t499-matchedoracle.md`.

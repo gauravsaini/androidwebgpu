@@ -1,0 +1,7 @@
+Image path: /Users/Shared/guest-inputs/Image
+Image file offset: 0x2d4018
+Guest PC alias (QEMU): 0xffffff8008354018
+Rust physical PC: 0x0000000040354018
+Guest bytes around CSINV: [f4, 4f, 07, a9, fd, 83, 00, 91, e8, 03, 21, aa, 1f, 01, 02, eb, 58, 80, 81, da, 48, 00, 01, ab]
+Rust BEFORE: pc=0x0000000040354018 x1=0x0000000040000000 x2=0x0000000040000000 x8=0xffffffffbfffffff x24=0xffffff8009512000 pstate=0xa00001c5
+Rust AFTER: pc=0x000000004035401c x1=0x0000000040000000 x2=0x0000000040000000 x8=0xffffffffbfffffff x24=0x0000000040000000 pstate=0xa00001c5

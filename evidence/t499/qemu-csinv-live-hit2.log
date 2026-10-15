@@ -1,0 +1,16 @@
+GDB features: PacketSize=20020;qXfer:features:read+;vContSupported+;multiprocess+
+Initial stop: T05core:01;
+Hardware breakpoint at 0xffffff8008354018: OK
+Live hit 1 stop: T05thread:p01.01;
+QEMU LIVE HIT 1 BEFORE: pc=0xffffff8008354018 pstate=0xa00001c5 x1=0x0000000048200000 x2=0x0000000000005992 x8=0xffffffffb7dfffff x24=0x0000000000000000
+Guest bytes around CSINV: f44f07a9fd830091e80321aa1f0102eb588081da480001ab1a319fda981400b4190c40f9
+Single-step stop: T05thread:p01.01;
+QEMU LIVE HIT 1 AFTER: pc=0xffffff800835401c pstate=0xa00001c5 x1=0x0000000048200000 x2=0x0000000000005992 x8=0xffffffffb7dfffff x24=0x0000000000005992
+Live hit 1 X24: 0x0000000000000000 -> 0x0000000000005992; X1=0x0000000048200000 X2=0x0000000000005992 X8=0xffffffffb7dfffff PSTATE=0xa00001c5
+Live hit 2 stop: T05thread:p01.01;
+QEMU LIVE HIT 2 BEFORE: pc=0xffffff8008354018 pstate=0xa00001c5 x1=0x0000000040000000 x2=0x0000000040000000 x8=0xffffffffbfffffff x24=0xffffff8009512000
+Single-step stop: T05thread:p01.01;
+QEMU LIVE HIT 2 AFTER: pc=0xffffff800835401c pstate=0xa00001c5 x1=0x0000000040000000 x2=0x0000000040000000 x8=0xffffffffbfffffff x24=0x0000000040000000
+Live hit 2 X24: 0xffffff8009512000 -> 0x0000000040000000; X1=0x0000000040000000 X2=0x0000000040000000 X8=0xffffffffbfffffff PSTATE=0xa00001c5
+QEMU stderr: qemu-system-aarch64: terminating on signal 15 from pid 44969 (<unknown process>)
+
