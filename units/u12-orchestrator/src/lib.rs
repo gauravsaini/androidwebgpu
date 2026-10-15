@@ -1724,7 +1724,7 @@ impl Orchestrator {
                 self.machine.cpu[0].pc = pc.wrapping_add(4);
                 return Some(Ok(()));
             }
-            // GB-25: ORR (opc=01). Rd = Rn | shift(Rm).
+            // GB-25: ORR/ORN (opc=01). Rd = Rn | (N ? ~shift(Rm) : shift(Rm)).
             // 32-bit form (sf=0) zeroes upper 32 bits of Rd.
             // Note: for logical ops, Rn/Rm=31 means XZR (not SP).
             if opc == 0b01 && shift < 3 {
@@ -1739,13 +1739,19 @@ impl Orchestrator {
                     self.machine.cpu[0].regs[rm]
                 };
                 if sf == 1 {
-                    let op2 = eval_shift64(rm_val, shift, imm6);
+                    let mut op2 = eval_shift64(rm_val, shift, imm6);
+                    if n == 1 {
+                        op2 = !op2;
+                    }
                     let res = rn_val | op2;
                     if rd != 31 {
                         self.machine.cpu[0].regs[rd] = res;
                     }
                 } else {
-                    let op2 = eval_shift32(rm_val as u32, shift, imm6 & 0x1F);
+                    let mut op2 = eval_shift32(rm_val as u32, shift, imm6 & 0x1F);
+                    if n == 1 {
+                        op2 = !op2;
+                    }
                     let res = (rn_val as u32) | op2;
                     if rd != 31 {
                         self.machine.cpu[0].regs[rd] = res as u64;
@@ -5436,6 +5442,31 @@ mod tests {
         // W2 << 4 = 0xF0, 0xF0 | 0xF0 = 0xF0.
         assert_eq!(o.machine().cpu[0].regs[0], 0x0000_00F0);
         assert_eq!(o.machine().cpu[0].pc, pc + 4);
+    }
+
+    #[test]
+    fn gb25_orn_honors_inverted_shifted_operand() {
+        fn execute(word: u32, x1: u64) -> u64 {
+            let pc = RAM_BASE + 0x1000;
+            let mut o = sp_test_orchestrator(pc, RAM_BASE + 0x2000, word);
+            o.machine_mut().cpu[0].regs[1] = x1;
+            let outcome = o.step_vcpu();
+            assert!(
+                matches!(outcome, StepOutcome::Continue),
+                "expected Continue for {word:#010x}, got: {outcome:?}"
+            );
+            o.machine().cpu[0].regs[8]
+        }
+
+        // ORN X8, XZR, X1 must invert the 64-bit operand before OR.
+        assert_eq!(execute(0xAA21_03E8, 0x4000_0000), 0xFFFF_FFFF_BFFF_FFFF);
+        // N=0 keeps ORR behavior unchanged.
+        assert_eq!(execute(0xAA01_03E8, 0x4000_0000), 0x0000_0000_4000_0000);
+        // W-form inversion is limited to 32 bits, then zero-extended.
+        assert_eq!(execute(0x2A21_03E8, 0x4000_0000), 0x0000_0000_BFFF_FFFF);
+        assert_eq!(execute(0x2A01_03E8, 0x4000_0000), 0x0000_0000_4000_0000);
+        // ORN X8, XZR, X1, LSL #1: ~(0x40000000 << 1).
+        assert_eq!(execute(0xAA21_07E8, 0x4000_0000), 0xFFFF_FFFF_7FFF_FFFF);
     }
 
     #[test]
