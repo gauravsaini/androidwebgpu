@@ -534,6 +534,9 @@ pub struct Orchestrator {
     /// Survey mode: skips unimplemented/illegal instructions for opcode discovery.
     /// Hard rule: discovery only — never progress.
     pub survey_mode: bool,
+    /// Enables compatibility interventions that change guest state.
+    /// Disabled by default so oracle runs expose emulator behavior directly.
+    guest_quirks_enabled: bool,
     /// First unimplemented/illegal miss per InsnKind seen during survey mode.
     pub survey_first_miss: Vec<SurveyMiss>,
     /// Guest traps (BRK/HLT) seen during survey mode, first per mnemonic.
@@ -616,6 +619,7 @@ impl Orchestrator {
             #[cfg(not(target_arch = "wasm32"))]
             trace_writer: None,
             survey_mode: false,
+            guest_quirks_enabled: false,
             survey_first_miss: Vec::new(),
             survey_traps: Vec::new(),
             last_notified: Vec::new(),
@@ -657,6 +661,17 @@ impl Orchestrator {
     /// claim boot progress or move any baseline.
     pub fn set_survey_mode(&mut self, enabled: bool) {
         self.survey_mode = enabled;
+    }
+
+    /// Enable the memblock store rewrite and vmemmap fault population.
+    /// These compatibility interventions are deliberately opt-in.
+    pub fn set_guest_quirks_enabled(&mut self, enabled: bool) {
+        self.guest_quirks_enabled = enabled;
+    }
+
+    /// Report whether compatibility interventions are enabled.
+    pub fn guest_quirks_enabled(&self) -> bool {
+        self.guest_quirks_enabled
     }
 
     /// Check if survey mode is active.
@@ -3177,7 +3192,9 @@ impl Orchestrator {
                         // on a vmemmap VA, populate the page table and retry the
                         // instruction instead of halting.
                         if let HaltReason::WasmTrap { addr, ref message } = reason {
-                            if message.starts_with("mmu_fault: TranslationFault") {
+                            if self.guest_quirks_enabled
+                                && message.starts_with("mmu_fault: TranslationFault")
+                            {
                                 if self.handle_vmemmap_fault(addr) {
                                     // Retry the instruction (do not advance PC,
                                     // do not count as a step yet).
@@ -3254,6 +3271,7 @@ impl Orchestrator {
             console,
             gpu_port,
             sysregs,
+            guest_quirks_enabled: self.guest_quirks_enabled,
             code_write: false,
         };
         let (exit_addr, wfi_seen) = match self.executor.run_block(&wasm, regs, &mut host) {
@@ -3728,6 +3746,7 @@ struct WasmHost<'a> {
     console: &'a mut ConsoleState,
     gpu_port: &'a mut GpuPort,
     sysregs: &'a mut SysRegs,
+    guest_quirks_enabled: bool,
     /// Set when a guest store writes to kernel text VA range (icache-fix).
     /// The orchestrator checks this after run_block and invalidates the
     /// WASM JIT code cache if set. Linux ARM64 alternatives patching
@@ -3875,24 +3894,14 @@ impl HostOps for WasmHost<'_> {
         }
         let off = ram_offset_in(self.ram, pa, size as u64)
             .map_err(|f| format!("mem_store fault: {f:?}"))?;
-        // QUIRK (2026-10-04, size-bug track): The kernel's memblock_add_range
-        // contains a CSINV instruction (0xda818058 at 0xffffff8008354018) that
-        // produces ~0x40000000 instead of 0x40000000 for the region size.
-        // The emulator correctly executes CSINV per the ARM spec, but the
-        // kernel's code generation appears incorrect for this case.
-        // Detect: 8-byte store of 0xffffffffbfffffff where the preceding 8
-        // bytes are 0x40000000 (the memblock region base). Correct to 0x40000000.
-        // See SIZE_BUG_NOTE.md for full analysis.
-        //
-        // EXTENDED (2026-10-04, panic-real track): The corrupted size also
-        // propagates to memblock_type.total_size (offset 16 in the struct).
-        // The original quirk only fixed rgn->size, leaving total_size corrupted,
-        // which causes the panic to persist. Detect: 8-byte store of
-        // 0xffffffffbfffffff where (off-16) == 1 (cnt) and (off-8) == 0x80 (max).
-        // This is the memblock_type.total_size field. Correct to 0x40000000.
-        // See PANIC_REAL_NOTE.md for full analysis.
+        // Optional legacy memblock store rewrite. This changes guest state and
+        // is disabled unless `--enable-guest-quirks` is explicitly requested.
         let mut val_u64 = val as u64;
-        if size == 8 && val_u64 == 0xffffffffbfffffff && off >= 8 {
+        if self.guest_quirks_enabled
+            && size == 8
+            && val_u64 == 0xffffffffbfffffff
+            && off >= 8
+        {
             let prev = u64::from_le_bytes(self.ram[off-8..off].try_into().unwrap());
             if prev == 0x40000000 {
                 // rgn->size corruption pattern
@@ -4859,6 +4868,7 @@ mod tests {
             console: &mut p.console,
             gpu_port: &mut p.gpu_port,
             sysregs: &mut p.sysregs,
+            guest_quirks_enabled: false,
             code_write: false,
         };
         f(&mut host)

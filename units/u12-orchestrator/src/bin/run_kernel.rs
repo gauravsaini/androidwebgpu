@@ -18,6 +18,9 @@ fn print_help() {
     println!("  --initrd <PATH>       Path to initramfs CPIO (optional; loaded at 0x4800_0000 per Track B layout)");
     println!("  --max-steps <N>       Step budget cap (default: 2000000)");
     println!("  --trace <FILE>        Enable per-step execution tracing to file");
+    println!("  --break-pc <HEX>      Capture registers before and after one instruction at PC");
+    println!("  --break-hit <N>       With --break-pc, capture the Nth visit (default: 1)");
+    println!("  --enable-guest-quirks Enable legacy memblock/vmemmap guest-state interventions");
     println!("  --survey              Enable survey mode (discovery only, never progress)");
     println!("  --save-snapshot <PATH>  Write emulator snapshot to PATH after the run");
     println!("  --save-at <STEP>     With --save-snapshot: save when step counter reaches STEP and exit");
@@ -37,6 +40,10 @@ fn main() {
     let mut initrd_path: Option<String> = None;
     let mut max_steps: u64 = 2_000_000;
     let mut trace_file: Option<String> = None;
+    let mut break_pc: Option<u64> = None;
+    let mut break_hit: u64 = 1;
+    let mut break_hits_seen: u64 = 0;
+    let mut guest_quirks_enabled = false;
     let mut dump_around: Option<usize> = None;
     let mut dump_console = false;
     let mut survey = false;
@@ -84,6 +91,35 @@ fn main() {
                 if i < args.len() {
                     trace_file = Some(args[i].clone());
                 }
+            }
+            "--break-pc" => {
+                i += 1;
+                if i < args.len() {
+                    let raw = args[i].strip_prefix("0x").unwrap_or(&args[i]);
+                    match u64::from_str_radix(raw, 16) {
+                        Ok(value) => break_pc = Some(value),
+                        Err(_) => {
+                            eprintln!("Invalid --break-pc address: {}", args[i]);
+                            std::process::exit(2);
+                        }
+                    }
+                }
+            }
+            "--break-hit" => {
+                i += 1;
+                if i < args.len() {
+                    break_hit = args[i].parse().unwrap_or_else(|_| {
+                        eprintln!("Invalid --break-hit count: {}", args[i]);
+                        std::process::exit(2);
+                    });
+                    if break_hit == 0 {
+                        eprintln!("--break-hit must be at least 1");
+                        std::process::exit(2);
+                    }
+                }
+            }
+            "--enable-guest-quirks" => {
+                guest_quirks_enabled = true;
             }
             "--dump-around" => {
                 i += 1;
@@ -137,6 +173,8 @@ fn main() {
     }
 
     let mut orch = Orchestrator::new();
+    orch.set_guest_quirks_enabled(guest_quirks_enabled);
+    println!("[guest-quirks] enabled={}", orch.guest_quirks_enabled());
     if let Some(ref tf) = trace_file {
         orch.enable_trace_file(tf)
             .expect("failed to open trace output file");
@@ -248,7 +286,39 @@ fn main() {
 
     let mut halt_reason = None;
     let mut saved_at_step: Option<u64> = None;
+    let mut break_captured = false;
     for _ in 0..max_steps {
+        if let Some(target) = break_pc {
+            let cpu = &orch.machine().cpu[0];
+            if cpu.pc == target {
+                break_hits_seen += 1;
+                if break_hits_seen < break_hit {
+                    let _ = orch.step_vcpu();
+                    continue;
+                }
+                let fetched = orch
+                    .debug_fetch_around(target, 1)
+                    .first()
+                    .and_then(|(_, word)| word.as_ref().ok().copied());
+                if let Some(word) = fetched {
+                    println!("[break] before pc={target:#018x} word={word:#010x}");
+                } else {
+                    println!("[break] before pc={target:#018x} word=<fetch unavailable>");
+                }
+                println!("[break] before x1={:#018x} x2={:#018x} x8={:#018x} x24={:#018x} pstate={:#010x}",
+                         cpu.regs[1], cpu.regs[2], cpu.regs[8], cpu.regs[24], cpu.pstate);
+                match orch.step_vcpu() {
+                    StepOutcome::Halted(reason) => halt_reason = Some(reason),
+                    StepOutcome::WfiYield { addr } => halt_reason = Some(HaltReason::Wfi { addr }),
+                    StepOutcome::Continue => {}
+                }
+                let cpu = &orch.machine().cpu[0];
+                println!("[break] after pc={:#018x} x1={:#018x} x2={:#018x} x8={:#018x} x24={:#018x} pstate={:#010x}",
+                         cpu.pc, cpu.regs[1], cpu.regs[2], cpu.regs[8], cpu.regs[24], cpu.pstate);
+                break_captured = true;
+                break;
+            }
+        }
         match orch.step_vcpu() {
             StepOutcome::Continue => {}
             StepOutcome::WfiYield { addr } => {
@@ -347,6 +417,7 @@ fn main() {
             "[snapshot] Reached --save-at step {} (saved, exiting)",
             saved_at_step.unwrap()
         ),
+        None if break_captured => println!("[break] Captured one instruction at the requested PC."),
         None => println!("[limit] Step budget ({max_steps}) reached without halt"),
     }
 
