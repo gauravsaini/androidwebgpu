@@ -50,3 +50,11 @@
 - Captured the dynamic CSINV at `0xffffff8008354018` in both engines. The live second hit differs before the instruction (QEMU X8/NZCV `0xffffffffbfffffff`/`0xA`; Rust X8/NZCV `0x40000000`/`0x6`) and produces QEMU X24 `0x40000000` versus Rust X24 `0xffffffffbfffffff`.
 - Matched-state control: QEMU and Rust execute the exact Image word `0xda818058` with identical relevant registers and PSTATE and both produce X24 `0x40000000`. The live divergence is in emulator state before CSINV, not the instruction's conditional-select result.
 - Gated the memblock store rewrite and vmemmap-on-fault handler behind `--enable-guest-quirks`; default is off. Raw captures are in `evidence/t499/`; curated branch is `okf/branches/t499-matchedoracle.md`.
+
+## T503 ORN fast-path fix — 2026-10-15
+
+- Located the live T499 state divergence one instruction before CSINV: `ORN X8, XZR, X1` was executed as ORR because the U12 fast path ignored N.
+- Fixed ORR/ORN for 32-bit and 64-bit forms; the focused test covers both ORR and ORN at each width and an LSL-shifted ORN form. Audited ANDS/BIC and the EOR/EON slow path.
+- Rebuilt the release runner. With guest quirks disabled, Rust now matches pinned QEMU X8 and architectural PSTATE before CSINV and matches PC, X24, and PSTATE after it.
+- Completed ten consecutive accepted QEMU/Rust live-state pairs with no mismatch. Raw logs and checksums are under `/Users/Shared/bundles/t503-ornfix-20261015/`.
+- Recorded gates G503-1/2/3 as MET in `GATES-T503.md`; T503 is a separate OKF branch. Full workspace testing also reports the unrelated vmemmap LDRB/MMU translation failure.
