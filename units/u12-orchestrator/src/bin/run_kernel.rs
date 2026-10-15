@@ -9,6 +9,13 @@ use std::path::Path;
 use u11_snapshot;
 use u12_orchestrator::{HaltReason, Orchestrator, StepOutcome, RAM_BASE};
 
+// U12 stores NZCV in CpuState::pstate and DAIF in CpuState::sysregs.daif.
+// The live kernel runner stays at EL1h, so combine those fields for a
+// QEMU-comparable architectural PSTATE in diagnostic captures.
+fn architectural_pstate(nzcv: u64, daif: u64) -> u64 {
+    (nzcv & 0xF000_0000) | (daif & 0x3C0) | 0x5
+}
+
 fn print_help() {
     println!("Usage: run_kernel [OPTIONS]");
     println!();
@@ -234,9 +241,10 @@ fn main() {
         orch.machine_mut().cpu[0].pc = KERNEL_LOAD_ADDR;
         orch.machine_mut().cpu[0].sp = 0;
         orch.machine_mut().cpu[0].regs = [0; 31];
-        // QEMU sets X4 to kernel load address and Z flag in PSTATE at boot.
+        // QEMU hands off to the kernel at EL1h with DAIF=0x3c0. DAIF is
+        // stored in SysRegs; CpuState::pstate carries the live NZCV flags.
         orch.machine_mut().cpu[0].regs[4] = KERNEL_LOAD_ADDR;
-        orch.machine_mut().cpu[0].pstate = 0x4000_0000; // Z flag (bit 30)
+        orch.machine_mut().cpu[0].pstate = 0x4000_0000; // boot Z flag
 
         // Initrd (Shelf Job 2, 2026-10-05): Track B QEMU layout.
         // - Initramfs CPIO at 0x4800_0000 (INITRD_LOAD_ADDR)
@@ -305,16 +313,32 @@ fn main() {
                 } else {
                     println!("[break] before pc={target:#018x} word=<fetch unavailable>");
                 }
-                println!("[break] before x1={:#018x} x2={:#018x} x8={:#018x} x24={:#018x} pstate={:#010x}",
-                         cpu.regs[1], cpu.regs[2], cpu.regs[8], cpu.regs[24], cpu.pstate);
+                let pstate = architectural_pstate(cpu.pstate, cpu.sysregs.daif);
+                println!(
+                    "[break] before x1={:#018x} x2={:#018x} x8={:#018x} x24={:#018x} pstate={:#010x}",
+                    cpu.regs[1], cpu.regs[2], cpu.regs[8], cpu.regs[24], pstate
+                );
+                println!(
+                    "[break] before pstate parts nzcv={:#010x} daif={:#05x} mode=EL1h",
+                    cpu.pstate & 0xF000_0000,
+                    cpu.sysregs.daif & 0x3C0
+                );
                 match orch.step_vcpu() {
                     StepOutcome::Halted(reason) => halt_reason = Some(reason),
                     StepOutcome::WfiYield { addr } => halt_reason = Some(HaltReason::Wfi { addr }),
                     StepOutcome::Continue => {}
                 }
                 let cpu = &orch.machine().cpu[0];
-                println!("[break] after pc={:#018x} x1={:#018x} x2={:#018x} x8={:#018x} x24={:#018x} pstate={:#010x}",
-                         cpu.pc, cpu.regs[1], cpu.regs[2], cpu.regs[8], cpu.regs[24], cpu.pstate);
+                let pstate = architectural_pstate(cpu.pstate, cpu.sysregs.daif);
+                println!(
+                    "[break] after pc={:#018x} x1={:#018x} x2={:#018x} x8={:#018x} x24={:#018x} pstate={:#010x}",
+                    cpu.pc, cpu.regs[1], cpu.regs[2], cpu.regs[8], cpu.regs[24], pstate
+                );
+                println!(
+                    "[break] after pstate parts nzcv={:#010x} daif={:#05x} mode=EL1h",
+                    cpu.pstate & 0xF000_0000,
+                    cpu.sysregs.daif & 0x3C0
+                );
                 break_captured = true;
                 break;
             }
@@ -408,7 +432,12 @@ fn main() {
                 }
             }
             println!();
-            println!("  sp={:#018x} pstate={:#010x}", orch.machine().cpu[0].sp, orch.machine().cpu[0].pstate);
+            let cpu = &orch.machine().cpu[0];
+            println!(
+                "  sp={:#018x} pstate={:#010x}",
+                cpu.sp,
+                architectural_pstate(cpu.pstate, cpu.sysregs.daif)
+            );
             let sys = &orch.machine().cpu[0].sysregs;
             println!("  ttbr0_el1={:#018x} ttbr1_el1={:#018x} tcr_el1={:#018x} sctlr_el1={:#010x}",
                      sys.ttbr0_el1, sys.ttbr1_el1, sys.tcr_el1, sys.sctlr_el1);
