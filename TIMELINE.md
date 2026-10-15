@@ -80,3 +80,12 @@
 1. **Boot Outcome & First Divergence**: Ran fresh boot from reset with pinned inputs (Image, DTB, initramfs) and quirks disabled. Guest executed 44,738,735 steps, emitting 1,950 UART bytes, then halted at PC `0xffffff800946a438` on `BRK #0x800` (`BUG()`). Divergence traced to `kasprintf` returning NULL in `X0` at `0xffffff800946a3d8` where QEMU returns allocated buffer `0xffffffc03d803000`. PID-1 marker not reached; Verdict FAIL.
 2. **Tests** (before → after): Unverified boot outcome → Completed boot run, 44.74M steps measured, first divergence localized; G506-1 MET, G506-2 NOT MET, G506-3 MET.
 3. **Files changed**: `GATES-T506.md`, `TIMELINE.md`, `codex-track506-rustinit.md`
+
+## UPDATED ON : 2026-10-16
+
+### fix (2026-10-16) — Fix UXTW and BFM lowering defects causing kasprintf NULL BUG()
+
+1. **Instruction Lowering Fixes**: Fixed UXTW register-offset LDR lowering in `u2-ir-lift` to use `rm` instead of zeroed `SCRATCH` as second operand of AndShift; preserved BFM destination bits outside `tmask`/`wmask` in `u3-wasm-jit`. Resolves deterministic `kasprintf` NULL return and `BUG_ON(!name)` at PC `0xffffff800946a438` (step 44,738,735).
+2. **Tests** (before → after): u2-ir-lift 126 → 127 passed (`ldr_reg_offset_uxtw_sxtw_lsl_addresses`); u12-orchestrator 133 → 134 passed (`gb4_bfxil_32bit_preserves_destination_bits_outside_field`).
+3. **Files changed**: `units/u2-ir-lift/src/lib.rs`, `units/u3-wasm-jit/src/lib.rs`, `units/u12-orchestrator/src/lib.rs`.
+
