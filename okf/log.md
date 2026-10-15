@@ -17,3 +17,10 @@
 - Audited logical-register fast paths: ANDS and BIC already honored N; EOR/EON had no U12 fast path and the U2/U3 slow path applies inversion.
 - Rebuilt the Rust runner and matched the pinned QEMU live CSINV state with guest quirks disabled; captured ten consecutive QEMU/Rust matching runs.
 - Added `GATES-T503.md`; G503-1, G503-2, and G503-3 are MET. The full workspace test has one separate LDRB/MMU translation-path failure, recorded with the run output.
+
+## 2026-10-16 — T506 fresh Rust PID-1 boot branch
+
+- Started a separate full-boot experiment from T503's fixed revision; recorded the manifest-pinned Image, DTB, and initramfs hashes and verified all three files are present and matching.
+- Kept T503's 10/10 oracle result scoped to the ORN/CSINV state gate; T506 requires a guest-originating PID-1 UART marker and ten fresh Rust runs before any reproducibility claim.
+- Preserved the T503 full-suite result: 349 passed and one unrelated LDRB/MMU translation test failed.
+- Added `GATES-T506.md`; boot outcome remains pending at this checkpoint.

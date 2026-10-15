@@ -58,3 +58,9 @@
 - Rebuilt the release runner. With guest quirks disabled, Rust now matches pinned QEMU X8 and architectural PSTATE before CSINV and matches PC, X24, and PSTATE after it.
 - Completed ten consecutive accepted QEMU/Rust live-state pairs with no mismatch. Raw logs and checksums are under `/Users/Shared/bundles/t503-ornfix-20261015/`.
 - Recorded gates G503-1/2/3 as MET in `GATES-T503.md`; T503 is a separate OKF branch. Full workspace testing also reports the unrelated vmemmap LDRB/MMU translation failure.
+
+## T506 fresh Rust PID-1 boot — 2026-10-16
+
+- Opened a separate full-boot branch from T503's `ec0a017` fixed revision; all three T499 manifest input hashes match.
+- Gate protocol requires guest quirks disabled, a guest-originating exact PID-1 UART marker, and ten consecutive fresh runs for any reproducibility claim. Boot outcome is pending.
+- Carried forward T503's 349/350 workspace test result and its unrelated LDRB/MMU translation failure.
