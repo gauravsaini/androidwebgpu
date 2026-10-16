@@ -4865,6 +4865,27 @@ mod tests {
     }
 
     #[test]
+    fn gb4_logical_shifted_reg_eor_ror_lifts() {
+        // Track A546: Kernel step 46,063,233 instruction
+        // eor w9, w12, w8, ror #1 (0x4AC8_0589)
+        // sf=0, opc=0b10, shift=0b11 (3), n=0, rm=8, imm6=1, rn=12, rd=9
+        let word = 0x4AC8_0589;
+        let ops = lift(&insn(0x4000, word, InsnKind::DataProc));
+        assert_eq!(
+            ops,
+            vec![IrOp::EorShift {
+                dst: 9,
+                a: 12,
+                b: 8,
+                shift: 3,
+                amount: 1,
+                invert: false,
+                is_32: true,
+            }]
+        );
+    }
+
+    #[test]
     fn gb4_dp_2source_lslv_lifts() {
         // LSL X2, X2, X3 (kernel 0x40004d70: 0x9ac32042)
         // sf=1, rm=3, rn=2, rd=2, shift=0 (LSLV: 00=LSL, 01=LSR, 10=ASR, 11=ROR)

@@ -97,3 +97,10 @@
 2. **Tests** (before → after): Halted at step 45,993,310 with FetchFault → Bypassed 45.99M wall (+69,923 steps); halted at step 46,063,233 on new type-3 engine wall (IllegalInstruction at PC `0xffffff80086be738`, `eor w9, w12, w8, ror #1`).
 3. **Files changed**: `units/u12-orchestrator/src/lib.rs`, `units/u12-orchestrator/src/bin/run_kernel.rs`, `files/WALLS.md`, `GATES.md`.
 
+## UPDATED ON : 2026-10-16
+
+### fix (2026-10-16) — Track A546 EOR/EON logical shifted register ROR fix
+
+1. **EOR/EON & ROR Logical Shift Fix**: Removed invalid `shift < 0b11` check in `u1-decode/src/dp_reg.rs` allowing ROR (0b11) for all logical shifted register instructions (EOR, EON, AND, BIC, ORR, ORN, ANDS, BICS); implemented 32-bit and 64-bit ROR in `eval_shift32`/`eval_shift64` and `execute_arm64`; corrected 32-bit ROR and ASR lowering in `u3-wasm-jit` to prevent 64-bit rotation truncation.
+2. **Tests** (before → after): Halted at step 46,063,233 (IllegalInstruction eor w9,w12,w8,ror #1) → Bypassed 46.06M wall (+80M+ steps to 126M+); u1-decode 105 → 106, u2-ir-lift 127 → 128, u12-orchestrator 134 → 136 tests passed.
+3. **Files changed**: `units/u1-decode/src/dp_reg.rs`, `units/u1-decode/src/lib.rs`, `units/u2-ir-lift/src/lib.rs`, `units/u12-orchestrator/src/arm64.rs`, `units/u12-orchestrator/src/lib.rs`, `units/u3-wasm-jit/src/lib.rs`.

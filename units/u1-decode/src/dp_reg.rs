@@ -29,13 +29,13 @@ pub fn decode(word: u32) -> Option<InsnKind> {
             let sf = (word >> 31) & 1;
             let opc = (word >> 29) & 0x3;
             let n = (word >> 21) & 1;
-            let shift = (word >> 22) & 0x3;
+            let _shift = (word >> 22) & 0x3;
             let imm6 = (word >> 10) & 0x3F;
-            // shift==0b11 (ROR) is reserved; 32-bit shift amount >= 32 is
+            // In ARMv8 ARM (C6.2.81 etc), shift==0b11 (ROR) is fully allocated
+            // for logical (shifted register); 32-bit shift amount >= 32 is
             // unallocated; 32-bit ORR with N==1 is reserved (GB-4 refinement).
             // N==1 itself is valid: it selects BIC / ORN / EON / BICS.
-            let encoding_valid = shift < 0b11
-                && (sf == 1 || (imm6 & 0x20) == 0)
+            let encoding_valid = (sf == 1 || (imm6 & 0x20) == 0)
                 && (sf == 1 || opc != 0b01 || n == 0);
             if encoding_valid {
                 Some(InsnKind::DataProc) // AND / BIC / ORR / ORN / EOR / EON / ANDS (TST) / BICS

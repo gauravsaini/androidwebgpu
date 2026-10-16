@@ -341,22 +341,10 @@ pub fn compile(block: &IrBlock) -> WasmModule {
                 invert,
                 is_32,
             } => {
-                let shift_op = match shift {
-                    0 => OP_I64_SHL,
-                    1 => OP_I64_SHR_U,
-                    2 => OP_I64_SHR_S,
-                    3 => OP_I64_ROTR,
-                    _ => {
-                        body.push(OP_UNREACHABLE);
-                        continue;
-                    }
-                };
                 reg_get(&mut body, *a);
-                reg_get(&mut body, *b);
-                if *amount > 0 {
-                    body.push(OP_I64_CONST);
-                    sleb(*amount as i64, &mut body);
-                    body.push(shift_op);
+                if !emit_shifted_b(&mut body, *b, *shift, *amount, *is_32) {
+                    body.push(OP_UNREACHABLE);
+                    continue;
                 }
                 if *invert {
                     body.push(OP_I64_CONST);
@@ -380,22 +368,10 @@ pub fn compile(block: &IrBlock) -> WasmModule {
                 invert,
                 is_32,
             } => {
-                let shift_op = match shift {
-                    0 => OP_I64_SHL,
-                    1 => OP_I64_SHR_U,
-                    2 => OP_I64_SHR_S,
-                    3 => OP_I64_ROTR,
-                    _ => {
-                        body.push(OP_UNREACHABLE);
-                        continue;
-                    }
-                };
                 reg_get(&mut body, *a);
-                reg_get(&mut body, *b);
-                if *amount > 0 {
-                    body.push(OP_I64_CONST);
-                    sleb(*amount as i64, &mut body);
-                    body.push(shift_op);
+                if !emit_shifted_b(&mut body, *b, *shift, *amount, *is_32) {
+                    body.push(OP_UNREACHABLE);
+                    continue;
                 }
                 if *invert {
                     body.push(OP_I64_CONST);
@@ -419,22 +395,10 @@ pub fn compile(block: &IrBlock) -> WasmModule {
                 invert,
                 is_32,
             } => {
-                let shift_op = match shift {
-                    0 => OP_I64_SHL,
-                    1 => OP_I64_SHR_U,
-                    2 => OP_I64_SHR_S,
-                    3 => OP_I64_ROTR,
-                    _ => {
-                        body.push(OP_UNREACHABLE);
-                        continue;
-                    }
-                };
                 reg_get(&mut body, *a);
-                reg_get(&mut body, *b);
-                if *amount > 0 {
-                    body.push(OP_I64_CONST);
-                    sleb(*amount as i64, &mut body);
-                    body.push(shift_op);
+                if !emit_shifted_b(&mut body, *b, *shift, *amount, *is_32) {
+                    body.push(OP_UNREACHABLE);
+                    continue;
                 }
                 if *invert {
                     body.push(OP_I64_CONST);
@@ -816,6 +780,56 @@ fn reg_set(body: &mut Vec<u8>, r: u8) {
         }
         _ => body.push(OP_UNREACHABLE),
     }
+}
+
+/// Emit WASM to push shifted operand `b` onto stack.
+/// Supports 64-bit and 32-bit forms:
+/// shift: 0 = LSL, 1 = LSR, 2 = ASR, 3 = ROR.
+fn emit_shifted_b(body: &mut Vec<u8>, b: u8, shift: u8, amount: u8, is_32: bool) -> bool {
+    let shift_op = match shift {
+        0 => OP_I64_SHL,
+        1 => OP_I64_SHR_U,
+        2 => OP_I64_SHR_S,
+        3 => OP_I64_ROTR,
+        _ => return false,
+    };
+    reg_get(body, b);
+    if is_32 {
+        body.push(OP_I64_CONST);
+        sleb(0xFFFF_FFFF, body);
+        body.push(OP_I64_AND);
+    }
+    if amount > 0 {
+        if is_32 && shift == 3 {
+            // 32-bit rotate right: ((b32 >> amount) | (b32 << (32 - amount))) & 0xFFFF_FFFF
+            reg_set(body, SCRATCH);
+            reg_get(body, SCRATCH);
+            body.push(OP_I64_CONST);
+            sleb(amount as i64, body);
+            body.push(OP_I64_SHR_U);
+            reg_get(body, SCRATCH);
+            body.push(OP_I64_CONST);
+            sleb((32 - amount) as i64, body);
+            body.push(OP_I64_SHL);
+            body.push(OP_I64_OR);
+            body.push(OP_I64_CONST);
+            sleb(0xFFFF_FFFF, body);
+            body.push(OP_I64_AND);
+        } else if is_32 && shift == 2 {
+            // 32-bit ASR: sign-extend bit 31 to bit 63 then arithmetic shift
+            body.push(OP_I64_CONST);
+            sleb(32, body);
+            body.push(OP_I64_SHL);
+            body.push(OP_I64_CONST);
+            sleb((32 + amount) as i64, body);
+            body.push(OP_I64_SHR_S);
+        } else {
+            body.push(OP_I64_CONST);
+            sleb(amount as i64, body);
+            body.push(shift_op);
+        }
+    }
+    true
 }
 
 /// Emit WASM for `Umulh { dst, n, m }`: `dst = ((n as u128 * m as u128) >> 64) as u64`.
@@ -1480,6 +1494,42 @@ mod tests {
                     shift: 2,
                     amount: 16,
                     invert: false,
+                    is_32: false,
+                }],
+                vec![BlockExit::FallThrough(0x4)],
+            ),
+            (
+                vec![IrOp::EorShift {
+                    dst: 9,
+                    a: 12,
+                    b: 8,
+                    shift: 3,
+                    amount: 1,
+                    invert: false,
+                    is_32: true,
+                }],
+                vec![BlockExit::FallThrough(0x4)],
+            ),
+            (
+                vec![IrOp::EorShift {
+                    dst: 9,
+                    a: 12,
+                    b: 8,
+                    shift: 2,
+                    amount: 4,
+                    invert: false,
+                    is_32: true,
+                }],
+                vec![BlockExit::FallThrough(0x4)],
+            ),
+            (
+                vec![IrOp::EorShift {
+                    dst: 9,
+                    a: 12,
+                    b: 8,
+                    shift: 3,
+                    amount: 16,
+                    invert: true,
                     is_32: false,
                 }],
                 vec![BlockExit::FallThrough(0x4)],

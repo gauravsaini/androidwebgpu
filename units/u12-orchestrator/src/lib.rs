@@ -1688,7 +1688,7 @@ impl Orchestrator {
             let rn = ((word >> 5) & 0x1F) as usize;
             let rd = (word & 0x1F) as usize;
 
-            if opc == 0b11 && shift < 3 {
+            if opc == 0b11 {
                 // ANDS (TST when rd=31) or BICS
                 let rn_val = if rn == 31 {
                     0
@@ -1728,7 +1728,7 @@ impl Orchestrator {
                 self.machine.cpu[0].pc = pc.wrapping_add(4);
                 return Some(Ok(()));
             }
-            if opc == 0b00 && n == 1 && shift < 3 {
+            if opc == 0b00 && n == 1 {
                 // BIC: Rd = Rn & ~shifted(Rm)
                 let rn_val = if rn == 31 {
                     0
@@ -1756,10 +1756,38 @@ impl Orchestrator {
                 self.machine.cpu[0].pc = pc.wrapping_add(4);
                 return Some(Ok(()));
             }
+            if opc == 0b00 && n == 0 {
+                // AND: Rd = Rn & shifted(Rm)
+                let rn_val = if rn == 31 {
+                    0
+                } else {
+                    self.machine.cpu[0].regs[rn]
+                };
+                let rm_val = if rm == 31 {
+                    0
+                } else {
+                    self.machine.cpu[0].regs[rm]
+                };
+                if sf == 1 {
+                    let op2 = eval_shift64(rm_val, shift, imm6);
+                    let res = rn_val & op2;
+                    if rd != 31 {
+                        self.machine.cpu[0].regs[rd] = res;
+                    }
+                } else {
+                    let op2 = eval_shift32(rm_val as u32, shift, imm6 & 0x1F);
+                    let res = (rn_val as u32) & op2;
+                    if rd != 31 {
+                        self.machine.cpu[0].regs[rd] = res as u64;
+                    }
+                }
+                self.machine.cpu[0].pc = pc.wrapping_add(4);
+                return Some(Ok(()));
+            }
             // GB-25: ORR/ORN (opc=01). Rd = Rn | (N ? ~shift(Rm) : shift(Rm)).
             // 32-bit form (sf=0) zeroes upper 32 bits of Rd.
             // Note: for logical ops, Rn/Rm=31 means XZR (not SP).
-            if opc == 0b01 && shift < 3 {
+            if opc == 0b01 {
                 let rn_val = if rn == 31 {
                     0
                 } else {
@@ -1785,6 +1813,41 @@ impl Orchestrator {
                         op2 = !op2;
                     }
                     let res = (rn_val as u32) | op2;
+                    if rd != 31 {
+                        self.machine.cpu[0].regs[rd] = res as u64;
+                    }
+                }
+                self.machine.cpu[0].pc = pc.wrapping_add(4);
+                return Some(Ok(()));
+            }
+            // Track A546: EOR/EON (opc=10). Rd = Rn ^ (N ? ~shift(Rm) : shift(Rm)).
+            // 32-bit form (sf=0) zeroes upper 32 bits of Rd.
+            if opc == 0b10 {
+                let rn_val = if rn == 31 {
+                    0
+                } else {
+                    self.machine.cpu[0].regs[rn]
+                };
+                let rm_val = if rm == 31 {
+                    0
+                } else {
+                    self.machine.cpu[0].regs[rm]
+                };
+                if sf == 1 {
+                    let mut op2 = eval_shift64(rm_val, shift, imm6);
+                    if n == 1 {
+                        op2 = !op2;
+                    }
+                    let res = rn_val ^ op2;
+                    if rd != 31 {
+                        self.machine.cpu[0].regs[rd] = res;
+                    }
+                } else {
+                    let mut op2 = eval_shift32(rm_val as u32, shift, imm6 & 0x1F);
+                    if n == 1 {
+                        op2 = !op2;
+                    }
+                    let res = (rn_val as u32) ^ op2;
                     if rd != 31 {
                         self.machine.cpu[0].regs[rd] = res as u64;
                     }
@@ -6510,6 +6573,48 @@ mod tests {
 
         assert_eq!(o.step_vcpu(), StepOutcome::Continue);
         assert_eq!(o.machine().cpu[0].regs[0], 0x2000_0003);
+        assert_eq!(o.machine().cpu[0].pc, pc + 4);
+    }
+
+    #[test]
+    fn gb26_eor_w_ror_kernel_wall_step46063233() {
+        // Track A546: Exact instruction halting step 46,063,233 at PC 0xffffff80086be738
+        // eor w9, w12, w8, ror #1 (0x4AC8_0589)
+        let pc = RAM_BASE + 0x1000;
+        let sp = RAM_BASE + 0x2000;
+        let mut o = sp_test_orchestrator(pc, sp, 0x4AC8_0589);
+        o.machine_mut().cpu[0].regs[12] = 0x1234_5678;
+        o.machine_mut().cpu[0].regs[8] = 0x8000_0001; // dirty upper bits? let's test with dirty upper bits!
+        o.machine_mut().cpu[0].regs[8] |= 0xDEAD_BEEF_0000_0000; // dirty upper 64 bits to test 32-bit isolation
+        let outcome = o.step_vcpu();
+        assert!(matches!(outcome, StepOutcome::Continue));
+        // w8 as u32 = 0x80000001. ROR #1 in 32-bit = (0x80000001 >> 1) | (0x80000001 << 31) = 0x40000000 | 0x80000000 = 0xC0000000
+        // w9 = w12 ^ 0xC0000000 = 0x12345678 ^ 0xC0000000 = 0xD2345678
+        assert_eq!(
+            o.machine().cpu[0].regs[9],
+            0xD234_5678,
+            "eor w9, w12, w8, ror #1 must correctly rotate 32-bit operand and zero-extend"
+        );
+        assert_eq!(o.machine().cpu[0].pc, pc + 4);
+    }
+
+    #[test]
+    fn gb26_eor_x_ror_64bit() {
+        // 64-bit form: eor x9, x12, x8, ror #1 (0xCAC8_0589)
+        let pc = RAM_BASE + 0x1000;
+        let sp = RAM_BASE + 0x2000;
+        let mut o = sp_test_orchestrator(pc, sp, 0xCAC8_0589);
+        o.machine_mut().cpu[0].regs[12] = 0x1234_5678_9ABC_DEF0;
+        o.machine_mut().cpu[0].regs[8] = 0x8000_0000_0000_0001;
+        let outcome = o.step_vcpu();
+        assert!(matches!(outcome, StepOutcome::Continue));
+        // x8 ROR #1 = 0xC000_0000_0000_0000
+        // x9 = x12 ^ 0xC000_0000_0000_0000 = 0xD234_5678_9ABC_DEF0
+        assert_eq!(
+            o.machine().cpu[0].regs[9],
+            0xD234_5678_9ABC_DEF0,
+            "eor x9, x12, x8, ror #1 must correctly rotate 64-bit operand"
+        );
         assert_eq!(o.machine().cpu[0].pc, pc + 4);
     }
 

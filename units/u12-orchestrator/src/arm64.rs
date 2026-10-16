@@ -99,6 +99,7 @@ pub fn eval_shift64(val: u64, shift: u8, amount: u8) -> u64 {
         0 => val.wrapping_shl(amt),
         1 => val.wrapping_shr(amt),
         2 => ((val as i64) >> amt) as u64,
+        3 => val.rotate_right(amt),
         _ => val,
     }
 }
@@ -110,6 +111,7 @@ pub fn eval_shift32(val: u32, shift: u8, amount: u8) -> u32 {
         0 => val.wrapping_shl(amt),
         1 => val.wrapping_shr(amt),
         2 => ((val as i32) >> amt) as u32,
+        3 => val.rotate_right(amt),
         _ => val,
     }
 }

@@ -338,6 +338,19 @@ mod tests {
     }
 
     #[test]
+    fn eor_w_ror_is_dataproc() {
+        // Track A546: Kernel step 46,063,233 wall instruction
+        // eor w9, w12, w8, ror #1 (0x4AC8_0589)
+        assert_eq!(ok_kind(0x4AC8_0589), InsnKind::DataProc);
+        // 64-bit form: eor x9, x12, x8, ror #1 (0xCAC8_0589)
+        assert_eq!(ok_kind(0xCAC8_0589), InsnKind::DataProc);
+        // 32-bit form with imm6 >= 32 is unallocated (bit 15 = 1 -> imm6 = 33)
+        assert_illegal(0x4AC8_8589);
+        // Add (shifted register) with shift==0b11 (ROR) remains reserved / illegal
+        assert_illegal(0x8BC2_0020);
+    }
+
+    #[test]
     fn adds_reg_with_flags_is_dataproc() {
         assert_eq!(ok_kind(0xAB02_0020), InsnKind::DataProc); // ADDS / CMN reg
     }
