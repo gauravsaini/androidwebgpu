@@ -94,6 +94,6 @@
 ### fix (2026-10-16) — Track A543 EXTR operand-inversion fix and GIC MMIO support
 
 1. **EXTR Operand Inversion & GIC Support**: Fixed ARM64 EXTR lowering in `u12-orchestrator` by swapping operand concatenation order from `(Rm:Rn)` to standard `(Rn:Rm)` for both 64-bit and 32-bit operations. Integrated prerequisite GICv2 distributor and CPU-interface MMIO window support to clear the 45.64M timer barrier.
-2. **Tests** (before → after): Halted at step 45,993,310 with FetchFault -> EXTR unit tests pass (gb26_extr_distinct_operands_sw_pan, gb26_extr_hand_verified_32bit_pair).
-3. **Files changed**: `units/u12-orchestrator/src/lib.rs`, `units/u12-orchestrator/src/bin/run_kernel.rs`, `files/WALLS.md`.
+2. **Tests** (before → after): Halted at step 45,993,310 with FetchFault → Bypassed 45.99M wall (+69,923 steps); halted at step 46,063,233 on new type-3 engine wall (IllegalInstruction at PC `0xffffff80086be738`, `eor w9, w12, w8, ror #1`).
+3. **Files changed**: `units/u12-orchestrator/src/lib.rs`, `units/u12-orchestrator/src/bin/run_kernel.rs`, `files/WALLS.md`, `GATES.md`.
 
