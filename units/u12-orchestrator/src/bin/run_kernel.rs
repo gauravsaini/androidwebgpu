@@ -302,6 +302,7 @@ fn main() {
     let mut halt_reason = None;
     let mut saved_at_step: Option<u64> = None;
     let mut break_captured = false;
+    let mut oracle_hits: u64 = 0;
     for _ in 0..max_steps {
         if let Some(target) = break_pc {
             let cpu = &orch.machine().cpu[0];
@@ -349,6 +350,23 @@ fn main() {
                 break_captured = true;
                 break;
             }
+        }
+        let cur_pc = orch.machine().cpu[0].pc;
+        if cur_pc == 0xffffff8008089560 {
+            oracle_hits += 1;
+            let cpu = &orch.machine().cpu[0];
+            let ttbr0 = cpu.sysregs.ttbr0_el1;
+            let ttbr1 = cpu.sysregs.ttbr1_el1;
+            let x3 = cpu.regs[3];
+            let x4 = cpu.regs[4];
+            let x5 = cpu.regs[5];
+            let lr = cpu.regs[30];
+            let s = orch.steps();
+            println!(
+                "[ORACLE_RUST] hit #{oracle_hits} step={s} pc={cur_pc:#018x} TTBR1={ttbr1:#018x} TTBR0={ttbr0:#018x} x3={x3:#018x} x4={x4:#018x} x5={x5:#018x} LR={lr:#018x}"
+            );
+            use std::io::Write;
+            std::io::stdout().flush().ok();
         }
         match orch.step_vcpu() {
             StepOutcome::Continue => {}

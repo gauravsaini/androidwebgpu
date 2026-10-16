@@ -148,6 +148,35 @@ pub const GPU_DATA: u64 = 0x0A00_0000;
 /// [`Orchestrator::drain_gpu_submit`].
 pub const GPU_SUBMIT: u64 = 0x0A00_0008;
 
+/// GICv2 distributor MMIO window from the supplied virt DTB.
+pub const GICD_BASE: u64 = 0x0800_0000;
+pub const GICD_SIZE: u64 = 0x1_0000;
+/// QEMU `virt`'s GICv2 has 288 interrupt IDs (16 SGIs + 16 PPIs + 256 SPIs), so
+/// GICD_TYPER.ITLinesNumber is `(288 / 32) - 1 = 8`.
+pub const GICD_TYPER_VALUE: u32 = 0x8;
+/// QEMU arm_gic.c ARM JEP106 identity: 0x043b.
+pub const GICD_IIDR_VALUE: u32 = 0x0000_043b;
+
+/// GICv2 CPU-interface window from the second `reg` tuple in the DTB.
+pub const GICC_BASE: u64 = 0x0801_0000;
+pub const GICC_SIZE: u64 = 0x1_0000;
+/// QEMU GICC_IIDR: (revision 2 << 16) | 0x43b = 0x0002043b.
+pub const GICC_IIDR_VALUE: u32 = 0x0002_043b;
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct GicV2State {
+    pub gicd_ctlr: u32,
+    pub gicc_ctlr: u32,
+    pub gicc_pmr: u32,
+    pub gicd_igroupr0: u32,
+    pub gicd_igroupr1: u32,
+    pub gicd_isenabler0: u32,
+    pub gicd_isenabler1: u32,
+    pub gicd_ppi27_priority: u8,
+    pub gicd_spi_priorities: [u32; 8],
+    pub gicc_active: Option<u32>,
+}
+
 /// Platform IRQ number the orchestrator raises for virtio-gpu completion.
 /// Not in the frozen contracts; a board device tree would fix this in M1+.
 /// Documented here as the orchestrator's explicit choice.
@@ -524,6 +553,8 @@ pub struct Orchestrator {
     pub console: ConsoleState,
     /// Guest-to-host virtio-gpu command-stream port (Track A).
     pub gpu_port: GpuPort,
+    /// Minimal GICv2 distributor / CPU-interface state.
+    pub gic: GicV2State,
     /// Injected cycle counter — the only "clock". Never wall time.
     pub clock_cycles: u64,
     pub steps: u64,
@@ -613,6 +644,7 @@ impl Orchestrator {
             },
             console: ConsoleState::new(),
             gpu_port: GpuPort::new(),
+            gic: GicV2State::default(),
             clock_cycles: 0,
             steps: 0,
             halted: None,
@@ -2488,7 +2520,7 @@ impl Orchestrator {
         // 1250891. Encoding: sf 0 0 100111 N Rm lsb Rn Rd.
         // bits[28:23] == 0b100111, op=bit30=0, S=bit29=0, N=bit22 must
         // equal sf. Rm = bits[21:16], lsb = bits[15:10], Rn = bits[9:5],
-        // Rd = bits[4:0]. Rd = (Rm:Rn)[lsb+datasize-1 : lsb].
+        // Rd = bits[4:0]. Rd = (Rn:Rm)[lsb+datasize-1 : lsb].
         // Rn/Rm=31 name XZR (not SP) for this class.
         if (word >> 23) & 0x3F == 0b100111
             && (word >> 30) & 1 == 0
@@ -2514,7 +2546,7 @@ impl Orchestrator {
                 if lsb >= 64 {
                     return None; // UNDEFINED: lsb >= datasize.
                 }
-                let concat = ((m_val as u128) << 64) | (n_val as u128);
+                let concat = ((n_val as u128) << 64) | (m_val as u128);
                 ((concat >> lsb) & 0xFFFF_FFFF_FFFF_FFFF) as u64
             } else {
                 if lsb >= 32 {
@@ -2522,7 +2554,7 @@ impl Orchestrator {
                 }
                 let n32 = n_val as u32 as u64;
                 let m32 = m_val as u32 as u64;
-                let concat = (m32 << 32) | n32;
+                let concat = (n32 << 32) | m32;
                 ((concat >> lsb) & 0xFFFF_FFFF) as u64
             };
             if rd != 31 {
@@ -3271,11 +3303,13 @@ impl Orchestrator {
         let ram: &mut Vec<u8> = &mut self.machine.ram;
         let console: &mut ConsoleState = &mut self.console;
         let gpu_port: &mut GpuPort = &mut self.gpu_port;
+        let gic: &mut GicV2State = &mut self.gic;
         let sysregs: &mut SysRegs = &mut cpu.sysregs;
         let mut host = WasmHost {
             ram,
             console,
             gpu_port,
+            gic,
             sysregs,
             guest_quirks_enabled: self.guest_quirks_enabled,
             code_write: false,
@@ -3363,21 +3397,37 @@ impl Orchestrator {
         self.clock_cycles = self.clock_cycles.wrapping_add(cycles);
 
         // Sync guest timer programming into irq state before ticking:
-        // ENABLE bit from CNTP_CTL_EL0, compare from CNTP_CVAL_EL0.
+        // ENABLE bit from CNTP_CTL_EL0 or CNTV_CTL_EL0, compare from CNTP_CVAL_EL0 / CNTV_CVAL_EL0.
         {
             let sysregs = &self.machine.cpu[0].sysregs;
             let irq = &mut self.machine.irq;
-            if (sysregs.cntp_ctl_el0 & 0x1) != 0 {
+            if (sysregs.cntp_ctl_el0 & 0x1) != 0 || (sysregs.cntv_ctl_el0 & 0x1) != 0 {
                 irq.enabled |= 1u32 << u5_gic_timer::TIMER_ENABLE_BIT;
             } else {
                 irq.enabled &= !(1u32 << u5_gic_timer::TIMER_ENABLE_BIT);
             }
-            irq.timer_compare = sysregs.cntp_cval_el0;
+            if (sysregs.cntv_ctl_el0 & 0x1) != 0 {
+                irq.timer_compare = sysregs.cntv_cval_el0;
+            } else {
+                irq.timer_compare = sysregs.cntp_cval_el0;
+            }
         }
         let (next_irq, _irqs) = u5_gic_timer::tick(&self.machine.irq, cycles);
         self.machine.irq = next_irq;
         // Sync the free-running counter back so MRS CNTPCT_EL0 sees it.
         self.machine.cpu[0].sysregs.cntpct_el0 = self.machine.irq.timer_count;
+
+        // CNTVCT_EL0 is CNTPCT_EL0 minus CNTVOFF_EL2. CNTV_CTL_EL0.ISTATUS
+        // remains a derived readback; the unmasked enabled timer drives the
+        // shared virtual-timer PPI line while its compare is reached.
+        let sysregs = &self.machine.cpu[0].sysregs;
+        let virtual_count = sysregs.cntpct_el0.wrapping_sub(sysregs.cntvoff_el2);
+        let virtual_timer_fires = sysregs.cntv_ctl_el0 & 1 != 0
+            && sysregs.cntv_ctl_el0 & 2 == 0
+            && virtual_count >= sysregs.cntv_cval_el0;
+        if virtual_timer_fires {
+            self.machine.irq.pending |= u5_gic_timer::TIMER_PENDING_BIT;
+        }
 
     }
 
@@ -3570,6 +3620,10 @@ impl Orchestrator {
             }
         }
         out.extend_from_slice(&w.buf);
+        out.extend_from_slice(b"GIC2");
+        out.extend_from_slice(&self.gic.gicd_ctlr.to_le_bytes());
+        out.extend_from_slice(&self.gic.gicc_ctlr.to_le_bytes());
+        out.extend_from_slice(&self.gic.gicc_pmr.to_le_bytes());
         out
     }
 
@@ -3651,6 +3705,19 @@ impl Orchestrator {
             }),
             _ => return Err(RestoreError::BadFormat),
         };
+        if matches!(r.remaining(), 8 | 16) {
+            let extension_len = r.remaining();
+            if r.take(4).ok_or(RestoreError::BadFormat)? != b"GIC2" {
+                return Err(RestoreError::BadFormat);
+            }
+            o.gic.gicd_ctlr = r.u32().ok_or(RestoreError::BadFormat)?;
+            if extension_len == 16 {
+                o.gic.gicc_ctlr = r.u32().ok_or(RestoreError::BadFormat)?;
+                o.gic.gicc_pmr = r.u32().ok_or(RestoreError::BadFormat)?;
+            }
+        } else if r.remaining() != 0 {
+            return Err(RestoreError::BadFormat);
+        }
         o.last_notified = vec![0; o.transport.queues.len()];
         Ok(o)
     }
@@ -3751,6 +3818,7 @@ struct WasmHost<'a> {
     ram: &'a mut Vec<u8>,
     console: &'a mut ConsoleState,
     gpu_port: &'a mut GpuPort,
+    gic: &'a mut GicV2State,
     sysregs: &'a mut SysRegs,
     guest_quirks_enabled: bool,
     /// Set when a guest store writes to kernel text VA range (icache-fix).
@@ -3842,6 +3910,73 @@ impl HostOps for WasmHost<'_> {
             // Defined MMIO region, no readable registers: reads return 0.
             return Ok(0);
         }
+        if (GICD_BASE..GICD_BASE + GICD_SIZE).contains(&pa) {
+            let offset = (pa - GICD_BASE) & !3;
+            let shift = ((pa & 3) * 8) as u32;
+            let value: u32 = match offset {
+                0x000 => self.gic.gicd_ctlr,
+                0x004 => GICD_TYPER_VALUE,
+                0x008 => GICD_IIDR_VALUE,
+                0x080 => self.gic.gicd_igroupr0,
+                0x084 => self.gic.gicd_igroupr1,
+                0x100 => self.gic.gicd_isenabler0,
+                0x104 => self.gic.gicd_isenabler1,
+                0x418 => (self.gic.gicd_ppi27_priority as u32) << 24,
+                0x420..=0x43c if (offset - 0x420) % 4 == 0 => {
+                    self.gic.gicd_spi_priorities[((offset - 0x420) / 4) as usize]
+                }
+                // SGI/PPI targets (ITARGETSR0-7): RAZ in QEMU virt uniprocessor
+                0x800..=0x8ff => 0,
+                // ICFGR
+                0xc00..=0xcff => 0,
+                _ => {
+                    eprintln!(
+                        "unhandled GIC MMIO read: GICD PA={pa:#010x} offset={offset:#06x} size={size}"
+                    );
+                    0
+                }
+            };
+            eprintln!(
+                "GIC MMIO read: GICD PA={pa:#010x} offset={offset:#06x} size={size} value={value:#010x}"
+            );
+            let shifted = value >> shift;
+            let ret = match size {
+                1 => (shifted & 0xff) as i64,
+                2 => (shifted & 0xffff) as i64,
+                4 => value as i64,
+                8 => value as i64,
+                _ => return Err(format!("mem_load: bad GICD size {size}")),
+            };
+            return Ok(ret);
+        }
+        if (GICC_BASE..GICC_BASE + GICC_SIZE).contains(&pa) {
+            let offset = (pa - GICC_BASE) & !3;
+            let shift = ((pa & 3) * 8) as u32;
+            let value: u32 = match offset {
+                0x000 => self.gic.gicc_ctlr,
+                0x004 => self.gic.gicc_pmr,
+                0x00c => 1023, // GIC_IAR_SPURIOUS
+                0x0fc => GICC_IIDR_VALUE,
+                _ => {
+                    eprintln!(
+                        "unhandled GIC MMIO read: GICC PA={pa:#010x} offset={offset:#06x} size={size}"
+                    );
+                    0
+                }
+            };
+            eprintln!(
+                "GIC MMIO read: GICC PA={pa:#010x} offset={offset:#06x} size={size} value={value:#010x}"
+            );
+            let shifted = value >> shift;
+            let ret = match size {
+                1 => (shifted & 0xff) as i64,
+                2 => (shifted & 0xffff) as i64,
+                4 => value as i64,
+                8 => value as i64,
+                _ => return Err(format!("mem_load: bad GICC size {size}")),
+            };
+            return Ok(ret);
+        }
         if !matches!(size, 1 | 2 | 4 | 8) {
             return Err("mem_load: size must be 1, 2, 4 or 8".to_string());
         }
@@ -3893,6 +4028,53 @@ impl HostOps for WasmHost<'_> {
                 self.gpu_port.submit();
             }
             // Writes to other GPU offsets are acknowledged, no effect.
+            return Ok(());
+        }
+        if (GICD_BASE..GICD_BASE + GICD_SIZE).contains(&pa) {
+            let offset = pa - GICD_BASE;
+            let val_u32 = val as u32;
+            eprintln!(
+                "GIC MMIO write: GICD PA={pa:#010x} offset={offset:#06x} size={size} value={val_u32:#010x}"
+            );
+            if offset == 0x000 {
+                self.gic.gicd_ctlr = val_u32;
+            } else if offset == 0x080 {
+                self.gic.gicd_igroupr0 = val_u32;
+            } else if offset == 0x084 {
+                self.gic.gicd_igroupr1 = val_u32;
+            } else if offset == 0x100 {
+                self.gic.gicd_isenabler0 |= val_u32;
+            } else if offset == 0x104 {
+                self.gic.gicd_isenabler1 |= val_u32;
+            } else if offset == 0x180 {
+                self.gic.gicd_isenabler0 &= !val_u32;
+            } else if offset == 0x184 {
+                self.gic.gicd_isenabler1 &= !val_u32;
+            } else if offset == 0x418 {
+                self.gic.gicd_ppi27_priority = (val_u32 >> 24) as u8;
+            } else if (0x420..=0x43c).contains(&offset) && (offset - 0x420) % 4 == 0 {
+                self.gic.gicd_spi_priorities[((offset - 0x420) / 4) as usize] = val_u32;
+            }
+            return Ok(());
+        }
+        if (GICC_BASE..GICC_BASE + GICC_SIZE).contains(&pa) {
+            let offset = pa - GICC_BASE;
+            let val_u32 = val as u32;
+            eprintln!(
+                "GIC MMIO write: GICC PA={pa:#010x} offset={offset:#06x} size={size} value={val_u32:#010x}"
+            );
+            match offset {
+                0x000 => self.gic.gicc_ctlr = val_u32,
+                0x004 => self.gic.gicc_pmr = val_u32,
+                0x010 => {
+                    let eoi = val_u32 & 0x3ff;
+                    if self.gic.gicc_active == Some(eoi) {
+                        self.gic.gicc_active = None;
+                    }
+                }
+                0x0d0..=0x0dc => {}
+                _ => {}
+            }
             return Ok(());
         }
         if !matches!(size, 1 | 2 | 4 | 8) {
@@ -4056,6 +4238,9 @@ impl<'a> CanonReader<'a> {
         let s = &self.buf[self.pos..self.pos + n];
         self.pos += n;
         Some(s)
+    }
+    fn remaining(&self) -> usize {
+        self.buf.len() - self.pos
     }
     fn u8(&mut self) -> Option<u8> {
         self.take(1).map(|s| s[0])
@@ -4303,6 +4488,8 @@ mod tests {
             .unwrap();
         o.console.write_tx(b'X');
         o.console.feed_rx(b"yz");
+        o.gic.gicd_ctlr = 1;
+        o.gic.gicc_pmr = 0xf0;
         o.transport.queue_count = 1;
         o.transport.status = 4;
         o.transport.queues.push(pathn_contracts::device::VirtQueue {
@@ -4326,6 +4513,7 @@ mod tests {
         assert_eq!(r.transport, o.transport);
         assert_eq!(r.gpu, o.gpu);
         assert_eq!(r.console, o.console);
+        assert_eq!(r.gic, o.gic);
         assert_eq!(r.clock_cycles, o.clock_cycles);
         assert_eq!(r.steps, o.steps);
         assert_eq!(r.halted, o.halted);
@@ -4878,6 +5066,7 @@ mod tests {
         ram: Vec<u8>,
         console: ConsoleState,
         gpu_port: GpuPort,
+        gic: GicV2State,
         sysregs: SysRegs,
     }
 
@@ -4886,6 +5075,7 @@ mod tests {
             ram: v01_ram(),
             console: ConsoleState::new(),
             gpu_port: GpuPort::new(),
+            gic: GicV2State::default(),
             sysregs,
         }
     }
@@ -4896,11 +5086,34 @@ mod tests {
             ram: &mut p.ram,
             console: &mut p.console,
             gpu_port: &mut p.gpu_port,
+            gic: &mut p.gic,
             sysregs: &mut p.sysregs,
             guest_quirks_enabled: false,
             code_write: false,
         };
         f(&mut host)
+    }
+
+    #[test]
+    fn gicd_typer_matches_qemu_virt_gicv2() {
+        let mut p = host_parts(SysRegs::default()); // MMU off: identity
+        let got = with_host(&mut p, |h| h.mem_load(0x0800_0004, 4));
+        assert_eq!(got, Ok(0x8));
+        assert_eq!(with_host(&mut p, |h| h.mem_load(0x0800_0008, 4)), Ok(0x43b));
+        assert_eq!(with_host(&mut p, |h| h.mem_load(0x0800_0c04, 4)), Ok(0));
+        assert_eq!(with_host(&mut p, |h| h.mem_load(0x0800_0000, 4)), Ok(0));
+        assert_eq!(
+            with_host(&mut p, |h| h.mem_store(0x0800_0000, 4, 1)),
+            Ok(())
+        );
+        assert_eq!(with_host(&mut p, |h| h.mem_load(0x0800_0000, 4)), Ok(1));
+        assert_eq!(with_host(&mut p, |h| h.mem_load(0x0801_00fc, 4)), Ok(0x2043b));
+        assert_eq!(with_host(&mut p, |h| h.mem_load(0x0801_0004, 4)), Ok(0));
+        assert_eq!(
+            with_host(&mut p, |h| h.mem_store(0x0801_0004, 4, 0xf0)),
+            Ok(())
+        );
+        assert_eq!(with_host(&mut p, |h| h.mem_load(0x0801_0004, 4)), Ok(0xf0));
     }
 
     #[test]
@@ -6259,6 +6472,44 @@ mod tests {
         );
         // Rotate right by 2: 0x8000...0001 -> 0x6000...0000.
         assert_eq!(o.machine().cpu[0].regs[8], 0x6000_0000_0000_0000);
+        assert_eq!(o.machine().cpu[0].pc, pc + 4);
+    }
+
+    #[test]
+    fn gb26_extr_distinct_operands_sw_pan() {
+        // Regression test for A538: EXTR X4, X4, X3, #48 (0x93C3C084)
+        // Rn=X4 (TTBR1=0x416ea000), Rm=X3 (TTBR0=0x41684000), lsb=48.
+        // concat = (Rn:Rm) = 0x00000000416ea000_0000000041684000
+        // Result = concat >> 48 = 0x0000416ea0000000.
+        // Followed by ROR #16, this preserves TTBR1 base 0x416ea000 while
+        // importing the ASID from TTBR0.
+        let pc = RAM_BASE + 0x1000;
+        let sp = RAM_BASE + 0x2000;
+        let mut o = sp_test_orchestrator(pc, sp, 0x93C3_C084);
+        o.machine_mut().cpu[0].regs[4] = 0x0000_0000_416e_a000;
+        o.machine_mut().cpu[0].regs[3] = 0x0000_0000_4168_4000;
+        let outcome = o.step_vcpu();
+        assert!(matches!(outcome, StepOutcome::Continue));
+        assert_eq!(
+            o.machine().cpu[0].regs[4],
+            0x0000_416e_a000_0000,
+            "EXTR must place Rn in upper 64 bits and Rm in lower 64 bits"
+        );
+        assert_eq!(o.machine().cpu[0].pc, pc + 4);
+    }
+
+    #[test]
+    fn gb26_extr_hand_verified_32bit_pair() {
+        // EXTR W0, W1, W2, #4 (0x13821020):
+        // (0x12:0x34) >> 4, low 32 bits = 0x20000003.
+        let pc = RAM_BASE + 0x1000;
+        let sp = RAM_BASE + 0x2000;
+        let mut o = sp_test_orchestrator(pc, sp, 0x1382_1020);
+        o.machine_mut().cpu[0].regs[1] = 0x12;
+        o.machine_mut().cpu[0].regs[2] = 0x34;
+
+        assert_eq!(o.step_vcpu(), StepOutcome::Continue);
+        assert_eq!(o.machine().cpu[0].regs[0], 0x2000_0003);
         assert_eq!(o.machine().cpu[0].pc, pc + 4);
     }
 
