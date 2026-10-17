@@ -138,6 +138,126 @@ fn p3_id_family_completion_e2e() {
 }
 
 #[test]
+fn p3_mmfr0_parange_mrs_to_tcr_matches_pinned_qemu() {
+    // Exact Linux Image instructions at 0x40c03694..0x40c036bc:
+    // MRS ID_AA64MMFR0_EL1; extract PARange; cap at 5; insert into TCR.IPS;
+    // then write TCR_EL1. The pinned QEMU trace records the resulting TCR.
+    const WORDS: [u32; 7] = [
+        0xd538_0705, // mrs x5, id_aa64mmfr0_el1
+        0xd340_08a5, // ubfx x5, x5, #0, #3
+        0xd280_00a6, // mov x6, #5
+        0xeb06_00bf, // cmp x5, x6
+        0x9a85_80c5, // csel x5, x6, x5, hi
+        0xb360_08aa, // bfi x10, x5, #32, #3
+        0xd518_204a, // msr tcr_el1, x10
+    ];
+    const QEMU_TCR_EL1: u64 = 0x0040_0032_b559_3519;
+    const PRE_IPS_TCR_EL1: u64 = 0x0040_0030_b559_3519;
+
+    let mut o = Orchestrator::new();
+    o.machine_mut().cpu[0].pc = RAM_BASE;
+    o.machine_mut().cpu[0].regs[10] = PRE_IPS_TCR_EL1;
+    for (i, word) in WORDS.iter().enumerate() {
+        let offset = i * 4;
+        o.machine_mut().ram[offset..offset + 4].copy_from_slice(&word.to_le_bytes());
+    }
+
+    for (i, word) in WORDS.iter().enumerate() {
+        let outcome = o.step_vcpu();
+        assert_eq!(
+            outcome,
+            StepOutcome::Continue,
+            "guest vector word {i} ({word:#010x}) did not Continue: {outcome:?}"
+        );
+        if i == 0 {
+            assert_eq!(
+                o.machine().cpu[0].regs[5],
+                2,
+                "Cortex-A53 MRS must expose PARange=2 (40-bit PA)"
+            );
+        }
+    }
+
+    assert_eq!(
+        o.machine().cpu[0].regs[5],
+        2,
+        "Linux's PARange extraction/cap must retain the Cortex-A53 value"
+    );
+    assert_eq!(
+        o.machine().cpu[0].sysregs.tcr_el1,
+        QEMU_TCR_EL1,
+        "Linux's exact MRS->TCR sequence must match the pinned QEMU trace"
+    );
+}
+
+#[test]
+fn p3_ctr_el0_matches_cortex_a53_qemu() {
+    // The pinned Cortex-A53 QEMU trace reaches MRS X3, CTR_EL0 at step 19
+    // (0x40084d60); its next state has X3=0x84448004.
+    let mut o = Orchestrator::new();
+    o.machine_mut().cpu[0].pc = RAM_BASE;
+    o.machine_mut().ram[..4].copy_from_slice(&0xd53b_0023u32.to_le_bytes());
+
+    assert_eq!(o.step_vcpu(), StepOutcome::Continue);
+    assert_eq!(o.machine().cpu[0].regs[3], 0x8444_8004);
+}
+
+#[test]
+fn p3_dfr0_el1_matches_cortex_a53_qemu() {
+    // The pinned Cortex-A53 QEMU trace reaches MRS X0, ID_AA64DFR0_EL1 at
+    // step 7469 (0x40c83660); its next state at step 7470 has X0=0x10305106.
+    // In Linux Image at 0x40c03660:
+    // MRS X0, ID_AA64DFR0_EL1 (0xd538_0500)
+    // SBFX X0, X0, #8, #4      (0x9348_2c00)
+    // CMP X0, #1               (0xf100_041f)
+    // B.LT 0x40c03674 (+8)     (0x5400_004b)
+    // With DFR0=0x10305106, bits[11:8] = 0x1 -> SBFX gives 1.
+    // CMP 1, 1 gives Z=1, so B.LT is NOT taken (branch fallthrough).
+    const WORDS: [u32; 4] = [
+        0xd538_0500, // mrs x0, id_aa64dfr0_el1
+        0x9348_2c00, // sbfx x0, x0, #8, #4
+        0xf100_041f, // cmp x0, #1
+        0x5400_004b, // b.lt +8 (to RAM_BASE + 20)
+    ];
+    let mut o = Orchestrator::new();
+    o.machine_mut().cpu[0].pc = RAM_BASE;
+    for (i, word) in WORDS.iter().enumerate() {
+        let offset = i * 4;
+        o.machine_mut().ram[offset..offset + 4].copy_from_slice(&word.to_le_bytes());
+    }
+
+    assert_eq!(o.step_vcpu(), StepOutcome::Continue);
+    assert_eq!(
+        o.machine().cpu[0].regs[0],
+        0x1030_5106,
+        "Cortex-A53 MRS ID_AA64DFR0_EL1 must match QEMU value 0x10305106"
+    );
+
+    assert_eq!(o.step_vcpu(), StepOutcome::Continue);
+    assert_eq!(
+        o.machine().cpu[0].regs[0],
+        1,
+        "SBFX bits [11:8] must yield 1"
+    );
+
+    assert_eq!(o.step_vcpu(), StepOutcome::Continue);
+    // CMP 1, 1 sets Zero flag (Z=1, bit 30)
+    assert_eq!(
+        (o.machine().cpu[0].pstate >> 30) & 1,
+        1,
+        "CMP 1, 1 must set Z flag"
+    );
+
+    assert_eq!(o.step_vcpu(), StepOutcome::Continue);
+    // B.LT is NOT taken, PC advances to RAM_BASE + 16 (0x4000_0010), NOT RAM_BASE + 20
+    assert_eq!(
+        o.machine().cpu[0].pc,
+        RAM_BASE + 16,
+        "B.LT must not be taken with DFR0=0x10305106; must fall through to next insn"
+    );
+}
+
+#[test]
 fn p3_pmu_remainder_e2e() {
     run_sequences(include_str!("fixtures/sysreg_p3_pmu.json"));
 }

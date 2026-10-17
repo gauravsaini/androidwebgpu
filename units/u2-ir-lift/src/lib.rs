@@ -469,8 +469,10 @@ fn lift_system(word: u32) -> Vec<IrOp> {
                     let val: u64 = match (op0, op1, crn, crm, op2) {
                         // CurrentEL: bits[3:2] = 0b01 (EL1) -> 0x4
                         (3, 0, 4, 2, 2) => 0x4,
-                        // CTR_EL0: Cache Type Register (64B D-cache, 64B I-cache)
-                        (3, 3, 0, 0, 1) => 0x8444_c004,
+                        // CTR_EL0: Cortex-A53 value observed in QEMU 11.1.2.
+                        // The earlier L1Ip=0b11 value made the guest's first
+                        // post-reset state diverge after MRS X3, CTR_EL0.
+                        (3, 3, 0, 0, 1) => 0x8444_8004,
                         // NZCV: stays in GB-2 live pstate flag path
                         (3, 3, 4, 2, 0) => 0,
                         // ID_AA64PFR0_EL1: EL0/EL1 AArch64 supported
@@ -495,20 +497,18 @@ fn lift_system(word: u32) -> Vec<IrOp> {
                         // ID_AA64MMFR2_EL1 (GB-16: was mislabeled ID_AA64MMFR1_EL1;
                         // (3,0,0,7,1) is the real ID_AA64MMFR1_EL1 -- see below)
                         (3, 0, 0, 7, 2) => 0,
-                        // ID_AA64DFR0_EL1
-                        (3, 0, 0, 5, 0) => 0,
-                        // ID_AA64MMFR0_EL1 (GB-14): measured halt at step 7474
-                        // (pc 0x40c03694, word 0xd5380705 = MRS X5,
-                        // S3_0_C0_C7_0 -- fields extracted by hand from the
-                        // word, not trusted from the first reading). Value 0
-                        // = no memory-model features advertised, matching the
-                        // sibling ID_AA64MMFR1_EL1 / ID_AA64DFR0_EL1 reads.
-                        // The kernel only feature-probes this register
-                        // (MRS -> bitfield extract -> compare -> conditional
-                        // branch, same shape as the ID_AA64DFR0_EL1 probe at
-                        // steps 7462-7465), so 0 takes the honest conservative
-                        // fallback path.
-                        (3, 0, 0, 7, 0) => 0,
+                        // ID_AA64DFR0_EL1 (T563): Cortex-A53 value observed in
+                        // QEMU 11.1.2. The pinned trace has MRS X0, ID_AA64DFR0_EL1
+                        // returning 0x10305106 at QEMU step 7470 (Rust step 7464).
+                        (3, 0, 0, 5, 0) => 0x1030_5106,
+                        // ID_AA64MMFR0_EL1 (T560): Cortex-A53 PARange=2
+                        // (40-bit PA), the value observed through the guest's
+                        // TCR_EL1.IPS construction. The pinned QEMU trace has
+                        // TCR_EL1=0x00400032b5593519 (IPS=2); returning zero
+                        // here incorrectly made the guest program IPS=0.
+                        // Other MMFR0 fields remain zero until independently
+                        // measured and implemented.
+                        (3, 0, 0, 7, 0) => 0x2,
                         // ID_AA64MMFR1_EL1 (GB-16): measured halt at step 7480
                         // (pc 0x40c036ac, word 0xd5380729 = MRS X9,
                         // S3_0_C0_C7_1 -- (op0,op1,crn,crm,op2) = (3,0,0,7,1)
@@ -4121,12 +4121,12 @@ mod tests {
             lift(&insn(0x4000, 0xD538_4240, InsnKind::System)),
             vec![IrOp::Mov { dst: 0, imm: 4 }]
         );
-        // CTR_EL0 -> 0x8444_c004
+        // CTR_EL0 -> 0x8444_8004 (Cortex-A53 observed in QEMU 11.1.2)
         assert_eq!(
             lift(&insn(0x4000, 0xD53B_0023, InsnKind::System)),
             vec![IrOp::Mov {
                 dst: 3,
-                imm: 0x8444_C004
+                imm: 0x8444_8004
             }]
         );
         // DAIF -> persistent (GB-sysreg2)
@@ -4666,11 +4666,22 @@ mod tests {
         // Measured halt word: MRS X5, ID_AA64MMFR0_EL1 (step 7474,
         // pc 0x40c03694). Field extraction: (op0,op1,crn,crm,op2) =
         // (3,0,0,7,0) = S3_0_C0_C7_0 = ID_AA64MMFR0_EL1; Rt = X5.
-        // Value 0 = no memory-model features advertised (matches the
-        // sibling ID_AA64MMFR1_EL1 / ID_AA64DFR0_EL1 reads).
+        // T560: PARange=2 for Cortex-A53 (40-bit PA).
         assert_eq!(
             lift(&insn(0x40c0_3694, 0xD538_0705, InsnKind::System)),
-            vec![IrOp::Mov { dst: 5, imm: 0 }]
+            vec![IrOp::Mov { dst: 5, imm: 2 }]
+        );
+    }
+
+    #[test]
+    fn gb14_id_aa64dfr0_el1_mrs_lifts_to_mov() {
+        // Measured halt word: MRS X0, ID_AA64DFR0_EL1 (step 7462,
+        // pc 0x40c03660). Field extraction: (op0,op1,crn,crm,op2) =
+        // (3,0,0,5,0) = S3_0_C0_C5_0 = ID_AA64DFR0_EL1; Rt = X0.
+        // T563: Value 0x10305106 matches Cortex-A53 QEMU 11.1.2.
+        assert_eq!(
+            lift(&insn(0x40c0_3660, 0xD538_0500, InsnKind::System)),
+            vec![IrOp::Mov { dst: 0, imm: 0x1030_5106 }]
         );
     }
 

@@ -104,3 +104,18 @@
 1. **EOR/EON & ROR Logical Shift Fix**: Removed invalid `shift < 0b11` check in `u1-decode/src/dp_reg.rs` allowing ROR (0b11) for all logical shifted register instructions (EOR, EON, AND, BIC, ORR, ORN, ANDS, BICS); implemented 32-bit and 64-bit ROR in `eval_shift32`/`eval_shift64` and `execute_arm64`; corrected 32-bit ROR and ASR lowering in `u3-wasm-jit` to prevent 64-bit rotation truncation.
 2. **Tests** (before → after): Halted at step 46,063,233 (IllegalInstruction eor w9,w12,w8,ror #1) → Bypassed 46.06M wall (+80M+ steps to 126M+); u1-decode 105 → 106, u2-ir-lift 127 → 128, u12-orchestrator 134 → 136 tests passed.
 3. **Files changed**: `units/u1-decode/src/dp_reg.rs`, `units/u1-decode/src/lib.rs`, `units/u2-ir-lift/src/lib.rs`, `units/u12-orchestrator/src/arm64.rs`, `units/u12-orchestrator/src/lib.rs`, `units/u3-wasm-jit/src/lib.rs`.
+
+## T560 MMU feature-gap — 2026-10-18
+
+- Started T560 from the T558/A546 revision after confirming base commit `1af87e805ab3335f1e744be96fe7465d32584799`; pinned guest inputs were hash-verified and left read-only.
+- Added the MMFR0 PARange=2 implementation and QEMU-matched MRS-to-TCR regression vector. The focused release suite passes 7 tests.
+- Aligned traces show TCR matches the pinned QEMU value at step 1,000,000, but the first remaining state mismatch is the DFR0 MRS result at Rust step 7,464 / QEMU step 7,470. See `okf/branches/t560-mmu-feature-gap.md` and `/Users/Shared/agyx-track560-mmu-gap.md`.
+- 150M Rust boot gate with per-write PL011 state capture remains in progress; final UART write, guest PID-1 marker, and gate status are pending.
+
+## UPDATED ON : 2026-10-18
+
+### fix (2026-10-18) — Track T563 ID_AA64DFR0_EL1 alignment to Cortex-A53 QEMU oracle
+
+1. **DFR0 Alignment**: Aligned `ID_AA64DFR0_EL1` MRS read to `0x10305106` matching Cortex-A53 QEMU 11.1.2; added QEMU-matched regression test `p3_dfr0_el1_matches_cortex_a53_qemu` covering MRS -> SBFX -> CMP -> B.LT fallthrough sequence; updated `u2-ir-lift` unit tests.
+2. **Tests** (before → after): sysreg_p3 7/7 → 8/8 passed; u2-ir-lift 128/128 → 129/129 passed. First-million trace: DFR0 divergence at Rust step 7,464 / QEMU step 7,470 completely eliminated. Next divergence is at Rust step 7,578 / QEMU step 7,584 (`MRS X3, DCZID_EL0`: Rust returns 0x10 [DZP=1], QEMU returns 0x4 [DZP=0]), causing control flow fork at Rust step 7,580 / QEMU step 7,586 (`TBNZ W3, #4`).
+3. **Files changed**: `units/u2-ir-lift/src/lib.rs`, `units/u12-orchestrator/tests/sysreg_p3.rs`.
