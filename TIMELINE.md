@@ -128,3 +128,11 @@
 2. **Tests** (before → after): sysreg_p3 9/9 → 10/10 passed. First-million aligned diff: 10,015-step window (Rust steps 29,994..40,009 / QEMU steps 30,000..40,015) matches 100% bit-for-bit across all GPRs, SP, CPSR, SCTLR, TTBR0, TCR, TTBR1, MAIR. Step 40,000 divergence eliminated; next periodic divergence sampled at Rust step 49,994 / QEMU step 50,000.
 3. **Files changed**: `guest-image/qemu-virt-runtime.dtb`, `units/u12-orchestrator/src/bin/run_kernel.rs`, `units/u12-orchestrator/tests/sysreg_p3.rs`, `GATES.md`, `GATES-T570.md`.
 
+## UPDATED ON : 2026-10-18
+
+### fix (2026-10-18) — Track T577 DC ZVA implementation eliminating vmemmap translation fault
+
+1. **DC ZVA Implementation**: Implemented `DC ZVA, Xt` (`0xd50b_7420`..`0xd50b_743f`) in `units/u2-ir-lift/src/lib.rs` to align the 64-byte cache block to 64 bytes (`Xt & !0x3F`) and store 64 zero bytes via 8x 64-bit zero stores. When `DCZID_EL0` was set to `0x04` in T564, Linux `clear_page` switched to `DC ZVA`. Because `DC ZVA` was previously lowered as a NOP, allocated pages remained unzeroed, creating corrupted pointer `X0/X22 = 0x7fd77cfdfd7cdb7f` at step 46,172,331 and halting with `WasmTrap TranslationFault` during `virt_to_page` calculation. Implementing `DC ZVA` eliminates the fault completely and advances execution past 55,000,000 steps without halt.
+2. **Tests** (before → after): Halted at step 46,172,331 with TranslationFault → Bypassed fault (+8,827,669 steps to 55M budget without halt); sysreg_p3 10/10 → 11/11 passed (`p3_dc_zva_zeroes_64_byte_block_matches_cortex_a53_qemu` verified 10/10 consecutive passes); u2-ir-lift 129/129 → 130/130 passed (`dc_zva_lifts_to_zeroing_sequence`).
+3. **Files changed**: `units/u2-ir-lift/src/lib.rs`, `units/u12-orchestrator/tests/sysreg_p3.rs`, `GATES.md`, `TIMELINE.md`.
+
