@@ -473,5 +473,62 @@ fn p3_psci_features_unknown_64_hvc_matches_cortex_a53_qemu() {
     );
 }
 
+#[test]
+fn p3_dc_zva_zeroes_64_byte_block_matches_cortex_a53_qemu() {
+    // Exact instruction from Linux clear_page / memset:
+    // DC ZVA, X0 (word 0xd50b_7420)
+    // On Cortex-A53 QEMU (DCZID_EL0 = 0x04, DZP = 0, BS = 4),
+    // DC ZVA zeroes a 64-byte cache block aligned to 64 bytes (X0 & !0x3F).
+    let mut o = Orchestrator::new();
+    o.machine_mut().cpu[0].pc = RAM_BASE;
 
+    // Place an unaligned address in X0 pointing into a memory region.
+    let target_base = RAM_BASE + 0x1000;
+    let unaligned_va = target_base + 13;
+    o.machine_mut().cpu[0].regs[0] = unaligned_va;
+
+    // Fill surrounding 128 bytes with canary 0xAA.
+    let ram_offset = (target_base - RAM_BASE) as usize;
+    for b in &mut o.machine_mut().ram[ram_offset - 16..ram_offset + 128] {
+        *b = 0xAA;
+    }
+
+    // DC ZVA, X0 (0xd50b_7420)
+    let insn_word = 0xd50b_7420u32;
+    o.machine_mut().ram[0..4].copy_from_slice(&insn_word.to_le_bytes());
+
+    assert_eq!(o.step_vcpu(), StepOutcome::Continue);
+
+    // Verify register X0 is preserved.
+    assert_eq!(
+        o.machine().cpu[0].regs[0],
+        unaligned_va,
+        "DC ZVA must not modify its operand register"
+    );
+
+    // Verify PC advanced by 4.
+    assert_eq!(
+        o.machine().cpu[0].pc,
+        RAM_BASE + 4,
+        "DC ZVA must advance PC by 4"
+    );
+
+    // Verify preceding 16 bytes remain untouched (0xAA).
+    assert!(
+        o.machine().ram[ram_offset - 16..ram_offset].iter().all(|&b| b == 0xAA),
+        "Memory preceding the aligned 64-byte block must remain unchanged"
+    );
+
+    // Verify the aligned 64-byte block [0x1000..0x1040) is completely zeroed.
+    assert!(
+        o.machine().ram[ram_offset..ram_offset + 64].iter().all(|&b| b == 0x00),
+        "The 64-byte block aligned to 64 bytes must be zeroed by DC ZVA"
+    );
+
+    // Verify following memory [0x1040..0x1080) remains untouched (0xAA).
+    assert!(
+        o.machine().ram[ram_offset + 64..ram_offset + 128].iter().all(|&b| b == 0xAA),
+        "Memory following the aligned 64-byte block must remain unchanged"
+    );
+}
 

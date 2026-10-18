@@ -211,9 +211,45 @@ fn lift_system(word: u32) -> Vec<IrOp> {
     if word >> 12 == 0xD5033 && word & 0x1F == 0x1F {
         return vec![];
     }
-    // System operations (e.g. DC CIVAC, DC IVAC, DC CVAC, IC IALLU, TLBI):
-    // op0 == 1 (SYS). On single-vCPU emulator, cache and TLB maintenance are NOPs.
+    // System operations:
+    // DC ZVA, Xt (op0=1, op1=3, CRn=7, CRm=4, op2=1):
+    // Zeroes the 64-byte cache line block aligned to 64 bytes (DCZID_EL0.BS = 4).
+    // Note: Other cache and TLB maintenance operations (e.g. DC CIVAC, DC IVAC,
+    // DC CVAC, IC IALLU, TLBI) are honest NOPs on our single-vCPU emulator.
     if (word >> 22) & 0x3FF == 0x354 && ((word >> 21) & 1) == 0 && ((word >> 19) & 0x3) == 1 {
+        let op1 = (word >> 16) & 0x7;
+        let crn = (word >> 12) & 0xF;
+        let crm = (word >> 8) & 0xF;
+        let op2 = (word >> 5) & 0x7;
+        let rt = (word & 0x1F) as u8;
+
+        if op1 == 3 && crn == 7 && crm == 4 && op2 == 1 {
+            // DC ZVA, Xt
+            let mut ops = Vec::with_capacity(10);
+            ops.push(IrOp::Mov {
+                dst: SCRATCH,
+                imm: 0x3F,
+            });
+            ops.push(IrOp::AndShift {
+                dst: SCRATCH,
+                a: rt,
+                b: SCRATCH,
+                shift: 0,
+                amount: 0,
+                invert: true,
+                is_32: false,
+            });
+            for i in 0..8 {
+                ops.push(IrOp::StoreDyn {
+                    src: 31, // XZR: stores 8 bytes of zero
+                    base: SCRATCH,
+                    off: (i * 8) as u64,
+                    size: 8,
+                });
+            }
+            return ops;
+        }
+
         return vec![];
     }
     // MRS Xt, <sysreg>: bit 21 == 1.
@@ -5163,6 +5199,64 @@ mod tests {
         assert_eq!(lift(&insn(0x4000, 0xD50B_7E20, InsnKind::System)), vec![]); // DC CIVAC, X0
         assert_eq!(lift(&insn(0x4000, 0xD508_751F, InsnKind::System)), vec![]); // IC IALLU
         assert_eq!(lift(&insn(0x4000, 0xD508_711F, InsnKind::System)), vec![]); // IC IALLUIS
+    }
+
+    #[test]
+    fn dc_zva_lifts_to_zeroing_sequence() {
+        // DC ZVA, X0 (word 0xD50B_7420): zeroes 64-byte block aligned to 64 bytes
+        assert_eq!(
+            lift(&insn(0x4000, 0xD50B_7420, InsnKind::System)),
+            vec![
+                IrOp::Mov {
+                    dst: SCRATCH,
+                    imm: 0x3F
+                },
+                IrOp::AndShift {
+                    dst: SCRATCH,
+                    a: 0,
+                    b: SCRATCH,
+                    shift: 0,
+                    amount: 0,
+                    invert: true,
+                    is_32: false,
+                },
+                IrOp::StoreDyn { src: 31, base: SCRATCH, off: 0, size: 8 },
+                IrOp::StoreDyn { src: 31, base: SCRATCH, off: 8, size: 8 },
+                IrOp::StoreDyn { src: 31, base: SCRATCH, off: 16, size: 8 },
+                IrOp::StoreDyn { src: 31, base: SCRATCH, off: 24, size: 8 },
+                IrOp::StoreDyn { src: 31, base: SCRATCH, off: 32, size: 8 },
+                IrOp::StoreDyn { src: 31, base: SCRATCH, off: 40, size: 8 },
+                IrOp::StoreDyn { src: 31, base: SCRATCH, off: 48, size: 8 },
+                IrOp::StoreDyn { src: 31, base: SCRATCH, off: 56, size: 8 },
+            ]
+        );
+        // DC ZVA, X8 (word 0xD50B_7428)
+        assert_eq!(
+            lift(&insn(0x4000, 0xD50B_7428, InsnKind::System)),
+            vec![
+                IrOp::Mov {
+                    dst: SCRATCH,
+                    imm: 0x3F
+                },
+                IrOp::AndShift {
+                    dst: SCRATCH,
+                    a: 8,
+                    b: SCRATCH,
+                    shift: 0,
+                    amount: 0,
+                    invert: true,
+                    is_32: false,
+                },
+                IrOp::StoreDyn { src: 31, base: SCRATCH, off: 0, size: 8 },
+                IrOp::StoreDyn { src: 31, base: SCRATCH, off: 8, size: 8 },
+                IrOp::StoreDyn { src: 31, base: SCRATCH, off: 16, size: 8 },
+                IrOp::StoreDyn { src: 31, base: SCRATCH, off: 24, size: 8 },
+                IrOp::StoreDyn { src: 31, base: SCRATCH, off: 32, size: 8 },
+                IrOp::StoreDyn { src: 31, base: SCRATCH, off: 40, size: 8 },
+                IrOp::StoreDyn { src: 31, base: SCRATCH, off: 48, size: 8 },
+                IrOp::StoreDyn { src: 31, base: SCRATCH, off: 56, size: 8 },
+            ]
+        );
     }
 
     #[test]

@@ -136,8 +136,6 @@
 2. **Tests** (before → after): sysreg_p3 10/10 → 11/11 passed (TEN-PASSES OK); u2-ir-lift 129/129 passed. Aligned diff: 15,005 consecutive instructions in 40,000..55,000 window and all 60,000 dense instructions in 40,000..100,000 match 100% bit-for-bit across all GPRs, SP, CPSR, and sysregs. In addition, 100/100 periodic checkpoints across the entire 1M-step window (steps 10k..1,000,000) match QEMU 100%.
 3. **Files changed**: `units/u2-ir-lift/src/lib.rs`, `units/u12-orchestrator/tests/sysreg_p3.rs`, `GATES.md`, `TIMELINE.md`.
 
-
-
 ## UPDATED ON : 2026-10-18
 
 ### fix (2026-10-18) — Track T575 PSCI_VERSION HVC return value alignment to Cortex-A53 QEMU virt oracle (v1.1)
@@ -145,6 +143,14 @@
 1. **PSCI_VERSION & MIGRATE_INFO_TYPE Alignment**: Aligned HVC PSCI dispatch in `units/u12-orchestrator/src/lib.rs` and `contracts/src/cpu.rs` so `PSCI_VERSION` (`0x84000000`) returns `0x00010001` (PSCI v1.1) matching Cortex-A53 QEMU 11.1.2 virt oracle (`target/arm/tcg/psci.c:95-96`), replacing previous `0x00010000` (v1.0). Added `PSCI_MIGRATE_INFO_TYPE` (`0x84000006`) returning 2 (`PSCI_0_2_RET_TOS_MIGRATION_NOT_REQUIRED`). Fixed root cause of divergence at Rust step 36,828,780 / QEMU step 36,828,786 where Linux `psci_probe()` reads minor version into `X2`/`X20` to format `"psci: PSCIv1.1 detected in firmware.\n"`. Added QEMU regression tests `p3_psci_version_hvc_matches_cortex_a53_qemu` and `p3_psci_migrate_info_type_matches_cortex_a53_qemu`.
 2. **Tests** (before → after): sysreg_p3 11/11 → 13/13 passed (TEN-PASSES OK); u12-orchestrator 134/134 passed. Aligned diff: all 1,215 instructions across window 36,828,786..36,830,000 match 100% bit-for-bit across all 31 GPRs, SP, CPSR, SCTLR, TTBR0, TCR, TTBR1, MAIR. Divergence at step 36,828,786 completely eliminated.
 3. **Files changed**: `contracts/src/cpu.rs`, `units/u12-orchestrator/src/lib.rs`, `units/u12-orchestrator/tests/sysreg_p3.rs`, `units/u15-exec-wasmi/src/lib.rs`, `GATES.md`, `TIMELINE.md`.
+
+## UPDATED ON : 2026-10-18
+
+### fix (2026-10-18) — Track T577 DC ZVA implementation eliminating vmemmap translation fault
+
+1. **DC ZVA Implementation**: Implemented `DC ZVA, Xt` (`0xd50b_7420`..`0xd50b_743f`) in `units/u2-ir-lift/src/lib.rs` to align the 64-byte cache block to 64 bytes (`Xt & !0x3F`) and store 64 zero bytes via 8x 64-bit zero stores. When `DCZID_EL0` was set to `0x04` in T564, Linux `clear_page` switched to `DC ZVA`. Because `DC ZVA` was previously lowered as a NOP, allocated pages remained unzeroed, creating corrupted pointer `X0/X22 = 0x7fd77cfdfd7cdb7f` at step 46,172,331 and halting with `WasmTrap TranslationFault` during `virt_to_page` calculation. Implementing `DC ZVA` eliminates the fault completely and advances execution past 55,000,000 steps without halt.
+2. **Tests** (before → after): Halted at step 46,172,331 with TranslationFault → Bypassed fault (+8,827,669 steps to 55M budget without halt); sysreg_p3 10/10 → 11/11 passed (`p3_dc_zva_zeroes_64_byte_block_matches_cortex_a53_qemu` verified 10/10 consecutive passes); u2-ir-lift 129/129 → 130/130 passed (`dc_zva_lifts_to_zeroing_sequence`).
+3. **Files changed**: `units/u2-ir-lift/src/lib.rs`, `units/u12-orchestrator/tests/sysreg_p3.rs`, `GATES.md`, `TIMELINE.md`.
 
 ## UPDATED ON : 2026-10-18
 
