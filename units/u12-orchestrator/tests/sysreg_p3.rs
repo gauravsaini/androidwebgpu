@@ -323,3 +323,39 @@ fn p3_fdt_totalsize_load_rev_matches_cortex_a53_qemu() {
     );
 }
 
+#[test]
+fn p3_mpidr_midr_el1_matches_cortex_a53_qemu() {
+    // Exact instruction sequence from Linux setup_arch() at QEMU steps 41,104 / 41,112:
+    // MRS X9, MPIDR_EL1 (word 0xd538_00a9)
+    // MRS X2, MIDR_EL1  (word 0xd538_0002)
+    // In Cortex-A53 virt QEMU oracle:
+    // MPIDR_EL1 has RES1 bit 31 = 1, U bit 30 = 0 (multiprocessor-capable), Aff0 = 0 -> 0x8000_0000.
+    // MIDR_EL1 is Cortex-A53 r0p4 -> 0x410f_d034.
+    let mut o = Orchestrator::new();
+    o.machine_mut().cpu[0].pc = RAM_BASE;
+
+    const WORDS: [u32; 2] = [
+        0xd538_00a9, // mrs x9, mpidr_el1
+        0xd538_0002, // mrs x2, midr_el1
+    ];
+    for (i, word) in WORDS.iter().enumerate() {
+        let offset = i * 4;
+        o.machine_mut().ram[offset..offset + 4].copy_from_slice(&word.to_le_bytes());
+    }
+
+    assert_eq!(o.step_vcpu(), StepOutcome::Continue);
+    assert_eq!(
+        o.machine().cpu[0].regs[9],
+        0x8000_0000,
+        "MRS X9, MPIDR_EL1 must return 0x8000_0000 matching QEMU step 41,105"
+    );
+
+    assert_eq!(o.step_vcpu(), StepOutcome::Continue);
+    assert_eq!(
+        o.machine().cpu[0].regs[2],
+        0x410f_d034,
+        "MRS X2, MIDR_EL1 must return 0x410fd034 matching QEMU step 41,113"
+    );
+}
+
+

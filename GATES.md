@@ -1,34 +1,34 @@
-# Gates: Track T570 — rust-40k-mismatch
+# Gates: Track T574 — rust-50k-mismatch
 
-OWNS: units/u2-ir-lift/src/lib.rs, units/u12-orchestrator/src/bin/run_kernel.rs, units/u12-orchestrator/tests/sysreg_p3.rs, GATES.md, GATES-T570.md, TIMELINE.md, /Users/Shared/agyx-track570-rust-40k-mismatch.md
+OWNS: units/u2-ir-lift/src/**, units/u1-decode/src/**, units/u12-orchestrator/src/**, units/u12-orchestrator/tests/**, GATES.md, TIMELINE.md, /Users/Shared/agyx-track574-rust-50k-mismatch.md
 
-Scope: Locate and fix the engine-state mismatch at Rust step 39,994 / QEMU step 40,000, add QEMU-matched regression vectors, verify no divergence <= 40,000 in the aligned diff, and record findings.
+Scope: Root-cause and eliminate the engine-state divergence at Rust step 49,994 / QEMU step 50,000, add QEMU-matched regression vector per touched class, verify no divergence <= 50,000 in the aligned diff, and record findings in /Users/Shared/agyx-track574-rust-50k-mismatch.md.
 
-- [x] G1: Base commit verified 4d4f1db on branch t570-rust-40k-mismatch with PARange/DFR0/DCZID fixes present.
+- [x] G1: Base commit verified d86db15 on branch t574-rust-50k-mismatch.
   CHECK: git rev-parse --short HEAD
-  EXPECT: 4d4f1db
-  EVIDENCE: Verified HEAD is 4d4f1db on branch t570-rust-40k-mismatch; PARange=2, DFR0=0x10305106, DCZID=0x04 all confirmed in source.
+  EXPECT: d86db15
+  EVIDENCE: Verified HEAD is d86db15ada98bc8dfd114ad112ef975095e3cb01 on branch t574-rust-50k-mismatch before running any work.
 
-- [x] G2: Clean build in separate CARGO_TARGET_DIR target-t570.
-  CHECK: CARGO_TARGET_DIR=/Users/Shared/wt-track570-rust-40k/target-t570 cargo build --release -p u12-orchestrator --bin run_kernel
+- [x] G2: Clean build in separate CARGO_TARGET_DIR target-t574.
+  CHECK: CARGO_TARGET_DIR=/Users/Shared/wt-track574-rust-50k/target-t574 cargo build --release -p u12-orchestrator --bin run_kernel
   EXPECT: Finished `release` profile
-  EVIDENCE: Release binary built at `/Users/Shared/wt-track570-rust-40k/target-t570/release/run_kernel` (SHA-256 `91f198059770b4cfc755633ef2ab969b6a251256b1aabbb5c3842d6b0cdf712c`).
+  EVIDENCE: Release binary built at `/Users/Shared/wt-track574-rust-50k-mismatch/target-t574/release/run_kernel`.
 
-- [x] G3: Locate exact divergence between Rust step 29,994 and 39,994 (QEMU step 30,000 and 40,000).
-  EVIDENCE: Located at Rust step 33,320 / QEMU step 33,326 at PC `0xffffff8009456ab0` (`0xb94006e8`: `LDR W8, [X23, #4]`) followed by `REV W8, W8` at step 33,321 / 33,327. Linux `setup_machine_fdt()` reads DTB header `totalsize` from PA `0x48200004` (X23=0xffffffbefe800000). QEMU's `arm_load_dtb()` resizes and enriches the DTB to 22,930 (`0x5992`) bytes (`/chosen`, `/memory@40000000`, `/psci`), whereas Rust previously loaded the un-enriched 1,465-byte (`0x5b9`) raw file. At step 33,321 (QEMU 33,327), X8 became `0x5992` in QEMU vs `0x5b9` in Rust.
+- [x] G3: Capture dense trace around 40,000..55,000 in Rust and QEMU, locate exact first instruction and architectural divergence.
+  EVIDENCE: Located first divergence at QEMU step 41,105 / Rust step 41,099 at PC 0xffffff8009452624 (opcode 0xf2a01fea `MOVK X10, #0xff, LSL #16`). In preceding step (QEMU 41,104 / Rust 41,098) at PC 0xffffff8009452620, Linux setup_arch() executed `MRS X9, MPIDR_EL1` (0xd53800a9). QEMU Cortex-A53 returned X9 = 0x8000_0000 (RES1 bit 31=1, U bit 30=0), whereas Rust returned X9 = 0x4000_0000. Eight steps later at QEMU 41,113 / Rust 41,107 (PC 0xffffff8009452640), `MRS X2, MIDR_EL1` (0xd5380002) returned X2 = 0x410f_d034 in QEMU vs 0x0 in Rust, leading to diverging vsnprintf formatting in early CPU boot banner ("Booting Linux on physical CPU 0x%010lx [0x%08x]").
 
-- [x] G4: Fix divergence in Rust emulator with QEMU-matched regression vector per touched class.
-  CHECK: CARGO_TARGET_DIR=/Users/Shared/wt-track570-rust-40k/target-t570 cargo test --release --test sysreg_p3 -- --test-threads=1
-  EXPECT: test result: ok. 10 passed; 0 failed
-  EVIDENCE: Extracted QEMU Cortex-A53 virt runtime DTB (22,930 bytes, SHA-256 `c94b1fd1ea4915ac0f3bd4fc69f5259bc695f8aad6ca49124760ab6512021a91`) to `guest-image/qemu-virt-runtime.dtb`. Updated `run_kernel.rs` to align minimal DTBs to QEMU runtime DTB. Added QEMU-matched regression test `p3_fdt_totalsize_load_rev_matches_cortex_a53_qemu` in `units/u12-orchestrator/tests/sysreg_p3.rs`. Test suite passes 10/10.
+- [x] G4: Root-cause against Cortex-A53 / QEMU oracle, fix in Rust engine, and add QEMU-matched regression vector to tests.
+  CHECK: CARGO_TARGET_DIR=/Users/Shared/wt-track574-rust-50k/target-t574 cargo test --release --test sysreg_p3 -- --test-threads=1
+  EXPECT: test result: ok. 11 passed; 0 failed
+  EVIDENCE: Updated units/u2-ir-lift/src/lib.rs: MPIDR_EL1 (3,0,0,0,5) aligned to 0x8000_0000; MIDR_EL1 (3,0,0,0,0) aligned to 0x410f_d034. Added QEMU-matched regression test `p3_mpidr_midr_el1_matches_cortex_a53_qemu` in units/u12-orchestrator/tests/sysreg_p3.rs. 11/11 tests pass.
 
-- [x] G5: Aligned diff rerun confirms no divergence <= 40,000 and no new earlier divergences introduced.
-  EVIDENCE: Verified window of 10,015 steps (Rust steps 29,994..40,009 / QEMU steps 30,000..40,015): 100% bit-for-bit match on all GPRs (x0-x30), sp, pc, cpsr, sctlr, ttbr0, tcr, ttbr1, mair. Checkpoints at steps 10k, 20k, 30k, 40k match 100%. Prior divergence at step 40,000 is completely eliminated. Next periodic divergence sampled at Rust step 49,994 / QEMU step 50,000. Earlier steps 1..10,000 re-verified against `track560-qemu-firstdiv-10k.log`: zero new earlier divergences.
+- [x] G5: Aligned diff rerun confirms divergence is eliminated (window past 50,000 clean) and no earlier divergences introduced.
+  EVIDENCE: Re-ran dense window from QEMU step 39,996 (Rust 39,990) to QEMU step 55,000 (Rust 54,994) — all 15,005 consecutive instructions match 100% bit-for-bit across all 31 GPRs, SP, CPSR, SCTLR, TTBR0, TCR, TTBR1, MAIR, insn_pc, and opcode word. Verified up to step 100,000 dense (all 60,000 instructions match 100%). In addition, 100/100 periodic 10k checkpoints from step 10k to 1,000,000 match QEMU 100%. Steps 1..10,000 and 30k..40k re-verified with zero earlier divergences.
 
-- [x] G6: Update TIMELINE.md, commit fix on t570-rust-40k-mismatch branch.
-  EVIDENCE: Appended entry to `TIMELINE.md`. Committed changes to branch `t570-rust-40k-mismatch`.
+- [x] G6: TEN-PASSES verified, TIMELINE.md updated, conventional commit on branch t574-rust-50k-mismatch.
+  EVIDENCE: Executed 10 consecutive fresh runs of test suite (`TEN-PASSES OK`). Updated TIMELINE.md. Changes committed to branch t574-rust-50k-mismatch.
 
-- [x] G7: Findings file /Users/Shared/agyx-track570-rust-40k-mismatch.md delivered on disk.
-  CHECK: grep -E "^Verdict: (PASS|FAIL)" /Users/Shared/agyx-track570-rust-40k-mismatch.md
+- [x] G7: Findings file /Users/Shared/agyx-track574-rust-50k-mismatch.md delivered on disk.
+  CHECK: grep -E "^Verdict: (PASS|FAIL)" /Users/Shared/agyx-track574-rust-50k-mismatch.md
   EXPECT: Verdict: PASS
-  EVIDENCE: Findings file written with complete CLAIM, SCOPE, and WITNESS sections.
+  EVIDENCE: Certified findings file written to /Users/Shared/agyx-track574-rust-50k-mismatch.md with Verdict: PASS, complete CLAIM, SCOPE, and WITNESS sections.

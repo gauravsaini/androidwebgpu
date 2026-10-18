@@ -128,3 +128,12 @@
 2. **Tests** (before → after): sysreg_p3 9/9 → 10/10 passed. First-million aligned diff: 10,015-step window (Rust steps 29,994..40,009 / QEMU steps 30,000..40,015) matches 100% bit-for-bit across all GPRs, SP, CPSR, SCTLR, TTBR0, TCR, TTBR1, MAIR. Step 40,000 divergence eliminated; next periodic divergence sampled at Rust step 49,994 / QEMU step 50,000.
 3. **Files changed**: `guest-image/qemu-virt-runtime.dtb`, `units/u12-orchestrator/src/bin/run_kernel.rs`, `units/u12-orchestrator/tests/sysreg_p3.rs`, `GATES.md`, `GATES-T570.md`.
 
+## UPDATED ON : 2026-10-18
+
+### fix (2026-10-18) — Track T574 MPIDR_EL1 & MIDR_EL1 alignment to Cortex-A53 QEMU oracle
+
+1. **MPIDR_EL1 & MIDR_EL1 Alignment**: Aligned MPIDR_EL1 read to `0x8000_0000` (RES1 bit 31 = 1, U bit 30 = 0 multiprocessor-capable, Aff0 = 0) and MIDR_EL1 read to `0x410f_d034` (ARM Cortex-A53 r0p4) to match the Cortex-A53 QEMU 11.1.2 oracle. Fixed the root cause of the Rust step 41,099 / QEMU step 41,105 divergence where Linux `setup_arch()` reads MPIDR and MIDR to format the early boot CPU banner string ("Booting Linux on physical CPU 0x%010lx [0x%08x]"). Added QEMU-matched regression test `p3_mpidr_midr_el1_matches_cortex_a53_qemu`.
+2. **Tests** (before → after): sysreg_p3 10/10 → 11/11 passed (TEN-PASSES OK); u2-ir-lift 129/129 passed. Aligned diff: 15,005 consecutive instructions in 40,000..55,000 window and all 60,000 dense instructions in 40,000..100,000 match 100% bit-for-bit across all GPRs, SP, CPSR, and sysregs. In addition, 100/100 periodic checkpoints across the entire 1M-step window (steps 10k..1,000,000) match QEMU 100%.
+3. **Files changed**: `units/u2-ir-lift/src/lib.rs`, `units/u12-orchestrator/tests/sysreg_p3.rs`, `GATES.md`, `TIMELINE.md`.
+
+

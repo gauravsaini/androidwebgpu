@@ -525,28 +525,14 @@ fn lift_system(word: u32) -> Vec<IrOp> {
                         // QEMU trace at step 7584 (Rust step 7578). BS=4 and
                         // DZP=0 select Linux's DC ZVA zeroing path.
                         (3, 3, 0, 0, 7) => 0x04,
-                        // MPIDR_EL1 (GB-26): measured halt at step 1248961
-                        // (pc 0xffffff80095d2620, word 0xd53800a9 = MRS X9,
-                        // S3_0_C0_C0_5 -- (op0,op1,crn,crm,op2) = (3,0,0,0,5)
-                        // confirmed by capstone disassembly). Value
-                        // 0x40000000: U (bit 30) = 1, uniprocessor system;
-                        // Aff0 = 0, this is the single vCPU 0. The kernel
-                        // derives its CPU number from MPIDR; this is the
-                        // architecturally correct single-CPU value.
-                        // (Fixed: old 0x80000000 set RES0 bit 31, not U.)
-                        (3, 0, 0, 0, 5) => 0x4000_0000,
-                        // MIDR_EL1 (GB-26): measured halt at step 1248969
-                        // (pc 0xffffff80095d2640, word 0xd5380002 = MRS X2,
-                        // S3_0_C0_C0_0 -- (op0,op1,crn,crm,op2) = (3,0,0,0,0)
-                        // confirmed by capstone disassembly). Value 0: no
-                        // implementer/part advertised, so the kernel's errata
-                        // framework matches nothing and takes the generic
-                        // path -- same conservative shape as the GB-14/GB-16
-                        // ID-register probes. (Deliberately NOT a real
-                        // Cortex-A57 MIDR: claiming real silicon would invite
-                        // errata workarounds that poke IMPLEMENTATION DEFINED
-                        // registers we don't model.)
-                        (3, 0, 0, 0, 0) => 0,
+                        // MPIDR_EL1 (T574): Cortex-A53 value from QEMU 11.1.2 oracle
+                        // at step 41,104. Bit 31 is RES1 (0x8000_0000); U (bit 30) = 0
+                        // for multiprocessor-capable Cortex-A53; Aff0 = 0 (vCPU 0).
+                        (3, 0, 0, 0, 5) => 0x8000_0000,
+                        // MIDR_EL1 (T574): Cortex-A53 r0p4 value from QEMU 11.1.2 oracle
+                        // at step 41,112 (0x410fd034: ARM 0x41, variant 0, arch 0xf,
+                        // part 0xd03 Cortex-A53, rev 4).
+                        (3, 0, 0, 0, 0) => 0x410f_d034,
                         // (P3, 2026-10-03) TPIDR_EL2 graduated to persistent
                         // (ReadSys); the constant-0 arm moved to the
                         // persistent match above.
@@ -4165,28 +4151,28 @@ mod tests {
     }
 
     #[test]
-    fn gb26_mrs_mpidr_el1_lifts_to_mov_uniprocessor() {
-        // MPIDR_EL1 = MRS X9, S3_0_C0_C0_5 (word 0xD53800A9, measured
-        // kernel halt at step 1248961, pc 0xffffff80095d2620).
-        // U (bit 30) = 1: uniprocessor; Aff0 = 0: this is vCPU 0.
+    fn t574_mrs_mpidr_el1_lifts_to_mov_cortex_a53() {
+        // MPIDR_EL1 = MRS X9, S3_0_C0_C0_5 (word 0xD53800A9).
+        // Matches Cortex-A53 QEMU 11.1.2: RES1 bit 31 = 1, U bit 30 = 0, Aff0 = 0.
         assert_eq!(
             lift(&insn(0x4000, 0xD538_00A9, InsnKind::System)),
             vec![IrOp::Mov {
                 dst: 9,
-                imm: 0x4000_0000
+                imm: 0x8000_0000
             }]
         );
     }
 
     #[test]
-    fn gb26_mrs_midr_el1_lifts_to_mov_zero() {
-        // MIDR_EL1 = MRS X2, S3_0_C0_C0_0 (word 0xD5380002, measured
-        // kernel halt at step 1248969, pc 0xffffff80095d2640).
-        // 0 = no implementer/part advertised; the kernel's errata
-        // framework matches nothing and takes the generic path.
+    fn t574_mrs_midr_el1_lifts_to_mov_cortex_a53() {
+        // MIDR_EL1 = MRS X2, S3_0_C0_C0_0 (word 0xD5380002).
+        // Matches Cortex-A53 r0p4 QEMU 11.1.2: 0x410fd034.
         assert_eq!(
             lift(&insn(0x4000, 0xD538_0002, InsnKind::System)),
-            vec![IrOp::Mov { dst: 2, imm: 0 }]
+            vec![IrOp::Mov {
+                dst: 2,
+                imm: 0x410f_d034
+            }]
         );
     }
 
