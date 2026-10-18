@@ -106,7 +106,7 @@ pub fn compile(block: &IrBlock) -> WasmModule {
     //   2: (i64, i64, i64) -> ()  — mem_store
     //   3: () -> ()               — wfi
     //   4: (i64, i64) -> ()       — sysreg_store
-    //   5: (i64) -> (i64)         — hvc (P0)
+    //   5: (i64, i64) -> (i64)    — hvc (P0/T579)
     let mut ty = Vec::new();
     uleb(6, &mut ty);
     func_type(&[], &[VALTYPE_I64], &mut ty);
@@ -114,7 +114,7 @@ pub fn compile(block: &IrBlock) -> WasmModule {
     func_type(&[VALTYPE_I64, VALTYPE_I64, VALTYPE_I64], &[], &mut ty);
     func_type(&[], &[], &mut ty);
     func_type(&[VALTYPE_I64, VALTYPE_I64], &[], &mut ty);
-    func_type(&[VALTYPE_I64], &[VALTYPE_I64], &mut ty);
+    func_type(&[VALTYPE_I64, VALTYPE_I64], &[VALTYPE_I64], &mut ty);
     section(1, &ty, &mut out);
 
     // Import section (id 2): env.mem_load, env.mem_store, env.wfi,
@@ -643,6 +643,7 @@ pub fn compile(block: &IrBlock) -> WasmModule {
             // call host, write result back to X0.
             IrOp::Hvc => {
                 reg_get(&mut body, 0);
+                reg_get(&mut body, 1);
                 body.push(OP_CALL);
                 uleb(u64::from(FUNC_HVC), &mut body);
                 reg_set(&mut body, 0);

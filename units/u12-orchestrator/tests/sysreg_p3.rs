@@ -402,4 +402,76 @@ fn p3_psci_migrate_info_type_matches_cortex_a53_qemu() {
     );
 }
 
+#[test]
+fn p3_psci_features_cpu_suspend_hvc_matches_cortex_a53_qemu() {
+    // Exact instruction from Linux at QEMU step 36,852,812 / Rust step 36,852,806:
+    // HVC #0 (word 0xd400_0002) with X0 = 0x8400_000a (PSCI_1_0_FN_PSCI_FEATURES)
+    // and X1 = 0xc400_0001 (PSCI_0_2_FN64_CPU_SUSPEND).
+    // In Cortex-A53 virt QEMU 11.1.2 oracle (target/arm/tcg/psci.c:178-204):
+    // PSCI_FEATURES for CPU_SUSPEND returns 0 (PSCI_RET_SUCCESS).
+    let mut o = Orchestrator::new();
+    o.machine_mut().cpu[0].pc = RAM_BASE;
+    o.machine_mut().cpu[0].regs[0] = 0x8400_000a;
+    o.machine_mut().cpu[0].regs[1] = 0xc400_0001;
+
+    const WORDS: [u32; 1] = [
+        0xd400_0002, // hvc #0
+    ];
+    o.machine_mut().ram[0..4].copy_from_slice(&WORDS[0].to_le_bytes());
+
+    assert_eq!(o.step_vcpu(), StepOutcome::Continue);
+    assert_eq!(
+        o.machine().cpu[0].regs[0],
+        0,
+        "HVC #0 with X0=0x8400_000a (PSCI_FEATURES) and X1=0xc400_0001 (CPU_SUSPEND) must return 0 (SUCCESS) matching QEMU step 36,852,813"
+    );
+}
+
+#[test]
+fn p3_psci_features_unsupported_hvc_matches_cortex_a53_qemu() {
+    // Exact instruction from Linux at QEMU step 36,846,718:
+    // HVC #0 with X0 = 0x8400_000a (PSCI_FEATURES) and X1 = 0x8000_0000.
+    // In Cortex-A53 virt QEMU 11.1.2 oracle: returns -1 (PSCI_RET_NOT_SUPPORTED).
+    let mut o = Orchestrator::new();
+    o.machine_mut().cpu[0].pc = RAM_BASE;
+    o.machine_mut().cpu[0].regs[0] = 0x8400_000a;
+    o.machine_mut().cpu[0].regs[1] = 0x8000_0000;
+
+    const WORDS: [u32; 1] = [
+        0xd400_0002, // hvc #0
+    ];
+    o.machine_mut().ram[0..4].copy_from_slice(&WORDS[0].to_le_bytes());
+
+    assert_eq!(o.step_vcpu(), StepOutcome::Continue);
+    assert_eq!(
+        o.machine().cpu[0].regs[0] as i64,
+        -1,
+        "HVC #0 with X0=0x8400_000a and X1=0x8000_0000 must return -1 (NOT_SUPPORTED) matching QEMU step 36,846,719"
+    );
+}
+
+#[test]
+fn p3_psci_features_unknown_64_hvc_matches_cortex_a53_qemu() {
+    // Exact instruction from Linux at QEMU step 36,852,864:
+    // HVC #0 with X0 = 0x8400_000a (PSCI_FEATURES) and X1 = 0xc400_000e.
+    // In Cortex-A53 virt QEMU 11.1.2 oracle: returns -1 (PSCI_RET_NOT_SUPPORTED).
+    let mut o = Orchestrator::new();
+    o.machine_mut().cpu[0].pc = RAM_BASE;
+    o.machine_mut().cpu[0].regs[0] = 0x8400_000a;
+    o.machine_mut().cpu[0].regs[1] = 0xc400_000e;
+
+    const WORDS: [u32; 1] = [
+        0xd400_0002, // hvc #0
+    ];
+    o.machine_mut().ram[0..4].copy_from_slice(&WORDS[0].to_le_bytes());
+
+    assert_eq!(o.step_vcpu(), StepOutcome::Continue);
+    assert_eq!(
+        o.machine().cpu[0].regs[0] as i64,
+        -1,
+        "HVC #0 with X0=0x8400_000a and X1=0xc400_000e must return -1 (NOT_SUPPORTED) matching QEMU step 36,852,865"
+    );
+}
+
+
 

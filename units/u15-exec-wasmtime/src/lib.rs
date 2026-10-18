@@ -144,11 +144,11 @@ impl BlockExecutor for WasmtimeExecutor {
             .func_wrap(
                 "env",
                 "hvc",
-                |mut caller: wasmtime::Caller<'_, TrackingHost>, func_id: i64| {
+                |mut caller: wasmtime::Caller<'_, TrackingHost>, func_id: i64, arg1: i64| {
                     caller
                         .data_mut()
                         .ops
-                        .hvc(func_id)
+                        .hvc(func_id, arg1)
                         .map_err(wasmtime::Error::msg)
                 },
             )

@@ -160,11 +160,11 @@ impl BlockExecutor for WasmiExecutor {
             .func_wrap(
                 "env",
                 "hvc",
-                |mut caller: Caller<'_, TrackingHost>, func_id: i64| {
+                |mut caller: Caller<'_, TrackingHost>, func_id: i64, arg1: i64| {
                     caller
                         .data_mut()
                         .ops
-                        .hvc(func_id)
+                        .hvc(func_id, arg1)
                         .map_err(|e| Error::host(HostMsg(e)))
                 },
             )
@@ -273,13 +273,26 @@ mod tests {
             Ok(())
         }
 
-        fn hvc(&mut self, func_id: i64) -> Result<i64, String> {
-            // Test stub mirrors the orchestrator's PSCI dispatch (T575 aligned to QEMU virt oracle).
+        fn hvc(&mut self, func_id: i64, arg1: i64) -> Result<i64, String> {
+            // Test stub mirrors the orchestrator's PSCI dispatch (T575/T579 aligned to QEMU virt oracle).
             const PSCI_VERSION: u64 = 0x8400_0000;
             const PSCI_MIGRATE_INFO_TYPE: u64 = 0x8400_0006;
+            const PSCI_FEATURES: u64 = 0x8400_000a;
             match func_id as u64 {
                 PSCI_VERSION => Ok(0x0001_0001),
                 PSCI_MIGRATE_INFO_TYPE => Ok(2),
+                PSCI_FEATURES => match arg1 as u64 {
+                    0x8400_0000..=0x8400_0004
+                    | 0x8400_0006
+                    | 0x8400_0008
+                    | 0x8400_0009
+                    | 0x8400_000a
+                    | 0xc400_0001
+                    | 0xc400_0003
+                    | 0xc400_0004
+                    | 0x95c1_ba5d..=0x95c1_ba5f => Ok(0),
+                    _ => Ok(-1),
+                },
                 _ => Ok(-1),
             }
         }

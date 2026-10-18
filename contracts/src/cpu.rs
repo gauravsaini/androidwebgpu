@@ -595,10 +595,11 @@ pub enum IrOp {
     /// The execution backend yields the vCPU until an IRQ is pending;
     /// resumable, never an error and never a silent nop.
     Wfi,
-    /// Added 2026-10-03 (P0, T575 aligned): Hypervisor call. The execution backend
+    /// Added 2026-10-03 (P0, T575/T579 aligned): Hypervisor call. The execution backend
     /// dispatches PSCI via the DTB-declared `hvc` method: PSCI_VERSION
-    /// (0x84000000) returns 0x00010001 (v1.1) matching Cortex-A53 QEMU virt oracle;
-    /// all other function IDs return PSCI_NOT_SUPPORTED (-1) in X0. Honest stub.
+    /// (0x84000000) returns 0x00010001 (v1.1), PSCI_MIGRATE_INFO_TYPE (0x84000006) returns 2,
+    /// and PSCI_FEATURES (0x8400000a) queries X1 matching Cortex-A53 QEMU virt oracle;
+    /// all unsupported function IDs return PSCI_NOT_SUPPORTED (-1) in X0. Honest stub.
     Hvc,
     /// Explicit trap for unimplemented/privileged semantics. Never a silent nop.
     Trap {

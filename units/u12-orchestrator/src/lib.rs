@@ -4187,23 +4187,42 @@ impl HostOps for WasmHost<'_> {
         Ok(())
     }
 
-    /// PSCI hypervisor call dispatcher (P0, 2026-10-03, T575 aligned to Cortex-A53 QEMU virt oracle).
+    /// PSCI hypervisor call dispatcher (P0, 2026-10-03, T575/T579 aligned to Cortex-A53 QEMU virt oracle).
     /// The DTB declares `method="hvc"`, so the kernel uses HVC for PSCI.
     /// - PSCI_VERSION (0x84000000): return 0x00010001 (PSCI v1.1 matching QEMU 11.1.2 virt oracle)
     /// - PSCI_MIGRATE_INFO_TYPE (0x84000006): return 2 (PSCI_0_2_RET_TOS_MIGRATION_NOT_REQUIRED)
+    /// - PSCI_FEATURES (0x8400000a): queries feature in X1 (arg1), matching QEMU target/arm/tcg/psci.c:178-204
     /// - All other function IDs: return PSCI_NOT_SUPPORTED (-1) in X0.
     /// Honest stub: unknown calls fail loudly via the return value,
     /// never silently succeed.
-    fn hvc(&mut self, func_id: i64) -> Result<i64, String> {
+    fn hvc(&mut self, func_id: i64, arg1: i64) -> Result<i64, String> {
         const PSCI_VERSION: u64 = 0x8400_0000;
         const PSCI_VERSION_1_1: i64 = 0x0001_0001;
         const PSCI_MIGRATE_INFO_TYPE: u64 = 0x8400_0006;
         const PSCI_TOS_NOT_REQUIRED: i64 = 2;
+        const PSCI_FEATURES: u64 = 0x8400_000a;
+        const PSCI_RET_SUCCESS: i64 = 0;
         const PSCI_NOT_SUPPORTED: i64 = -1;
         let fid = func_id as u64;
+        let feat = arg1 as u64;
         match fid {
             PSCI_VERSION => Ok(PSCI_VERSION_1_1),
             PSCI_MIGRATE_INFO_TYPE => Ok(PSCI_TOS_NOT_REQUIRED),
+            PSCI_FEATURES => {
+                // Matches QEMU 11.1.2 Cortex-A53 virt oracle (target/arm/tcg/psci.c:178-204)
+                match feat {
+                    0x8400_0000..=0x8400_0004
+                    | 0x8400_0006
+                    | 0x8400_0008
+                    | 0x8400_0009
+                    | 0x8400_000a
+                    | 0xc400_0001
+                    | 0xc400_0003
+                    | 0xc400_0004
+                    | 0x95c1_ba5d..=0x95c1_ba5f => Ok(PSCI_RET_SUCCESS),
+                    _ => Ok(PSCI_NOT_SUPPORTED),
+                }
+            }
             _ => Ok(PSCI_NOT_SUPPORTED),
         }
     }
