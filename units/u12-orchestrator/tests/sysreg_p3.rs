@@ -258,6 +258,17 @@ fn p3_dfr0_el1_matches_cortex_a53_qemu() {
 }
 
 #[test]
+fn p3_dczid_el0_matches_cortex_a53_qemu() {
+    // The dense Cortex-A53 QEMU trace returns DCZID_EL0=0x04 for this MRS.
+    let mut o = Orchestrator::new();
+    o.machine_mut().cpu[0].pc = RAM_BASE;
+    o.machine_mut().ram[..4].copy_from_slice(&0xd53b_00e3u32.to_le_bytes());
+
+    assert_eq!(o.step_vcpu(), StepOutcome::Continue);
+    assert_eq!(o.machine().cpu[0].regs[3], 0x04);
+}
+
+#[test]
 fn p3_pmu_remainder_e2e() {
     run_sequences(include_str!("fixtures/sysreg_p3_pmu.json"));
 }

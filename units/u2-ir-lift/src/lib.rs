@@ -521,18 +521,10 @@ fn lift_system(word: u32) -> Vec<IrOp> {
                         // -> CBZ), so 0 takes the honest conservative
                         // fallback path.
                         (3, 0, 0, 7, 1) => 0,
-                        // DCZID_EL0 (GB-26): measured halt at step 1210749
-                        // (pc 0xffffff8008209d80, word 0xd53b00e3 = MRS X3,
-                        // S3_3_C0_C0_7 -- (op0,op1,crn,crm,op2) = (3,3,0,0,7)
-                        // extracted by hand from the word and confirmed by
-                        // capstone disassembly; not trusted from the first
-                        // reading). Value 0x10: DZP=1 (DC ZVA prohibited).
-                        // Our DC ops are honest NOPs, so advertising "allowed"
-                        // would corrupt memory the kernel expects zeroed;
-                        // DZP=1 takes the kernel's store-based fallback path,
-                        // which we implement. Same conservative shape as the
-                        // GB-14/GB-16 ID-register probes.
-                        (3, 3, 0, 0, 7) => 0x10,
+                        // DCZID_EL0 (T564): Cortex-A53 value from the dense
+                        // QEMU trace at step 7584 (Rust step 7578). BS=4 and
+                        // DZP=0 select Linux's DC ZVA zeroing path.
+                        (3, 3, 0, 0, 7) => 0x04,
                         // MPIDR_EL1 (GB-26): measured halt at step 1248961
                         // (pc 0xffffff80095d2620, word 0xd53800a9 = MRS X9,
                         // S3_0_C0_C0_5 -- (op0,op1,crn,crm,op2) = (3,0,0,0,5)
@@ -4162,14 +4154,13 @@ mod tests {
     }
 
     #[test]
-    fn gb26_mrs_dczid_el0_lifts_to_mov_prohibited() {
+    fn gb26_mrs_dczid_el0_lifts_to_cortex_a53_qemu_value() {
         // DCZID_EL0 = MRS X3, S3_3_C0_C0_7 (word 0xD53B00E3, measured
-        // kernel halt at step 1210749, pc 0xffffff8008209d80).
-        // DZP (bit 4) is set: our DC ZVA is an honest NOP, so the
-        // kernel must take its store-based zeroing fallback.
+        // at Rust step 7578, pc 0xffffff8008089d80).
+        // Cortex-A53 QEMU returns BS=4 with DZP=0.
         assert_eq!(
             lift(&insn(0x4000, 0xD53B_00E3, InsnKind::System)),
-            vec![IrOp::Mov { dst: 3, imm: 0x10 }]
+            vec![IrOp::Mov { dst: 3, imm: 0x04 }]
         );
     }
 
