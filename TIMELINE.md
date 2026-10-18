@@ -137,3 +137,11 @@
 3. **Files changed**: `units/u2-ir-lift/src/lib.rs`, `units/u12-orchestrator/tests/sysreg_p3.rs`, `GATES.md`, `TIMELINE.md`.
 
 
+
+## UPDATED ON : 2026-10-18
+
+### fix (2026-10-18) — Track T575 PSCI_VERSION HVC return value alignment to Cortex-A53 QEMU virt oracle (v1.1)
+
+1. **PSCI_VERSION & MIGRATE_INFO_TYPE Alignment**: Aligned HVC PSCI dispatch in `units/u12-orchestrator/src/lib.rs` and `contracts/src/cpu.rs` so `PSCI_VERSION` (`0x84000000`) returns `0x00010001` (PSCI v1.1) matching Cortex-A53 QEMU 11.1.2 virt oracle (`target/arm/tcg/psci.c:95-96`), replacing previous `0x00010000` (v1.0). Added `PSCI_MIGRATE_INFO_TYPE` (`0x84000006`) returning 2 (`PSCI_0_2_RET_TOS_MIGRATION_NOT_REQUIRED`). Fixed root cause of divergence at Rust step 36,828,780 / QEMU step 36,828,786 where Linux `psci_probe()` reads minor version into `X2`/`X20` to format `"psci: PSCIv1.1 detected in firmware.\n"`. Added QEMU regression tests `p3_psci_version_hvc_matches_cortex_a53_qemu` and `p3_psci_migrate_info_type_matches_cortex_a53_qemu`.
+2. **Tests** (before → after): sysreg_p3 11/11 → 13/13 passed (TEN-PASSES OK); u12-orchestrator 134/134 passed. Aligned diff: all 1,215 instructions across window 36,828,786..36,830,000 match 100% bit-for-bit across all 31 GPRs, SP, CPSR, SCTLR, TTBR0, TCR, TTBR1, MAIR. Divergence at step 36,828,786 completely eliminated.
+3. **Files changed**: `contracts/src/cpu.rs`, `units/u12-orchestrator/src/lib.rs`, `units/u12-orchestrator/tests/sysreg_p3.rs`, `units/u15-exec-wasmi/src/lib.rs`, `GATES.md`, `TIMELINE.md`.

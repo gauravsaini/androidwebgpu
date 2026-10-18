@@ -4187,21 +4187,24 @@ impl HostOps for WasmHost<'_> {
         Ok(())
     }
 
-    /// PSCI hypervisor call dispatcher (P0, 2026-10-03).
+    /// PSCI hypervisor call dispatcher (P0, 2026-10-03, T575 aligned to Cortex-A53 QEMU virt oracle).
     /// The DTB declares `method="hvc"`, so the kernel uses HVC for PSCI.
-    /// - PSCI_VERSION (0x84000000): return 0x00010000 (PSCI v1.0)
+    /// - PSCI_VERSION (0x84000000): return 0x00010001 (PSCI v1.1 matching QEMU 11.1.2 virt oracle)
+    /// - PSCI_MIGRATE_INFO_TYPE (0x84000006): return 2 (PSCI_0_2_RET_TOS_MIGRATION_NOT_REQUIRED)
     /// - All other function IDs: return PSCI_NOT_SUPPORTED (-1) in X0.
     /// Honest stub: unknown calls fail loudly via the return value,
     /// never silently succeed.
     fn hvc(&mut self, func_id: i64) -> Result<i64, String> {
         const PSCI_VERSION: u64 = 0x8400_0000;
-        const PSCI_VERSION_1_0: i64 = 0x0001_0000;
+        const PSCI_VERSION_1_1: i64 = 0x0001_0001;
+        const PSCI_MIGRATE_INFO_TYPE: u64 = 0x8400_0006;
+        const PSCI_TOS_NOT_REQUIRED: i64 = 2;
         const PSCI_NOT_SUPPORTED: i64 = -1;
         let fid = func_id as u64;
-        if fid == PSCI_VERSION {
-            Ok(PSCI_VERSION_1_0)
-        } else {
-            Ok(PSCI_NOT_SUPPORTED)
+        match fid {
+            PSCI_VERSION => Ok(PSCI_VERSION_1_1),
+            PSCI_MIGRATE_INFO_TYPE => Ok(PSCI_TOS_NOT_REQUIRED),
+            _ => Ok(PSCI_NOT_SUPPORTED),
         }
     }
 }

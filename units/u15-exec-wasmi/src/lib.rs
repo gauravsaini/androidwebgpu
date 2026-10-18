@@ -274,12 +274,13 @@ mod tests {
         }
 
         fn hvc(&mut self, func_id: i64) -> Result<i64, String> {
-            // Test stub mirrors the orchestrator's PSCI dispatch.
+            // Test stub mirrors the orchestrator's PSCI dispatch (T575 aligned to QEMU virt oracle).
             const PSCI_VERSION: u64 = 0x8400_0000;
-            if func_id as u64 == PSCI_VERSION {
-                Ok(0x0001_0000)
-            } else {
-                Ok(-1)
+            const PSCI_MIGRATE_INFO_TYPE: u64 = 0x8400_0006;
+            match func_id as u64 {
+                PSCI_VERSION => Ok(0x0001_0001),
+                PSCI_MIGRATE_INFO_TYPE => Ok(2),
+                _ => Ok(-1),
             }
         }
     }

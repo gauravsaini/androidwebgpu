@@ -358,4 +358,48 @@ fn p3_mpidr_midr_el1_matches_cortex_a53_qemu() {
     );
 }
 
+#[test]
+fn p3_psci_version_hvc_matches_cortex_a53_qemu() {
+    // Exact instruction from Linux psci probe at QEMU step 36,828,786:
+    // HVC #0 (word 0xd400_0002) with X0 = 0x8400_0000 (PSCI_0_2_FN_PSCI_VERSION).
+    // In Cortex-A53 virt QEMU 11.1.2 oracle (target/arm/tcg/psci.c:95-96):
+    // PSCI_VERSION returns 0x0001_0001 (PSCI v1.1).
+    let mut o = Orchestrator::new();
+    o.machine_mut().cpu[0].pc = RAM_BASE;
+    o.machine_mut().cpu[0].regs[0] = 0x8400_0000;
+
+    const WORDS: [u32; 1] = [
+        0xd400_0002, // hvc #0
+    ];
+    o.machine_mut().ram[0..4].copy_from_slice(&WORDS[0].to_le_bytes());
+
+    assert_eq!(o.step_vcpu(), StepOutcome::Continue);
+    assert_eq!(
+        o.machine().cpu[0].regs[0],
+        0x0001_0001,
+        "HVC #0 with X0=0x8400_0000 (PSCI_VERSION) must return 0x0001_0001 (v1.1) matching QEMU step 36,828,787"
+    );
+}
+
+#[test]
+fn p3_psci_migrate_info_type_matches_cortex_a53_qemu() {
+    // In Cortex-A53 virt QEMU 11.1.2 oracle (target/arm/tcg/psci.c:98-99):
+    // MIGRATE_INFO_TYPE (0x8400_0006) returns 2 (PSCI_0_2_RET_TOS_MIGRATION_NOT_REQUIRED).
+    let mut o = Orchestrator::new();
+    o.machine_mut().cpu[0].pc = RAM_BASE;
+    o.machine_mut().cpu[0].regs[0] = 0x8400_0006;
+
+    const WORDS: [u32; 1] = [
+        0xd400_0002, // hvc #0
+    ];
+    o.machine_mut().ram[0..4].copy_from_slice(&WORDS[0].to_le_bytes());
+
+    assert_eq!(o.step_vcpu(), StepOutcome::Continue);
+    assert_eq!(
+        o.machine().cpu[0].regs[0],
+        2,
+        "HVC #0 with X0=0x8400_0006 (MIGRATE_INFO_TYPE) must return 2 (TOS_MIGRATION_NOT_REQUIRED) matching QEMU"
+    );
+}
+
 
