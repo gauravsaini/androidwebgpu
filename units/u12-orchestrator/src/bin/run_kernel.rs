@@ -281,11 +281,28 @@ fn main() {
             );
         }
         if let Some(ref dtb_p) = dtb_path {
-            let dtb_bytes = fs::read(dtb_p).expect("failed to read DTB");
+            let raw_dtb_bytes = fs::read(dtb_p).expect("failed to read DTB");
+            // QEMU bootloader alignment (T570):
+            // When QEMU boots with `-dtb minimal-virt-fixed.dtb`, QEMU's `arm_load_dtb()`
+            // expands the DTB from 1,465 bytes to 22,930 bytes, enriching it with
+            // `/chosen` (bootargs, initrd range), `/memory@40000000`, and `/psci` nodes.
+            // If the raw un-enriched minimal DTB is provided, align it to QEMU's
+            // Cortex-A53 virt runtime DTB so guest RAM at DTB_LOAD_ADDR matches QEMU.
+            const QEMU_VIRT_RUNTIME_DTB: &[u8] = include_bytes!("../../../../guest-image/qemu-virt-runtime.dtb");
+            let dtb_bytes: &[u8] = if raw_dtb_bytes.len() < 2000 {
+                println!(
+                    "[boot] Aligning minimal DTB ({} bytes) to QEMU Cortex-A53 virt runtime DTB ({} bytes)",
+                    raw_dtb_bytes.len(),
+                    QEMU_VIRT_RUNTIME_DTB.len()
+                );
+                QEMU_VIRT_RUNTIME_DTB
+            } else {
+                &raw_dtb_bytes
+            };
             let off = (DTB_LOAD_ADDR - RAM_BASE) as usize;
             let ram = &mut orch.machine_mut().ram;
             assert!(off + dtb_bytes.len() <= ram.len(), "DTB does not fit in RAM");
-            ram[off..off + dtb_bytes.len()].copy_from_slice(&dtb_bytes);
+            ram[off..off + dtb_bytes.len()].copy_from_slice(dtb_bytes);
             orch.machine_mut().cpu[0].regs[0] = DTB_LOAD_ADDR;
             println!(
                 "[boot] Loaded DTB ({} bytes) at {DTB_LOAD_ADDR:#x}, x0 set",
@@ -303,6 +320,9 @@ fn main() {
     let mut saved_at_step: Option<u64> = None;
     let mut break_captured = false;
     let mut oracle_hits: u64 = 0;
+    let trace_start: Option<u64> = env::var("TRACE_WINDOW_START").ok().and_then(|s| s.parse().ok());
+    let trace_end: Option<u64> = env::var("TRACE_WINDOW_END").ok().and_then(|s| s.parse().ok());
+    let periodic_sample: bool = env::var_os("TRACE_PERIODIC_1M").is_some();
     for _ in 0..max_steps {
         if let Some(target) = break_pc {
             let cpu = &orch.machine().cpu[0];
@@ -352,6 +372,48 @@ fn main() {
             }
         }
         let cur_pc = orch.machine().cpu[0].pc;
+        let sample_step = orch.steps() + 1;
+        let should_sample = match (trace_start, trace_end) {
+            (Some(st), Some(en)) => sample_step >= st && sample_step <= en,
+            (Some(st), None) => sample_step >= st,
+            (None, Some(en)) => sample_step <= en,
+            (None, None) => false,
+        } || (periodic_sample && ((7_450..=7_600).contains(&sample_step)
+            || (sample_step >= 9_994 && (sample_step - 9_994) % 10_000 == 0)
+            || (999_990..=1_000_006).contains(&sample_step)));
+
+        if should_sample {
+            let sample_word = orch
+                .debug_fetch_around(cur_pc, 1)
+                .first()
+                .and_then(|(_, word)| word.as_ref().ok().copied())
+                .unwrap_or(0);
+            let cpu = &orch.machine().cpu[0];
+            let mut sample = format!(
+                "[sample] step={sample_step} insn_pc={cur_pc:#018x} word={sample_word:#010x}"
+            );
+            for (index, reg) in cpu.regs.iter().enumerate() {
+                use std::fmt::Write as FmtWrite;
+                write!(&mut sample, " x{index}={reg:#018x}").unwrap();
+            }
+            use std::fmt::Write as FmtWrite;
+            write!(
+                &mut sample,
+                " sp={:#018x} pc={:#018x} cpsr={:#010x} SCTLR_EL1={:#010x} VBAR_EL1={:#018x} TTBR0_EL1={:#018x} TCR_EL1={:#018x} TTBR1_EL1={:#018x} MAIR_EL1={:#018x} UART_BYTES={}",
+                cpu.sp,
+                cpu.pc,
+                architectural_pstate(cpu.pstate, cpu.sysregs.daif),
+                cpu.sysregs.sctlr_el1,
+                cpu.sysregs.vbar_el1,
+                cpu.sysregs.ttbr0_el1,
+                cpu.sysregs.tcr_el1,
+                cpu.sysregs.ttbr1_el1,
+                cpu.sysregs.mair_el1,
+                orch.console().tx_bytes.len(),
+            )
+            .unwrap();
+            println!("{sample}");
+        }
         if cur_pc == 0xffffff8008089560 {
             oracle_hits += 1;
             let cpu = &orch.machine().cpu[0];

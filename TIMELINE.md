@@ -119,3 +119,12 @@
 1. **DFR0 Alignment**: Aligned `ID_AA64DFR0_EL1` MRS read to `0x10305106` matching Cortex-A53 QEMU 11.1.2; added QEMU-matched regression test `p3_dfr0_el1_matches_cortex_a53_qemu` covering MRS -> SBFX -> CMP -> B.LT fallthrough sequence; updated `u2-ir-lift` unit tests.
 2. **Tests** (before → after): sysreg_p3 7/7 → 8/8 passed; u2-ir-lift 128/128 → 129/129 passed. First-million trace: DFR0 divergence at Rust step 7,464 / QEMU step 7,470 completely eliminated. Next divergence is at Rust step 7,578 / QEMU step 7,584 (`MRS X3, DCZID_EL0`: Rust returns 0x10 [DZP=1], QEMU returns 0x4 [DZP=0]), causing control flow fork at Rust step 7,580 / QEMU step 7,586 (`TBNZ W3, #4`).
 3. **Files changed**: `units/u2-ir-lift/src/lib.rs`, `units/u12-orchestrator/tests/sysreg_p3.rs`.
+
+## UPDATED ON : 2026-10-18
+
+### fix (2026-10-18) — Track T570 DTB totalsize & runtime nodes alignment to Cortex-A53 QEMU oracle
+
+1. **DTB Runtime Alignment & First Divergence Fix**: Aligned guest RAM DTB payload at `0x48200000` to Cortex-A53 QEMU 11.1.2 virt runtime DTB (22,930 bytes, SHA-256 `c94b1fd1ea4915ac0f3bd4fc69f5259bc695f8aad6ca49124760ab6512021a91`); eliminated DTB header `totalsize` mismatch (`0x5992` in QEMU vs `0x5b9` in raw DTB) accessed via `LDR W8, [X23, #4]` + `REV W8, W8` in Linux `setup_machine_fdt()` at Rust step 33,320 / QEMU step 33,326; added QEMU-matched regression test `p3_fdt_totalsize_load_rev_matches_cortex_a53_qemu`.
+2. **Tests** (before → after): sysreg_p3 9/9 → 10/10 passed. First-million aligned diff: 10,015-step window (Rust steps 29,994..40,009 / QEMU steps 30,000..40,015) matches 100% bit-for-bit across all GPRs, SP, CPSR, SCTLR, TTBR0, TCR, TTBR1, MAIR. Step 40,000 divergence eliminated; next periodic divergence sampled at Rust step 49,994 / QEMU step 50,000.
+3. **Files changed**: `guest-image/qemu-virt-runtime.dtb`, `units/u12-orchestrator/src/bin/run_kernel.rs`, `units/u12-orchestrator/tests/sysreg_p3.rs`, `GATES.md`, `GATES-T570.md`.
+

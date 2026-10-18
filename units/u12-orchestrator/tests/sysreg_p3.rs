@@ -282,3 +282,44 @@ fn p3_timers_e2e() {
 fn p3_fpcr_fpsr_e2e() {
     run_sequences(include_str!("fixtures/sysreg_p3_fp.json"));
 }
+
+#[test]
+fn p3_fdt_totalsize_load_rev_matches_cortex_a53_qemu() {
+    // Exact instruction sequence from Linux setup_machine_fdt() at step 33,326:
+    // LDR W8, [X23, #4] (word 0xb940_06e8)
+    // REV W8, W8        (word 0x5ac0_0908)
+    // In Cortex-A53 virt QEMU oracle, the DTB totalsize field at offset 4 is
+    // 0x00005992 (22,930 bytes in big-endian, matching QEMU arm_load_dtb).
+    // The load produces 0x92590000 and REV converts it to 0x5992.
+    let mut o = Orchestrator::new();
+    o.machine_mut().cpu[0].pc = RAM_BASE;
+    let dtb_addr = RAM_BASE + 0x1000;
+    o.machine_mut().cpu[0].regs[23] = dtb_addr;
+    let dtb_off = (dtb_addr - RAM_BASE) as usize;
+    o.machine_mut().ram[dtb_off..dtb_off + 4].copy_from_slice(&0xd00d_feedu32.to_be_bytes());
+    o.machine_mut().ram[dtb_off + 4..dtb_off + 8].copy_from_slice(&0x0000_5992u32.to_be_bytes());
+
+    const WORDS: [u32; 2] = [
+        0xb940_06e8, // ldr w8, [x23, #4]
+        0x5ac0_0908, // rev w8, w8
+    ];
+    for (i, word) in WORDS.iter().enumerate() {
+        let offset = i * 4;
+        o.machine_mut().ram[offset..offset + 4].copy_from_slice(&word.to_le_bytes());
+    }
+
+    assert_eq!(o.step_vcpu(), StepOutcome::Continue);
+    assert_eq!(
+        o.machine().cpu[0].regs[8],
+        0x9259_0000,
+        "LDR W8, [X23, #4] must load big-endian 0x00005992 as 0x92590000"
+    );
+
+    assert_eq!(o.step_vcpu(), StepOutcome::Continue);
+    assert_eq!(
+        o.machine().cpu[0].regs[8],
+        0x5992,
+        "REV W8, W8 must yield totalsize 0x5992 matching QEMU step 33,327"
+    );
+}
+
