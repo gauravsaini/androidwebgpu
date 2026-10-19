@@ -1,5 +1,5 @@
 {
-  "ts": "2026-10-19T11:01:24.225592+00:00",
-  "stage": "GATE_RUN_COMPLETE",
-  "note": "150M gate run executed to completion (150,000,000 steps). PC=0xffffff800822e650, 0 panics, UART 3055 bytes. TEN-PASSES verified 10/10."
+  "ts": "2026-10-20T03:52:10+11:00",
+  "stage": "full-150m-boot-gate-v2",
+  "note": "150M boot gate running: passed step 47.75M with 0 traps. IRQ exceptions cleanly vectoring to VBAR_EL1+0x280 (el1_irq), GICC MMIO active, cpu_switch_to active."
 }

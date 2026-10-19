@@ -194,8 +194,17 @@ fn lift_system(word: u32) -> Vec<IrOp> {
         };
     }
     // ERET: 1101 0110 100 11111 0000 00 11111 00000 (0xD69F03E0)
+    // Track T586 / A551 (2026-10-16): Exception return lowers to reading ELR_EL1 into SCRATCH,
+    // then dynamic branch to SCRATCH. Full state transition (including PSTATE restoration
+    // from SPSR_EL1) is executed on the fast path in u12-orchestrator.
     if word == 0xD69F_03E0 {
-        return trap(R_ERET);
+        return vec![
+            IrOp::ReadSys {
+                dst: SCRATCH,
+                reg: SysReg::ElrEl1,
+            },
+            IrOp::BranchDyn { reg: SCRATCH },
+        ];
     }
     // WFI is HINT #3 with CRm:op2 = 00100:01111: exact word match, no aliases.
     if word == 0xD503_207F {
@@ -500,6 +509,11 @@ fn lift_system(word: u32) -> Vec<IrOp> {
             (2, 0, 0, 13, 7) => SysReg::Dbgwcr13,
             (2, 0, 0, 14, 7) => SysReg::Dbgwcr14,
             (2, 0, 0, 15, 7) => SysReg::Dbgwcr15,
+            // Track T586 / A551 (2026-10-16): EL1 exception registers.
+            (3, 0, 4, 0, 0) => SysReg::SpsrEl1,
+            (3, 0, 4, 0, 1) => SysReg::ElrEl1,
+            (3, 0, 5, 2, 0) => SysReg::EsrEl1,
+            (3, 0, 6, 0, 0) => SysReg::FarEl1,
             _ => {
                 return {
                     let val: u64 = match (op0, op1, crn, crm, op2) {
@@ -651,11 +665,6 @@ fn lift_system(word: u32) -> Vec<IrOp> {
                         (3, 3, 13, 0, 3) => 0,
                         // TPIDR_EL0: Thread ID register EL0 (21 static hits)
                         (3, 3, 13, 0, 2) => 0,
-                        // Exception status / syndrome registers
-                        (3, 0, 5, 2, 0) => 0, // ESR_EL1
-                        (3, 0, 6, 0, 0) => 0, // FAR_EL1
-                        (3, 0, 4, 0, 1) => 0, // ELR_EL1
-                        (3, 0, 4, 0, 0) => 0, // SPSR_EL1
                         // Performance monitors
                         // PMCR_EL0 (P3: PMUSERENR_EL0 graduated to persistent
                         // above, so it no longer belongs in this list).
@@ -861,6 +870,11 @@ fn lift_system(word: u32) -> Vec<IrOp> {
             (2, 0, 0, 13, 7) => SysReg::Dbgwcr13,
             (2, 0, 0, 14, 7) => SysReg::Dbgwcr14,
             (2, 0, 0, 15, 7) => SysReg::Dbgwcr15,
+            // Track T586 / A551 (2026-10-16): EL1 exception registers.
+            (3, 0, 4, 0, 0) => SysReg::SpsrEl1,
+            (3, 0, 4, 0, 1) => SysReg::ElrEl1,
+            (3, 0, 5, 2, 0) => SysReg::EsrEl1,
+            (3, 0, 6, 0, 0) => SysReg::FarEl1,
             // MSR DAIFSet, #imm (op2=6) / MSR DAIFClr, #imm (op2=7): real
             // read-modify-write of the persistent DAIF (GB-11). Upgrades
             // the GB-3 accepted no-ops to honest state.
@@ -894,11 +908,6 @@ fn lift_system(word: u32) -> Vec<IrOp> {
                         (3, 3, 13, 0, 2) => vec![],
                         // CSSELR_EL1: Cache Size Selection
                         (3, 2, 0, 0, 0) => vec![],
-                        // Exception registers (ESR_EL1, FAR_EL1, ELR_EL1, SPSR_EL1)
-                        (3, 0, 5, 2, 0) => vec![],
-                        (3, 0, 6, 0, 0) => vec![],
-                        (3, 0, 4, 0, 1) => vec![],
-                        (3, 0, 4, 0, 0) => vec![],
                         // Performance monitors (PMCR_EL0, PMINTENSET_EL1, PMINTENCLR_EL1)
                         (3, 3, 9, 12, 0) => vec![],
                         (3, 0, 9, 14, 1) => vec![],
@@ -5106,7 +5115,13 @@ mod tests {
         );
         assert_eq!(
             lift(&insn(0x4000, 0xD69F_03E0, InsnKind::System)),
-            vec![IrOp::Trap { reason: R_ERET }]
+            vec![
+                IrOp::ReadSys {
+                    dst: SCRATCH,
+                    reg: SysReg::ElrEl1,
+                },
+                IrOp::BranchDyn { reg: SCRATCH },
+            ]
         );
     }
 
@@ -5174,19 +5189,19 @@ mod tests {
         );
         assert_eq!(
             lift(&insn(0x4000, 0xD538_5200, InsnKind::System)),
-            vec![IrOp::Mov { dst: 0, imm: 0 }] // MRS X0, ESR_EL1
+            vec![IrOp::ReadSys { dst: 0, reg: SysReg::EsrEl1 }] // MRS X0, ESR_EL1
         );
         assert_eq!(
             lift(&insn(0x4000, 0xD538_6000, InsnKind::System)),
-            vec![IrOp::Mov { dst: 0, imm: 0 }] // MRS X0, FAR_EL1
+            vec![IrOp::ReadSys { dst: 0, reg: SysReg::FarEl1 }] // MRS X0, FAR_EL1
         );
         assert_eq!(
             lift(&insn(0x4000, 0xD538_4020, InsnKind::System)),
-            vec![IrOp::Mov { dst: 0, imm: 0 }] // MRS X0, ELR_EL1
+            vec![IrOp::ReadSys { dst: 0, reg: SysReg::ElrEl1 }] // MRS X0, ELR_EL1
         );
         assert_eq!(
             lift(&insn(0x4000, 0xD538_4000, InsnKind::System)),
-            vec![IrOp::Mov { dst: 0, imm: 0 }] // MRS X0, SPSR_EL1
+            vec![IrOp::ReadSys { dst: 0, reg: SysReg::SpsrEl1 }] // MRS X0, SPSR_EL1
         );
     }
 

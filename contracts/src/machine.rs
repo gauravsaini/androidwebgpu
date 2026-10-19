@@ -125,7 +125,11 @@ pub struct SysRegs {
     pub lorc_el1: u64,
     pub pmccntr_el0: u64,
     pub zcr_el1: u64,
-
+    // Track T586 / A551: EL1 exception registers.
+    pub spsr_el1: u64,
+    pub elr_el1: u64,
+    pub esr_el1: u64,
+    pub far_el1: u64,
 }
 
 impl Default for SysRegs {
@@ -227,7 +231,11 @@ impl Default for SysRegs {
             lorc_el1: 0,
             pmccntr_el0: 0,
             zcr_el1: 0,
-
+            // Track T586 / A551: EL1 exception registers.
+            spsr_el1: 0,
+            elr_el1: 0,
+            esr_el1: 0,
+            far_el1: 0,
         }
     }
 }
@@ -395,7 +403,11 @@ impl SysRegs {
             SysReg::LorcEl1 => self.lorc_el1,
             SysReg::PmccntrEl0 => self.pmccntr_el0,
             SysReg::ZcrEl1 => self.zcr_el1,
-
+            // Track T586 / A551: EL1 exception registers.
+            SysReg::SpsrEl1 => self.spsr_el1,
+            SysReg::ElrEl1 => self.elr_el1,
+            SysReg::EsrEl1 => self.esr_el1,
+            SysReg::FarEl1 => self.far_el1,
         }
     }
 
@@ -554,7 +566,11 @@ impl SysRegs {
             SysReg::LorcEl1 => self.lorc_el1 = val,
             SysReg::PmccntrEl0 => self.pmccntr_el0 = val,
             SysReg::ZcrEl1 => self.zcr_el1 = val,
-
+            // Track T586 / A551: EL1 exception registers.
+            SysReg::SpsrEl1 => self.spsr_el1 = val,
+            SysReg::ElrEl1 => self.elr_el1 = val,
+            SysReg::EsrEl1 => self.esr_el1 = val,
+            SysReg::FarEl1 => self.far_el1 = val,
         }
     }
 
@@ -702,6 +718,11 @@ impl SysRegs {
             133 => Some(SysReg::LorcEl1),
             134 => Some(SysReg::PmccntrEl0),
             135 => Some(SysReg::ZcrEl1),
+            // Track T586 / A551: EL1 exception registers.
+            136 => Some(SysReg::SpsrEl1),
+            137 => Some(SysReg::ElrEl1),
+            138 => Some(SysReg::EsrEl1),
+            139 => Some(SysReg::FarEl1),
 
             _ => None,
         }
@@ -747,9 +768,8 @@ pub const MAX_GUEST_RAM_BYTES: usize = 2 * 1024 * 1024 * 1024;
 pub struct Snapshot(pub Vec<u8>);
 
 /// Current snapshot format version. Bump on any format change.
-pub const SNAPSHOT_VERSION: u32 = 13;
-/// P4 (2026-10-03): v13 adds the 91 P4 system registers (64 debug,
-/// 13 EL2, 10 GIC CPU-interface, 4 misc) to the per-CPU sysreg area.
+pub const SNAPSHOT_VERSION: u32 = 14;
+/// Track T586 / A551 (2026-10-16): v14 adds EL1 exception registers (spsr_el1, elr_el1, esr_el1, far_el1).
 
 /// Snapshot restore failure. Data, not panic — corrupt input never crashes the host.
 #[derive(Debug, Clone, PartialEq, Eq)]

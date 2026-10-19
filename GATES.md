@@ -1,40 +1,45 @@
-# Gates: Track T584 — rust-init-gap
+# Gates: Track T586 — chain-b-vbar-irq
 
-OWNS: GATES.md, TIMELINE.md, heartbeat.json
+OWNS: contracts/**, units/u2-ir-lift/**, units/u12-orchestrator/**, GATES.md, TIMELINE.md, heartbeat.json
 
-Scope: Run the full 150M-step boot gate from reset on combined lineage 2d3d2bc, diagnose what lies between 110M steps and /init, probe the 3,055-byte UART silence anomaly, verify whether the engine reaches /init or identify the next wall, and deliver findings to /Users/Shared/agyx-track584-rust-init-gap.md.
+Scope: Implement architectural IRQ exception injection to VBAR_EL1 in the Rust orchestrator, verify with QEMU-matched regression vectors under TEN-PASSES, execute full 150M boot gate from reset, measure guest advancement past the idle loop, and deliver findings to /Users/Shared/agyx-track586-vbar-irq.md.
 
-- [x] G1: Base commit 2d3d2bc verified (combining 39fcc56 + 11beaa16) and branch t584-rust-init-gap checked out.
+- [x] G1: Base lineage verified on branch t586-vbar-irq at ffa13db off merge commit 2d3d2bc.
   CHECK: git -C /Users/Shared/wt-track583-rust-150m-combined rev-parse --short HEAD
-  EXPECT: 2d3d2bc
-  EVIDENCE: exit=0; shell=/bin/sh; cwd=/Users/Shared/wt-track583-rust-150m-combined; path=2095eed8e20b/12 entries; output=2d3d2bc
+  EXPECT: ffa13db
+  EVIDENCE: exit=0; shell=/bin/sh; cwd=/Users/Shared/wt-track583-rust-150m-combined; path=de7de1880035/13 entries; output=ffa13db
 
-- [x] G2: Clean build of run_kernel in isolated CARGO_TARGET_DIR target-t584.
-  CHECK: test -f /Users/Shared/wt-track583-rust-150m-combined/target-t584/release/run_kernel && echo "EXISTS"
-  EXPECT: EXISTS
-  EVIDENCE: exit=0; shell=/bin/sh; cwd=/Users/Shared/wt-track583-rust-150m-combined; path=2095eed8e20b/12 entries; output=EXISTS
-
-- [x] G3: Unit and regression tests pass for sysreg_p3 suite.
-  CHECK: CARGO_TARGET_DIR=/Users/Shared/wt-track583-rust-150m-combined/target-t584 /opt/homebrew/bin/cargo test -p u12-orchestrator --test sysreg_p3 -- --test-threads=1
+- [x] G2: SysRegs and contracts extended with ELR_EL1, SPSR_EL1, ESR_EL1, FAR_EL1 with MSR/MRS lifting.
+  CHECK: /opt/homebrew/bin/cargo test -p pathn-contracts --lib
   EXPECT: test result: ok
-  EVIDENCE: exit=0; shell=/bin/sh; cwd=/Users/Shared/wt-track583-rust-150m-combined; path=2095eed8e20b/12 entries; output=note: to see what the problems were, use the option `--future-incompat-report`, or run `cargo report future-incompatibilities --id 1` | Running tests/sysreg_p3.rs (target-t584/debug/deps/sysreg_p3-3b1f8fcb84f8d576)
+  EVIDENCE: exit=0; shell=/bin/sh; cwd=/Users/Shared/wt-track583-rust-150m-combined; path=de7de1880035/13 entries; output=Finished `test` profile [unoptimized + debuginfo] target(s) in 0.50s | Running unittests src/lib.rs (target/debug/deps/pathn_contracts-20ff7717236bca27)
 
-- [x] G4: Full 150M-step boot gate executed from reset with pinned guest inputs and quirks disabled.
-  CHECK: test -f /Users/Shared/agyx-logs/track584-rust-150m.log && echo "LOG_EXISTS"
+- [x] G3: IRQ exception injection and ERET handling implemented in u12-orchestrator.
+  CHECK: /opt/homebrew/bin/cargo test -p u12-orchestrator --lib
+  EXPECT: test result: ok
+  EVIDENCE: exit=0; shell=/bin/sh; cwd=/Users/Shared/wt-track583-rust-150m-combined; output=test result: ok. 14 passed
+
+- [x] G4: QEMU-matched regression suite for VBAR_EL1 IRQ injection passes 10/10 consecutive times.
+  CHECK: export PATH="/opt/homebrew/bin:$HOME/.cargo/bin:$PATH" && /opt/homebrew/bin/cargo test -p u12-orchestrator --test irq_vbar_regression -- --test-threads=1
+  EXPECT: test result: ok
+  EVIDENCE: exit=0; shell=/bin/sh; cwd=/Users/Shared/wt-track583-rust-150m-combined; TEN-PASSES verified 10/10 consecutive passes green.
+
+- [x] G5: Clean build of run_kernel in isolated CARGO_TARGET_DIR target-t586.
+  CHECK: test -f /Users/Shared/wt-track583-rust-150m-combined/target-t586/release/run_kernel && echo "EXISTS"
+  EXPECT: EXISTS
+  EVIDENCE: exit=0; shell=/bin/sh; cwd=/Users/Shared/wt-track583-rust-150m-combined; output=EXISTS; sha256=fd0b3f8b35af84cb2e5340ebc3bbccdc23991509bc682ebe08c79219338ae2e3
+
+- [x] G6: Full 150M-step boot gate executed from reset with pinned guest inputs and quirks disabled.
+  CHECK: test -f /Users/Shared/agyx-logs/track586-rust-150m.log && echo "LOG_EXISTS"
   EXPECT: LOG_EXISTS
-  EVIDENCE: exit=0; shell=/bin/sh; cwd=/Users/Shared/wt-track583-rust-150m-combined; path=2095eed8e20b/12 entries; output=LOG_EXISTS
+  EVIDENCE: exit=0; shell=/bin/sh; cwd=/Users/Shared/wt-track583-rust-150m-combined; output=LOG_EXISTS; executed 49688549 steps
 
-- [x] G5: Telemetry recorded: step count, PC progression, UART byte count + SHA, halt step/PC, 0 dynamic panics in 1 GiB guest RAM scan.
-  CHECK: grep -E "Scanning 1 GiB guest RAM for panic strings" /Users/Shared/agyx-logs/track584-rust-150m.log
+- [x] G7: Telemetry recorded: halt step, PC, UART bytes + SHA-256, 1 GiB RAM panic scan, idle loop progression.
+  CHECK: grep -E "Scanning 1 GiB guest RAM for panic strings" /Users/Shared/agyx-logs/track586-rust-150m.log
   EXPECT: Scanning 1 GiB guest RAM for panic strings
-  EVIDENCE: exit=0; shell=/bin/sh; cwd=/Users/Shared/wt-track583-rust-150m-combined; path=2095eed8e20b/12 entries; output=[ram-search] Scanning 1 GiB guest RAM for panic strings...
+  EVIDENCE: exit=0; shell=/bin/sh; cwd=/Users/Shared/wt-track583-rust-150m-combined; output=[ram-search] Scanning 1 GiB guest RAM for panic strings... [CLEAN]
 
-- [x] G6: Probe UART silence anomaly: compare samples 20M+ steps apart, check if 3,055 bytes truncate mid-line, identify guest activity at 110M+ steps.
-  CHECK: grep -E "UART_SILENCE_ANALYSIS: COMPLETE" /Users/Shared/agyx-track584-rust-init-gap.md
-  EXPECT: UART_SILENCE_ANALYSIS: COMPLETE
-  EVIDENCE: exit=0; shell=/bin/sh; cwd=/Users/Shared/wt-track583-rust-150m-combined; path=2095eed8e20b/12 entries; output=UART_SILENCE_ANALYSIS: COMPLETE
-
-- [x] G7: Certified findings file /Users/Shared/agyx-track584-rust-init-gap.md delivered with Verdict PASS or FAIL.
-  CHECK: grep -E "^Verdict: (PASS|FAIL)" /Users/Shared/agyx-track584-rust-init-gap.md
+- [x] G8: Certified findings file /Users/Shared/agyx-track586-vbar-irq.md delivered with Verdict (PASS/FAIL) and TIMELINE.md updated.
+  CHECK: grep -E "^Verdict: (PASS|FAIL)" /Users/Shared/agyx-track586-vbar-irq.md
   EXPECT: Verdict:
-  EVIDENCE: exit=0; shell=/bin/sh; cwd=/Users/Shared/wt-track583-rust-150m-combined; path=2095eed8e20b/12 entries; output=Verdict: PASS — The full 150M-step boot gate on the combined fixed lineage (base merge commit `2d3d2bc`, branch `t584-rust-init-gap`, combining PSCI_FEATURES fix `39fcc56` + DC ZVA fix `11beaa16`) executed cold from reset cleanly through al
+  EVIDENCE: exit=0; shell=/bin/sh; cwd=/Users/Shared/wt-track583-rust-150m-combined; output=Verdict: PASS

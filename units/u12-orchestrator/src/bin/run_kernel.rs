@@ -251,7 +251,7 @@ fn main() {
         // QEMU hands off to the kernel at EL1h with DAIF=0x3c0. DAIF is
         // stored in SysRegs; CpuState::pstate carries the live NZCV flags.
         orch.machine_mut().cpu[0].regs[4] = KERNEL_LOAD_ADDR;
-        orch.machine_mut().cpu[0].pstate = 0x4000_0000; // boot Z flag
+        orch.machine_mut().cpu[0].pstate = 0x4000_0005; // boot Z flag, EL1h mode
 
         // Initrd (Shelf Job 2, 2026-10-05): Track B QEMU layout.
         // - Initramfs CPIO at 0x4800_0000 (INITRD_LOAD_ADDR)
@@ -445,7 +445,9 @@ fn main() {
         if s > 0 && s % 2_000_000 == 0 {
             let pc = orch.machine().cpu[0].pc;
             let c_bytes = orch.console().tx_bytes.len();
-            println!("[progress] step {s} ({}M), PC={pc:#018x}, console_bytes={c_bytes}", s / 1_000_000);
+            let irq_in = orch.irq_entry_count();
+            let irq_out = orch.irq_return_count();
+            println!("[progress] step {s} ({}M), PC={pc:#018x}, console_bytes={c_bytes}, irq_in={irq_in}, irq_out={irq_out}", s / 1_000_000);
             use std::io::Write;
             std::io::stdout().flush().ok();
         }
@@ -520,7 +522,11 @@ fn main() {
             println!("<non-UTF8 output>");
         }
     }
-    println!("[done] Executed {steps} steps. PC={pc:#018x}");
+    println!(
+        "[done] Executed {steps} steps. PC={pc:#018x}, irq_in={}, irq_out={}",
+        orch.irq_entry_count(),
+        orch.irq_return_count()
+    );
     match halt_reason {
         Some(ref reason) => {
             println!("[halt] Reason: {reason:?}");

@@ -376,7 +376,14 @@ pub enum SysReg {
     PmccntrEl0 = 134,
     /// P4 (2026-10-03): ZCR_EL1: SVE Control Register, EL1. Written/read by the kernel's SVE probe (mrs x3, zcr_el1 @ 0x4008474c). Stored u64, default 0. ID_AA64ZFR0_EL1 reads 0 (no SVE), so the probe must see a consistent stored value, not a trap.
     ZcrEl1 = 135,
-
+    /// Track A551 / T586: SPSR_EL1: Saved Program Status Register, EL1. Stored u64. Restored to PSTATE on ERET.
+    SpsrEl1 = 136,
+    /// Track A551 / T586: ELR_EL1: Exception Link Register, EL1. Stored u64. Restored to PC on ERET.
+    ElrEl1 = 137,
+    /// Track A551 / T586: ESR_EL1: Exception Syndrome Register, EL1. Stored u64.
+    EsrEl1 = 138,
+    /// Track A551 / T586: FAR_EL1: Fault Address Register, EL1. Stored u64.
+    FarEl1 = 139,
 }
 
 /// Single IR operation (SSA-style). The lifter (U2) is the only producer.

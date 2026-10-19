@@ -177,13 +177,27 @@ pub struct GicV2State {
     pub gicc_active: Option<u32>,
 }
 
+pub fn highest_pending_gic_irq(gic: &GicV2State, pending: u64) -> Option<u32> {
+    const PPI27: u32 = 1 << 27;
+    let priority_mask = gic.gicc_pmr as u8;
+    (gic.gicd_ctlr & 1 != 0
+        && gic.gicc_ctlr & 1 != 0
+        && gic.gicd_isenabler0 & PPI27 != 0
+        && pending & (PPI27 as u64) != 0
+        && gic.gicc_active != Some(27)
+        && gic.gicd_ppi27_priority < priority_mask)
+        .then_some(27)
+}
+
 /// Platform IRQ number the orchestrator raises for virtio-gpu completion.
 /// Not in the frozen contracts; a board device tree would fix this in M1+.
 /// Documented here as the orchestrator's explicit choice.
 pub const VIRTIO_GPU_IRQ: u32 = 48;
 
-/// Injected timer cycles advanced per vCPU step. Fixed → deterministic.
-pub const TIMER_CYCLES_PER_STEP: u64 = 1000;
+/// Injected timer cycles advanced per vCPU step. Calibrated against QEMU's
+/// low-overhead timer IRQ density for the same guest (178 IRQs by ~140.9M
+/// instructions, versus 36,163 by 150M emulator steps at 1000 cycles/step).
+pub const TIMER_CYCLES_PER_STEP: u64 = 5;
 
 /// Image magic `"PNIM"` little-endian (PLATFORM.md).
 const IMAGE_MAGIC: u32 = 0x4D49_4E50;
@@ -588,6 +602,9 @@ pub struct Orchestrator {
     /// allocated from VMEMMAP_POOL_BASE (grows upward). Each vmemmap fault
     /// allocates zeroed 4K pages for missing L2 tables, L3 tables, or data pages.
     vmemmap_pages_used: u64,
+    /// Total asynchronous IRQ entries and completed ERET returns.
+    pub irq_entry_count: u64,
+    pub irq_return_count: u64,
 }
 
 /// Default backend for this target: wasmtime where a JIT is available,
@@ -658,6 +675,8 @@ impl Orchestrator {
             exclusive: None,
             executor: default_executor(),
             vmemmap_pages_used: 0,
+            irq_entry_count: 0,
+            irq_return_count: 0,
         };
         #[cfg(not(target_arch = "wasm32"))]
         {
@@ -828,6 +847,16 @@ impl Orchestrator {
     /// Number of vCPU blocks executed.
     pub fn steps(&self) -> u64 {
         self.steps
+    }
+
+    /// Total asynchronous IRQ entries since construction or snapshot load.
+    pub fn irq_entry_count(&self) -> u64 {
+        self.irq_entry_count
+    }
+
+    /// Total IRQ handlers that returned through ERET.
+    pub fn irq_return_count(&self) -> u64 {
+        self.irq_return_count
     }
 
     /// Number of distinct blocks currently in the JIT cache.
@@ -1294,6 +1323,19 @@ impl Orchestrator {
             let bit = (val >> bit_pos) & 1;
             let taken = if op == 0 { bit == 0 } else { bit != 0 };
             self.machine.cpu[0].pc = if taken { target } else { pc.wrapping_add(4) };
+            return Some(Ok(()));
+        }
+
+        // 2b. Track T586 / A551 (2026-10-16): ERET (exception return)
+        // 1101 0110 100 11111 0000 00 11111 00000 (0xD69F03E0)
+        // Restores PC from ELR_EL1 and PSTATE from SPSR_EL1.
+        if word == 0xD69F_03E0 {
+            let elr = self.machine.cpu[0].sysregs.elr_el1;
+            let spsr = self.machine.cpu[0].sysregs.spsr_el1;
+            self.machine.cpu[0].pc = elr;
+            self.machine.cpu[0].pstate = spsr;
+            self.machine.cpu[0].sysregs.daif = spsr & 0x3C0;
+            self.irq_return_count = self.irq_return_count.saturating_add(1);
             return Some(Ok(()));
         }
 
@@ -3219,12 +3261,75 @@ impl Orchestrator {
         None
     }
 
+    pub fn deliverable_irq(&self) -> Option<u32> {
+        highest_pending_gic_irq(&self.gic, self.machine.irq.pending)
+    }
+
+    pub fn virtual_timer_cycles_until_expiry(&self) -> Option<u64> {
+        let sysregs = &self.machine.cpu[0].sysregs;
+        if sysregs.cntv_ctl_el0 & 1 == 0 || sysregs.cntv_ctl_el0 & 2 != 0 {
+            return None;
+        }
+        let virtual_count = sysregs.cntpct_el0.wrapping_sub(sysregs.cntvoff_el2);
+        Some(sysregs.cntv_cval_el0.saturating_sub(virtual_count))
+    }
+
+    fn try_take_irq_exception(&mut self) -> Result<(), HaltReason> {
+        let Some(_intid) = self.deliverable_irq() else {
+            return Ok(());
+        };
+        let cpu = &self.machine.cpu[0];
+        let saved_pstate =
+            (cpu.pstate & !0x0000_03C0) | (cpu.sysregs.daif & 0x0000_03C0);
+        // PSTATE.I (bit 7): if masked, do not take IRQ exception.
+        if saved_pstate & (1 << 7) != 0 {
+            return Ok(());
+        }
+        let source_mode = match saved_pstate & 0x1F {
+            0x05 => 0x05, // EL1h
+            0x04 => 0x04, // EL1t
+            0x00 if (cpu.pc >> 63) == 1 || (cpu.pc >= 0x4000_0000 && cpu.pc < 0x8000_0000) => {
+                // Kernel space with uninitialized mode bits -> EL1h
+                0x05
+            }
+            0x00 => 0x00, // EL0t (AArch64)
+            _ => {
+                return Err(HaltReason::Unsupported {
+                    addr: cpu.pc,
+                    reason: "IRQ exception from an unsupported PSTATE mode",
+                });
+            }
+        };
+        let vector_offset = match source_mode {
+            0x05 => 0x280, // EL1h -> el1_irq
+            0x04 => 0x080, // EL1t -> el1_irq with SP0
+            0x00 => 0x480, // EL0t (AArch64) -> el0_irq
+            _ => unreachable!(),
+        };
+        let source_pc = cpu.pc;
+        let vector_pc = (cpu.sysregs.vbar_el1 & !0x7FF).wrapping_add(vector_offset);
+        let cpu = &mut self.machine.cpu[0];
+
+        cpu.sysregs.elr_el1 = source_pc;
+        cpu.sysregs.spsr_el1 = (saved_pstate & !0x1F) | source_mode;
+        cpu.sysregs.daif |= 0x3C0;
+        cpu.pstate = (saved_pstate & !(0x0000_03C0 | 0x1F)) | 0x0000_03C0 | 0x05;
+        cpu.pc = vector_pc;
+
+        self.irq_entry_count = self.irq_entry_count.saturating_add(1);
+        Ok(())
+    }
+
     // ---- vCPU ----
 
     /// One vCPU step: fetch → U1 decode → U2 lift → U3 compile → wasmtime.
     /// Never panics: every failure becomes a typed [`HaltReason`].
     pub fn step_vcpu(&mut self) -> StepOutcome {
         if let Some(reason) = self.halted.clone() {
+            return StepOutcome::Halted(reason);
+        }
+        if let Err(reason) = self.try_take_irq_exception() {
+            self.halted = Some(reason.clone());
             return StepOutcome::Halted(reason);
         }
         let pc = self.machine.cpu[0].pc;
@@ -3367,12 +3472,14 @@ impl Orchestrator {
         let console: &mut ConsoleState = &mut self.console;
         let gpu_port: &mut GpuPort = &mut self.gpu_port;
         let gic: &mut GicV2State = &mut self.gic;
+        let irq: &mut IrqState = &mut self.machine.irq;
         let sysregs: &mut SysRegs = &mut cpu.sysregs;
         let mut host = WasmHost {
             ram,
             console,
             gpu_port,
             gic,
+            irq,
             sysregs,
             guest_quirks_enabled: self.guest_quirks_enabled,
             code_write: false,
@@ -3424,8 +3531,15 @@ impl Orchestrator {
         self.steps += 1;
         // Injected clock: the timer advances only here, never wall time.
         self.tick_clock(TIMER_CYCLES_PER_STEP);
-        // WFI with no IRQ pending parks the vCPU: resumable, not halted.
-        // (A pending IRQ is a spurious wake — the guest spins, honestly.)
+        // WFI waits for the next virtual-timer compare when one is armed.
+        // The injected clock advances to that deadline while the vCPU is
+        // parked, then the GIC line wakes it if the distributor and CPU
+        // interface can deliver PPI 27.
+        if wfi_seen && self.machine.irq.pending == 0 {
+            if let Some(cycles) = self.virtual_timer_cycles_until_expiry() {
+                self.tick_clock(cycles);
+            }
+        }
         if wfi_seen && self.machine.irq.pending == 0 {
             return StepOutcome::WfiYield { addr: pc };
         }
@@ -3484,14 +3598,18 @@ impl Orchestrator {
         // remains a derived readback; the unmasked enabled timer drives the
         // shared virtual-timer PPI line while its compare is reached.
         let sysregs = &self.machine.cpu[0].sysregs;
+        let physical_timer_fires = sysregs.cntp_ctl_el0 & 1 != 0
+            && sysregs.cntp_ctl_el0 & 2 == 0
+            && sysregs.cntpct_el0 >= sysregs.cntp_cval_el0;
         let virtual_count = sysregs.cntpct_el0.wrapping_sub(sysregs.cntvoff_el2);
         let virtual_timer_fires = sysregs.cntv_ctl_el0 & 1 != 0
             && sysregs.cntv_ctl_el0 & 2 == 0
             && virtual_count >= sysregs.cntv_cval_el0;
-        if virtual_timer_fires {
+        if virtual_timer_fires || physical_timer_fires {
             self.machine.irq.pending |= u5_gic_timer::TIMER_PENDING_BIT;
+        } else {
+            self.machine.irq.pending &= !u5_gic_timer::TIMER_PENDING_BIT;
         }
-
     }
 
     /// Currently asserted interrupt lines (INTIDs with pending bits set).
@@ -3882,6 +4000,7 @@ struct WasmHost<'a> {
     console: &'a mut ConsoleState,
     gpu_port: &'a mut GpuPort,
     gic: &'a mut GicV2State,
+    irq: &'a mut IrqState,
     sysregs: &'a mut SysRegs,
     guest_quirks_enabled: bool,
     /// Set when a guest store writes to kernel text VA range (icache-fix).
@@ -4018,7 +4137,14 @@ impl HostOps for WasmHost<'_> {
             let value: u32 = match offset {
                 0x000 => self.gic.gicc_ctlr,
                 0x004 => self.gic.gicc_pmr,
-                0x00c => 1023, // GIC_IAR_SPURIOUS
+                0x00c => {
+                    let irq_id = highest_pending_gic_irq(&self.gic, self.irq.pending).unwrap_or(1023);
+                    if irq_id != 1023 {
+                        self.gic.gicc_active = Some(irq_id);
+                        self.irq.pending &= !(1u64 << irq_id);
+                    }
+                    irq_id
+                }
                 0x0fc => GICC_IIDR_VALUE,
                 _ => {
                     eprintln!(
@@ -5152,6 +5278,7 @@ mod tests {
         console: ConsoleState,
         gpu_port: GpuPort,
         gic: GicV2State,
+        irq: IrqState,
         sysregs: SysRegs,
     }
 
@@ -5161,6 +5288,12 @@ mod tests {
             console: ConsoleState::new(),
             gpu_port: GpuPort::new(),
             gic: GicV2State::default(),
+            irq: IrqState {
+                enabled: 0,
+                pending: 0,
+                timer_count: 0,
+                timer_compare: 0,
+            },
             sysregs,
         }
     }
@@ -5172,6 +5305,7 @@ mod tests {
             console: &mut p.console,
             gpu_port: &mut p.gpu_port,
             gic: &mut p.gic,
+            irq: &mut p.irq,
             sysregs: &mut p.sysregs,
             guest_quirks_enabled: false,
             code_write: false,
@@ -7258,6 +7392,7 @@ mod tests {
         // PC 0xffffff8008089e0c: ldrb w2, [x0], #1 (0x38401402)
         // with x0 = 0xffffffbf00000000.
         let mut orch = Orchestrator::new();
+        orch.set_guest_quirks_enabled(true);
         let sysregs = v01_sysregs();
         orch.machine_mut().cpu[0].sysregs = sysregs;
 
