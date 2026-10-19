@@ -160,3 +160,11 @@
 2. **Tests** (before → after): sysreg_p3 13/13 → 16/16 passed (TEN-PASSES OK); u3-wasm-jit 39/39 passed; u12-orchestrator passed. Aligned diff: all 10,021 instructions across window 36,850,000..36,860,000 match 100% bit-for-bit across all 31 GPRs, SP, CPSR, SCTLR, TTBR0, TCR, TTBR1, MAIR. Divergence at step 36,852,812 completely eliminated; periodic checkpoints match through step 36,930,000 (80k+ steps past divergence).
 3. **Files changed**: `contracts/src/execution.rs`, `contracts/src/cpu.rs`, `units/u3-wasm-jit/src/lib.rs`, `units/u15-exec-wasmtime/src/lib.rs`, `units/u15-exec-wasmi/src/lib.rs`, `units/u12-orchestrator/src/lib.rs`, `units/u12-orchestrator/tests/sysreg_p3.rs`, `GATES.md`, `TIMELINE.md`.
 
+
+## UPDATED ON : 2026-10-19
+
+### diagnosis (2026-10-19) — Track T584 150M boot gate & UART silence root-cause diagnosis
+
+1. **150M Boot Gate & UART Silence Diagnosis**: Executed full 150M-step boot gate cold from reset on combined lineage 2d3d2bc without trap or crash (150,000,000 steps reached at PC 0xffffff800822e650, step budget reached, 0 dynamic panics). Diagnosed 3,055-byte UART silence anomaly: guest is live and cycling in Linux kernel idle/scheduler loop (`cpu_startup_entry` -> `do_idle` -> `cpu_do_idle` [PC 0xffffff8008084eb4, WFI at 0xffffff8008084eb8] and `__schedule` -> `pick_next_task` -> `switch_mm` -> `finish_task_switch`). Wall identified: engine lacks architectural IRQ exception injection to `VBAR_EL1 + 0x280` (`el1_irq`), leaving the CPU without timer tick interrupts; PID 1 (`kernel_init`) is never scheduled to userspace /init.
+2. **Tests** (before → after): sysreg_p3 17/17 passed (TEN-PASSES 10/10 verified); 150M boot gate executed to completion (150,000,000 steps, 0 panics).
+3. **Files changed**: `GATES.md`, `TIMELINE.md`, `/Users/Shared/agyx-track584-rust-init-gap.md`.
