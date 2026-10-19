@@ -1,5 +1,5 @@
 {
-  "ts": "2026-10-20T03:52:10+11:00",
-  "stage": "full-150m-boot-gate-v2",
-  "note": "150M boot gate running: passed step 47.75M with 0 traps. IRQ exceptions cleanly vectoring to VBAR_EL1+0x280 (el1_irq), GICC MMIO active, cpu_switch_to active."
+  "ts": "2026-10-20T04:03:15+11:00",
+  "stage": "complete",
+  "note": "Track T586 completed with Verdict: PASS. Idle loop spin wall eliminated; 74 IRQs taken/returned; advanced past step 49.68M (UART: 3,936 bytes). Certified findings delivered to /Users/Shared/agyx-track586-vbar-irq.md."
 }
