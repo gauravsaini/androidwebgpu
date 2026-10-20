@@ -22,13 +22,20 @@
 - Root Cause: Missing GICv2 distributor (`0x08000000`) and CPU interface (`0x08010000`) MMIO handling in `WasmHost::mem_load`/`mem_store`. Address `0x08000004` falls outside RAM (`0x40000000..0x80000000`), triggering an unhandled `TranslationFault`.
 - Oracle: QEMU returns `0x00000008` for `GICD_TYPER` and cleanly configures GIC distributor and CPU interface, enabling virtual timer PPI 27 (`0x08000000` into `GICD_ISENABLER0`) at step `45,834,542` and reaching `arch_timer` probe at step `45,844,254`.
 
-## T585/T588 netd-updatable-crashing / zygote-clean-exit-respawn-loop — guest
+## T585/T588/T589 netd-updatable-crashing — guest [RESOLVED in T589]
 
 - Tag: **guest** (Type-1 guest image wall).
 - Rust par bhi lagu: haan (applies to both QEMU virt and Rust emulator Android guest userspace).
-- Pinned witness: `/Users/Shared/agyx-track585-sf-fabricate-display.md` lines 16868, 17108, 17219, 17280, 17477 (`init: process with updatable components 'netd' exited 4 times before boot completed`), lines 16929, 17488 (`init: Service 'zygote' (pid ...) exited with status 0`).
-- Observation: In headless virt guest without physical network / eBPF routing interfaces, `netd` fails to initialize and crash-loops with exit status 1. Once `netd` exits 4 times, Android init sets `sys.init.updatable_crashing=1` and initiates a userspace daemon reset cascade. Simultaneously, Zygote exits cleanly with status 0, triggering its `onrestart` stanza and bouncing core daemons (`surfaceflinger`, `audioserver`, `cameraserver`, `media`), while `vendor.camera-provider-ranchu` exits with status 1 (no camera hardware).
-- T588 Status: Hard gate NO-MISSING-INPUTS triggered. Base tree `/Users/Shared/wt-track585-sf-fabricate-display` was pruned during host disk-guard sweeps, so the display fabrication artifacts could not be directly inherited without re-derivation.
+- Status: **RESOLVED in T589**. In-stream patching of `/system/etc/init/netd.rc` at offset `0x17c9c000` in `ramdisk-images/system.img` substituted dummy sleep daemon and commented out `updatable` stanza. `netd` status-1 crash loop and `init: process with updatable components 'netd' exited 4 times before boot completed` completely eliminated (0 occurrences across 656.25s continuous uptime vs 5+ in T585). Camera provider ranchu (`0x13ab000`) and sensors multihal (`0x13b7000`) stubbed in `vendor.img`. T585 fabricate-display lineage reconstructed and preserved in `/Users/Shared/guest-inputs/t585-fabricate-display/` with SHA-256 manifest.
+- Findings: `/Users/Shared/agyx-track589-netd-retry.md`.
+
+## T589 surfaceflinger-display-abort-loop / zygote-clean-exit — guest
+
+- Tag: **guest** (Type-1 guest image wall).
+- Rust par bhi lagu: haan (SurfaceFlinger display negotiation and Zygote lifecycle on headless Android).
+- Pinned witness: `/Users/Shared/agyx-track589-netd-retry.md` line 15607 (`init: Service 'zygote' (pid 2343) exited with status 0`), lines 15689, 15714, 15742, 15772 (`init: Service 'surfaceflinger' (pid ...) received signal 6`), line 15718 (`init: process with updatable components 'surfaceflinger' exited 4 times before boot completed`).
+- Observation: In headless virt guest, SurfaceFlinger aborts with signal 6 (`LOG_ALWAYS_FATAL("!display")`) when `vendor.hwc-2-1` is not started before SurfaceFlinger, triggering `init: process with updatable components 'surfaceflinger' exited 4 times before boot completed` and setting `sys.init.updatable_crashing=1`. Zygote cleanly exits with status 0 at 134.95s, triggering `onrestart` stanza.
+- Recommended fix: Explicitly start `vendor.hwc-2-1` and `vendor.allocator-2-0` in `surfaceflinger.rc` or `on early-boot` prior to SurfaceFlinger startup, and investigate Zygote clean exit-0 restart.
 
 
 
@@ -42,13 +49,14 @@
 - Fault: `HaltReason::Unsupported { addr: 18446743524090417492, reason: "DataProc: ADC/SBC/ADCS/SBCS need NZCV carry flag, not expressible in IrOp" }`.
 - Status: **RESOLVED in T587**. Full AArch64 architectural `AddWithCarry` flag propagation implemented for 32-bit and 64-bit ADC, SBC, ADCS, and SBCS in `units/u12-orchestrator/src/lib.rs` and `arm64.rs`. Verified against 16 QEMU-matched regression test vectors (`adc_sbc_regression.rs`). Boot cleanly advanced past step 49,688,549 to step 49,688,578.
 
-## T587 TranslationFault va:0 / NULL dereference (49.69M wall) — engine
+## T587 TranslationFault va:0 / NULL dereference (49.69M wall) — engine [RESOLVED in T590]
 
 - Tag: **engine** (unhandled MMU synchronous exception / TranslationFault on zero address in `u12-orchestrator`).
 - Rust par bhi lagu: haan (applies to Rust emulator MMU / exception vectoring).
 - Step: `49,688,578` (29 steps past bypassed T586 wall at step 49,688,549).
-- PC: `0xffffff80082591e4` (`lib/find_bit.c:__find_next_bit`).
-- Instruction: `ldr x8, [x23, #1344]` (`0xf942a2e8`), where `x23 = 0x0` at halt.
+- PC: `0xffffff80082591e4` (`kernel/futex.c:futex_init` / `futex_detect_cmpxchg`).
+- Instruction: `ldxr w11, [x10]` (`0x885f7d4b`), where `x10 = 0x0` (NULL pointer probe) at halt.
 - Fault: `HaltReason::WasmTrap { addr: 0, message: "mmu_fault: TranslationFault { va: 0 }" }`.
-- Root Cause: In Linux ARM64 with CPU PAN emulation, `__find_next_bit` executes post-carry bit search and user access routines where a memory access with `x23=0` triggers a stage-1 Translation Fault on VA 0. In bare-metal ARM64 / QEMU, translation faults generate synchronous Data Abort exceptions vectoring to `VBAR_EL1 + 0x200` with `ESR_EL1` and `FAR_EL1` set, allowing Linux kernel exception fixup tables (`__ex_table`) to handle the fault gracefully. The Rust emulator currently treats non-vmemmap `TranslationFault` as an unhandled fatal `WasmTrap` rather than vectoring a synchronous Data Abort to `VBAR_EL1`.
-- Console bytes: 3,936 bytes (clean, 0 dynamic panics in 1 GiB guest RAM scan).
+- Root Cause: In Linux ARM64, `futex_init` intentionally executes atomic cmpxchg probe with NULL pointer, expecting an architectural synchronous Data Abort exception to vector to `VBAR_EL1 + 0x200` where `do_page_fault` -> `fixup_exception` searches `__ex_table` and fixes up the return value to `-EFAULT`. The Rust emulator previously lacked synchronous Data Abort vectoring, treating non-vmemmap `TranslationFault` as an unhandled fatal `WasmTrap`.
+- Status: **RESOLVED in T590**. Synchronous Data Abort exception vectoring to `VBAR_EL1 + 0x200` implemented in `u12-orchestrator` (`DetailedFault`, `translate_detailed`, `take_data_abort_exception`). Sets ESR_EL1 with exact EC (0x25 for EL1), IL=1, WnR, and DFSC (0x05 for Level 1 Translation Fault), FAR_EL1 = faulting VA, saves ELR_EL1/SPSR_EL1, masks DAIF, and vectors to `VBAR_EL1 + 0x200`. Verified against 6 QEMU-matched regression test vectors (`data_abort_vbar_regression.rs`). Live cold boot gate run cleanly advanced past step 49,688,578 to 68M+ steps with UART console advancing from 3,936 bytes to 5,542 bytes (+1,606 bytes).
+- Console bytes: 3,936 → 5,542 bytes (clean, 0 dynamic panics).

@@ -107,20 +107,42 @@ fn start_level(granule: Granule, ia_bits: u32) -> Option<u32> {
     None
 }
 
+/// Detailed MMU fault information matching AArch64 ESR_ELx fault status.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct DetailedFault {
+    pub va: u64,
+    pub is_permission: bool,
+    pub level: u8,
+}
+
+impl DetailedFault {
+    /// Return ARM AArch64 Data Fault Status Code (DFSC, bits [5:0] of ESR_ELx ISS).
+    ///
+    /// Translation fault: 0b0001LL (LL = level 0..=3) -> 0x04..=0x07
+    /// Permission fault:  0b0011LL (LL = level 0..=3) -> 0x0c..=0x0f
+    pub fn dfsc(&self) -> u32 {
+        if self.is_permission {
+            0b001100 | (self.level as u32 & 3)
+        } else {
+            0b000100 | (self.level as u32 & 3)
+        }
+    }
+}
+
 /// Read 8 bytes at guest-physical `pa` from `ram` as little-endian u64.
 /// The `ram` slice starts at guest-physical `ram_base`; `pa` is rebased by
-/// `checked_sub`, so a PA below `ram_base` is a `TranslationFault`, never a
-/// panic or a wraparound read. Out-of-range reads are `TranslationFault`,
+/// `checked_sub`, so a PA below `ram_base` is a `DetailedFault`, never a
+/// panic or a wraparound read. Out-of-range reads are `DetailedFault`,
 /// never panics.
-fn read_desc(ram: &[u8], pa: u64, va: u64, ram_base: u64) -> Result<u64, MemFault> {
+fn read_desc(ram: &[u8], pa: u64, va: u64, ram_base: u64, level: u8) -> Result<u64, DetailedFault> {
     let rebased = pa
         .checked_sub(ram_base)
-        .ok_or(MemFault::TranslationFault { va })?;
+        .ok_or(DetailedFault { va, is_permission: false, level })?;
     let end = rebased
         .checked_add(8)
-        .ok_or(MemFault::TranslationFault { va })?;
+        .ok_or(DetailedFault { va, is_permission: false, level })?;
     if end > ram.len() as u64 {
-        return Err(MemFault::TranslationFault { va });
+        return Err(DetailedFault { va, is_permission: false, level });
     }
     // Bounds proven above; `rebased <= ram.len()` always fits in `usize`
     // because `ram.len()` itself is a `usize`.
@@ -134,7 +156,18 @@ fn read_desc(ram: &[u8], pa: u64, va: u64, ram_base: u64) -> Result<u64, MemFaul
 /// walk described in the module docs. Unit-test convention: the `ram`
 /// slice starts at guest-physical address 0.
 pub fn translate(state: &MmuState, ram: &[u8], va: u64, access: Access) -> Result<u64, MemFault> {
-    translate_impl(state, ram, va, access, 0)
+    translate_with_base(state, ram, 0, va, access)
+}
+
+/// Translate `va` with detailed architectural fault reporting (level and permission flag).
+pub fn translate_detailed(
+    state: &MmuState,
+    ram: &[u8],
+    ram_base: u64,
+    va: u64,
+    access: Access,
+) -> Result<u64, DetailedFault> {
+    translate_impl(state, ram, va, access, ram_base)
 }
 
 /// Translate `va` to a guest-physical address where the `ram` slice starts
@@ -151,7 +184,13 @@ pub fn translate_with_base(
     va: u64,
     access: Access,
 ) -> Result<u64, MemFault> {
-    translate_impl(state, ram, va, access, ram_base)
+    translate_impl(state, ram, va, access, ram_base).map_err(|df| {
+        if df.is_permission {
+            MemFault::PermissionFault { va: df.va }
+        } else {
+            MemFault::TranslationFault { va: df.va }
+        }
+    })
 }
 
 /// Shared walk implementation. `ram_base` is the guest-physical address
@@ -162,7 +201,7 @@ fn translate_impl(
     va: u64,
     access: Access,
     ram_base: u64,
-) -> Result<u64, MemFault> {
+) -> Result<u64, DetailedFault> {
     // MMU off: flat identity map.
     if state.sctlr & 1 == 0 {
         return Ok(va);
@@ -179,28 +218,28 @@ fn translate_impl(
     } else {
         (state.ttbr0, state.tcr & 0x3F, (state.tcr >> 14) & 0x3)
     };
-    let granule = Granule::decode(tg, upper).ok_or(MemFault::TranslationFault { va })?;
+    let granule = Granule::decode(tg, upper).ok_or(DetailedFault { va, is_permission: false, level: 0 })?;
     if !(16..=63).contains(&tsz) {
-        return Err(MemFault::TranslationFault { va });
+        return Err(DetailedFault { va, is_permission: false, level: 0 });
     }
     let ia_bits = (64 - tsz) as u32;
     if ia_bits > 48 {
-        return Err(MemFault::TranslationFault { va });
+        return Err(DetailedFault { va, is_permission: false, level: 0 });
     }
 
     // VA must lie inside its region: low region all-zero top bits,
     // high region all-one top bits.
     if upper {
         if va >> ia_bits != u64::MAX >> ia_bits {
-            return Err(MemFault::TranslationFault { va });
+            return Err(DetailedFault { va, is_permission: false, level: 0 });
         }
     } else if va >> ia_bits != 0 {
-        return Err(MemFault::TranslationFault { va });
+        return Err(DetailedFault { va, is_permission: false, level: 0 });
     }
 
-    let level0 = start_level(granule, ia_bits).ok_or(MemFault::TranslationFault { va })?;
+    let level0 = start_level(granule, ia_bits).ok_or(DetailedFault { va, is_permission: false, level: 0 })?;
     if ttbr & (granule.bytes() - 1) != 0 {
-        return Err(MemFault::TranslationFault { va });
+        return Err(DetailedFault { va, is_permission: false, level: level0 as u8 });
     }
     // Physical address bits only: attribute bits above bit 47 never leak
     // into table bases or output addresses.
@@ -212,32 +251,32 @@ fn translate_impl(
     let mut no_write = false;
 
     for level in level0..=3 {
-        let (hi, lo) = index_range(granule, level).ok_or(MemFault::TranslationFault { va })?;
+        let (hi, lo) = index_range(granule, level).ok_or(DetailedFault { va, is_permission: false, level: level as u8 })?;
         let width = hi - lo + 1;
         let index = (va >> lo) & ((1u64 << width) - 1);
         let entry_pa = table_base
             .checked_add(index * 8)
-            .ok_or(MemFault::TranslationFault { va })?;
-        let desc = read_desc(ram, entry_pa, va, ram_base)?;
+            .ok_or(DetailedFault { va, is_permission: false, level: level as u8 })?;
+        let desc = read_desc(ram, entry_pa, va, ram_base, level as u8)?;
 
         match desc & 0b11 {
-            0b00 | 0b10 => return Err(MemFault::TranslationFault { va }), // invalid / reserved
+            0b00 | 0b10 => return Err(DetailedFault { va, is_permission: false, level: level as u8 }), // invalid / reserved
             0b01 => {
                 // Block descriptor: valid at levels 0..2 only.
                 if level == 3 {
-                    return Err(MemFault::TranslationFault { va });
+                    return Err(DetailedFault { va, is_permission: false, level: 3 });
                 }
-                return finish_block(desc, va, lo, access, no_exec, no_write);
+                return finish_block(desc, va, lo, access, no_exec, no_write, level as u8);
             }
             _ => {
                 if level == 3 {
                     // Page descriptor.
-                    return finish_block(desc, va, lo, access, no_exec, no_write);
+                    return finish_block(desc, va, lo, access, no_exec, no_write, level as u8);
                 }
                 // Table descriptor: descend. Bits [1:0] are the type tag;
                 // the remaining low bits of the base must be zero.
                 if desc & (granule.bytes() - 1) != 0b11 {
-                    return Err(MemFault::TranslationFault { va });
+                    return Err(DetailedFault { va, is_permission: false, level: level as u8 });
                 }
                 // PXNTable (bit 59) denies EL1 execute below. UXNTable/XNTable
                 // (bit 60) only restricts EL0: ignored in this EL1-only model.
@@ -248,7 +287,7 @@ fn translate_impl(
         }
     }
     // Unreachable: the level-3 iteration always returns.
-    Err(MemFault::TranslationFault { va })
+    Err(DetailedFault { va, is_permission: false, level: 3 })
 }
 
 /// Permission check + output-address assembly for a block/page descriptor.
@@ -263,7 +302,8 @@ fn finish_block(
     access: Access,
     no_exec: bool,
     no_write: bool,
-) -> Result<u64, MemFault> {
+    level: u8,
+) -> Result<u64, DetailedFault> {
     let ap = (desc >> 6) & 0b11;
     let read_only = ap == 0b10 || ap == 0b11;
     // PXN (bit 53) denies EL1 execute. UXN (bit 54) only restricts EL0 and
@@ -271,10 +311,10 @@ fn finish_block(
     let pxn = desc & (1u64 << 53) != 0; // PXN
     match access {
         Access::Write if read_only || no_write => {
-            return Err(MemFault::PermissionFault { va });
+            return Err(DetailedFault { va, is_permission: true, level });
         }
         Access::Execute if pxn || no_exec => {
-            return Err(MemFault::PermissionFault { va });
+            return Err(DetailedFault { va, is_permission: true, level });
         }
         _ => {}
     }

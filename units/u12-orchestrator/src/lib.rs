@@ -74,6 +74,7 @@ use pathn_contracts::device::{DevEvent, DevOut, GpuCmd, GpuDevState, TransportSt
 use pathn_contracts::execution::{BlockExecutor, HostOps};
 use pathn_contracts::machine::{CpuState, MachineState, SysRegs};
 use sha2::{Digest, Sha256};
+use u4_mmu::DetailedFault;
 
 pub mod arm64;
 use arm64::*;
@@ -605,6 +606,10 @@ pub struct Orchestrator {
     /// Total asynchronous IRQ entries and completed ERET returns.
     pub irq_entry_count: u64,
     pub irq_return_count: u64,
+    /// Track T590: Synchronous Data Abort exceptions taken to VBAR_EL1 + 0x200.
+    pub data_abort_count: u64,
+    /// Last MMU translation or permission fault recorded on data access.
+    pub last_mmu_fault: Option<(u64, Access, DetailedFault)>,
 }
 
 /// Default backend for this target: wasmtime where a JIT is available,
@@ -677,6 +682,8 @@ impl Orchestrator {
             vmemmap_pages_used: 0,
             irq_entry_count: 0,
             irq_return_count: 0,
+            data_abort_count: 0,
+            last_mmu_fault: None,
         };
         #[cfg(not(target_arch = "wasm32"))]
         {
@@ -859,6 +866,11 @@ impl Orchestrator {
         self.irq_return_count
     }
 
+    /// Total synchronous Data Abort exception entries.
+    pub fn data_abort_count(&self) -> u64 {
+        self.data_abort_count
+    }
+
     /// Number of distinct blocks currently in the JIT cache.
     pub fn block_cache_len(&self) -> usize {
         self.executor.cache_len()
@@ -1026,19 +1038,8 @@ impl Orchestrator {
             .map_err(|_| HaltReason::FetchFault { addr: va })
     }
 
-    /// Translate a data-access VA to a guest-physical address for the
-    /// fast-path interpreter. MMU off: identity. Faults become WasmTrap
-    /// (same surfacing as WasmHost data accesses).
-    fn translate_data_orch(&self, va: u64, access: Access) -> Result<u64, HaltReason> {
-        self.translate_va(va, access)
-            .map_err(|f| HaltReason::WasmTrap {
-                addr: va,
-                message: format!("mmu_fault: {f:?}"),
-            })
-    }
-
-    /// Shared VA->PA translation. MMU off (SCTLR_EL1.M == 0): identity.
-    fn translate_va(&self, va: u64, access: Access) -> Result<u64, MemFault> {
+    /// Translate a data-access VA to a guest-physical address with detailed fault tracking.
+    fn translate_va_detailed(&self, va: u64, access: Access) -> Result<u64, DetailedFault> {
         let sysregs = &self.machine.cpu[0].sysregs;
         if sysregs.sctlr_el1 & 1 == 0 {
             return Ok(va);
@@ -1049,7 +1050,41 @@ impl Orchestrator {
             ttbr0: sysregs.ttbr0_el1,
             ttbr1: sysregs.ttbr1_el1,
         };
-        u4_mmu::translate_with_base(&st, &self.machine.ram, RAM_BASE, va, access)
+        u4_mmu::translate_detailed(&st, &self.machine.ram, RAM_BASE, va, access)
+    }
+
+    /// Translate a data-access VA to a guest-physical address for the
+    /// fast-path interpreter. MMU off: identity. Faults record detailed info
+    /// and become WasmTrap.
+    fn translate_data_orch(&mut self, va: u64, access: Access) -> Result<u64, HaltReason> {
+        match self.translate_va_detailed(va, access) {
+            Ok(pa) => Ok(pa),
+            Err(df) => {
+                self.last_mmu_fault = Some((va, access, df));
+                Err(HaltReason::WasmTrap {
+                    addr: va,
+                    message: format!(
+                        "mmu_fault: {}",
+                        if df.is_permission {
+                            format!("PermissionFault {{ va: {va} }}")
+                        } else {
+                            format!("TranslationFault {{ va: {va} }}")
+                        }
+                    ),
+                })
+            }
+        }
+    }
+
+    /// Shared VA->PA translation. MMU off (SCTLR_EL1.M == 0): identity.
+    fn translate_va(&self, va: u64, access: Access) -> Result<u64, MemFault> {
+        self.translate_va_detailed(va, access).map_err(|df| {
+            if df.is_permission {
+                MemFault::PermissionFault { va: df.va }
+            } else {
+                MemFault::TranslationFault { va: df.va }
+            }
+        })
     }
 
     /// Handle a vmemmap demand-population fault.
@@ -3381,6 +3416,73 @@ impl Orchestrator {
         Ok(())
     }
 
+    /// Compute architectural ESR_EL1 value for synchronous Data Abort.
+    pub fn compute_data_abort_esr(is_el1: bool, is_write: bool, dfsc: u32) -> u64 {
+        let ec: u64 = if is_el1 { 0x25 } else { 0x24 };
+        let il: u64 = 1;
+        let wnr: u64 = if is_write { 1 } else { 0 };
+        let iss: u64 = (wnr << 6) | (dfsc as u64 & 0x3F);
+        (ec << 26) | (il << 25) | iss
+    }
+
+    /// Deliver an architectural synchronous Data Abort exception to EL1.
+    pub fn take_data_abort_exception(
+        &mut self,
+        faulting_pc: u64,
+        faulting_va: u64,
+        access: Access,
+        df: DetailedFault,
+    ) -> Result<(), HaltReason> {
+        let cpu = &self.machine.cpu[0];
+        let saved_pstate =
+            (cpu.pstate & !0x0000_03C0) | (cpu.sysregs.daif & 0x0000_03C0);
+        let is_el1 = match saved_pstate & 0x1F {
+            0x05 => true, // EL1h
+            0x04 => true, // EL1t
+            0x00 if (cpu.pc >> 63) == 1 || (cpu.pc >= 0x4000_0000 && cpu.pc < 0x8000_0000) => {
+                // Kernel space with uninitialized mode bits -> EL1h
+                true
+            }
+            0x00 => false, // EL0t (AArch64)
+            _ => {
+                return Err(HaltReason::Unsupported {
+                    addr: cpu.pc,
+                    reason: "Data abort exception from an unsupported PSTATE mode",
+                });
+            }
+        };
+        let source_mode = if is_el1 {
+            match saved_pstate & 0x1F {
+                0x04 => 0x04,
+                _ => 0x05,
+            }
+        } else {
+            0x00
+        };
+        let vector_offset = match source_mode {
+            0x05 => 0x200, // EL1h -> el1h_sync (VBAR_EL1 + 0x200)
+            0x04 => 0x000, // EL1t -> el1t_sync (VBAR_EL1 + 0x000)
+            0x00 => 0x400, // EL0t (AArch64) -> el0_sync (VBAR_EL1 + 0x400)
+            _ => unreachable!(),
+        };
+        let vector_pc = (cpu.sysregs.vbar_el1 & !0x7FF).wrapping_add(vector_offset);
+
+        let is_write = matches!(access, Access::Write);
+        let esr = Self::compute_data_abort_esr(is_el1, is_write, df.dfsc());
+
+        let cpu = &mut self.machine.cpu[0];
+        cpu.sysregs.elr_el1 = faulting_pc;
+        cpu.sysregs.far_el1 = faulting_va;
+        cpu.sysregs.esr_el1 = esr;
+        cpu.sysregs.spsr_el1 = (saved_pstate & !0x1F) | source_mode;
+        cpu.sysregs.daif |= 0x3C0;
+        cpu.pstate = (saved_pstate & !(0x0000_03C0 | 0x1F)) | 0x0000_03C0 | 0x05;
+        cpu.pc = vector_pc;
+
+        self.data_abort_count = self.data_abort_count.saturating_add(1);
+        Ok(())
+    }
+
     // ---- vCPU ----
 
     /// One vCPU step: fetch → U1 decode → U2 lift → U3 compile → wasmtime.
@@ -3393,6 +3495,7 @@ impl Orchestrator {
             self.halted = Some(reason.clone());
             return StepOutcome::Halted(reason);
         }
+        self.last_mmu_fault = None;
         let pc = self.machine.cpu[0].pc;
 
         // Fetch.
@@ -3455,19 +3558,21 @@ impl Orchestrator {
                         {
                             return self.survey_skip_instruction(pc, word, None);
                         }
-                        // vmemmap demand-population: if this is a TranslationFault
-                        // on a vmemmap VA, populate the page table and retry the
-                        // instruction instead of halting.
-                        if let HaltReason::WasmTrap { addr, ref message } = reason {
-                            if self.guest_quirks_enabled
-                                && message.starts_with("mmu_fault: TranslationFault")
-                            {
-                                if self.handle_vmemmap_fault(addr) {
-                                    // Retry the instruction (do not advance PC,
-                                    // do not count as a step yet).
-                                    return self.step_vcpu();
-                                }
+                        // Check for MMU translation or permission fault.
+                        if let Some((va, access, df)) = self.last_mmu_fault.take() {
+                            if self.guest_quirks_enabled && self.handle_vmemmap_fault(va) {
+                                // Retry the instruction (do not advance PC,
+                                // do not count as a step yet).
+                                return self.step_vcpu();
                             }
+                            // Track T590: Vector synchronous Data Abort exception to VBAR_EL1 + 0x200.
+                            if let Err(err) = self.take_data_abort_exception(pc, va, access, df) {
+                                self.halted = Some(err.clone());
+                                return StepOutcome::Halted(err);
+                            }
+                            self.steps += 1;
+                            self.tick_clock(TIMER_CYCLES_PER_STEP);
+                            return StepOutcome::Continue;
                         }
                         self.halted = Some(reason.clone());
                         return StepOutcome::Halted(reason);
@@ -3544,10 +3649,23 @@ impl Orchestrator {
             sysregs,
             guest_quirks_enabled: self.guest_quirks_enabled,
             code_write: false,
+            last_mmu_fault: None,
         };
         let (exit_addr, wfi_seen) = match self.executor.run_block(&wasm, regs, &mut host) {
             Ok(pair) => pair,
             Err(message) => {
+                if let Some((va, access, df)) = host.last_mmu_fault.take() {
+                    if self.guest_quirks_enabled && self.handle_vmemmap_fault(va) {
+                        return self.step_vcpu();
+                    }
+                    if let Err(err) = self.take_data_abort_exception(pc, va, access, df) {
+                        self.halted = Some(err.clone());
+                        return StepOutcome::Halted(err);
+                    }
+                    self.steps += 1;
+                    self.tick_clock(TIMER_CYCLES_PER_STEP);
+                    return StepOutcome::Continue;
+                }
                 let halt = HaltReason::WasmTrap { addr: pc, message };
                 self.halted = Some(halt.clone());
                 return StepOutcome::Halted(halt);
@@ -4070,6 +4188,8 @@ struct WasmHost<'a> {
     /// rewrites kernel text at boot; without invalidation we execute stale
     /// instructions.
     pub code_write: bool,
+    /// Last MMU fault recorded during block memory access.
+    pub last_mmu_fault: Option<(u64, Access, DetailedFault)>,
 }
 
 impl WasmHost<'_> {
@@ -4091,13 +4211,25 @@ impl WasmHost<'_> {
     /// live registers, rebasing descriptor PAs by RAM_BASE. Faults
     /// surface as `mmu_fault: <MemFault>` strings, which the executor
     /// turns into `HaltReason::WasmTrap`.
-    fn translate_data(&self, va: u64, access: Access) -> Result<u64, String> {
+    fn translate_data(&mut self, va: u64, access: Access) -> Result<u64, String> {
         let st = self.mmu_state();
         if st.sctlr & 1 == 0 {
             return Ok(va);
         }
-        u4_mmu::translate_with_base(&st, self.ram, RAM_BASE, va, access)
-            .map_err(|f| format!("mmu_fault: {f:?}"))
+        match u4_mmu::translate_detailed(&st, self.ram, RAM_BASE, va, access) {
+            Ok(pa) => Ok(pa),
+            Err(df) => {
+                self.last_mmu_fault = Some((va, access, df));
+                Err(format!(
+                    "mmu_fault: {}",
+                    if df.is_permission {
+                        format!("PermissionFault {{ va: {va} }}")
+                    } else {
+                        format!("TranslationFault {{ va: {va} }}")
+                    }
+                ))
+            }
+        }
     }
 }
 
@@ -5370,6 +5502,7 @@ mod tests {
             sysregs: &mut p.sysregs,
             guest_quirks_enabled: false,
             code_write: false,
+            last_mmu_fault: None,
         };
         f(&mut host)
     }
