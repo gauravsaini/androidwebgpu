@@ -1718,6 +1718,67 @@ impl Orchestrator {
             }
         }
 
+        // 4d. Add/subtract (with carry): ADC, SBC, ADCS, SBCS (Track T587).
+        // Encoding (ARM DDI 0487): sf op S 11010000 Rm 000000 Rn Rd
+        // bits[28:21] == 0xD0, bits[15:10] == 0.
+        // op: 0 = ADC/ADCS (ADD), 1 = SBC/SBCS (SUB).
+        // S:  0 = ADC/SBC (no flags), 1 = ADCS/SBCS (updates NZCV).
+        // Rn=31 is XZR (not SP), Rm=31 is XZR, Rd=31 is XZR (discard).
+        // S=1 with Rd=31 (e.g. SBCS XZR, X10, X8) still updates flags.
+        if (word >> 21) & 0xFF == 0xD0 && (word >> 10) & 0x3F == 0 {
+            let sf = (word >> 31) & 1;
+            let op = (word >> 30) & 1; // 0 = ADC/ADCS, 1 = SBC/SBCS
+            let s = (word >> 29) & 1;  // 0 = ADC/SBC, 1 = ADCS/SBCS
+            let rm = ((word >> 16) & 0x1F) as usize;
+            let rn = ((word >> 5) & 0x1F) as usize;
+            let rd = (word & 0x1F) as usize;
+            let carry_in = (self.machine.cpu[0].pstate >> 29) & 1;
+
+            if sf == 1 {
+                let rn_val = if rn == 31 {
+                    0
+                } else {
+                    self.machine.cpu[0].regs[rn]
+                };
+                let rm_val = if rm == 31 {
+                    0
+                } else {
+                    self.machine.cpu[0].regs[rm]
+                };
+                let operand2 = if op == 0 { rm_val } else { !rm_val };
+                let (res, nzcv) = add_with_carry64(rn_val, operand2, carry_in);
+                if rd != 31 {
+                    self.machine.cpu[0].regs[rd] = res;
+                }
+                if s == 1 {
+                    self.machine.cpu[0].pstate =
+                        (self.machine.cpu[0].pstate & !FLAGS_NZCV_MASK) | nzcv;
+                }
+            } else {
+                let a32 = if rn == 31 {
+                    0
+                } else {
+                    self.machine.cpu[0].regs[rn] as u32
+                };
+                let b32 = if rm == 31 {
+                    0
+                } else {
+                    self.machine.cpu[0].regs[rm] as u32
+                };
+                let operand2 = if op == 0 { b32 } else { !b32 };
+                let (res, nzcv) = add_with_carry32(a32, operand2, carry_in);
+                if rd != 31 {
+                    self.machine.cpu[0].regs[rd] = res as u64;
+                }
+                if s == 1 {
+                    self.machine.cpu[0].pstate =
+                        (self.machine.cpu[0].pstate & !FLAGS_NZCV_MASK) | nzcv;
+                }
+            }
+            self.machine.cpu[0].pc = pc.wrapping_add(4);
+            return Some(Ok(()));
+        }
+
         // 5. Logical (shifted register): ANDS / TST (opc=11) and BIC (opc=00, N=1)
         // sf opc 01010 shift N Rm imm6 Rn Rd
         if (word >> 24) & 0x1F == 0x0A {

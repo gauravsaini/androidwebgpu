@@ -78,6 +78,48 @@ pub fn nzcv_sub32(a: u32, b: u32) -> u64 {
     (n << 31) | (z << 30) | (c << 29) | (v << 28)
 }
 
+/// Compute result and updated NZCV flags for 64-bit addition with carry (ADC / ADCS / SBC / SBCS).
+/// Per ARM ARM AddWithCarry(x, y, carry_in):
+/// For ADC/ADCS, y = operand2, carry_in = PSTATE.C (0 or 1).
+/// For SBC/SBCS, y = NOT(operand2), carry_in = PSTATE.C (0 or 1).
+pub fn add_with_carry64(a: u64, b: u64, carry_in: u64) -> (u64, u64) {
+    let cin = carry_in & 1;
+    let unsigned_sum = (a as u128) + (b as u128) + (cin as u128);
+    let res = unsigned_sum as u64;
+    let signed_sum = (a as i64 as i128) + (b as i64 as i128) + (cin as i128);
+    let n = (res >> 63) & 1;
+    let z = if res == 0 { 1 } else { 0 };
+    let c = if unsigned_sum > 0xFFFF_FFFF_FFFF_FFFF { 1 } else { 0 };
+    let v = if (signed_sum < i64::MIN as i128) || (signed_sum > i64::MAX as i128) {
+        1
+    } else {
+        0
+    };
+    let nzcv = (n << 31) | (z << 30) | (c << 29) | (v << 28);
+    (res, nzcv)
+}
+
+/// Compute result and updated NZCV flags for 32-bit addition with carry (ADC / ADCS / SBC / SBCS).
+/// Per ARM ARM AddWithCarry(x, y, carry_in):
+/// For ADC/ADCS, y = operand2, carry_in = PSTATE.C (0 or 1).
+/// For SBC/SBCS, y = NOT(operand2), carry_in = PSTATE.C (0 or 1).
+pub fn add_with_carry32(a: u32, b: u32, carry_in: u64) -> (u32, u64) {
+    let cin = (carry_in & 1) as u64;
+    let unsigned_sum = (a as u64) + (b as u64) + cin;
+    let res = unsigned_sum as u32;
+    let signed_sum = (a as i32 as i64) + (b as i32 as i64) + (cin as i64);
+    let n = ((res >> 31) & 1) as u64;
+    let z = if res == 0 { 1 } else { 0 };
+    let c = if unsigned_sum > 0xFFFF_FFFF { 1 } else { 0 };
+    let v = if (signed_sum < i32::MIN as i64) || (signed_sum > i32::MAX as i64) {
+        1
+    } else {
+        0
+    };
+    let nzcv = (n << 31) | (z << 30) | (c << 29) | (v << 28);
+    (res, nzcv)
+}
+
 /// Compute updated NZCV flags for 64-bit logical AND (ANDS / TST).
 pub fn nzcv_and64(res: u64) -> u64 {
     let n = (res >> 63) & 1;
@@ -341,5 +383,47 @@ mod tests {
         // TST X0, #1 -> N=1, imms=0, immr=0 -> mask = 1
         let mask = decode_logical_immediate(1, 1, 0, 0);
         assert_eq!(mask, Some(1));
+    }
+
+    #[test]
+    fn test_add_with_carry64() {
+        // ADC 5 + 3 + carry_in(0) -> res 8, flags 0
+        let (res, flags) = add_with_carry64(5, 3, 0);
+        assert_eq!(res, 8);
+        assert_eq!(flags, 0);
+
+        // ADC 5 + 3 + carry_in(1) -> res 9, flags 0
+        let (res, flags) = add_with_carry64(5, 3, 1);
+        assert_eq!(res, 9);
+        assert_eq!(flags, 0);
+
+        // Carry out: u64::MAX + 0 + carry_in(1) -> res 0, Z=1, C=1
+        let (res, flags) = add_with_carry64(u64::MAX, 0, 1);
+        assert_eq!(res, 0);
+        assert_eq!(flags & (FLAG_Z | FLAG_C), FLAG_Z | FLAG_C);
+
+        // SBC 5 - 3 with borrow (carry_in=0): 5 + !3 + 0 = 5 + (-4) = 1
+        let (res, flags) = add_with_carry64(5, !3, 0);
+        assert_eq!(res, 1);
+        assert_eq!(flags & FLAG_C, FLAG_C); // 5 >= 4 so no borrow out (C=1)
+
+        // SBC 3 - 5 without borrow (carry_in=1): 3 + !5 + 1 = 3 - 5 = -2
+        let (res, flags) = add_with_carry64(3, !5, 1);
+        assert_eq!(res, (-2i64) as u64);
+        assert_eq!(flags & FLAG_N, FLAG_N);
+        assert_eq!(flags & FLAG_C, 0); // 3 < 5 so borrow out (C=0)
+    }
+
+    #[test]
+    fn test_add_with_carry32() {
+        // ADC 32-bit: 0xFFFF_FFFF + 0 + carry_in(1) -> res 0, Z=1, C=1
+        let (res, flags) = add_with_carry32(u32::MAX, 0, 1);
+        assert_eq!(res, 0);
+        assert_eq!(flags & (FLAG_Z | FLAG_C), FLAG_Z | FLAG_C);
+
+        // SBC 32-bit: 10 - 10 with carry_in=1 -> res 0, Z=1, C=1
+        let (res, flags) = add_with_carry32(10, !10, 1);
+        assert_eq!(res, 0);
+        assert_eq!(flags & (FLAG_Z | FLAG_C), FLAG_Z | FLAG_C);
     }
 }

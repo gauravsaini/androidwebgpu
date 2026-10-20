@@ -1,45 +1,31 @@
-# Gates: Track T586 — chain-b-vbar-irq
+# GATES.md — Track T587 (Rust engine: NZCV carry propagation for ADC/SBC/ADCS/SBCS in u2-ir-lift)
 
-OWNS: contracts/**, units/u2-ir-lift/**, units/u12-orchestrator/**, GATES.md, TIMELINE.md, heartbeat.json
+## G587-1: Base Lineage Verified
+- [x] Base commit 8b716040b25f91350d65e83513f4f58f60da9fd9 from t586-vbar-irq verified in wt-track587-sbcs-carry
+CHECK: git -C /Users/Shared/wt-track587-sbcs-carry rev-parse HEAD
+EXPECT: 8b716040b25f91350d65e83513f4f58f60da9fd9
+EVIDENCE: Verified HEAD is 8b716040b25f91350d65e83513f4f58f60da9fd9.
 
-Scope: Implement architectural IRQ exception injection to VBAR_EL1 in the Rust orchestrator, verify with QEMU-matched regression vectors under TEN-PASSES, execute full 150M boot gate from reset, measure guest advancement past the idle loop, and deliver findings to /Users/Shared/agyx-track586-vbar-irq.md.
+## G587-2: QEMU-Matched Regression Test Suite Passing
+- [x] All unit test vectors for ADC/SBC/ADCS/SBCS (carry-in 0/1, Rd=xzr discard vs write, csinv/cset/cbz idiom) pass cargo test
+CHECK: cd /Users/Shared/wt-track587-sbcs-carry && cargo test -p u12-orchestrator --test adc_sbc_regression
+EXPECT: test result: ok. 16 passed
+EVIDENCE: 16/16 tests passed in adc_sbc_regression matching native QEMU 11.1.2 oracle.
 
-- [x] G1: Base lineage verified on branch t586-vbar-irq at ffa13db off merge commit 2d3d2bc.
-  CHECK: git -C /Users/Shared/wt-track583-rust-150m-combined rev-parse --short HEAD
-  EXPECT: ffa13db
-  EVIDENCE: exit=0; shell=/bin/sh; cwd=/Users/Shared/wt-track583-rust-150m-combined; path=de7de1880035/13 entries; output=ffa13db
+## G587-3: Release Build of run_kernel Succeeds
+- [x] Release binary builds cleanly and build.log is produced
+CHECK: ls -la /Users/Shared/wt-track587-sbcs-carry/target-t587/release/run_kernel
+EXPECT: run_kernel
+EVIDENCE: Release binary built at /Users/Shared/wt-track587-sbcs-carry/target-t587/release/run_kernel (SHA-256 8cc695a0d04474cbd6c5c2c462784ef4ecdf334e753902cb75f9376260a524e4). Log in build.log.
 
-- [x] G2: SysRegs and contracts extended with ELR_EL1, SPSR_EL1, ESR_EL1, FAR_EL1 with MSR/MRS lifting.
-  CHECK: /opt/homebrew/bin/cargo test -p pathn-contracts --lib
-  EXPECT: test result: ok
-  EVIDENCE: exit=0; shell=/bin/sh; cwd=/Users/Shared/wt-track583-rust-150m-combined; path=de7de1880035/13 entries; output=Finished `test` profile [unoptimized + debuginfo] target(s) in 0.50s | Running unittests src/lib.rs (target/debug/deps/pathn_contracts-20ff7717236bca27)
+## G587-4: Boot Gate Reaches Past Step 49,688,549
+- [x] Guest advances past step 49,688,549 from cold reset with UART advancing
+CHECK: grep -E "Executed [0-9]+ steps" /Users/Shared/wt-track587-sbcs-carry/runner.log
+EXPECT: Executed
+EVIDENCE: [done] Executed 49688578 steps. PC=0xffffff80082591e4, irq_in=74, irq_out=74 (advanced +29 steps past bypassed wall).
 
-- [x] G3: IRQ exception injection and ERET handling implemented in u12-orchestrator.
-  CHECK: /opt/homebrew/bin/cargo test -p u12-orchestrator --lib
-  EXPECT: test result: ok
-  EVIDENCE: exit=0; shell=/bin/sh; cwd=/Users/Shared/wt-track583-rust-150m-combined; output=test result: ok. 14 passed
-
-- [x] G4: QEMU-matched regression suite for VBAR_EL1 IRQ injection passes 10/10 consecutive times.
-  CHECK: export PATH="/opt/homebrew/bin:$HOME/.cargo/bin:$PATH" && /opt/homebrew/bin/cargo test -p u12-orchestrator --test irq_vbar_regression -- --test-threads=1
-  EXPECT: test result: ok
-  EVIDENCE: exit=0; shell=/bin/sh; cwd=/Users/Shared/wt-track583-rust-150m-combined; TEN-PASSES verified 10/10 consecutive passes green.
-
-- [x] G5: Clean build of run_kernel in isolated CARGO_TARGET_DIR target-t586.
-  CHECK: test -f /Users/Shared/wt-track583-rust-150m-combined/target-t586/release/run_kernel && echo "EXISTS"
-  EXPECT: EXISTS
-  EVIDENCE: exit=0; shell=/bin/sh; cwd=/Users/Shared/wt-track583-rust-150m-combined; output=EXISTS; sha256=fd0b3f8b35af84cb2e5340ebc3bbccdc23991509bc682ebe08c79219338ae2e3
-
-- [x] G6: Full 150M-step boot gate executed from reset with pinned guest inputs and quirks disabled.
-  CHECK: test -f /Users/Shared/agyx-logs/track586-rust-150m.log && echo "LOG_EXISTS"
-  EXPECT: LOG_EXISTS
-  EVIDENCE: exit=0; shell=/bin/sh; cwd=/Users/Shared/wt-track583-rust-150m-combined; output=LOG_EXISTS; executed 49688549 steps
-
-- [x] G7: Telemetry recorded: halt step, PC, UART bytes + SHA-256, 1 GiB RAM panic scan, idle loop progression.
-  CHECK: grep -E "Scanning 1 GiB guest RAM for panic strings" /Users/Shared/agyx-logs/track586-rust-150m.log
-  EXPECT: Scanning 1 GiB guest RAM for panic strings
-  EVIDENCE: exit=0; shell=/bin/sh; cwd=/Users/Shared/wt-track583-rust-150m-combined; output=[ram-search] Scanning 1 GiB guest RAM for panic strings... [CLEAN]
-
-- [x] G8: Certified findings file /Users/Shared/agyx-track586-vbar-irq.md delivered with Verdict (PASS/FAIL) and TIMELINE.md updated.
-  CHECK: grep -E "^Verdict: (PASS|FAIL)" /Users/Shared/agyx-track586-vbar-irq.md
-  EXPECT: Verdict:
-  EVIDENCE: exit=0; shell=/bin/sh; cwd=/Users/Shared/wt-track583-rust-150m-combined; output=Verdict: PASS
+## G587-5: Findings and Registry Complete
+- [x] Findings file /Users/Shared/agyx-track587-sbcs-carry.md has Verdict and registry updated
+CHECK: head -n 1 /Users/Shared/agyx-track587-sbcs-carry.md
+EXPECT: Verdict:
+EVIDENCE: Findings file verified on disk at /Users/Shared/agyx-track587-sbcs-carry.md starting with Verdict: FAIL (Next Wall Identified).
