@@ -529,8 +529,8 @@ fn lift_system(word: u32) -> Vec<IrOp> {
                         (3, 3, 0, 0, 1) => 0x8444_8004,
                         // NZCV: stays in GB-2 live pstate flag path
                         (3, 3, 4, 2, 0) => 0,
-                        // ID_AA64PFR0_EL1: EL0/EL1 AArch64 supported
-                        (3, 0, 0, 4, 0) => 0x11,
+                        // ID_AA64PFR0_EL1: EL0/EL1 AArch64 supported; AdvSIMD=0xF (Not Implemented, Track T607)
+                        (3, 0, 0, 4, 0) => 0x00f0_0011,
                         // ID_AA64PFR1_EL1 (2026-10-02): minimal Cortex-A53 =
                         // 0. No BT, no MTE, no RAS. If we advertised these,
                         // the alternatives framework would patch in code
@@ -4351,7 +4351,7 @@ mod tests {
         let w = sys_word(3, 0, 0, 4, 0, 2, true);
         assert_eq!(
             lift(&insn(0x4000, w, InsnKind::System)),
-            vec![IrOp::Mov { dst: 2, imm: 0x11 }]
+            vec![IrOp::Mov { dst: 2, imm: 0x00f0_0011 }]
         );
     }
 
