@@ -25,12 +25,12 @@ Scope: Implement architectural BRK debug exception vectoring to VBAR_EL1+0x200 (
   EXPECT: BUILD_OK
   EVIDENCE: verified executable at `target-t594/release/run_kernel` (SHA-256 fe054e10f5ca0dbf361a2d13a5f588d04d8b8e0c002f6db754a058ab7b655557)
 
-- [ ] G594-5: Cold reset boot gate executed under owned supervisor past step 145,410,118 with log capture and heartbeat
+- [x] G594-5: Cold reset boot gate executed under owned supervisor past step 145,410,118 with log capture and heartbeat
   CHECK: test -f /Users/Shared/wt-track594-brk-vector/outcome-t594.txt && echo BOOT_GATE_RECORDED
   EXPECT: BOOT_GATE_RECORDED
-  EVIDENCE: pending
+  EVIDENCE: verified `outcome-t594.txt` recorded 150M completion (step 150,000,000, UART 13,456 bytes, 1,984 IRQs, 1 BRK exception vectored at step 145,410,118, 0 emulator traps)
 
-- [ ] G594-6: Findings artifact delivered with required tags, verdict, and registry updated
+- [x] G594-6: Findings artifact delivered with required tags, verdict, and registry updated
   CHECK: test -f /Users/Shared/agyx-track594-brk-vector.md && grep -q "WALL-TYPE-TAG: engine" /Users/Shared/agyx-track594-brk-vector.md && echo FINDINGS_OK
   EXPECT: FINDINGS_OK
-  EVIDENCE: pending
+  EVIDENCE: verified `/Users/Shared/agyx-track594-brk-vector.md` delivered with Verdict: PASS and WALL-TYPE-TAG: engine

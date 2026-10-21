@@ -79,3 +79,12 @@
 - Instruction: `brk #0x800` (`0xd4210000`).
 - Fault: `HaltReason::Unsupported { addr: 18446743524090974028, reason: "System: BRK exception" }`.
 - Status: **RESOLVED in T594**. Architectural BRK exception vectoring to `VBAR_EL1 + 0x200` (`el1_sync`) for EL1 and `VBAR_EL1 + 0x400` (`el0_sync`) for EL0 implemented. ESR_EL1 populated with EC=0x3C, IL=1, ISS=imm16, ELR_EL1 = faulting PC, SPSR_EL1 = saved PSTATE, DAIF masked (0x3C0), FAR_EL1 untouched. Verified against 5 QEMU-matched regression test vectors (`brk_vbar_regression.rs`).
+
+## T594 clang-cfi-sha256-check-fail / init-kill-panic (145.41M wall) — guest
+
+- Tag: **guest** (Type-1 guest kernel Clang Forward-Edge CFI jump table mismatch on assembly symbol `sha256_block_data_order`).
+- Rust par bhi lagu: haan (applies to guest kernel execution under both Rust emulator and QEMU virt during X.509 regulatory cert load).
+- Step: `145,410,118`.
+- PC: `0xffffff80082e0f4c` (`__cfi_check_fail+0x18/0x1c`).
+- Fault: `CFI failure (target: sha256_block_data_order.cfi_jt+0x4/0x8)`, `kernel BUG at kernel/cfi.c:32!`, `Kernel panic - not syncing: Attempted to kill init! exitcode=0x0000000b`.
+- Status: **DISCOVERED in T594**. Following architectural BRK vectoring bypass, the kernel's trap handler executed the CFI check failure crash handler. Next action: boot with `cfi=permissive` or patch `sha256_block_data_order` CFI type hash in `Image`.
