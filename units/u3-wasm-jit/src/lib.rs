@@ -239,6 +239,10 @@ pub fn compile(block: &IrBlock) -> WasmModule {
             IrOp::Trap { .. } => {
                 body.push(OP_UNREACHABLE);
             }
+            // Track T594: Architectural BRK debug exception (handled by orchestrator before WASM run).
+            IrOp::Brk { .. } => {
+                body.push(OP_UNREACHABLE);
+            }
             IrOp::LoadDyn {
                 dst,
                 base,

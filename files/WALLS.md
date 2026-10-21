@@ -60,3 +60,22 @@
 - Root Cause: In Linux ARM64, `futex_init` intentionally executes atomic cmpxchg probe with NULL pointer, expecting an architectural synchronous Data Abort exception to vector to `VBAR_EL1 + 0x200` where `do_page_fault` -> `fixup_exception` searches `__ex_table` and fixes up the return value to `-EFAULT`. The Rust emulator previously lacked synchronous Data Abort vectoring, treating non-vmemmap `TranslationFault` as an unhandled fatal `WasmTrap`.
 - Status: **RESOLVED in T590**. Synchronous Data Abort exception vectoring to `VBAR_EL1 + 0x200` implemented in `u12-orchestrator` (`DetailedFault`, `translate_detailed`, `take_data_abort_exception`). Sets ESR_EL1 with exact EC (0x25 for EL1), IL=1, WnR, and DFSC (0x05 for Level 1 Translation Fault), FAR_EL1 = faulting VA, saves ELR_EL1/SPSR_EL1, masks DAIF, and vectors to `VBAR_EL1 + 0x200`. Verified against 6 QEMU-matched regression test vectors (`data_abort_vbar_regression.rs`). Live cold boot gate run cleanly advanced past step 49,688,578 to 68M+ steps with UART console advancing from 3,936 bytes to 5,542 bytes (+1,606 bytes).
 - Console bytes: 3,936 → 5,542 bytes (clean, 0 dynamic panics).
+
+
+## T593 zygote-exit0 / missing-hwc-dependency — guest [FAIL]
+
+- Tag: **guest** (DisplayManagerService display timeout, SurfaceFlinger unstarted HWC dependency, and Zygote clean exit-0 loop).
+- Rust par bhi lagu: haan (applies to guest image used by both Rust and QEMU engines).
+- Guest uptime: 650.9s continuous QEMU virt ARM64 boot.
+- Fault: `DisplayManagerService` throws `RuntimeException("Timeout waiting for default display to be initialized")` when SurfaceFlinger is unstarted, causing `system_server` crash and Zygote clean exit 0. Restoring SurfaceFlinger (`class core animation`) and bypassing DMS timeout eliminated the Zygote exit-0 loop (45 -> 1), but uncovered the underlying root cause: `vendor.hwc-2-1` (`android.hardware.graphics.composer@2.1-service`) never starts because `/vendor/etc/init` is not parsed in headless virt boot without `mount_all`. SurfaceFlinger in `SurfaceFlinger::init()` fails with `LOG_ALWAYS_FATAL_IF(!display, "Failed to configure the primary display")` (`SIGABRT` / signal 6, 43 aborts across 650.9s).
+- Status: **RESOLVED (Diagnosis complete; Zygote exit-0 loop eliminated [45 -> 1])**. Fix versioned in `guest-inputs/t585-fabricate-display/t593-initramfs.cpio.gz`. Next wall: `surfaceflinger-signal6-abort-loop / missing-hwc-dependency`.
+
+## T592/T594 brk-0x800-unvectorized (145.41M wall) — engine
+
+- Tag: **engine** (AArch64 architectural BRK debug exception vectoring in `u12-orchestrator` / `u2-ir-lift`).
+- Rust par bhi lagu: haan (applies to Rust emulator exception dispatch and execution pipeline).
+- Step: `145,410,118`.
+- PC: `0xffffff80082e0f4c` (`sha256_block_data_order` / Clang CFI check failure during `cfg80211` X.509 regulatory certificate loading).
+- Instruction: `brk #0x800` (`0xd4210000`).
+- Fault: `HaltReason::Unsupported { addr: 18446743524090974028, reason: "System: BRK exception" }`.
+- Status: **RESOLVED in T594**. Architectural BRK exception vectoring to `VBAR_EL1 + 0x200` (`el1_sync`) for EL1 and `VBAR_EL1 + 0x400` (`el0_sync`) for EL0 implemented. ESR_EL1 populated with EC=0x3C, IL=1, ISS=imm16, ELR_EL1 = faulting PC, SPSR_EL1 = saved PSTATE, DAIF masked (0x3C0), FAR_EL1 untouched. Verified against 5 QEMU-matched regression test vectors (`brk_vbar_regression.rs`).

@@ -523,10 +523,11 @@ fn main() {
         }
     }
     println!(
-        "[done] Executed {steps} steps. PC={pc:#018x}, irq_in={}, irq_out={}, da_in={}",
+        "[done] Executed {steps} steps. PC={pc:#018x}, irq_in={}, irq_out={}, da_in={}, brk_in={}",
         orch.irq_entry_count(),
         orch.irq_return_count(),
-        orch.data_abort_count()
+        orch.data_abort_count(),
+        orch.brk_count()
     );
     match halt_reason {
         Some(ref reason) => {

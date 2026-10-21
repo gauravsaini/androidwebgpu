@@ -188,7 +188,11 @@ fn lift_system(word: u32) -> Vec<IrOp> {
             // IrOp::Hvc; the backend returns PSCI_VERSION or NOT_SUPPORTED.
             0b000 if ll == 0b10 => vec![IrOp::Hvc],
             0b000 if ll == 0b11 => trap(R_SMC),
-            0b001 if (word & 0x1F) == 0 => trap(R_BRK),
+            // Track T594: BRK exception (EC=0x3c) lifts to IrOp::Brk { imm } for architectural vectoring.
+            0b001 if (word & 0x1F) == 0 => {
+                let imm = ((word >> 5) & 0xFFFF) as u16;
+                vec![IrOp::Brk { imm }]
+            }
             0b010 if (word & 0x1F) == 0 => trap(R_HLT),
             _ => trap(R_SYSTEM),
         };
@@ -5095,9 +5099,14 @@ mod tests {
 
     #[test]
     fn exceptions_lift_to_honest_traps() {
+        // Track T594: BRK lifts to IrOp::Brk { imm }, not Trap.
         assert_eq!(
             lift(&insn(0x4000, 0xD420_0000, InsnKind::System)),
-            vec![IrOp::Trap { reason: R_BRK }]
+            vec![IrOp::Brk { imm: 0 }]
+        );
+        assert_eq!(
+            lift(&insn(0x4000, 0xD421_0000, InsnKind::System)),
+            vec![IrOp::Brk { imm: 0x800 }]
         );
         assert_eq!(
             lift(&insn(0x4000, 0xD440_0000, InsnKind::System)),

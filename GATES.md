@@ -1,31 +1,36 @@
-# GATES.md — Track T590 (Rust emulator: synchronous Data Abort exception vectoring to VBAR_EL1+0x200)
+# Gates: Track T594 — Rust engine: BRK exception vectoring to VBAR_EL1+0x200 (Chain B)
 
-## G590-1: Base Lineage Verified
-- [x] Base commit 22c7ba450891ea56d16f6f98fe6da77eb8ca7d53 from t587-sbcs-carry verified in wt-track590-data-abort
-CHECK: git -C /Users/Shared/wt-track590-data-abort rev-parse HEAD
-EXPECT: 22c7ba450891ea56d16f6f98fe6da77eb8ca7d53
-EVIDENCE: Verified HEAD is 22c7ba450891ea56d16f6f98fe6da77eb8ca7d53.
+OWNS: units/u12-orchestrator/**, units/u2-ir-lift/**, contracts/**, GATES.md, TIMELINE.md, files/WALLS.md, outcome-t594.txt
 
-## G590-2: QEMU-Matched Regression Test Suite Passing
-- [x] All unit test vectors for synchronous Data Abort exception vectoring (LDR null base, STR unmapped VA, DFSC levels 0..3, Permission fault, ERET return) pass cargo test
-CHECK: cd /Users/Shared/wt-track590-data-abort && CARGO_TARGET_DIR=target-t590 cargo test --release -p u12-orchestrator --test data_abort_vbar_regression
-EXPECT: test result: ok. 6 passed
-EVIDENCE: 6/6 tests passed in data_abort_vbar_regression matching Cortex-A53 QEMU 11.1.2 oracle.
+Scope: Implement architectural BRK debug exception vectoring to VBAR_EL1+0x200 (el1_sync) and VBAR_EL1+0x400 (el0_sync) in u12-orchestrator/u2-ir-lift, verify QEMU regression vectors, execute owned cold boot gate past step 145,410,118.
 
-## G590-3: Release Build of run_kernel Succeeds
-- [x] Release binary builds cleanly and build.log is produced
-CHECK: ls -la /Users/Shared/wt-track590-data-abort/target-t590/release/run_kernel
-EXPECT: run_kernel
-EVIDENCE: Release binary built at /Users/Shared/wt-track590-data-abort/target-t590/release/run_kernel (SHA-256 664c17eb7534797d0197e1d4d7dc5f7fbbddf8f2d9eb9301e0552d5e8c0e16cf).
+- [x] G594-1: Base commit fb394dcf0807003e155b075a1e4d4de76dd90c0d verified in worktree
+  CHECK: cd /Users/Shared/wt-track594-brk-vector && git rev-parse HEAD
+  EXPECT: fb394dcf0807003e155b075a1e4d4de76dd90c0d
+  EVIDENCE: verified 2026-10-21 `fb394dcf0807003e155b075a1e4d4de76dd90c0d`
 
-## G590-4: Boot Gate Reaches Past Step 49,688,578
-- [x] Guest advances past step 49,688,578 from cold reset with UART advancing
-CHECK: grep -E "step [0-9]+" /Users/Shared/wt-track590-data-abort/runner.log | tail -n 1
-EXPECT: step
-EVIDENCE: Live cold boot reached step 70,000,000 (70M steps, PC=0xffffff80085bed34, console_bytes=5542, irq_in=472, irq_out=473), cleanly advancing +20,311,422 steps past the step 49,688,578 halt with console bytes advancing from 3,936 to 5,542 bytes (+1,606 bytes).
+- [x] G594-2: BRK decode, ESR encoding (EC=0x3c, IL=1, ISS=imm16), ELR/SPSR save, DAIF mask, and VBAR vectoring implemented
+  CHECK: grep -q "take_brk_exception" /Users/Shared/wt-track594-brk-vector/units/u12-orchestrator/src/lib.rs && echo BRK_IMPLEMENTED
+  EXPECT: BRK_IMPLEMENTED
+  EVIDENCE: verified `take_brk_exception` implemented in `u12-orchestrator` and `IrOp::Brk { imm }` in `u2-ir-lift`
 
-## G590-5: Findings and Registry Complete
-- [x] Findings file /Users/Shared/agyx-track590-data-abort.md has Verdict and registry updated
-CHECK: head -n 1 /Users/Shared/agyx-track590-data-abort.md
-EXPECT: Verdict: PASS
-EVIDENCE: Findings file verified on disk at /Users/Shared/agyx-track590-data-abort.md starting with Verdict: PASS.
+- [x] G594-3: QEMU-matched regression tests passing
+  CHECK: CARGO_TARGET_DIR=target-t594 cargo test --release --test brk_vbar_regression -- --nocapture
+  EXPECT: test result: ok. 5 passed
+  CWD: /Users/Shared/wt-track594-brk-vector/units/u12-orchestrator
+  EVIDENCE: verified 5/5 passed (EL1 imm=0x800 T592 wall, EL0 imm=0x1 to VBAR+0x400, imm=0x0, DAIF masking, ERET round-trip)
+
+- [x] G594-4: Release build of run_kernel with CARGO_TARGET_DIR=target-t594
+  CHECK: test -x /Users/Shared/wt-track594-brk-vector/target-t594/release/run_kernel && echo BUILD_OK
+  EXPECT: BUILD_OK
+  EVIDENCE: verified executable at `target-t594/release/run_kernel` (SHA-256 fe054e10f5ca0dbf361a2d13a5f588d04d8b8e0c002f6db754a058ab7b655557)
+
+- [ ] G594-5: Cold reset boot gate executed under owned supervisor past step 145,410,118 with log capture and heartbeat
+  CHECK: test -f /Users/Shared/wt-track594-brk-vector/outcome-t594.txt && echo BOOT_GATE_RECORDED
+  EXPECT: BOOT_GATE_RECORDED
+  EVIDENCE: pending
+
+- [ ] G594-6: Findings artifact delivered with required tags, verdict, and registry updated
+  CHECK: test -f /Users/Shared/agyx-track594-brk-vector.md && grep -q "WALL-TYPE-TAG: engine" /Users/Shared/agyx-track594-brk-vector.md && echo FINDINGS_OK
+  EXPECT: FINDINGS_OK
+  EVIDENCE: pending

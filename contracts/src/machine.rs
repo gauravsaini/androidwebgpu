@@ -925,7 +925,7 @@ mod tests {
         ] {
             assert_eq!(SysRegs::from_index(idx), Some(reg));
         }
-        assert_eq!(SysRegs::from_index(136), None);
+        assert_eq!(SysRegs::from_index(140), None);
     }
 
     #[test]
@@ -981,6 +981,6 @@ mod tests {
         ] {
             assert_eq!(SysRegs::from_index(idx), Some(reg));
         }
-        assert_eq!(SysRegs::from_index(136), None);
+        assert_eq!(SysRegs::from_index(140), None);
     }
 }

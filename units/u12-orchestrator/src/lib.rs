@@ -608,6 +608,8 @@ pub struct Orchestrator {
     pub irq_return_count: u64,
     /// Track T590: Synchronous Data Abort exceptions taken to VBAR_EL1 + 0x200.
     pub data_abort_count: u64,
+    /// Track T594: Synchronous BRK exceptions taken to VBAR_EL1.
+    pub brk_count: u64,
     /// Last MMU translation or permission fault recorded on data access.
     pub last_mmu_fault: Option<(u64, Access, DetailedFault)>,
 }
@@ -683,6 +685,7 @@ impl Orchestrator {
             irq_entry_count: 0,
             irq_return_count: 0,
             data_abort_count: 0,
+            brk_count: 0,
             last_mmu_fault: None,
         };
         #[cfg(not(target_arch = "wasm32"))]
@@ -869,6 +872,11 @@ impl Orchestrator {
     /// Total synchronous Data Abort exception entries.
     pub fn data_abort_count(&self) -> u64 {
         self.data_abort_count
+    }
+
+    /// Total synchronous BRK debug exception entries.
+    pub fn brk_count(&self) -> u64 {
+        self.brk_count
     }
 
     /// Number of distinct blocks currently in the JIT cache.
@@ -1371,6 +1379,16 @@ impl Orchestrator {
             self.machine.cpu[0].pstate = spsr;
             self.machine.cpu[0].sysregs.daif = spsr & 0x3C0;
             self.irq_return_count = self.irq_return_count.saturating_add(1);
+            return Some(Ok(()));
+        }
+
+        // 2c. Track T594: BRK (software breakpoint debug exception)
+        // 1101 0100 001 imm16 00000 (0xD4200000 | (imm16 << 5))
+        if (word & 0xFFE0_001F) == 0xD420_0000 {
+            let imm = ((word >> 5) & 0xFFFF) as u16;
+            if let Err(reason) = self.take_brk_exception(pc, imm) {
+                return Some(Err(reason));
+            }
             return Some(Ok(()));
         }
 
@@ -3439,7 +3457,8 @@ impl Orchestrator {
         let is_el1 = match saved_pstate & 0x1F {
             0x05 => true, // EL1h
             0x04 => true, // EL1t
-            0x00 if (cpu.pc >> 63) == 1 || (cpu.pc >= 0x4000_0000 && cpu.pc < 0x8000_0000) => {
+            0x00 if (cpu.pc >> 63) == 1
+                || (cpu.sysregs.sctlr_el1 & 1 == 0 && cpu.pc >= 0x4000_0000 && cpu.pc < 0x8000_0000) => {
                 // Kernel space with uninitialized mode bits -> EL1h
                 true
             }
@@ -3480,6 +3499,75 @@ impl Orchestrator {
         cpu.pc = vector_pc;
 
         self.data_abort_count = self.data_abort_count.saturating_add(1);
+        Ok(())
+    }
+
+    /// Compute architectural ESR_EL1 value for synchronous BRK debug exception.
+    /// EC = 0x3C (AArch64 BRK instruction), IL = 1 (32-bit instruction), ISS = imm16.
+    pub fn compute_brk_esr(imm: u16) -> u64 {
+        let ec: u64 = 0x3C;
+        let il: u64 = 1;
+        let iss: u64 = imm as u64;
+        (ec << 26) | (il << 25) | iss
+    }
+
+    /// Deliver an architectural synchronous BRK debug exception to EL1.
+    pub fn take_brk_exception(
+        &mut self,
+        faulting_pc: u64,
+        imm: u16,
+    ) -> Result<(), HaltReason> {
+        let cpu = &self.machine.cpu[0];
+        let saved_pstate =
+            (cpu.pstate & !0x0000_03C0) | (cpu.sysregs.daif & 0x0000_03C0);
+        let is_el1 = match saved_pstate & 0x1F {
+            0x05 => true, // EL1h
+            0x04 => true, // EL1t
+            0x00 if (cpu.pc >> 63) == 1
+                || (cpu.sysregs.sctlr_el1 & 1 == 0 && cpu.pc >= 0x4000_0000 && cpu.pc < 0x8000_0000) => {
+                // Kernel space with uninitialized mode bits -> EL1h
+                true
+            }
+            0x00 => false, // EL0t (AArch64)
+            _ => {
+                return Err(HaltReason::Unsupported {
+                    addr: cpu.pc,
+                    reason: "BRK exception from an unsupported PSTATE mode",
+                });
+            }
+        };
+        let source_mode = if is_el1 {
+            match saved_pstate & 0x1F {
+                0x04 => 0x04,
+                _ => 0x05,
+            }
+        } else {
+            0x00
+        };
+        let vector_offset = match source_mode {
+            0x05 => 0x200, // EL1h -> el1h_sync (VBAR_EL1 + 0x200)
+            0x04 => 0x000, // EL1t -> el1t_sync (VBAR_EL1 + 0x000)
+            0x00 => 0x400, // EL0t (AArch64) -> el0_sync (VBAR_EL1 + 0x400)
+            _ => unreachable!(),
+        };
+        let vector_pc = (cpu.sysregs.vbar_el1 & !0x7FF).wrapping_add(vector_offset);
+
+        let esr = Self::compute_brk_esr(imm);
+
+        let cpu = &mut self.machine.cpu[0];
+        cpu.sysregs.elr_el1 = faulting_pc;
+        // Note: FAR_EL1 is UNTOUCHED on BRK debug exceptions per ARM ARM and QEMU.
+        cpu.sysregs.esr_el1 = esr;
+        cpu.sysregs.spsr_el1 = (saved_pstate & !0x1F) | source_mode;
+        cpu.sysregs.daif |= 0x3C0;
+        cpu.pstate = (saved_pstate & !(0x0000_03C0 | 0x1F)) | 0x0000_03C0 | 0x05;
+        cpu.pc = vector_pc;
+
+        self.brk_count = self.brk_count.saturating_add(1);
+        println!(
+            "[brk] Architectural BRK #0x{:x} taken at step {}, faulting_pc={:#018x} -> vector {:#018x}, ESR_EL1={:#010x}",
+            imm, self.steps, faulting_pc, vector_pc, esr
+        );
         Ok(())
     }
 
@@ -3601,6 +3689,19 @@ impl Orchestrator {
 
         // Lift (U2).
         let ops = u2_ir_lift::lift(&insn);
+
+        // Track T594: Check for architectural BRK debug exception in lifted ops.
+        for op in &ops {
+            if let IrOp::Brk { imm } = op {
+                if let Err(err) = self.take_brk_exception(pc, *imm) {
+                    self.halted = Some(err.clone());
+                    return StepOutcome::Halted(err);
+                }
+                self.steps += 1;
+                self.tick_clock(TIMER_CYCLES_PER_STEP);
+                return StepOutcome::Continue;
+            }
+        }
 
         // Trap check BEFORE compiling: U2's trap strings are the exact,
         // honest reason. Compiling a trap would only produce `unreachable`.

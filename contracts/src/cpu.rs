@@ -608,6 +608,10 @@ pub enum IrOp {
     /// and PSCI_FEATURES (0x8400000a) queries X1 matching Cortex-A53 QEMU virt oracle;
     /// all unsupported function IDs return PSCI_NOT_SUPPORTED (-1) in X0. Honest stub.
     Hvc,
+    /// Track T594: Architectural BRK software breakpoint debug exception with 16-bit immediate.
+    Brk {
+        imm: u16,
+    },
     /// Explicit trap for unimplemented/privileged semantics. Never a silent nop.
     Trap {
         reason: &'static str,
