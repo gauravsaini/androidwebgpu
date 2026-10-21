@@ -87,4 +87,16 @@
 - Step: `145,410,118`.
 - PC: `0xffffff80082e0f4c` (`__cfi_check_fail+0x18/0x1c`).
 - Fault: `CFI failure (target: sha256_block_data_order.cfi_jt+0x4/0x8)`, `kernel BUG at kernel/cfi.c:32!`, `Kernel panic - not syncing: Attempted to kill init! exitcode=0x0000000b`.
-- Status: **DISCOVERED in T594**. Following architectural BRK vectoring bypass, the kernel's trap handler executed the CFI check failure crash handler. Next action: boot with `cfi=permissive` or patch `sha256_block_data_order` CFI type hash in `Image`.
+- Status: **CONFIRMED in T594/T599**. Following architectural BRK vectoring bypass, kernel trap handler executes CFI check failure crash handler and enters 5-second reboot delay. Next action: boot with `cfi=permissive` or patch `sha256_block_data_order` CFI type hash in `Image`.
+
+## T599 reboot-failed-livelock / machine-halt (208.64M wall) — guest
+
+- Tag: **guest** (Guest kernel terminal machine halt via `b .` at `0xffffff80081842c0` following 5-second reboot delay expiration on PID 1 CFI panic).
+- Rust par bhi lagu: haan (applies to guest kernel execution under both Rust emulator and QEMU virt when platform reboot is unhandled).
+- Step: `208,640,789`.
+- PC: `0xffffff80081842c0` (`init_irq_stacks+0x88` / `machine_halt`).
+- Instruction: `b .` (`0x14000000`).
+- Fault: `HaltReason::Unsupported { addr: 18446743524089545408, reason: "livelock: PC did not advance after block execution" }`.
+- Console Evidence: `[   13.066640] Reboot failed -- System halted` (UART 13,503 bytes, SHA-256 `cb8e02c50a1371b18df03f62f07c3bdac4ef9182cbc0b95862d954fe1d943b53`).
+- Cap Rule Telemetry: Distinct PCs in last 10,000 steps = 1,894; jiffies = 9; init_grep = not found.
+- Status: **IDENTIFIED in T599**. The 300M boot gate advanced +58.64M steps past the 150M cap to step 208,640,789 before halting on terminal self-branch. Root wall blocking `/init` remains `clang-cfi-sha256-check-fail` at step 145,410,118.

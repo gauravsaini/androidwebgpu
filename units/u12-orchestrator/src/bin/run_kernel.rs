@@ -323,6 +323,11 @@ fn main() {
     let trace_start: Option<u64> = env::var("TRACE_WINDOW_START").ok().and_then(|s| s.parse().ok());
     let trace_end: Option<u64> = env::var("TRACE_WINDOW_END").ok().and_then(|s| s.parse().ok());
     let periodic_sample: bool = env::var_os("TRACE_PERIODIC_1M").is_some();
+    // Track last 10,000 PCs in a ring buffer for Cap Rule verification
+    let mut last_10k_pcs = vec![0u64; 10_000];
+    let mut last_10k_idx = 0;
+    let mut last_10k_count = 0;
+    let mut last_marker_check_len = 0;
     for _ in 0..max_steps {
         if let Some(target) = break_pc {
             let cpu = &orch.machine().cpu[0];
@@ -372,6 +377,11 @@ fn main() {
             }
         }
         let cur_pc = orch.machine().cpu[0].pc;
+        last_10k_pcs[last_10k_idx] = cur_pc;
+        last_10k_idx = (last_10k_idx + 1) % 10_000;
+        if last_10k_count < 10_000 {
+            last_10k_count += 1;
+        }
         let sample_step = orch.steps() + 1;
         let should_sample = match (trace_start, trace_end) {
             (Some(st), Some(en)) => sample_step >= st && sample_step <= en,
@@ -452,11 +462,22 @@ fn main() {
             std::io::stdout().flush().ok();
         }
         const PID1_MARKER: &[u8] = b"[PATHN-TRACK-B] ARM64 STATIC /INIT LAUNCHED (PID 1)";
-        if orch.console().tx_bytes.windows(PID1_MARKER.len()).any(|w| w == PID1_MARKER) {
-            println!("[marker] EXACT PID-1 MARKER OBSERVED at step {s}!");
-            use std::io::Write;
-            std::io::stdout().flush().ok();
-            break;
+        const INIT_PROC_MARKER: &[u8] = b"Run /init as init process";
+        let cur_console_len = orch.console().tx_bytes.len();
+        if cur_console_len != last_marker_check_len {
+            last_marker_check_len = cur_console_len;
+            if orch.console().tx_bytes.windows(PID1_MARKER.len()).any(|w| w == PID1_MARKER) {
+                println!("[marker] EXACT PID-1 MARKER OBSERVED at step {s}!");
+                use std::io::Write;
+                std::io::stdout().flush().ok();
+                break;
+            }
+            if orch.console().tx_bytes.windows(INIT_PROC_MARKER.len()).any(|w| w == INIT_PROC_MARKER) {
+                println!("[marker] Run /init as init process OBSERVED at step {s}!");
+                use std::io::Write;
+                std::io::stdout().flush().ok();
+                break;
+            }
         }
         // --save-at: snapshot as soon as the step counter reaches the target.
         if let Some(target) = save_at {
@@ -582,6 +603,34 @@ fn main() {
         } else {
             println!("  [PANIC DETECTED] {} dynamic occurrences of '{}'", count, name);
         }
+    }
+
+    // Mandatory Cap Rule Verification (Track T599)
+    // 1. Distinct PCs in the last 10,000 steps
+    let mut pc_set = std::collections::HashSet::new();
+    for &p in last_10k_pcs.iter().take(last_10k_count) {
+        pc_set.insert(p);
+    }
+    let distinct_pcs = pc_set.len();
+    println!("[cap-rule] distinct_pcs_last_10k: {distinct_pcs}");
+
+    // 2. Jiffies (guest timer progress)
+    // In ARM64 Linux 4.19, jiffies_64 is at VA 0xffffff800954e3d0 -> PA 0x4154e3d0
+    const JIFFIES_PA: u64 = 0x4154_e3d0;
+    let jiffies_offset = (JIFFIES_PA - RAM_BASE) as usize;
+    let jiffies_val = if jiffies_offset + 8 <= ram.len() {
+        u64::from_le_bytes(ram[jiffies_offset..jiffies_offset + 8].try_into().unwrap())
+    } else {
+        0
+    };
+    println!("[cap-rule] jiffies: {jiffies_val} ({jiffies_val:#x}) at PA {JIFFIES_PA:#x}");
+
+    // 3. UART grep result for "Run /init as init process"
+    const INIT_NEEDLE: &[u8] = b"Run /init as init process";
+    let init_grep = orch.console().tx_bytes.windows(INIT_NEEDLE.len()).position(|w| w == INIT_NEEDLE);
+    match init_grep {
+        Some(offset) => println!("[cap-rule] init_grep: found at byte offset {offset}"),
+        None => println!("[cap-rule] init_grep: not found"),
     }
 
     if survey {
