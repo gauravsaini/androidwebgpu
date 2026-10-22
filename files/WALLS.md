@@ -88,3 +88,14 @@
 - PC: `0xffffff80082e0f4c` (`__cfi_check_fail+0x18/0x1c`).
 - Fault: `CFI failure (target: sha256_block_data_order.cfi_jt+0x4/0x8)`, `kernel BUG at kernel/cfi.c:32!`, `Kernel panic - not syncing: Attempted to kill init! exitcode=0x0000000b`.
 - Status: **DISCOVERED in T594**. Following architectural BRK vectoring bypass, the kernel's trap handler executed the CFI check failure crash handler. Next action: boot with `cfi=permissive` or patch `sha256_block_data_order` CFI type hash in `Image`.
+
+## T607 clang-cfi-sha256-generic-assembly-fail / init-kill-panic (145.27M wall) — engine
+
+- Tag: **engine** (Rust emulator lacks ARMv8 Crypto Extensions, forcing guest to fallback to assembly-backed sha256 drivers that fail Clang CFI).
+- Rust par bhi lagu: haan (applies to Rust emulator CPU feature advertising and execution).
+- Step: `145,268,307`.
+- PC: `0xffffff80082e0f4c` (`__cfi_check_fail+0x18/0x1c`).
+- Fault: `CFI failure (target: sha256_block_data_order.cfi_jt+0x0/0x8)`, `kernel BUG at kernel/cfi.c:32!`, `Kernel panic - not syncing: Attempted to kill init! exitcode=0x0000000b`.
+- Status: **DISCOVERED in T607**. Advertising `AdvSIMD = 0xF` (Not Implemented) in `ID_AA64PFR0_EL1` cleanly skipped `sha256-neon` (+0x4 slot). However, the scalar fallback `sha256-generic` in `arch/arm64/crypto/sha256_glue.c` still calls assembly routine `sha256_block_data_order` (`0xffffff8008c88508`, +0x0 slot) via indirect call. Because assembly functions lack Clang CFI type annotations in this kernel build, Clang CFI unconditionally traps on `brk #0x800` at step 145,268,307, with terminal `machine_halt` livelock at step 208,482,953 PC `0xffffff80081842c0`.
+- Oracle: QEMU advertises `ID_AA64ISAR0_EL1.SHA2=1` (`0x0001_1120`), which causes Linux to bind `sha256-ce` via direct `bl #0xffffff8008084f38`, completely bypassing Clang CFI indirect call checks.
+
