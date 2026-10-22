@@ -216,3 +216,12 @@
 1. **Engine-side Clang CFI indirect-call handling**: Implemented inlined CFI call-site sequence handling and `__cfi_check` dispatch in `units/u12-orchestrator/src/lib.rs`. In Clang CFI, assembly routines (`sha256_block_data_order` at `0xffffff8008c88508` / `0xffffff8008c8850c`) lack C AST type metadata and sit outside the function-type subtable, causing false-positive CFI traps on indirect invocation. The engine treats inlined CFI check branches (`b.hs`) targeting CFI failure trampolines as passed (falling through to direct `bl sha256_block_data_order`) and implements a fast-path return for `__cfi_check` (`0xffffff80082e0de8`) with type hash `0x803f44c09a663b43`.
 2. **Tests** (before → after): Step 145,268,307 `brk #0x800` CFI failure → Bypassed with 0 traps. `brk_vbar_regression` 5/5 passed.
 3. **Files changed**: `units/u12-orchestrator/src/lib.rs`, `scripts/supervisor-t611.py`, `GATES.md`, `TIMELINE.md`.
+
+
+## UPDATED ON : 2026-10-22
+
+### feat (2026-10-22) — Track T612 (t612-and-rd31-sp): revive T486 AND-Rd31-SP engine fix
+
+1. **AND-Rd31-SP Engine Fix**: Revived the T486 engine instruction-semantics fix in `units/u12-orchestrator/src/lib.rs`. Non-flag-setting logical-immediate AND (`opc=00`) with `Rd=31` writes the result to `SP` (64-bit `sf=1`) or `WSP` (32-bit `sf=0`, zero-extended into `SP`), while `Rn=31` reads `XZR`/`WZR` (0), preserving PSTATE flags and advancing PC. Resolves the T611/T486 guest wall where `AND SP, X9, #0xffffffffffffffc0` (`0x927ae53f`) at `0xffffff80082ea400` in `perf_event_exit_task` failed to update `SP` (retaining stale stack pointer), causing DABT write fault on the subsequent `str x8, [sp, #-16]!` (`0xf9014fe8`) at FAR `0xffffff8009944048`.
+2. **Tests** (before → after): Unpatched base failed 4/6 regression tests (`test_exact_t486_and_sp_64bit`, `test_and_wsp_32bit_zero_extend`, `test_and_sp_64bit_rn_xzr`, `test_and_wsp_32bit_rn_wzr` failed with stale SP retained) → Patched engine passes 6/6 tests in `and_sp_regression`.
+3. **Files changed**: `units/u12-orchestrator/src/lib.rs`, `units/u12-orchestrator/tests/and_sp_regression.rs`, `scripts/supervisor-t612.py`, `GATES.md`, `TIMELINE.md`.

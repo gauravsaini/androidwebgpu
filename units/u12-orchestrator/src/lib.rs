@@ -2154,6 +2154,38 @@ impl Orchestrator {
             }
         }
 
+        // 6b. Logical (immediate): AND (non-flag-setting, opc=00) with Rd=31 (SP / WSP)
+        // Track T612: Logical immediate AND with Rd=31 writes SP (64-bit) / WSP (32-bit zero-extended).
+        // Encoding: sf 00 100100 N immr imms Rn Rd
+        // When Rd=31, AArch64 specifies destination is SP/WSP, not XZR.
+        // Rn=31 reads XZR (0). PSTATE is preserved. PC advances.
+        if ((word >> 23) & 0x3F == 0b100100) && ((word >> 29) & 0x3 == 0b00) {
+            let rd = (word & 0x1F) as usize;
+            if rd == 31 {
+                let sf = ((word >> 31) & 1) as u8;
+                let n = ((word >> 22) & 1) as u8;
+                let immr = ((word >> 16) & 0x3F) as u8;
+                let imms = ((word >> 10) & 0x3F) as u8;
+                let rn = ((word >> 5) & 0x1F) as usize;
+                if let Some(mask) = decode_logical_immediate(sf, n, immr, imms) {
+                    let rn_val = if rn == 31 {
+                        0
+                    } else {
+                        self.machine.cpu[0].regs[rn]
+                    };
+                    if sf == 1 {
+                        let res = rn_val & mask;
+                        self.machine.cpu[0].sp = res;
+                    } else {
+                        let res = (rn_val as u32) & (mask as u32);
+                        self.machine.cpu[0].sp = res as u64;
+                    }
+                    self.machine.cpu[0].pc = pc.wrapping_add(4);
+                    return Some(Ok(()));
+                }
+            }
+        }
+
         // 7. Conditional select: CSEL / CSINC / CSINV / CSNEG (GB-15,
         // encoding corrected GB-26). sf op S 11010100 Rm cond op2 Rn Rd.
         // op=bit30 selects the pair (0: CSEL/CSINC, 1: CSINV/CSNEG),
