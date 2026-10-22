@@ -1,0 +1,77 @@
+outcome: halted at step 208482953 PC 0xffffff80081842c0 UART 13436 bytes
+step: 208482953
+pc: 0xffffff80081842c0
+uart_bytes: 13436
+uart_sha256: b9cbd6ead8c58898b5644dddc47ac58e6615f78ce9eb936db6f618d5996aca14
+irq_in: 1982
+irq_out: 1983
+da_in: 1
+brk_in: 1
+traps: 1
+dynamic_panics: 3
+halt_reason: Unsupported { addr: 18446743524089545408, reason: "livelock: PC did not advance after block execution" }
+distinct_pcs_last_10k: 1894
+jiffies: 9 (0x9) at PA 0x4154e3d0
+init_grep: not found
+wall_type_tag: engine
+rust_par_bhi_lagu: haan
+canonical_images:
+  kernel_image: /Users/Shared/guest-inputs/Image
+  kernel_sha256: 05c4391767a6ff44f5124796b92d7b98027c37fbf58e81b342ca2adb7d99fa04
+  dtb: /Users/Shared/guest-inputs/minimal-virt-fixed.dtb
+  dtb_sha256: f5f7e340dcc22f6b76d4c7139a7aac2d9cebf6f2ea2c7c6832a0181d3d9c85b0
+  initrd: /Users/Shared/guest-inputs/initramfs.cpio
+  initrd_sha256: 49b607426468f63404047e1321f7ea4505978fee301160ba3ac33c7439928f38
+commit_sha: 5949681b9d919bb300aa936c0c3a9f97f30824a5
+binary_sha256: d1bdce88b44a27515027b3a0cc653156be9125385743cb8a194f91403cf83c83
+terminal_details:
+[progress] step 136000000 (136M), PC=0xffffff8008362188, console_bytes=7680, irq_in=1793, irq_out=1794
+[progress] step 138000000 (138M), PC=0xffffff8008364a5c, console_bytes=7912, irq_in=1833, irq_out=1834
+[progress] step 140000000 (140M), PC=0xffffff8008088e28, console_bytes=9174, irq_in=1875, irq_out=1876
+[progress] step 142000000 (142M), PC=0xffffff8008089dcc, console_bytes=9537, irq_in=1915, irq_out=1916
+[progress] step 144000000 (144M), PC=0xffffff800835e580, console_bytes=9732, irq_in=1956, irq_out=1957
+[brk] Architectural BRK #0x800 taken at step 145268307, faulting_pc=0xffffff80082e0f4c -> vector 0xffffff8008082200, ESR_EL1=0xf2000800
+[progress] step 146000000 (146M), PC=0xffffff80088ce4e4, console_bytes=13389, irq_in=1982, irq_out=1983
+[progress] step 148000000 (148M), PC=0xffffff8008c62334, console_bytes=13389, irq_in=1982, irq_out=1983
+[progress] step 150000000 (150M), PC=0xffffff8008c62334, console_bytes=13389, irq_in=1982, irq_out=1983
+[progress] step 152000000 (152M), PC=0xffffff8008c6238c, console_bytes=13389, irq_in=1982, irq_out=1983
+[progress] step 154000000 (154M), PC=0xffffff80088ce4c8, console_bytes=13389, irq_in=1982, irq_out=1983
+[progress] step 156000000 (156M), PC=0xffffff80088ce4c8, console_bytes=13389, irq_in=1982, irq_out=1983
+[progress] step 158000000 (158M), PC=0xffffff80088ce4c8, console_bytes=13389, irq_in=1982, irq_out=1983
+[progress] step 160000000 (160M), PC=0xffffff8008c6234c, console_bytes=13389, irq_in=1982, irq_out=1983
+[progress] step 162000000 (162M), PC=0xffffff80088ce4d8, console_bytes=13389, irq_in=1982, irq_out=1983
+[progress] step 164000000 (164M), PC=0xffffff80088ce4d8, console_bytes=13389, irq_in=1982, irq_out=1983
+[progress] step 166000000 (166M), PC=0xffffff8008c62338, console_bytes=13389, irq_in=1982, irq_out=1983
+[progress] step 168000000 (168M), PC=0xffffff8008c62330, console_bytes=13389, irq_in=1982, irq_out=1983
+[progress] step 170000000 (170M), PC=0xffffff8008c62330, console_bytes=13389, irq_in=1982, irq_out=1983
+[progress] step 172000000 (172M), PC=0xffffff8008c90450, console_bytes=13389, irq_in=1982, irq_out=1983
+[progress] step 174000000 (174M), PC=0xffffff8008c90450, console_bytes=13389, irq_in=1982, irq_out=1983
+[progress] step 176000000 (176M), PC=0xffffff8008c90450, console_bytes=13389, irq_in=1982, irq_out=1983
+[progress] step 178000000 (178M), PC=0xffffff8008c62348, console_bytes=13389, irq_in=1982, irq_out=1983
+[progress] step 180000000 (180M), PC=0xffffff8008c62348, console_bytes=13389, irq_in=1982, irq_out=1983
+[progress] step 182000000 (182M), PC=0xffffff80088ce4d4, console_bytes=13389, irq_in=1982, irq_out=1983
+[progress] step 184000000 (184M), PC=0xffffff8008c62334, console_bytes=13389, irq_in=1982, irq_out=1983
+[progress] step 186000000 (186M), PC=0xffffff8008c62334, console_bytes=13389, irq_in=1982, irq_out=1983
+[progress] step 188000000 (188M), PC=0xffffff8008c62358, console_bytes=13389, irq_in=1982, irq_out=1983
+[progress] step 190000000 (190M), PC=0xffffff80088ce55c, console_bytes=13389, irq_in=1982, irq_out=1983
+[progress] step 192000000 (192M), PC=0xffffff8008c62344, console_bytes=13389, irq_in=1982, irq_out=1983
+[progress] step 194000000 (194M), PC=0xffffff8008c62344, console_bytes=13389, irq_in=1982, irq_out=1983
+[progress] step 196000000 (196M), PC=0xffffff8008c6234c, console_bytes=13389, irq_in=1982, irq_out=1983
+[progress] step 198000000 (198M), PC=0xffffff80088ce56c, console_bytes=13389, irq_in=1982, irq_out=1983
+[progress] step 200000000 (200M), PC=0xffffff80088ce56c, console_bytes=13389, irq_in=1982, irq_out=1983
+[progress] step 202000000 (202M), PC=0xffffff8008c62330, console_bytes=13389, irq_in=1982, irq_out=1983
+[progress] step 204000000 (204M), PC=0xffffff8008c62330, console_bytes=13389, irq_in=1982, irq_out=1983
+[progress] step 206000000 (206M), PC=0xffffff8008c62330, console_bytes=13389, irq_in=1982, irq_out=1983
+[progress] step 208000000 (208M), PC=0xffffff8008c62380, console_bytes=13389, irq_in=1982, irq_out=1983
+[    8.030200] Kernel panic - not syncing: Attempted to kill init! exitcode=0x0000000b
+[done] Executed 208482953 steps. PC=0xffffff80081842c0, irq_in=1982, irq_out=1983, da_in=1, brk_in=1
+[halt] Reason: Unsupported { addr: 18446743524089545408, reason: "livelock: PC did not advance after block execution" }
+[cpu] Registers at halt:
+  sp=0xffffff800800b3f0 pstate=0x600003c5
+  ttbr0_el1=0x00000000416e9000 ttbr1_el1=0x00000000416ea000 tcr_el1=0x00400032b5593519 sctlr_el1=0x34f5d91d
+[ram-search] Scanning 1 GiB guest RAM for panic strings...
+  Found 'Kernel panic - not syncing' at PA 0x41694570 (rodata=false)
+  [PANIC DETECTED] 1 dynamic occurrences of 'Kernel panic - not syncing'
+[cap-rule] distinct_pcs_last_10k: 1894
+[cap-rule] jiffies: 9 (0x9) at PA 0x4154e3d0
+[cap-rule] init_grep: not found
