@@ -1,13 +1,16 @@
 {
-  "timestamp": "2026-10-20T12:36:45Z",
-  "lane": "T590",
-  "runner_pid": 67851,
+  "lane": "T611",
   "status": "running",
-  "target_halt_step": 49688578,
-  "current_step": 68000000,
-  "pc": "0xffffff800853a170",
-  "console_bytes": 5542,
-  "irq_in": 432,
-  "irq_out": 433,
-  "note": "Bypassed step 49,688,578 wall cleanly! Boot advanced past 68M steps with console bytes advancing (3936 -> 5542 bytes), 432 IRQs delivered"
+  "timestamp": "2026-10-22T17:50:15+1100",
+  "runner_pid": 16826,
+  "supervisor_pid": 16825,
+  "current_step": 30000000,
+  "current_pc": "0xffffff80081a3744",
+  "console_bytes": 754,
+  "irq_in": 0,
+  "irq_out": 0,
+  "da_in": 0,
+  "brk_in": 0,
+  "last_milestone": "step_30M",
+  "elapsed_seconds": 1785.67
 }

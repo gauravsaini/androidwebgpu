@@ -211,7 +211,7 @@
 
 ## UPDATED ON : 2026-10-22
 
-### feat (2026-10-22) — Track T611: engine-side Clang CFI assembly indirect call handling for sha256
+### feat (2026-10-22) — Track T611 (t611-sha256-cfi-engine): engine-side Clang CFI assembly indirect call handling for sha256
 
 1. **Engine-side Clang CFI indirect-call handling**: Implemented inlined CFI call-site sequence handling and `__cfi_check` dispatch in `units/u12-orchestrator/src/lib.rs`. In Clang CFI, assembly routines (`sha256_block_data_order` at `0xffffff8008c88508` / `0xffffff8008c8850c`) lack C AST type metadata and sit outside the function-type subtable, causing false-positive CFI traps on indirect invocation. The engine treats inlined CFI check branches (`b.hs`) targeting CFI failure trampolines as passed (falling through to direct `bl sha256_block_data_order`) and implements a fast-path return for `__cfi_check` (`0xffffff80082e0de8`) with type hash `0x803f44c09a663b43`.
 2. **Tests** (before → after): Step 145,268,307 `brk #0x800` CFI failure → Bypassed with 0 traps. `brk_vbar_regression` 5/5 passed.
