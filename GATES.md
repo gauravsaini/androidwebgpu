@@ -35,7 +35,7 @@ Scope: Differential-trace sha256_finup CFI indirect call fault against QEMU, imp
   EXPECT: BOOT_RECORDED
   EVIDENCE: automatic-evidence=v1; definition-sha256=6d85bf54882a956a69f0ab3e3ac0c505284c0f24051681edd594a63519585c4b; exit=0; EXPECT=matched; output-sha256=c75d951de10e5c11958f29ace7139a8c780d24f4ef1d6397fc7601975c7d67d9; output-bytes=14; shell=/bin/sh; cwd=/Users/Shared/wt-track611-sha256-cfi-engine; path=de7de1880035/13 entries
 
-- [ ] G611-7: Findings artifact delivered with Verdict and required tags, TIMELINE updated
+- [x] G611-7: Findings artifact delivered with Verdict and required tags, TIMELINE updated
   CHECK: test -f /Users/Shared/agyx-track611-sha256-cfi-engine.md && grep -q "WALL-TYPE-TAG:" /Users/Shared/agyx-track611-sha256-cfi-engine.md && grep -q "t611-sha256-cfi-engine" /Users/Shared/wt-track611-sha256-cfi-engine/TIMELINE.md && echo FINDINGS_OK
   EXPECT: FINDINGS_OK
-  EVIDENCE: pending
+  EVIDENCE: automatic-evidence=v1; definition-sha256=a7d5d3af1c630a84e045c64e4f35892b542ad804346fd3b383c337aa33871c60; exit=0; EXPECT=matched; output-sha256=c938ae8b07197d74ecdeed9bfdcb04b48944980f8caf85d5261f869c21cbb9d2; output-bytes=12; shell=/bin/sh; cwd=/Users/Shared/wt-track611-sha256-cfi-engine; path=de7de1880035/13 entries

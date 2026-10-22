@@ -1,16 +1,16 @@
 {
   "lane": "T611",
   "status": "running",
-  "timestamp": "2026-10-22T17:50:15+1100",
+  "timestamp": "2026-10-22T17:58:30+1100",
   "runner_pid": 16826,
   "supervisor_pid": 16825,
-  "current_step": 30000000,
-  "current_pc": "0xffffff80081a3744",
+  "current_step": 34000000,
+  "current_pc": "0xffffff80083555ac",
   "console_bytes": 754,
   "irq_in": 0,
   "irq_out": 0,
   "da_in": 0,
   "brk_in": 0,
-  "last_milestone": "step_30M",
-  "elapsed_seconds": 1785.67
+  "last_milestone": "step_34M",
+  "elapsed_seconds": 2280.84
 }
