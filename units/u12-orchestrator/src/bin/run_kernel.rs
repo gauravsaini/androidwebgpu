@@ -9,6 +9,17 @@ use std::path::Path;
 use u11_snapshot;
 use u12_orchestrator::{HaltReason, Orchestrator, StepOutcome, RAM_BASE};
 
+const PID1_MARKER: &[u8] = b"[PATHN-TRACK-B] ARM64 STATIC /INIT LAUNCHED (PID 1)";
+const M3_PID1_MARKER: &[u8] = b"M3-PID1 ";
+
+fn pid1_marker_seen(console_bytes: &[u8]) -> bool {
+    [PID1_MARKER, M3_PID1_MARKER].iter().any(|marker| {
+        console_bytes
+            .windows(marker.len())
+            .any(|window| window == *marker)
+    })
+}
+
 // U12 stores NZCV in CpuState::pstate and DAIF in CpuState::sysregs.daif.
 // The live kernel runner stays at EL1h, so combine those fields for a
 // QEMU-comparable architectural PSTATE in diagnostic captures.
@@ -464,19 +475,11 @@ fn main() {
             use std::io::Write;
             std::io::stdout().flush().ok();
         }
-        const PID1_MARKER: &[u8] = b"[PATHN-TRACK-B] ARM64 STATIC /INIT LAUNCHED (PID 1)";
-        const INIT_PROC_MARKER: &[u8] = b"Run /init as init process";
         let cur_console_len = orch.console().tx_bytes.len();
         if cur_console_len != last_marker_check_len {
             last_marker_check_len = cur_console_len;
-            if orch.console().tx_bytes.windows(PID1_MARKER.len()).any(|w| w == PID1_MARKER) {
+            if pid1_marker_seen(&orch.console().tx_bytes) {
                 println!("[marker] EXACT PID-1 MARKER OBSERVED at step {s}!");
-                use std::io::Write;
-                std::io::stdout().flush().ok();
-                break;
-            }
-            if orch.console().tx_bytes.windows(INIT_PROC_MARKER.len()).any(|w| w == INIT_PROC_MARKER) {
-                println!("[marker] Run /init as init process OBSERVED at step {s}!");
                 use std::io::Write;
                 std::io::stdout().flush().ok();
                 break;
@@ -638,5 +641,21 @@ fn main() {
 
     if survey {
         orch.print_survey_summary();
+    }
+}
+
+#[cfg(test)]
+mod marker_tests {
+    use super::pid1_marker_seen;
+
+    #[test]
+    fn only_guest_pid1_uart_bytes_stop_the_runner() {
+        let kernel_handoff = b"[    8.141321] Run /init as init process\n";
+        let pid1_output = b"[PATHN-TRACK-B] ARM64 STATIC /INIT LAUNCHED (PID 1)";
+        let m3_pid1_output = b"M3-PID1 T626\n";
+
+        assert!(!pid1_marker_seen(kernel_handoff));
+        assert!(pid1_marker_seen(pid1_output));
+        assert!(pid1_marker_seen(m3_pid1_output));
     }
 }
