@@ -11,6 +11,10 @@ use u12_orchestrator::{HaltReason, Orchestrator, StepOutcome, RAM_BASE};
 
 const PID1_MARKER: &[u8] = b"[PATHN-TRACK-B] ARM64 STATIC /INIT LAUNCHED (PID 1)";
 const M3_PID1_MARKER: &[u8] = b"M3-PID1 ";
+const FUTEX_NULL_ELR: u64 = 0xffff_ff80_0825_91e4;
+const FUTEX_NULL_ESR: u64 = 0x9600_0005;
+const FUTEX_NULL_FAR: u64 = 0;
+const FUTEX_FIXUP_RESUME: u64 = 0xffff_ff80_08c8_5a8c;
 
 fn pid1_marker_seen(console_bytes: &[u8]) -> bool {
     [PID1_MARKER, M3_PID1_MARKER].iter().any(|marker| {
@@ -18,6 +22,10 @@ fn pid1_marker_seen(console_bytes: &[u8]) -> bool {
             .windows(marker.len())
             .any(|window| window == *marker)
     })
+}
+
+fn futex_vector_matches(esr: u64, far: u64, elr: u64) -> bool {
+    esr == FUTEX_NULL_ESR && far == FUTEX_NULL_FAR && elr == FUTEX_NULL_ELR
 }
 
 // U12 stores NZCV in CpuState::pstate and DAIF in CpuState::sysregs.daif.
@@ -340,7 +348,21 @@ fn main() {
     let mut last_10k_count = 0;
     let mut last_marker_check_len = 0;
     let mut reported_data_abort_count = 0;
+    let mut futex_exact_occurrences = 0u64;
+    let mut futex_resume_count = 0u64;
+    let mut futex_mismatch_count = 0u64;
+    let mut pending_futex_steps = Vec::new();
     for _ in 0..max_steps {
+        let step = orch.steps();
+        if orch.machine().cpu[0].pc == FUTEX_FIXUP_RESUME {
+            if !pending_futex_steps.is_empty() {
+                let event_step = pending_futex_steps.remove(0);
+                futex_resume_count += 1;
+                println!(
+                    "[futex-fixup] event_step={event_step} fixup_resume={FUTEX_FIXUP_RESUME:#018x} resume_step={step}"
+                );
+            }
+        }
         if let Some(target) = break_pc {
             let cpu = &orch.machine().cpu[0];
             if cpu.pc == target {
@@ -467,11 +489,19 @@ fn main() {
         let data_abort_count = orch.data_abort_count();
         if data_abort_count > reported_data_abort_count {
             let cpu = &orch.machine().cpu[0];
+            let esr = cpu.sysregs.esr_el1;
+            let far = cpu.sysregs.far_el1;
+            let elr = cpu.sysregs.elr_el1;
+            if elr == FUTEX_NULL_ELR {
+                if futex_vector_matches(esr, far, elr) {
+                    futex_exact_occurrences += 1;
+                    pending_futex_steps.push(s);
+                } else {
+                    futex_mismatch_count += 1;
+                }
+            }
             println!(
-                "[data-abort] step={s} count={data_abort_count} ESR_EL1={:#010x} FAR_EL1={:#018x} ELR_EL1={:#018x} vector_pc={:#018x} resume_lr={:#018x}",
-                cpu.sysregs.esr_el1,
-                cpu.sysregs.far_el1,
-                cpu.sysregs.elr_el1,
+                "[data-abort] step={s} count={data_abort_count} ESR_EL1={esr:#010x} FAR_EL1={far:#018x} ELR_EL1={elr:#018x} vector_pc={:#018x} resume_lr={:#018x}",
                 cpu.pc,
                 cpu.regs[30]
             );
@@ -523,6 +553,20 @@ fn main() {
     }
 
     orch.flush_trace();
+
+    let futex_verdict = if futex_exact_occurrences == 1
+        && futex_resume_count == 1
+        && futex_mismatch_count == 0
+        && pending_futex_steps.is_empty()
+    {
+        "PASS"
+    } else {
+        "FAIL"
+    };
+    println!(
+        "[futex-vector-check] exact_occurrences={futex_exact_occurrences} resume_observed={futex_resume_count} mismatches={futex_mismatch_count} unresolved={} expected_occurrences=1 verdict={futex_verdict}",
+        pending_futex_steps.len()
+    );
 
     // Snapshot save: u64 LE step-count header + u11-snapshot blob.
     if let Some(ref snap_path) = save_snapshot {
@@ -660,7 +704,7 @@ fn main() {
 
 #[cfg(test)]
 mod marker_tests {
-    use super::pid1_marker_seen;
+    use super::{futex_vector_matches, pid1_marker_seen};
 
     #[test]
     fn only_guest_pid1_uart_bytes_stop_the_runner() {
@@ -671,5 +715,11 @@ mod marker_tests {
         assert!(!pid1_marker_seen(kernel_handoff));
         assert!(pid1_marker_seen(pid1_output));
         assert!(pid1_marker_seen(m3_pid1_output));
+    }
+
+    #[test]
+    fn futex_vector_requires_the_exact_esr_far_and_elr() {
+        assert!(futex_vector_matches(0x9600_0005, 0, 0xffff_ff80_0825_91e4));
+        assert!(!futex_vector_matches(0x9600_0005, 1, 0xffff_ff80_0825_91e4));
     }
 }

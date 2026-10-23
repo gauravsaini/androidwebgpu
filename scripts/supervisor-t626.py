@@ -43,8 +43,8 @@ EXPECTED_FUTEX_VECTOR = {
     "esr_el1": 0x96000005,
     "far_el1": 0x0,
     "elr_el1": 0xFFFFFF80082591E4,
-    "resume_lr": 0xFFFFFF8008C85A8C,
 }
+EXPECTED_FUTEX_RESUME_PC = 0xFFFFFF8008C85A8C
 
 progress_re = re.compile(
     r"\[progress\] step (\d+) \((\d+)M\), PC=(0x[0-9a-fA-F]+), "
@@ -60,6 +60,13 @@ done_re = re.compile(
     r"irq_in=(\d+), irq_out=(\d+), da_in=(\d+), brk_in=(\d+)"
 )
 marker_re = re.compile(r"\[marker\] EXACT PID-1 MARKER OBSERVED at step (\d+)!?")
+fixup_re = re.compile(
+    r"\[futex-fixup\] event_step=(\d+) fixup_resume=(0x[0-9a-fA-F]+) resume_step=(\d+)"
+)
+futex_summary_re = re.compile(
+    r"\[futex-vector-check\] exact_occurrences=(\d+) resume_observed=(\d+) "
+    r"mismatches=(\d+) unresolved=(\d+) expected_occurrences=(\d+) verdict=(PASS|FAIL)"
+)
 guest_time_re = re.compile(r"\[\s*(\d+\.\d+)\]\s+Run /init as init process")
 
 state_lock = threading.Lock()
@@ -239,6 +246,8 @@ def main() -> int:
     observed_marker_step: int | None = None
     marker_observed_utc: str | None = None
     abort_vectors: list[dict[str, object]] = []
+    fixup_events: list[dict[str, int]] = []
+    futex_summary: dict[str, object] = {}
     trap_inventory = {"data_abort_lines": 0, "brk_lines": 0, "trap_lines": 0, "exception_lines": 0, "fault_lines": 0}
     halt_lines: list[str] = []
     done_fields: dict[str, object] = {}
@@ -304,6 +313,26 @@ def main() -> int:
                     marker_observed_utc = utc_now()
                     with state_lock:
                         state.update(current_step=observed_marker_step, last_milestone="guest PID-1 marker observed")
+                match = fixup_re.search(line)
+                if match:
+                    fixup = {
+                        "event_step": int(match.group(1)),
+                        "fixup_resume": int(match.group(2), 16),
+                        "resume_step": int(match.group(3)),
+                    }
+                    fixup_events.append(fixup)
+                    with state_lock:
+                        state.update(current_step=fixup["resume_step"], last_milestone="futex exception-table fixup resumed")
+                match = futex_summary_re.search(line)
+                if match:
+                    futex_summary = {
+                        "exact_occurrences": int(match.group(1)),
+                        "resume_observed": int(match.group(2)),
+                        "mismatches": int(match.group(3)),
+                        "unresolved": int(match.group(4)),
+                        "expected_occurrences": int(match.group(5)),
+                        "verdict": match.group(6),
+                    }
                 match = done_re.search(line)
                 if match:
                     done_fields = {
@@ -354,6 +383,23 @@ def main() -> int:
         key: bool(futex is not None and futex.get(key) == expected)
         for key, expected in EXPECTED_FUTEX_VECTOR.items()
     }
+    exact_fixup = (
+        len(fixup_events) == 1
+        and futex is not None
+        and fixup_events[0]["event_step"] == futex["step"]
+        and fixup_events[0]["fixup_resume"] == EXPECTED_FUTEX_RESUME_PC
+        and fixup_events[0]["resume_step"] > fixup_events[0]["event_step"]
+    )
+    futex_check.update(
+        resume_pc=exact_fixup,
+        exact_occurrences=futex_summary.get("exact_occurrences") == 1,
+        resume_observed=futex_summary.get("resume_observed") == 1,
+        mismatches=futex_summary.get("mismatches") == 0,
+        unresolved=futex_summary.get("unresolved") == 0,
+        summary_verdict=futex_summary.get("verdict") == "PASS",
+        da_in=done_fields.get("da_in") == 1,
+        brk_in=done_fields.get("brk_in") == 0,
+    )
     futex_check["pass"] = all(futex_check.values())
     status = (
         "PASS"
@@ -380,6 +426,8 @@ def main() -> int:
         "booted_images_sha256": {str(path): hashes[str(path)] for path in EXPECTED_SHA256},
         "initramfs_decision": "T612 canonical initramfs booted unchanged; no replacement image was built",
         "futex_vector": futex,
+        "futex_fixup_events": fixup_events,
+        "futex_runner_summary": futex_summary,
         "futex_vector_check": futex_check,
         "trap_inventory": trap_inventory,
         "done_fields": done_fields,
