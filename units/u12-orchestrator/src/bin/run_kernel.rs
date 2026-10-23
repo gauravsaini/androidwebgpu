@@ -339,6 +339,7 @@ fn main() {
     let mut last_10k_idx = 0;
     let mut last_10k_count = 0;
     let mut last_marker_check_len = 0;
+    let mut reported_data_abort_count = 0;
     for _ in 0..max_steps {
         if let Some(target) = break_pc {
             let cpu = &orch.machine().cpu[0];
@@ -463,6 +464,19 @@ fn main() {
             }
         }
         let s = orch.steps();
+        let data_abort_count = orch.data_abort_count();
+        if data_abort_count > reported_data_abort_count {
+            let cpu = &orch.machine().cpu[0];
+            println!(
+                "[data-abort] step={s} count={data_abort_count} ESR_EL1={:#010x} FAR_EL1={:#018x} ELR_EL1={:#018x} vector_pc={:#018x} resume_lr={:#018x}",
+                cpu.sysregs.esr_el1,
+                cpu.sysregs.far_el1,
+                cpu.sysregs.elr_el1,
+                cpu.pc,
+                cpu.regs[30]
+            );
+            reported_data_abort_count = data_abort_count;
+        }
         if s > 0 && s % 2_000_000 == 0 {
             let pc = orch.machine().cpu[0].pc;
             let c_bytes = orch.console().tx_bytes.len();
