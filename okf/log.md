@@ -24,3 +24,8 @@
 - Kept T503's 10/10 oracle result scoped to the ORN/CSINV state gate; T506 requires a guest-originating PID-1 UART marker and ten fresh Rust runs before any reproducibility claim.
 - Preserved the T503 full-suite result: 349 passed and one unrelated LDRB/MMU translation test failed.
 - Added `GATES-T506.md`; boot outcome remains pending at this checkpoint.
+
+## 2026-10-23 — T626 M3 runner-fix branch
+
+- Opened T626 as a separate Chain B engine branch. The runner marker predicate now ignores the kernel handoff printk and watches guest PID-1 UART markers; the red-green regression is complete.
+- Cold-boot evidence is in progress under `/Users/Shared/t626-flight/`, with T612's inputs pinned and hash-checked. The runner remains isolated from the pinned T612 worktree.

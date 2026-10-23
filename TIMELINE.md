@@ -225,3 +225,12 @@
 1. **AND-Rd31-SP Engine Fix**: Revived the T486 engine instruction-semantics fix in `units/u12-orchestrator/src/lib.rs`. Non-flag-setting logical-immediate AND (`opc=00`) with `Rd=31` writes the result to `SP` (64-bit `sf=1`) or `WSP` (32-bit `sf=0`, zero-extended into `SP`), while `Rn=31` reads `XZR`/`WZR` (0), preserving PSTATE flags and advancing PC. Resolves the T611/T486 guest wall where `AND SP, X9, #0xffffffffffffffc0` (`0x927ae53f`) at `0xffffff80082ea400` in `perf_event_exit_task` failed to update `SP` (retaining stale stack pointer), causing DABT write fault on the subsequent `str x8, [sp, #-16]!` (`0xf9014fe8`) at FAR `0xffffff8009944048`.
 2. **Tests** (before → after): Unpatched base failed 4/6 regression tests (`test_exact_t486_and_sp_64bit`, `test_and_wsp_32bit_zero_extend`, `test_and_sp_64bit_rn_xzr`, `test_and_wsp_32bit_rn_wzr` failed with stale SP retained) → Patched engine passes 6/6 tests in `and_sp_regression`.
 3. **Files changed**: `units/u12-orchestrator/src/lib.rs`, `units/u12-orchestrator/tests/and_sp_regression.rs`, `scripts/supervisor-t612.py`, `GATES.md`, `TIMELINE.md`.
+
+
+## UPDATED ON : 2026-10-23
+
+### in progress — Track T626 M3 runner fix (Chain B, engine)
+
+1. **Runner handoff fix**: On isolated branch `t626-m3-runner-fix`, `run_kernel` no longer treats the kernel's `Run /init as init process` printk as PID-1 evidence. It continues until the guest UART contains the T612 initramfs marker or the `M3-PID1 ` prefix. Regression was red on the kernel line and green for kernel-vs-guest marker bytes. Commits: `1af4334` (marker gate) and `051c85c` (abort-vector report).
+2. **Cold-boot preflight**: Release runner revision `051c85c`, binary SHA-256 `57d1bffae493f851955e21f6a0c6854ba66d9231c813c84c634ce87580d80edd`. The canonical T612 Image, DTB, and initramfs all matched their pinned SHA-256 values before boot. The one cold boot is running with guest quirks disabled; no replacement initramfs has been created.
+3. **Flight evidence**: Supervisor heartbeat is written every 15 seconds to `/Users/Shared/t626-flight/heartbeat.json`; raw output is outside `okf/`. Final PID-1 marker, futex vector, trap inventory, and verdict are pending.
