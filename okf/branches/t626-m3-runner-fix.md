@@ -12,9 +12,12 @@ The T612 runner stops at a kernel message before userspace `/init` runs. Moving 
 
 - Runner fix commit: `1af433421787b1023e886273216844be24efd577`.
 - Abort-vector evidence commit: `051c85c`.
+- Fixup-PC instrumentation commit: `9d55dc244110919322dae62ea1487a272d693a93`.
 - Regression: kernel handoff bytes are rejected; the pinned T612 marker and `M3-PID1 ` marker are accepted.
 - RED: `only_guest_pid1_uart_bytes_stop_the_runner` failed on the kernel handoff assertion before the predicate fix.
-- GREEN: focused `run_kernel` marker test passed after the fix.
+- GREEN: focused `run_kernel` marker and exact futex-vector tests pass.
+- The QEMU regression's `0xffffff8008c85a8c` value is Linux's exception-table fixup resume PC after `fixup_exception`/ERET. It is not saved `x30` LR. Attempt 1 captured the exact abort tuple at step `49,693,869` (`ESR=0x96000005`, `FAR=0`, `ELR=0xffffff80082591e4`) and `x30=0xffffff800945f488`, then stopped at step `52,000,000` before PID-1 evidence. Attempt 1 is retained under `/Users/Shared/t626-flight-attempt1/` with gzip UART; it does not establish initramfs silence.
+- The corrected runner records a later visit to the fixup PC and checks it is paired with the exact abort entry; the supervisor additionally requires `da_in=1`, `brk_in=0`, and one fixup resume.
 
 ## Input identity
 
@@ -25,4 +28,4 @@ The T612 runner stops at a kernel message before userspace `/init` runs. Moving 
 
 ## Flight status
 
-Cold boot is running under the T626 supervisor in a persistent managed execution session. It writes a heartbeat every 15 seconds. OS-detached launch attempts were blocked by the execution sandbox (background children were reaped, tmux could not create its socket, and `launchctl submit` was rejected); Terminal automation was also denied. Raw flight output stays outside `okf/` in `/Users/Shared/t626-flight/`; the UART capture is gzip-compressed at flight end. Final marker, futex vector, trap inventory, runner hash, and verdict will be recorded here and in `/Users/Shared/codex-track626-m3-runner-fix.md`.
+Final cold boot is running under the T626 supervisor in a persistent managed execution session. It writes a heartbeat every 15 seconds. OS-detached launch attempts were blocked by the execution sandbox (background children were reaped, tmux could not create its socket, and `launchctl submit` was rejected); Terminal automation was also denied. Raw flight output stays outside `okf/` in `/Users/Shared/t626-flight/`; the UART capture is gzip-compressed at flight end. Final marker, futex fixup resume, trap inventory, runner hash, and verdict remain pending.

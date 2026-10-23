@@ -25,6 +25,12 @@
 - Preserved the T503 full-suite result: 349 passed and one unrelated LDRB/MMU translation test failed.
 - Added `GATES-T506.md`; boot outcome remains pending at this checkpoint.
 
+## 2026-10-23 — T626 M3 runner fix (Chain B, engine)
+
+- The runner now ignores the kernel's `/init` handoff printk and watches for PID-1 marker bytes in guest UART output. Marker-gate regression ran red then green; the focused marker and futex-vector tests pass. Commits: `1af4334`, `051c85c`, and `9d55dc2`.
+- QEMU's `0xffffff8008c85a8c` futex resume value is Linux's exception-table fixup PC after ERET, not saved `x30`. Attempt 1 captured ESR `0x96000005`, FAR `0`, ELR `0xffffff80082591e4` at step `49,693,869`, with LR `0xffffff800945f488`; it ended at 52M before PID-1 and does not establish that T612 `/init` is silent. Gzip UART and outcome are kept under `/Users/Shared/t626-flight-attempt1/`.
+- The corrected runner records and pairs a visit to the fixup PC with the exact abort. Its final cold boot uses the pinned T612 Image, DTB, and initramfs at their verified SHA-256 values; no replacement initramfs has been created. PID-1 marker, fixup resume, trap inventory, and verdict are still pending under `/Users/Shared/t626-flight/`.
+
 ## 2026-10-23 — T626 M3 runner-fix branch
 
 - Opened T626 as a separate Chain B engine branch. The runner marker predicate now ignores the kernel handoff printk and watches guest PID-1 UART markers; the red-green regression is complete.
