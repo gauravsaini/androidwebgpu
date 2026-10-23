@@ -28,4 +28,13 @@ The T612 runner stops at a kernel message before userspace `/init` runs. Moving 
 
 ## Flight status
 
-Final cold boot is running under the T626 supervisor in a persistent managed execution session. It writes a heartbeat every 15 seconds. OS-detached launch attempts were blocked by the execution sandbox (background children were reaped, tmux could not create its socket, and `launchctl submit` was rejected); Terminal automation was also denied. Raw flight output stays outside `okf/` in `/Users/Shared/t626-flight/`; the UART capture is gzip-compressed at flight end. Final marker, futex fixup resume, trap inventory, runner hash, and verdict remain pending.
+Final cold boot completed under the T626 supervisor in a persistent managed execution session. The supervisor wrote heartbeats every 15 seconds. OS-detached launch attempts were blocked by the execution sandbox (background children were reaped, tmux could not create its socket, and `launchctl submit` was rejected); Terminal automation was also denied. Raw flight output stays outside `okf/` in `/Users/Shared/t626-flight/`, and the UART capture is gzip-compressed at flight end.
+
+## Final cold-boot result
+
+- Verdict: **FAIL** for PID-1 attestation. The runner passed the kernel handoff at step `147035427`, guest time `8.141321s`, but halted at step `147106780`, PC `0xffffff800808460c`, word `0xad400400` (`LDP Q0,Q1,[X0]`, Image PA `0x4008460c`) before initramfs PID 1 could emit UART bytes. The `/init` silence question remains undetermined because it never ran. The next blocking engine work is architectural Q-register state and this Q-pair load path.
+- The guest's last printk was `[    8.141321] Run /init as init process`; it is kernel output and does not count as a PID-1 marker. No replacement initramfs was created.
+- Final runner revision `9d55dc244110919322dae62ea1487a272d693a93`; optimized binary SHA-256 `93119a968bcbd25a7f1be94a73a43f80b3b32526d727f97e1ecd9e5e8018d75e`. Locked attribution: `Gaurav Saini <me@gauravsaini.com>`.
+- The futex vector passed: one abort at step `49693869` with ESR `0x96000005`, FAR `0x0`, ELR `0xffffff80082591e4`; Linux fixup PC `0xffffff8008c85a8c` observed at step `49694369`. The saved `x30` (`0xffffff800945f488`) is not the resume PC. Counts: `da_in=1`, `brk_in=0`, vector mismatches `0`, unresolved `0`.
+- Trap inventory: data-abort lines `1`, BRK `0`, trap `0`, exception `0`, fault `0`; terminal modeled halt was the unsupported Q-pair load. UART output: 11,120 bytes, SHA-256 `bfe44e59d9ebcca2c1626b56365dbf8b3e42f7777c80610a6a8c6bd0094feafe`, compressed at `/Users/Shared/t626-flight/guest-uart.log.gz`. Full machine outcome is `/Users/Shared/outcome-t626.txt`; findings are `/Users/Shared/codex-track626-m3-runner-fix.md`.
+- The canonical T612 Image, DTB, and initramfs hashes above matched preflight before boot. The pinned T612 worktree was not modified by T626.

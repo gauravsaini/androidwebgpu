@@ -34,4 +34,5 @@
 ## 2026-10-23 — T626 M3 runner-fix branch
 
 - Opened T626 as a separate Chain B engine branch. The runner marker predicate now ignores the kernel handoff printk and watches guest PID-1 UART markers; the red-green regression is complete.
-- Cold-boot evidence is in progress under `/Users/Shared/t626-flight/`, with T612's inputs pinned and hash-checked. The runner remains isolated from the pinned T612 worktree.
+- Cold-boot evidence is complete under `/Users/Shared/t626-flight/`. T612's Image, DTB, and initramfs hashes matched preflight, and the runner remains isolated from the pinned T612 worktree. The runner continued past the kernel handoff but halted before PID 1 at step `147106780`, PC `0xffffff800808460c`, on unsupported `LDP Q0,Q1,[X0]` (`0xad400400`). Verdict is FAIL for PID-1 attestation; do not call the initramfs silent because `/init` never ran.
+- The futex vector passed exactly once, with its Linux fixup PC observed 500 steps later; counts were `da_in=1`, `brk_in=0`. UART was gzip-compressed at flight end. No replacement initramfs was created because it could not be consumed before resolving the Q-pair engine blocker. Full evidence and hashes are in `okf/branches/t626-m3-runner-fix.md` and `/Users/Shared/codex-track626-m3-runner-fix.md`.
