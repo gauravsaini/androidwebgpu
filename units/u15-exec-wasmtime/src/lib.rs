@@ -153,6 +153,72 @@ impl BlockExecutor for WasmtimeExecutor {
                 },
             )
             .map_err(|e| format!("link hvc: {e}"))?;
+        // Track T631: Q-register file access. Register indices arrive as
+        // i64 from the module and are validated to u8 like sysreg indices.
+        linker
+            .func_wrap(
+                "env",
+                "q_get_lo",
+                |mut caller: wasmtime::Caller<'_, TrackingHost>, reg: i64| {
+                    let idx = u8::try_from(reg).map_err(|_| {
+                        wasmtime::Error::msg(format!("q_get_lo: bad index {reg}"))
+                    })?;
+                    caller
+                        .data_mut()
+                        .ops
+                        .q_get_lo(idx)
+                        .map_err(wasmtime::Error::msg)
+                },
+            )
+            .map_err(|e| format!("link q_get_lo: {e}"))?;
+        linker
+            .func_wrap(
+                "env",
+                "q_get_hi",
+                |mut caller: wasmtime::Caller<'_, TrackingHost>, reg: i64| {
+                    let idx = u8::try_from(reg).map_err(|_| {
+                        wasmtime::Error::msg(format!("q_get_hi: bad index {reg}"))
+                    })?;
+                    caller
+                        .data_mut()
+                        .ops
+                        .q_get_hi(idx)
+                        .map_err(wasmtime::Error::msg)
+                },
+            )
+            .map_err(|e| format!("link q_get_hi: {e}"))?;
+        linker
+            .func_wrap(
+                "env",
+                "q_set_lo",
+                |mut caller: wasmtime::Caller<'_, TrackingHost>, reg: i64, val: i64| {
+                    let idx = u8::try_from(reg).map_err(|_| {
+                        wasmtime::Error::msg(format!("q_set_lo: bad index {reg}"))
+                    })?;
+                    caller
+                        .data_mut()
+                        .ops
+                        .q_set_lo(idx, val)
+                        .map_err(wasmtime::Error::msg)
+                },
+            )
+            .map_err(|e| format!("link q_set_lo: {e}"))?;
+        linker
+            .func_wrap(
+                "env",
+                "q_set_hi",
+                |mut caller: wasmtime::Caller<'_, TrackingHost>, reg: i64, val: i64| {
+                    let idx = u8::try_from(reg).map_err(|_| {
+                        wasmtime::Error::msg(format!("q_set_hi: bad index {reg}"))
+                    })?;
+                    caller
+                        .data_mut()
+                        .ops
+                        .q_set_hi(idx, val)
+                        .map_err(wasmtime::Error::msg)
+                },
+            )
+            .map_err(|e| format!("link q_set_hi: {e}"))?;
         // Register file: checkpointed X0-X30 in, mutated X0-X30 out.
         let mut globals = Vec::with_capacity(31);
         for (i, reg) in regs.iter().enumerate() {

@@ -447,6 +447,25 @@ pub enum IrOp {
         off: u64,
         size: u8,
     },
+    /// Added 2026-10-28 (Track T631): AdvSIMD 128-bit pair load.
+    /// `qregs[dst] = mem[regs[base]+off .. +16]`, little-endian, low 64
+    /// bits first. The lifter traps base == 31 (SP) like integer pairs.
+    /// The backend lowers this through `env.mem_load` + `env.q_set_lo/hi`,
+    /// so MMIO/fault semantics are byte-for-byte the mem_load ones.
+    /// Q registers are a standalone file: no FP data-processing exists yet
+    /// to alias with (D = Q low half, S = Q low word when FP lands).
+    LoadQ {
+        dst: u8,
+        base: u8,
+        off: u64,
+    },
+    /// Added 2026-10-28 (Track T631): AdvSIMD 128-bit pair store.
+    /// `mem[regs[base]+off .. +16] = qregs[src]`, low 64 bits first.
+    StoreQ {
+        src: u8,
+        base: u8,
+        off: u64,
+    },
     /// Added 2026-09-27 (Wave 4 amendment U2-G1): conditional branch
     /// (CBZ/CBNZ). If `(regs[reg] == 0) == when_zero`, control goes to
     /// `target`; otherwise it falls through to the next instruction.

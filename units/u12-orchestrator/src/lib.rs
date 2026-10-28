@@ -640,6 +640,7 @@ impl Orchestrator {
                     pc: 0x4000_0000,
                     pstate: 0,
                     sysregs: SysRegs::default(),
+                    qregs: [[0; 2]; 32],
                 }],
                 mmu: MmuState {
                     ttbr0: 0,
@@ -3823,6 +3824,7 @@ impl Orchestrator {
         let gic: &mut GicV2State = &mut self.gic;
         let irq: &mut IrqState = &mut self.machine.irq;
         let sysregs: &mut SysRegs = &mut cpu.sysregs;
+        let qregs: &mut [[u64; 2]; 32] = &mut cpu.qregs;
         let mut host = WasmHost {
             ram,
             console,
@@ -3830,6 +3832,7 @@ impl Orchestrator {
             gic,
             irq,
             sysregs,
+            qregs,
             guest_quirks_enabled: self.guest_quirks_enabled,
             code_write: false,
             last_mmu_fault: None,
@@ -4364,6 +4367,10 @@ struct WasmHost<'a> {
     gic: &'a mut GicV2State,
     irq: &'a mut IrqState,
     sysregs: &'a mut SysRegs,
+    /// AdvSIMD Q-register file (Track T631): borrowed from CpuState, so
+    /// q_get/q_set calls read and write the same state the orchestrator
+    /// snapshots. qregs[q][0] = low half, qregs[q][1] = high half.
+    qregs: &'a mut [[u64; 2]; 32],
     guest_quirks_enabled: bool,
     /// Set when a guest store writes to kernel text VA range (icache-fix).
     /// The orchestrator checks this after run_block and invalidates the
@@ -4727,6 +4734,41 @@ impl HostOps for WasmHost<'_> {
             }
             _ => Ok(PSCI_NOT_SUPPORTED),
         }
+    }
+
+    /// AdvSIMD Q-register file access (Track T631). Register indices are
+    /// validated: out-of-range is a host error (WASM trap), never a
+    /// silent zero — the lifter only emits 0..=31, so a bad index means
+    /// a broken module, not a guest action.
+    fn q_get_lo(&mut self, reg: u8) -> Result<i64, String> {
+        let q = self
+            .qregs
+            .get(reg as usize)
+            .ok_or_else(|| format!("q_get_lo: bad Q register {reg}"))?;
+        Ok(q[0] as i64)
+    }
+    fn q_get_hi(&mut self, reg: u8) -> Result<i64, String> {
+        let q = self
+            .qregs
+            .get(reg as usize)
+            .ok_or_else(|| format!("q_get_hi: bad Q register {reg}"))?;
+        Ok(q[1] as i64)
+    }
+    fn q_set_lo(&mut self, reg: u8, val: i64) -> Result<(), String> {
+        let q = self
+            .qregs
+            .get_mut(reg as usize)
+            .ok_or_else(|| format!("q_set_lo: bad Q register {reg}"))?;
+        q[0] = val as u64;
+        Ok(())
+    }
+    fn q_set_hi(&mut self, reg: u8, val: i64) -> Result<(), String> {
+        let q = self
+            .qregs
+            .get_mut(reg as usize)
+            .ok_or_else(|| format!("q_set_hi: bad Q register {reg}"))?;
+        q[1] = val as u64;
+        Ok(())
     }
 }
 
@@ -5656,6 +5698,7 @@ mod tests {
         gic: GicV2State,
         irq: IrqState,
         sysregs: SysRegs,
+        qregs: [[u64; 2]; 32],
     }
 
     fn host_parts(sysregs: SysRegs) -> HostParts {
@@ -5671,6 +5714,7 @@ mod tests {
                 timer_compare: 0,
             },
             sysregs,
+            qregs: [[0; 2]; 32],
         }
     }
 
@@ -5683,6 +5727,7 @@ mod tests {
             gic: &mut p.gic,
             irq: &mut p.irq,
             sysregs: &mut p.sysregs,
+            qregs: &mut p.qregs,
             guest_quirks_enabled: false,
             code_write: false,
             last_mmu_fault: None,

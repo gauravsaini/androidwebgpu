@@ -10,6 +10,17 @@ use pathn_contracts::cpu::InsnKind;
 ///
 /// Dispatched from `lib.rs` when bits[28:25] in {0b0111, 0b1111, 0b0110, 0b1110}.
 pub fn decode(word: u32) -> Option<InsnKind> {
+    // 0. AdvSIMD pair load/store (ARM ARM C7.2.6, Track T631): the pair
+    // family is opc(2) 101 V L imm7 Rt2 Rn Rt; the V=1 form (bits[29:25]
+    // == 0b10110) is the SIMD form. Only opc == 0b10 (128-bit Q) has
+    // architectural state in this engine, so only it classifies as
+    // LoadStore; S/D pair forms (opc 00/01) fall through to None
+    // (Illegal) — no S/D register file exists. This branch goes first:
+    // every FP family has bit29 == 0, so no FP word can match 0b10110.
+    if (word >> 25) & 0x1F == 0b10110 && (word >> 30) & 0x3 == 0b10 {
+        return Some(InsnKind::LoadStore);
+    }
+
     // 1. Conversion between floating-point and integer (ARM ARM C7.2.14)
     // sf 00 11110 type 1 rmode opcode Rn Rd
     if let Some(kind) = decode_float_int_conversion(word) {
@@ -297,6 +308,26 @@ mod tests {
         assert_eq!(decode(0x1E62_0820), Some(InsnKind::DataProc)); // FMUL D0, D1, D2
         assert_eq!(decode(0x1E22_1820), Some(InsnKind::DataProc)); // FDIV S0, S1, S2
         assert_eq!(decode(0x1E62_1820), Some(InsnKind::DataProc)); // FDIV D0, D1, D2
+    }
+
+    #[test]
+    fn test_decode_simd_pair_q() {
+        // Track T631: the wall word itself — LDP Q0, Q1, [X0].
+        assert_eq!(decode(0xad40_0400), Some(InsnKind::LoadStore));
+        // STP Q0, Q1, [X0] (L bit cleared).
+        assert_eq!(decode(0xad00_0400), Some(InsnKind::LoadStore));
+        // Pre-index LDP Q2, Q3, [X1, #32]! (imm7=2, idx=11).
+        assert_eq!(decode(0xadc1_0c22), Some(InsnKind::LoadStore));
+        // Post-index LDNP Q0, Q1, [X0] (idx=00, non-temporal form still Q).
+        assert_eq!(decode(0xac40_0400), Some(InsnKind::LoadStore));
+    }
+
+    #[test]
+    fn test_decode_simd_pair_sd_stays_illegal() {
+        // LDP D0, D1, [X0] (opc 01) and LDP S0, S1, [X0] (opc 00): no
+        // S/D register file exists, so these stay Illegal (None).
+        assert_eq!(decode(0x6d40_0400), None);
+        assert_eq!(decode(0x2d40_0400), None);
     }
 
     #[test]

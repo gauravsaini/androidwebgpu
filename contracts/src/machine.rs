@@ -12,6 +12,11 @@ pub struct CpuState {
     pub pc: u64,
     pub pstate: u64,
     pub sysregs: SysRegs,
+    /// AdvSIMD Q-register file (Track T631, 2026-10-28): qregs[q][0] is
+    /// the low 64 bits, qregs[q][1] the high 64 bits, little-endian.
+    /// Standalone until FP data-processing lands, at which point D/S/B
+    /// views must alias into this same file (D = low half, S = low word).
+    pub qregs: [[u64; 2]; 32],
 }
 
 /// Persistent system-register state (Track GB-sysreg2).
@@ -768,8 +773,11 @@ pub const MAX_GUEST_RAM_BYTES: usize = 2 * 1024 * 1024 * 1024;
 pub struct Snapshot(pub Vec<u8>);
 
 /// Current snapshot format version. Bump on any format change.
-pub const SNAPSHOT_VERSION: u32 = 14;
+pub const SNAPSHOT_VERSION: u32 = 15;
 /// Track T586 / A551 (2026-10-16): v14 adds EL1 exception registers (spsr_el1, elr_el1, esr_el1, far_el1).
+/// Track T631 (2026-10-28): v15 appends the Q-register file (32 x 2 x u64LE)
+/// at the end of each CpuState record; old blobs fail cleanly as
+/// VersionMismatch instead of mis-decoding.
 
 /// Snapshot restore failure. Data, not panic — corrupt input never crashes the host.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -817,6 +825,7 @@ mod tests {
                 pc: 0x4000,
                 pstate: 0,
                 sysregs: SysRegs::default(),
+                qregs: [[0; 2]; 32],
             }],
             mmu: MmuState {
                 ttbr0: 0x1000,

@@ -169,6 +169,67 @@ impl BlockExecutor for WasmiExecutor {
                 },
             )
             .map_err(|e| format!("link hvc: {e}"))?;
+        // Track T631: Q-register file access (same contract as wasmtime).
+        linker
+            .func_wrap(
+                "env",
+                "q_get_lo",
+                |mut caller: Caller<'_, TrackingHost>, reg: i64| {
+                    let idx = u8::try_from(reg)
+                        .map_err(|_| Error::host(HostMsg(format!("q_get_lo: bad index"))))?;
+                    caller
+                        .data_mut()
+                        .ops
+                        .q_get_lo(idx)
+                        .map_err(|e| Error::host(HostMsg(e)))
+                },
+            )
+            .map_err(|e| format!("link q_get_lo: {e}"))?;
+        linker
+            .func_wrap(
+                "env",
+                "q_get_hi",
+                |mut caller: Caller<'_, TrackingHost>, reg: i64| {
+                    let idx = u8::try_from(reg)
+                        .map_err(|_| Error::host(HostMsg(format!("q_get_hi: bad index"))))?;
+                    caller
+                        .data_mut()
+                        .ops
+                        .q_get_hi(idx)
+                        .map_err(|e| Error::host(HostMsg(e)))
+                },
+            )
+            .map_err(|e| format!("link q_get_hi: {e}"))?;
+        linker
+            .func_wrap(
+                "env",
+                "q_set_lo",
+                |mut caller: Caller<'_, TrackingHost>, reg: i64, val: i64| {
+                    let idx = u8::try_from(reg)
+                        .map_err(|_| Error::host(HostMsg(format!("q_set_lo: bad index"))))?;
+                    caller
+                        .data_mut()
+                        .ops
+                        .q_set_lo(idx, val)
+                        .map_err(|e| Error::host(HostMsg(e)))
+                },
+            )
+            .map_err(|e| format!("link q_set_lo: {e}"))?;
+        linker
+            .func_wrap(
+                "env",
+                "q_set_hi",
+                |mut caller: Caller<'_, TrackingHost>, reg: i64, val: i64| {
+                    let idx = u8::try_from(reg)
+                        .map_err(|_| Error::host(HostMsg(format!("q_set_hi: bad index"))))?;
+                    caller
+                        .data_mut()
+                        .ops
+                        .q_set_hi(idx, val)
+                        .map_err(|e| Error::host(HostMsg(e)))
+                },
+            )
+            .map_err(|e| format!("link q_set_hi: {e}"))?;
         // Register file: checkpointed X0-X30 in, mutated X0-X30 out.
         let mut globals = Vec::with_capacity(31);
         for (i, reg) in regs.iter().enumerate() {
@@ -218,6 +279,7 @@ mod tests {
         ram: Vec<u8>,
         wfi_calls: u32,
         sysregs: SysRegs,
+        qregs: [[u64; 2]; 32],
     }
 
     impl RamHost {
@@ -226,6 +288,7 @@ mod tests {
                 ram: vec![0; size],
                 wfi_calls: 0,
                 sysregs: SysRegs::default(),
+                qregs: [[0; 2]; 32],
             }
         }
     }
@@ -296,6 +359,38 @@ mod tests {
                 _ => Ok(-1),
             }
         }
+
+        // Track T631: the test host owns Q state, like WasmHost.
+        fn q_get_lo(&mut self, reg: u8) -> Result<i64, String> {
+            let q = self
+                .qregs
+                .get(reg as usize)
+                .ok_or_else(|| format!("q_get_lo: bad Q register {reg}"))?;
+            Ok(q[0] as i64)
+        }
+        fn q_get_hi(&mut self, reg: u8) -> Result<i64, String> {
+            let q = self
+                .qregs
+                .get(reg as usize)
+                .ok_or_else(|| format!("q_get_hi: bad Q register {reg}"))?;
+            Ok(q[1] as i64)
+        }
+        fn q_set_lo(&mut self, reg: u8, val: i64) -> Result<(), String> {
+            let q = self
+                .qregs
+                .get_mut(reg as usize)
+                .ok_or_else(|| format!("q_set_lo: bad Q register {reg}"))?;
+            q[0] = val as u64;
+            Ok(())
+        }
+        fn q_set_hi(&mut self, reg: u8, val: i64) -> Result<(), String> {
+            let q = self
+                .qregs
+                .get_mut(reg as usize)
+                .ok_or_else(|| format!("q_set_hi: bad Q register {reg}"))?;
+            q[1] = val as u64;
+            Ok(())
+        }
     }
 
     fn compile(ops: Vec<IrOp>, exits: Vec<BlockExit>) -> WasmModule {
@@ -330,6 +425,63 @@ mod tests {
         assert_eq!(exit2, 0x100);
         assert!(!wfi2);
         assert_eq!(exe.cache_len(), 1);
+    }
+
+    #[test]
+    fn t631_backend_loadq_storeq_roundtrip() {
+        // 16 bytes at 0x100: lo then hi, little-endian.
+        let mut host = RamHost::new(0x1000);
+        let lo: u64 = 0x1122_3344_5566_7788;
+        let hi: u64 = 0x99AA_BBCC_DDEE_FF00;
+        host.ram[0x100..0x108].copy_from_slice(&lo.to_le_bytes());
+        host.ram[0x108..0x110].copy_from_slice(&hi.to_le_bytes());
+        let wasm = compile(
+            vec![
+                IrOp::Mov { dst: 0, imm: 0x100 },
+                IrOp::LoadQ {
+                    dst: 5,
+                    base: 0,
+                    off: 0,
+                },
+                // Fresh zero base: the store address is regs[base]+off,
+                // so base 1 (= 0) with off 0x200 lands exactly at 0x200.
+                IrOp::Mov { dst: 1, imm: 0 },
+                IrOp::StoreQ {
+                    src: 5,
+                    base: 1,
+                    off: 0x200,
+                },
+                IrOp::Branch { target: 0x100 },
+            ],
+            vec![BlockExit::Branch(0x100)],
+        );
+        let mut exe = WasmiExecutor::new();
+        let mut regs = [0u64; 31];
+        let (exit, wfi) = exe.run_block(&wasm, &mut regs, &mut host).unwrap();
+        assert_eq!(exit, 0x100);
+        assert!(!wfi);
+        assert_eq!(host.qregs[5], [lo, hi]);
+        assert_eq!(&host.ram[0x200..0x208], &lo.to_le_bytes());
+        assert_eq!(&host.ram[0x208..0x210], &hi.to_le_bytes());
+
+        // Out-of-range Q index traps loudly instead of touching memory.
+        let bad = compile(
+            vec![
+                IrOp::Mov { dst: 0, imm: 0x100 },
+                IrOp::LoadQ {
+                    dst: 32,
+                    base: 0,
+                    off: 0,
+                },
+                IrOp::Branch { target: 0x100 },
+            ],
+            vec![BlockExit::Branch(0x100)],
+        );
+        let err = exe.run_block(&bad, &mut regs, &mut host).unwrap_err();
+        assert!(
+            err.contains("bad Q register"),
+            "unexpected trap message: {err}"
+        );
     }
 
     #[test]

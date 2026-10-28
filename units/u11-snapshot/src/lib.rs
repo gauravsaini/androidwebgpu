@@ -24,9 +24,11 @@ use pathn_contracts::machine::{
     SNAPSHOT_VERSION, SysRegs,
 };
 
-/// Encoded size of one [`CpuState`]: 31 regs + sp + pc + pstate + 137 sysregs,
-/// all u64LE. (Track T586 / A551, 2026-10-16: 167 + 4 EL1 exception sysregs = 171.)
-const CPU_ENCODED_BYTES: usize = 171 * 8;
+/// Encoded size of one [`CpuState`]: 31 regs + sp + pc + pstate + 137 sysregs
+/// + 32 Q registers x 2 halves, all u64LE. (Track T586 / A551, 2026-10-16:
+/// 167 + 4 EL1 exception sysregs = 171. Track T631, 2026-10-28: + 64 Q halves
+/// appended at the end of the record = 235.)
+const CPU_ENCODED_BYTES: usize = 235 * 8;
 /// Minimum encoded size of one [`DeviceState`]: u8 tag + u64 blob length.
 const DEVICE_MIN_BYTES: usize = 1 + 8;
 
@@ -164,6 +166,13 @@ impl Writer {
         self.u64(c.sysregs.elr_el1);
         self.u64(c.sysregs.esr_el1);
         self.u64(c.sysregs.far_el1);
+        // Track T631: Q-register file, appended at the end of the record
+        // (low half then high half per register). Old blobs are rejected
+        // by the version check, never mis-decoded.
+        for q in c.qregs {
+            self.u64(q[0]);
+            self.u64(q[1]);
+        }
     }
 
     fn mmu(&mut self, m: &MmuState) {
@@ -362,6 +371,15 @@ impl<'a> Reader<'a> {
                 esr_el1: self.u64()?,
                 far_el1: self.u64()?,
             },
+            // Track T631: Q-register file, appended at the end of the record.
+            qregs: {
+                let mut qregs = [[0u64; 2]; 32];
+                for q in qregs.iter_mut() {
+                    q[0] = self.u64()?;
+                    q[1] = self.u64()?;
+                }
+                qregs
+            },
         })
     }
 }
@@ -551,6 +569,14 @@ mod tests {
                 esr_el1: seed.wrapping_add(70),
                 far_el1: seed.wrapping_add(71),
             },
+            qregs: {
+                let mut qregs = [[0u64; 2]; 32];
+                for (i, q) in qregs.iter_mut().enumerate() {
+                    q[0] = seed.wrapping_add(100).wrapping_add(2 * i as u64);
+                    q[1] = seed.wrapping_add(101).wrapping_add(2 * i as u64);
+                }
+                qregs
+            },
         }
     }
 
@@ -718,6 +744,7 @@ mod tests {
                     esr_el1: u64::MAX,
                     far_el1: u64::MAX,
                 },
+                qregs: [[u64::MAX; 2]; 32],
             }],
             mmu: MmuState {
                 ttbr0: u64::MAX,

@@ -161,6 +161,8 @@ pub fn initial_cpu_state(manifest: &GuestManifest) -> CpuState {
         pc: manifest.load_addr,
         pstate: 0,
         sysregs: SysRegs::default(),
+        // Track T631: a fresh CPU has a zeroed Q-register file.
+        qregs: [[0; 2]; 32],
     }
 }
 

@@ -82,8 +82,14 @@ const FUNC_SYSREG_LOAD: u32 = 3;
 const FUNC_SYSREG_STORE: u32 = 4;
 /// PSCI hypervisor call (P0, 2026-10-03): dispatched by the host.
 const FUNC_HVC: u32 = 5;
-/// Index of `run` (6 imported functions precede it).
-const FUNC_RUN: u32 = 6;
+/// AdvSIMD Q-register file access (Track T631, 2026-10-28): dispatched by
+/// the host. Appended after hvc so every existing index is untouched.
+const FUNC_Q_GET_LO: u32 = 6;
+const FUNC_Q_GET_HI: u32 = 7;
+const FUNC_Q_SET_LO: u32 = 8;
+const FUNC_Q_SET_HI: u32 = 9;
+/// Index of `run` (10 imported functions precede it).
+const FUNC_RUN: u32 = 10;
 
 /// Architectural register 31 (XZR): sources are const 0, dests are dropped.
 const XZR: u8 = 31;
@@ -100,34 +106,41 @@ pub fn compile(block: &IrBlock) -> WasmModule {
     out.extend_from_slice(b"\0asm");
     out.extend_from_slice(&[0x01, 0x00, 0x00, 0x00]);
 
-    // Type section (id 1): six types.
+    // Type section (id 1): seven types.
     //   0: () -> (i64)            — run
     //   1: (i64, i64) -> (i64)    — mem_load, sysreg_load
     //   2: (i64, i64, i64) -> ()  — mem_store
     //   3: () -> ()               — wfi
-    //   4: (i64, i64) -> ()       — sysreg_store
+    //   4: (i64, i64) -> ()       — sysreg_store, q_set_lo, q_set_hi
     //   5: (i64, i64) -> (i64)    — hvc (P0/T579)
+    //   6: (i64) -> (i64)         — q_get_lo, q_get_hi (T631)
     let mut ty = Vec::new();
-    uleb(6, &mut ty);
+    uleb(7, &mut ty);
     func_type(&[], &[VALTYPE_I64], &mut ty);
     func_type(&[VALTYPE_I64, VALTYPE_I64], &[VALTYPE_I64], &mut ty);
     func_type(&[VALTYPE_I64, VALTYPE_I64, VALTYPE_I64], &[], &mut ty);
     func_type(&[], &[], &mut ty);
     func_type(&[VALTYPE_I64, VALTYPE_I64], &[], &mut ty);
     func_type(&[VALTYPE_I64, VALTYPE_I64], &[VALTYPE_I64], &mut ty);
+    func_type(&[VALTYPE_I64], &[VALTYPE_I64], &mut ty);
     section(1, &ty, &mut out);
 
     // Import section (id 2): env.mem_load, env.mem_store, env.wfi,
     // env.sysreg_load, env.sysreg_store, env.hvc,
+    // env.q_get_lo, env.q_get_hi, env.q_set_lo, env.q_set_hi (T631),
     // then env.r0 .. env.r30 as mutable i64 globals. ORDER IS CONTRACT.
     let mut im = Vec::new();
-    uleb(6 + 31, &mut im);
+    uleb(10 + 31, &mut im);
     import_func("mem_load", 1, &mut im);
     import_func("mem_store", 2, &mut im);
     import_func("wfi", 3, &mut im);
     import_func("sysreg_load", 1, &mut im);
     import_func("sysreg_store", 4, &mut im);
     import_func("hvc", 5, &mut im);
+    import_func("q_get_lo", 6, &mut im);
+    import_func("q_get_hi", 6, &mut im);
+    import_func("q_set_lo", 4, &mut im);
+    import_func("q_set_hi", 4, &mut im);
     for i in 0..31u8 {
         import_global(&format!("r{i}"), &mut im);
     }
@@ -272,6 +285,73 @@ pub fn compile(block: &IrBlock) -> WasmModule {
                 body.push(OP_I64_CONST);
                 sleb(*size as i64, &mut body);
                 reg_get(&mut body, *src);
+                body.push(OP_CALL);
+                uleb(u64::from(FUNC_MEM_STORE), &mut body);
+            }
+            // Track T631: AdvSIMD 128-bit pair load. Low half first, then
+            // high half at addr+8. Stack discipline: the dst index is
+            // pushed before the address computation, so each mem_load
+            // leaves [reg, val] for the q_set_* call. No extra local is
+            // needed; the address is recomputed for the second half.
+            IrOp::LoadQ { dst, base, off } => {
+                body.push(OP_I64_CONST);
+                sleb(*dst as i64, &mut body);
+                reg_get(&mut body, *base);
+                body.push(OP_I64_CONST);
+                sleb(*off as i64, &mut body);
+                body.push(OP_I64_ADD);
+                body.push(OP_I64_CONST);
+                sleb(8, &mut body);
+                body.push(OP_CALL);
+                uleb(u64::from(FUNC_MEM_LOAD), &mut body);
+                body.push(OP_CALL);
+                uleb(u64::from(FUNC_Q_SET_LO), &mut body);
+                body.push(OP_I64_CONST);
+                sleb(*dst as i64, &mut body);
+                reg_get(&mut body, *base);
+                body.push(OP_I64_CONST);
+                sleb(*off as i64, &mut body);
+                body.push(OP_I64_ADD);
+                body.push(OP_I64_CONST);
+                sleb(8, &mut body);
+                body.push(OP_I64_ADD);
+                body.push(OP_I64_CONST);
+                sleb(8, &mut body);
+                body.push(OP_CALL);
+                uleb(u64::from(FUNC_MEM_LOAD), &mut body);
+                body.push(OP_CALL);
+                uleb(u64::from(FUNC_Q_SET_HI), &mut body);
+            }
+            // Track T631: AdvSIMD 128-bit pair store. The q_get_* call
+            // consumes only the top of the stack (the register index),
+            // leaving [addr, size, val] for mem_store — the same shape as
+            // StoreDyn with the source fetched from the Q file.
+            IrOp::StoreQ { src, base, off } => {
+                reg_get(&mut body, *base);
+                body.push(OP_I64_CONST);
+                sleb(*off as i64, &mut body);
+                body.push(OP_I64_ADD);
+                body.push(OP_I64_CONST);
+                sleb(8, &mut body);
+                body.push(OP_I64_CONST);
+                sleb(*src as i64, &mut body);
+                body.push(OP_CALL);
+                uleb(u64::from(FUNC_Q_GET_LO), &mut body);
+                body.push(OP_CALL);
+                uleb(u64::from(FUNC_MEM_STORE), &mut body);
+                reg_get(&mut body, *base);
+                body.push(OP_I64_CONST);
+                sleb(*off as i64, &mut body);
+                body.push(OP_I64_ADD);
+                body.push(OP_I64_CONST);
+                sleb(8, &mut body);
+                body.push(OP_I64_ADD);
+                body.push(OP_I64_CONST);
+                sleb(8, &mut body);
+                body.push(OP_I64_CONST);
+                sleb(*src as i64, &mut body);
+                body.push(OP_CALL);
+                uleb(u64::from(FUNC_Q_GET_HI), &mut body);
                 body.push(OP_CALL);
                 uleb(u64::from(FUNC_MEM_STORE), &mut body);
             }
@@ -1899,15 +1979,19 @@ mod tests {
     #[test]
     fn wave4_structural_imports_match_contract_order() {
         let im = imports(&compile(&sample_block()).bytes);
-        // 6 funcs + 31 register globals, in contract declaration order.
-        assert_eq!(im.len(), 37);
+        // 10 funcs + 31 register globals, in contract declaration order.
+        assert_eq!(im.len(), 41);
         assert_eq!(im[0], ("env".to_string(), "mem_load".to_string(), 0x00, 1));
         assert_eq!(im[1], ("env".to_string(), "mem_store".to_string(), 0x00, 2));
         assert_eq!(im[2], ("env".to_string(), "wfi".to_string(), 0x00, 3));
         assert_eq!(im[3], ("env".to_string(), "sysreg_load".to_string(), 0x00, 1));
         assert_eq!(im[4], ("env".to_string(), "sysreg_store".to_string(), 0x00, 4));
         assert_eq!(im[5], ("env".to_string(), "hvc".to_string(), 0x00, 5));
-        for (i, entry) in im[6..].iter().enumerate() {
+        assert_eq!(im[6], ("env".to_string(), "q_get_lo".to_string(), 0x00, 6));
+        assert_eq!(im[7], ("env".to_string(), "q_get_hi".to_string(), 0x00, 6));
+        assert_eq!(im[8], ("env".to_string(), "q_set_lo".to_string(), 0x00, 4));
+        assert_eq!(im[9], ("env".to_string(), "q_set_hi".to_string(), 0x00, 4));
+        for (i, entry) in im[10..].iter().enumerate() {
             assert_eq!(
                 entry,
                 &(
@@ -1921,7 +2005,7 @@ mod tests {
     }
 
     #[test]
-    fn wave4_structural_run_export_is_func_6() {
+    fn wave4_structural_run_export_is_func_10() {
         let module = compile(&sample_block());
         let secs = sections(&module.bytes);
         let ex = secs.iter().find(|(id, _)| *id == 7).unwrap().1;
@@ -1932,7 +2016,7 @@ mod tests {
         pos += 3;
         assert_eq!(ex[pos], 0x00); // kind: func
         pos += 1;
-        assert_eq!(read_uleb(ex, &mut pos), 6); // func index 6 (6 imports precede run)
+        assert_eq!(read_uleb(ex, &mut pos), 10); // func index 10 (10 imports precede run)
     }
 
     #[test]
@@ -2127,6 +2211,78 @@ mod tests {
             0x7C, // i64.add
             0x42, 0x01, // i64.const 1
             0x42, 0x00, // i64.const 0 (WZR)
+            0x10, 0x01, // call 1 (mem_store)
+        ];
+        assert!(expr.windows(seq.len()).any(|w| w == seq.as_slice()));
+    }
+
+    #[test]
+    fn t631_codegen_loadq_calls_mem_load_then_q_set() {
+        let block = IrBlock {
+            entry_addr: 0,
+            ops: vec![IrOp::LoadQ {
+                dst: 5,
+                base: 0,
+                off: 0x100,
+            }],
+            exits: vec![],
+        };
+        let expr = assert_valid(&block);
+        // const 5; global.get 0; const 0x100; add; const 8; call 0; call 8;
+        // const 5; global.get 0; const 0x100; add; const 8; add; const 8;
+        // call 0; call 9.
+        let seq: Vec<u8> = vec![
+            0x42, 0x05, // i64.const 5 (dst)
+            0x23, 0x00, // global.get 0 (base)
+            0x42, 0x80, 0x02, // i64.const 0x100
+            0x7C, // i64.add
+            0x42, 0x08, // i64.const 8
+            0x10, 0x00, // call 0 (mem_load -> lo)
+            0x10, 0x08, // call 8 (q_set_lo)
+            0x42, 0x05, // i64.const 5 (dst)
+            0x23, 0x00, // global.get 0 (base)
+            0x42, 0x80, 0x02, // i64.const 0x100
+            0x7C, // i64.add
+            0x42, 0x08, // i64.const 8
+            0x7C, // i64.add (addr+8)
+            0x42, 0x08, // i64.const 8
+            0x10, 0x00, // call 0 (mem_load -> hi)
+            0x10, 0x09, // call 9 (q_set_hi)
+        ];
+        assert!(expr.windows(seq.len()).any(|w| w == seq.as_slice()));
+    }
+
+    #[test]
+    fn t631_codegen_storeq_calls_q_get_then_mem_store() {
+        let block = IrBlock {
+            entry_addr: 0,
+            ops: vec![IrOp::StoreQ {
+                src: 3,
+                base: 0,
+                off: 0x100,
+            }],
+            exits: vec![],
+        };
+        let expr = assert_valid(&block);
+        // global.get 0; const 0x100; add; const 8; const 3; call 6; call 1;
+        // global.get 0; const 0x100; add; const 8; add; const 8; const 3;
+        // call 7; call 1.
+        let seq: Vec<u8> = vec![
+            0x23, 0x00, // global.get 0 (base)
+            0x42, 0x80, 0x02, // i64.const 0x100
+            0x7C, // i64.add
+            0x42, 0x08, // i64.const 8
+            0x42, 0x03, // i64.const 3 (src)
+            0x10, 0x06, // call 6 (q_get_lo)
+            0x10, 0x01, // call 1 (mem_store)
+            0x23, 0x00, // global.get 0 (base)
+            0x42, 0x80, 0x02, // i64.const 0x100
+            0x7C, // i64.add
+            0x42, 0x08, // i64.const 8
+            0x7C, // i64.add (addr+8)
+            0x42, 0x08, // i64.const 8
+            0x42, 0x03, // i64.const 3 (src)
+            0x10, 0x07, // call 7 (q_get_hi)
             0x10, 0x01, // call 1 (mem_store)
         ];
         assert!(expr.windows(seq.len()).any(|w| w == seq.as_slice()));

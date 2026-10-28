@@ -1737,6 +1737,83 @@ fn lift_load_store(insn: &Instruction) -> Vec<IrOp> {
         }];
     }
 
+    // 2Q. AdvSIMD load/store pair (LDP/STP Q, STNP/LDNP Q; Track T631):
+    // bits[29:25] == 0b10110 (pins V=1, SIMD registers). Only opc == 0b10
+    // (128-bit Q) has architectural state; S/D pair forms are Illegal in
+    // the decoder and never reach this lifter. Scale is 16; otherwise the
+    // indexing/writeback semantics mirror the integer pair section below.
+    // Unlike integer pairs, NO rt == rn reorder is needed: the base is an
+    // X register and the dests are Q registers — disjoint files, so a
+    // numerically equal rt can never clobber the base. Loads always emit
+    // rt then rt2 in program order.
+    if (word >> 25) & 0x1F == 0b10110 {
+        let opc = (word >> 30) & 0x3;
+        let idx_mode = (word >> 23) & 0x3;
+        let is_load = (word >> 22) & 1 == 1;
+        let imm7 = ((word >> 15) & 0x7F) as i32;
+        let rt2 = ((word >> 10) & 0x1F) as u8;
+        let rn = ((word >> 5) & 0x1F) as u8;
+        let rt = (word & 0x1F) as u8;
+
+        if rn == 31 {
+            return trap(R_LS_SP);
+        }
+        if opc != 0b10 {
+            return trap(R_LS_UNSUPPORTED);
+        }
+
+        let simm7 = ((imm7 << 25) >> 25) as i64;
+        let offset = simm7 * 16;
+
+        let (base_off, writeback) = match idx_mode {
+            0b00 => (offset, false), // Non-temporal (STNP/LDNP)
+            0b01 => (0, true),       // Post-index
+            0b10 => (offset, false), // Signed offset
+            0b11 => (offset, true),  // Pre-index
+            _ => unreachable!(),
+        };
+
+        let mut ops = Vec::new();
+        if is_load {
+            // Program order: rt then rt2. No reorder — Q dests cannot
+            // clobber the X base (disjoint register files).
+            ops.push(IrOp::LoadQ {
+                dst: rt,
+                base: rn,
+                off: base_off as u64,
+            });
+            ops.push(IrOp::LoadQ {
+                dst: rt2,
+                base: rn,
+                off: (base_off + 16) as u64,
+            });
+        } else {
+            ops.push(IrOp::StoreQ {
+                src: rt,
+                base: rn,
+                off: base_off as u64,
+            });
+            ops.push(IrOp::StoreQ {
+                src: rt2,
+                base: rn,
+                off: (base_off + 16) as u64,
+            });
+        }
+
+        if writeback && offset != 0 {
+            ops.push(IrOp::Mov {
+                dst: SCRATCH,
+                imm: offset as u64,
+            });
+            ops.push(IrOp::Add {
+                dst: rn,
+                a: rn,
+                b: SCRATCH,
+            });
+        }
+        return ops;
+    }
+
     // 2. Load/store pair (STP, LDP, LDPSW, STNP, LDNP):
     // bits[29:25] == 0b10100 (pins V=0, integer registers).
     if (word >> 25) & 0x1F == 0b10100 {
@@ -2819,6 +2896,145 @@ mod tests {
                 off: 0x20,
                 size: 8
             }]
+        );
+    }
+
+    #[test]
+    fn t631_ldp_q_wall_word() {
+        // The T631 wall word itself: LDP Q0, Q1, [X0]. Note rn == rt == 0
+        // numerically, but X0 (base) and Q0 (dest) are disjoint files, so
+        // the load order stays program order (rt then rt2) — the integer
+        // pair rt2-first reorder must NOT apply here.
+        let ops = lift(&insn(0x4000, 0xad40_0400, InsnKind::LoadStore));
+        assert_eq!(
+            ops,
+            vec![
+                IrOp::LoadQ {
+                    dst: 0,
+                    base: 0,
+                    off: 0
+                },
+                IrOp::LoadQ {
+                    dst: 1,
+                    base: 0,
+                    off: 16
+                },
+            ]
+        );
+    }
+
+    #[test]
+    fn t631_stp_q() {
+        // STP Q0, Q1, [X0].
+        let ops = lift(&insn(0x4000, 0xad00_0400, InsnKind::LoadStore));
+        assert_eq!(
+            ops,
+            vec![
+                IrOp::StoreQ {
+                    src: 0,
+                    base: 0,
+                    off: 0
+                },
+                IrOp::StoreQ {
+                    src: 1,
+                    base: 0,
+                    off: 16
+                },
+            ]
+        );
+    }
+
+    #[test]
+    fn t631_ldp_q_preindex() {
+        // LDP Q2, Q3, [X1, #32]! — loads at base+32/+48, then writeback.
+        let ops = lift(&insn(0x4000, 0xadc1_0c22, InsnKind::LoadStore));
+        assert_eq!(
+            ops,
+            vec![
+                IrOp::LoadQ {
+                    dst: 2,
+                    base: 1,
+                    off: 32
+                },
+                IrOp::LoadQ {
+                    dst: 3,
+                    base: 1,
+                    off: 48
+                },
+                IrOp::Mov {
+                    dst: SCRATCH,
+                    imm: 32
+                },
+                IrOp::Add {
+                    dst: 1,
+                    a: 1,
+                    b: SCRATCH
+                },
+            ]
+        );
+    }
+
+    #[test]
+    fn t631_ldp_q_postindex() {
+        // LDP Q0, Q1, [X0], #32 — loads at base/+16, then writeback +32.
+        let ops = lift(&insn(0x4000, 0xacc1_0400, InsnKind::LoadStore));
+        assert_eq!(
+            ops,
+            vec![
+                IrOp::LoadQ {
+                    dst: 0,
+                    base: 0,
+                    off: 0
+                },
+                IrOp::LoadQ {
+                    dst: 1,
+                    base: 0,
+                    off: 16
+                },
+                IrOp::Mov {
+                    dst: SCRATCH,
+                    imm: 32
+                },
+                IrOp::Add {
+                    dst: 0,
+                    a: 0,
+                    b: SCRATCH
+                },
+            ]
+        );
+    }
+
+    #[test]
+    fn t631_ldp_q_sp_traps() {
+        // LDP Q0, Q1, [SP] — SP-relative, like integer pairs: trap.
+        let ops = lift(&insn(0x4000, 0xad40_07e0, InsnKind::LoadStore));
+        assert_eq!(
+            ops,
+            vec![IrOp::Trap {
+                reason: R_LS_SP
+            }]
+        );
+    }
+
+    #[test]
+    fn t631_ldp_q_negative_offset() {
+        // LDP Q0, Q1, [X0, #-16] — signed offset wraps in the u64 off,
+        // exactly like integer pairs; the WASM i64 add wraps back.
+        let ops = lift(&insn(0x4000, 0xad7f_8400, InsnKind::LoadStore));
+        assert_eq!(
+            ops,
+            vec![
+                IrOp::LoadQ {
+                    dst: 0,
+                    base: 0,
+                    off: 0xFFFF_FFFF_FFFF_FFF0
+                },
+                IrOp::LoadQ {
+                    dst: 1,
+                    base: 0,
+                    off: 0
+                },
+            ]
         );
     }
 

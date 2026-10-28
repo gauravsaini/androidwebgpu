@@ -26,6 +26,23 @@ pub trait HostOps {
     /// PSCI hypervisor call (P0, 2026-10-03, T579 aligned). func_id is X0,
     /// arg1 is X1 at HVC entry. Returns the PSCI result for X0.
     fn hvc(&mut self, func_id: i64, arg1: i64) -> Result<i64, String>;
+    /// AdvSIMD Q-register file access (Track T631, 2026-10-28). The WASM
+    /// backend lowers LoadQ/StoreQ through these four host calls so the
+    /// 31-global register-file contract is untouched. Default impls trap:
+    /// a host that does not own Q state must fail loudly, never silently
+    /// return zero. The orchestrator's WasmHost overrides all four.
+    fn q_get_lo(&mut self, _reg: u8) -> Result<i64, String> {
+        Err("q_get_lo: host does not own Q state".to_string())
+    }
+    fn q_get_hi(&mut self, _reg: u8) -> Result<i64, String> {
+        Err("q_get_hi: host does not own Q state".to_string())
+    }
+    fn q_set_lo(&mut self, _reg: u8, _val: i64) -> Result<(), String> {
+        Err("q_set_lo: host does not own Q state".to_string())
+    }
+    fn q_set_hi(&mut self, _reg: u8, _val: i64) -> Result<(), String> {
+        Err("q_set_hi: host does not own Q state".to_string())
+    }
 }
 
 /// Executes one U3 block: checkpoint the 31 registers in, call the `run`
