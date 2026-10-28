@@ -16,18 +16,20 @@
 //!   `RAM_BASE = 0x4000_0000`) must use this entry point.
 //!
 //! Documented model (vs the ARM ARM VMSA):
-//! - Stage 1 only. `Access` carries no exception level, so the model is
-//!   EL1-equivalent: `AP[7:6]` of `0b00`/`0b01` allows read+write,
-//!   `0b10`/`0b11` is read-only. `PXN` (bit 53) denies `Access::Execute`;
-//!   `UXN` (bit 54) does NOT deny execute here because it only restricts
-//!   EL0, which this model has no concept of (AArch64 Linux maps all
-//!   kernel text `UXN=1,PXN=0`; treating UXN as EL1 execute-never
-//!   faulted every kernel fetch once the final page tables were live).
+//! - Stage 1 only. Data-permission checks use the EL1 view: `AP[7:6]` of
+//!   `0b00`/`0b01` allows read+write, `0b10`/`0b11` is read-only.
+//!   Execute-never IS exception-level aware (T632): callers pass the
+//!   accessing EL via [`translate_detailed_el`]; EL1 execute is denied by
+//!   `PXN` (bit 53) / `PXNTable` (bit 59), EL0 execute by `UXN` (bit 54) /
+//!   `UXNTable` (bit 60). (AArch64 Linux maps kernel text `UXN=1,PXN=0`
+//!   and user PROT_EXEC pages `UXN=0,PXN=1`; the old EL-blind PXN rule
+//!   faulted the first EL0 fetch at 0x210158.) The plain [`translate`]
+//!   entry points keep EL1 behavior.
 //! - Table-descriptor hierarchical controls accumulate down the walk:
-//!   `PXNTable` (bit 59) ORs into the execute-never flag; `UXNTable`/
-//!   `XNTable` (bit 60) is ignored for the same EL0-only reason.
+//!   `PXNTable` (bit 59) ORs into the EL1 execute-never flag,
+//!   `UXNTable`/`XNTable` (bit 60) into the EL0 one.
 //!   (`APTable[1]` accumulates a no-write flag. `APTable[0]` only
-//!   restricts EL0, which this model has no concept of.)
+//!   restricts EL0 and is not modeled: EL0 data checks stay permissive.)
 //! - `SCTLR.M == 0` means the MMU is off: translation is the identity map.
 //! - Granule comes from `TCR.TG0`/`TCR.TG1`; input address size from
 //!   `TCR.T0SZ`/`TCR.T1SZ` (`IA = 64 - TxSZ`, capped at 48 bits — 52-bit LVA
@@ -129,6 +131,16 @@ impl DetailedFault {
     }
 }
 
+/// Exception level of the accessing agent, for EL-correct execute-never
+/// enforcement (T632). EL is runtime CPU state (PSTATE mode), not MMU
+/// register state, so it travels as a parameter rather than an `MmuState`
+/// field (which is a shared contract and snapshot format).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum El {
+    El0,
+    El1,
+}
+
 /// Read 8 bytes at guest-physical `pa` from `ram` as little-endian u64.
 /// The `ram` slice starts at guest-physical `ram_base`; `pa` is rebased by
 /// `checked_sub`, so a PA below `ram_base` is a `DetailedFault`, never a
@@ -167,7 +179,21 @@ pub fn translate_detailed(
     va: u64,
     access: Access,
 ) -> Result<u64, DetailedFault> {
-    translate_impl(state, ram, va, access, ram_base)
+    translate_detailed_el(state, ram, ram_base, va, access, El::El1)
+}
+
+/// EL-aware detailed translation. `El::El1` reproduces the historical
+/// behavior exactly; `El::El0` applies UXN/UXNTable instead of PXN/
+/// PXNTable to `Access::Execute`.
+pub fn translate_detailed_el(
+    state: &MmuState,
+    ram: &[u8],
+    ram_base: u64,
+    va: u64,
+    access: Access,
+    el: El,
+) -> Result<u64, DetailedFault> {
+    translate_impl(state, ram, va, access, ram_base, el)
 }
 
 /// Translate `va` to a guest-physical address where the `ram` slice starts
@@ -184,7 +210,7 @@ pub fn translate_with_base(
     va: u64,
     access: Access,
 ) -> Result<u64, MemFault> {
-    translate_impl(state, ram, va, access, ram_base).map_err(|df| {
+    translate_impl(state, ram, va, access, ram_base, El::El1).map_err(|df| {
         if df.is_permission {
             MemFault::PermissionFault { va: df.va }
         } else {
@@ -201,6 +227,7 @@ fn translate_impl(
     va: u64,
     access: Access,
     ram_base: u64,
+    el: El,
 ) -> Result<u64, DetailedFault> {
     // MMU off: flat identity map.
     if state.sctlr & 1 == 0 {
@@ -247,7 +274,8 @@ fn translate_impl(
 
     let mut table_base = ttbr & addr_mask;
     // Hierarchical restrictions accumulated from table descriptors.
-    let mut no_exec = false;
+    let mut no_exec_pxn = false;
+    let mut no_exec_uxn = false;
     let mut no_write = false;
 
     for level in level0..=3 {
@@ -266,21 +294,22 @@ fn translate_impl(
                 if level == 3 {
                     return Err(DetailedFault { va, is_permission: false, level: 3 });
                 }
-                return finish_block(desc, va, lo, access, no_exec, no_write, level as u8);
+                return finish_block(desc, va, lo, access, el, no_exec_pxn, no_exec_uxn, no_write, level as u8);
             }
             _ => {
                 if level == 3 {
                     // Page descriptor.
-                    return finish_block(desc, va, lo, access, no_exec, no_write, level as u8);
+                    return finish_block(desc, va, lo, access, el, no_exec_pxn, no_exec_uxn, no_write, level as u8);
                 }
                 // Table descriptor: descend. Bits [1:0] are the type tag;
                 // the remaining low bits of the base must be zero.
                 if desc & (granule.bytes() - 1) != 0b11 {
                     return Err(DetailedFault { va, is_permission: false, level: level as u8 });
                 }
-                // PXNTable (bit 59) denies EL1 execute below. UXNTable/XNTable
-                // (bit 60) only restricts EL0: ignored in this EL1-only model.
-                no_exec |= desc & (1u64 << 59) != 0; // PXNTable
+                // PXNTable (bit 59) denies EL1 execute below; UXNTable/
+                // XNTable (bit 60) denies EL0 execute below (T632).
+                no_exec_pxn |= desc & (1u64 << 59) != 0; // PXNTable
+                no_exec_uxn |= desc & (1u64 << 60) != 0; // UXNTable
                 no_write |= desc & (1u64 << 61) != 0; // APTable[1]: no writes below
                 table_base = desc & addr_mask;
             }
@@ -300,20 +329,29 @@ fn finish_block(
     va: u64,
     lo: u32,
     access: Access,
-    no_exec: bool,
+    el: El,
+    no_exec_pxn: bool,
+    no_exec_uxn: bool,
     no_write: bool,
     level: u8,
 ) -> Result<u64, DetailedFault> {
     let ap = (desc >> 6) & 0b11;
     let read_only = ap == 0b10 || ap == 0b11;
-    // PXN (bit 53) denies EL1 execute. UXN (bit 54) only restricts EL0 and
-    // is ignored: the kernel maps its own text UXN=1,PXN=0.
+    // Execute-never is EL-correct (T632): EL1 execute is denied by PXN
+    // (bit 53) / PXNTable; EL0 execute by UXN (bit 54) / UXNTable.
+    // Linux maps kernel text UXN=1,PXN=0 and user PROT_EXEC pages
+    // UXN=0,PXN=1, so an EL-blind PXN rule faults the first EL0 fetch.
     let pxn = desc & (1u64 << 53) != 0; // PXN
+    let uxn = desc & (1u64 << 54) != 0; // UXN
+    let exec_denied = match el {
+        El::El1 => pxn || no_exec_pxn,
+        El::El0 => uxn || no_exec_uxn,
+    };
     match access {
         Access::Write if read_only || no_write => {
             return Err(DetailedFault { va, is_permission: true, level });
         }
-        Access::Execute if pxn || no_exec => {
+        Access::Execute if exec_denied => {
             return Err(DetailedFault { va, is_permission: true, level });
         }
         _ => {}
@@ -453,6 +491,53 @@ mod tests {
         // Data accesses are unaffected by PXNTable.
         assert_eq!(
             translate(&st4k(0x1000), &ram, 0x401234, Access::Read),
+            Ok(0x800234)
+        );
+    }
+
+    #[test]
+    fn t632_el0_exec_linux_user_exec_page_ok() {
+        // T632: the /init .text page as Linux maps a user PROT_EXEC page:
+        // AP=0b11 (RO), UXN=0, PXN=1. EL0 fetch must succeed; the old
+        // EL1-only rule denied it on PXN and halted the first userspace
+        // fetch at 0x210158 (T631 boot, step 147,106,947).
+        let (mut ram, leaf) = chain4k();
+        w64(&mut ram, leaf, page(0x800000, 0b11) | (1u64 << 53)); // PXN
+        assert_eq!(
+            translate_detailed_el(&st4k(0x1000), &ram, 0, 0x401234, Access::Execute, El::El0),
+            Ok(0x800234)
+        );
+    }
+
+    #[test]
+    fn t632_el0_exec_uxn_page_denied() {
+        // UXN=1 denies EL0 execute (user non-exec page).
+        let (mut ram, leaf) = chain4k();
+        w64(&mut ram, leaf, page(0x800000, 0b01) | (1u64 << 54)); // UXN
+        assert_eq!(
+            translate_detailed_el(&st4k(0x1000), &ram, 0, 0x401234, Access::Execute, El::El0),
+            Err(DetailedFault { va: 0x401234, is_permission: true, level: 3 })
+        );
+    }
+
+    #[test]
+    fn t632_el0_exec_uxntable_denied() {
+        // UXNTable (bit 60) on an ancestor denies EL0 execute below.
+        let (mut ram, _) = chain4k();
+        w64(&mut ram, 0x2000, table(0x3000) | (1u64 << 60));
+        assert_eq!(
+            translate_detailed_el(&st4k(0x1000), &ram, 0, 0x401234, Access::Execute, El::El0),
+            Err(DetailedFault { va: 0x401234, is_permission: true, level: 3 })
+        );
+    }
+
+    #[test]
+    fn t632_el0_exec_pxntable_ignored() {
+        // PXNTable (bit 59) only restricts EL1: must not deny EL0 execute.
+        let (mut ram, _) = chain4k();
+        w64(&mut ram, 0x2000, table(0x3000) | (1u64 << 59));
+        assert_eq!(
+            translate_detailed_el(&st4k(0x1000), &ram, 0, 0x401234, Access::Execute, El::El0),
             Ok(0x800234)
         );
     }

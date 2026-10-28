@@ -74,7 +74,7 @@ use pathn_contracts::device::{DevEvent, DevOut, GpuCmd, GpuDevState, TransportSt
 use pathn_contracts::execution::{BlockExecutor, HostOps};
 use pathn_contracts::machine::{CpuState, MachineState, SysRegs};
 use sha2::{Digest, Sha256};
-use u4_mmu::DetailedFault;
+use u4_mmu::{DetailedFault, El};
 
 pub mod arm64;
 use arm64::*;
@@ -1059,7 +1059,14 @@ impl Orchestrator {
             ttbr0: sysregs.ttbr0_el1,
             ttbr1: sysregs.ttbr1_el1,
         };
-        u4_mmu::translate_detailed(&st, &self.machine.ram, RAM_BASE, va, access)
+        // T632: current EL from PSTATE mode bits (0x00 = EL0t, else EL1).
+        // MMU-off early boot returns above, so a 0x00 mode here is
+        // genuine EL0, not uninitialized state.
+        let el = match self.machine.cpu[0].pstate & 0x1F {
+            0x00 => El::El0,
+            _ => El::El1,
+        };
+        u4_mmu::translate_detailed_el(&st, &self.machine.ram, RAM_BASE, va, access, el)
     }
 
     /// Translate a data-access VA to a guest-physical address for the
