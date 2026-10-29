@@ -1,0 +1,56 @@
+{
+  "track": "T636",
+  "flight": "flight-01",
+  "created_utc": "2026-10-29T10:54:36Z",
+  "worktree": "/Users/Shared/wt-track636-bootclasspath-fix",
+  "files": {
+    "kernel": {
+      "path": "/Users/Shared/wt-track636-bootclasspath-fix/guest-inputs/Image",
+      "sha256": "05c4391767a6ff44f5124796b92d7b98027c37fbf58e81b342ca2adb7d99fa04",
+      "bytes": 23073280
+    },
+    "qemu": {
+      "path": "/opt/homebrew/bin/qemu-system-aarch64",
+      "sha256": "8e5c46dc6752c36afbb706f933e72fef835e35f48881a63cadb06c6d29bac869",
+      "bytes": 31498864
+    },
+    "base_image": {
+      "path": "/Users/Shared/wt-track636-bootclasspath-fix/guest-inputs/t628-iallocator-service-initramfs.cpio.gz",
+      "sha256": "6b0b0d715b92e97b9a997c60f7c5e06cff81d7178af92d1ed28fc55a95414e17",
+      "bytes": 984389699
+    },
+    "boot_image": {
+      "path": "/Users/Shared/wt-track636-bootclasspath-fix/guest-image/t636-bootclasspath-fixed-initramfs.cpio.gz",
+      "sha256": "2a279db4a3085df1b523afba28cf6994ab3a51d0921c6879db5a8858217ccec0",
+      "bytes": 984390847
+    }
+  },
+  "qemu_version": "QEMU emulator version 11.1.2",
+  "target_host_seconds": 680,
+  "target_guest_seconds": 660,
+  "initramfs_decision": "single fix initramfs overlay (t636-bootclasspath-fixed-initramfs.cpio.gz) on pinned T624-fixed lineage base",
+  "command": [
+    "/opt/homebrew/bin/qemu-system-aarch64",
+    "-machine",
+    "virt,gic-version=2,virtio-mmio-transports=1",
+    "-cpu",
+    "cortex-a57",
+    "-m",
+    "8192",
+    "-smp",
+    "4",
+    "-kernel",
+    "/Users/Shared/wt-track636-bootclasspath-fix/guest-inputs/Image",
+    "-initrd",
+    "/Users/Shared/wt-track636-bootclasspath-fix/guest-image/t636-bootclasspath-fixed-initramfs.cpio.gz",
+    "-append",
+    "console=ttyAMA0,115200 earlycon loglevel=8 debug rdinit=/early-ramdisk androidboot.hardware=virt androidboot.selinux=permissive androidboot.veritymode=disabled enforcing=0 printk.ratelimit=0",
+    "-display",
+    "none",
+    "-serial",
+    "file:/Users/Shared/wt-track636-bootclasspath-fix/flights/flight-01/verify-boot.log",
+    "-monitor",
+    "none",
+    "-no-reboot"
+  ]
+}

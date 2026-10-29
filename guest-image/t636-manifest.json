@@ -1,0 +1,14 @@
+{
+  "track": "T636",
+  "created_utc": "2026-10-29T10:53:00Z",
+  "base_image": "/Users/Shared/wt-track636-bootclasspath-fix/guest-inputs/t628-iallocator-service-initramfs.cpio.gz",
+  "base_image_sha256": "6b0b0d715b92e97b9a997c60f7c5e06cff81d7178af92d1ed28fc55a95414e17",
+  "output_image": "/Users/Shared/wt-track636-bootclasspath-fix/guest-image/t636-bootclasspath-fixed-initramfs.cpio.gz",
+  "output_image_sha256": "2a279db4a3085df1b523afba28cf6994ab3a51d0921c6879db5a8858217ccec0",
+  "output_image_bytes": 984390847,
+  "orig_system_sha256": "1f9d601bfc44640c3680365e9d8b82fd3408f0c1dc6b515f4e47095b9bcb74df",
+  "new_system_sha256": "8267e3c89b80ae7abd930b2232e5fc763bc5078fedccdea4856a43a43a98e87e",
+  "build_elapsed_seconds": 106.76,
+  "bootclasspath_entries_count": 20,
+  "bootclasspath_20": "/apex/com.android.art/javalib/core-oj.jar:/apex/com.android.art/javalib/core-libart.jar:/apex/com.android.art/javalib/okhttp.jar:/apex/com.android.art/javalib/bouncycastle.jar:/apex/com.android.art/javalib/apache-xml.jar:/system/framework/framework.jar:/system/framework/framework-graphics.jar:/system/framework/ext.jar:/system/framework/telephony-common.jar:/system/framework/voip-common.jar:/system/framework/ims-common.jar:/apex/com.android.i18n/javalib/core-icu4j.jar:/apex/com.android.btservices/javalib/framework-bluetooth.jar:/apex/com.android.conscrypt/javalib/conscrypt.jar:/apex/com.android.devicelock/javalib/framework-devicelock.jar:/apex/com.android.healthfitness/javalib/framework-healthfitness.jar:/apex/com.android.os.statsd/javalib/framework-statsd.jar:/apex/com.android.sdkext/javalib/framework-sdkextensions.jar:/apex/com.android.virt/javalib/framework-virtualization.jar:/system/system_ext/apex/com.android.tethering/javalib/framework-connectivity.jar"
+}

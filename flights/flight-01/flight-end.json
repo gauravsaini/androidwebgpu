@@ -1,0 +1,33 @@
+{
+  "track": "T636",
+  "flight": "flight-01",
+  "started_utc": "2026-10-29T10:54:36Z",
+  "ended_utc": "2026-10-29T11:05:42Z",
+  "host_elapsed_seconds": 666.36,
+  "guest_log_max_seconds": 661.619,
+  "stop_reason": "Guest target reached (661.6s >= 660s)",
+  "log": {
+    "path": "/Users/Shared/wt-track636-bootclasspath-fix/flights/flight-01/verify-boot.log",
+    "bytes": 797243,
+    "sha256": "a3a0f7b2548966df79bd5d4e79fe9d32936c9c9c6dfb6fd6fdc52e80d7c6653f",
+    "gz_path": "/Users/Shared/wt-track636-bootclasspath-fix/flights/flight-01/verify-boot.log.gz",
+    "gz_bytes": 82945
+  },
+  "stderr": {
+    "path": "/Users/Shared/wt-track636-bootclasspath-fix/flights/flight-01/qemu-stderr.log",
+    "bytes": 81,
+    "sha256": "122fa6f85419d6b4d17811d21d4a3d7e3e44688dd9f672dffb1d71febbcc2666"
+  },
+  "findings": {
+    "zygote_processes_detected": 0,
+    "zygote_bcp_verbatim_count": 1,
+    "zygote_bcp_items_count": 40,
+    "mediaplayer_failure_count": 0,
+    "system_server_lines_count": 80,
+    "sample_zygote_bcp": [
+      "4870",
+      "BOOTCLASSPATH=/apex/com.android.art/javalib/core-oj.jar:/apex/com.android.art/javalib/core-libart.jar:/apex/com.android.art/javalib/okhttp.jar:/apex/com.android.art/javalib/bouncycastle.jar:/apex/com.android.art/javalib/apache-xml.jar:/system/framework/framework.jar:/system/framework/framework-graphics.jar:/system/framework/ext.jar:/system/framework/telephony-common.jar:/system/framework/voip-common.jar:/system/framework/ims-common.jar:/apex/com.android.i18n/javalib/core-icu4j.jar:/apex/com.android.btservices/javalib/framework-bluetooth.jar:/apex/com.android.conscrypt/javalib/conscrypt.jar:/apex/com.android.devicelock/javalib/framework-devicelock.jar:/apex/com.android.healthfitness/javalib/framework-healthfitness.jar:/apex/com.android.os.statsd/javalib/framework-statsd.jar:/apex/com.android.sdkext/javalib/framework-sdkextensions.jar:/apex/com.android.virt/javalib/framework-virtualization.jar:/system/system_ext/apex/com.android.tethering/javalib/framework-connectivity.jar"
+    ],
+    "sample_media_failures": []
+  }
+}

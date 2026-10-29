@@ -6,3 +6,11 @@ node_modules/
 *.log
 .DS_Store
 .unlazy/
+guest-inputs/
+guest-image/*.cpio.gz
+flights/*pretest*
+flights/*.bak
+__pycache__/
+*.pyc
+
+

@@ -245,3 +245,12 @@
 2. **Cold-boot verdict**: FAIL for PID-1 attestation. The pinned T612 inputs passed SHA preflight. The runner passed the kernel handoff at step `147035427`, guest time `8.141321s`, then halted at step `147106780`, PC `0xffffff800808460c`, on unsupported word `0xad400400` (`LDP Q0,Q1,[X0]`, Image PA `0x4008460c`). PID 1 did not emit a marker; `/init` silence remains undetermined because it never ran. No new initramfs was built.
 3. **Futex and trap evidence**: Exact futex vector at step `49693869` (`ESR=0x96000005`, `FAR=0`, `ELR=0xffffff80082591e4`); Linux fixup PC `0xffffff8008c85a8c` observed at step `49694369`. Vector check PASS, `da_in=1`, `brk_in=0`. Trap inventory: one data-abort line, zero BRK/trap/exception/fault lines; terminal halt was unsupported Q-pair load. UART gzip and complete outcome are preserved under `/Users/Shared/t626-flight/` and `/Users/Shared/outcome-t626.txt`.
 4. **Next blocker**: Implement architectural Q-register state and `LDP Q0,Q1,[X0]`, then repeat a cold boot before deciding whether an instrumented initramfs is needed. Findings: `/Users/Shared/codex-track626-m3-runner-fix.md`.
+
+## UPDATED ON : 2026-10-29
+
+### fix (2026-10-29) — Track T636: bootclasspath-fix resolves zygote MediaPlayer preload crash
+
+1. **BOOTCLASSPATH Fix**: In-stream patched `/system/etc/init.rc` and `/data/system/environ/classpath` in single fix initramfs `guest-image/t636-bootclasspath-fixed-initramfs.cpio.gz` (overlay on pinned T624 base, SHA-256 `2a279db4a3085df1b523afba28cf6994ab3a51d0921c6879db5a8858217ccec0`). Appends flattened `/system/system_ext/apex/com.android.tethering/javalib/framework-connectivity.jar` to BOOTCLASSPATH, providing `android/net/ProxyInfo` needed by `MediaPlayer.<clinit>` -> JNI `native_init()`.
+2. **Tests** (before → after): Zygote aborted 30+ cycles on `RuntimeException: Error preloading android.media.MediaPlayer` caused by `NoClassDefFoundError: Failed resolution of: Landroid/net/ProxyInfo;` → 0 occurrences of `Error preloading android.media.MediaPlayer` and 0 occurrences of `NoClassDefFoundError` in 661.6s QEMU 11.1.2 flight-01. Zygote (PID 4870) inherited the 20-jar BOOTCLASSPATH and progressed past class preloading. G636-1: PASS, G636-2: PASS.
+3. **Files changed**: `scripts/build_t636_fix.py`, `scripts/supervisor-t636.py`, `scripts/verify_g636_1.py`, `scripts/verify_g636_2.py`, `guest-image/t636-manifest.json`, `files/WALLS.md`, `GATES.md`, `dafg/GATES.md`, `TIMELINE.md`.
+

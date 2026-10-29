@@ -99,3 +99,13 @@
 - Status: **DISCOVERED in T607**. Advertising `AdvSIMD = 0xF` (Not Implemented) in `ID_AA64PFR0_EL1` cleanly skipped `sha256-neon` (+0x4 slot). However, the scalar fallback `sha256-generic` in `arch/arm64/crypto/sha256_glue.c` still calls assembly routine `sha256_block_data_order` (`0xffffff8008c88508`, +0x0 slot) via indirect call. Because assembly functions lack Clang CFI type annotations in this kernel build, Clang CFI unconditionally traps on `brk #0x800` at step 145,268,307, with terminal `machine_halt` livelock at step 208,482,953 PC `0xffffff80081842c0`.
 - Oracle: QEMU advertises `ID_AA64ISAR0_EL1.SHA2=1` (`0x0001_1120`), which causes Linux to bind `sha256-ce` via direct `bl #0xffffff8008084f38`, completely bypassing Clang CFI indirect call checks.
 
+## T636 zygote64-preload-failure-mediaplayer — guest [RESOLVED in T636]
+
+- Tag: **guest** (Type-1 guest image wall).
+- Rust par bhi lagu: haan (applies to guest image used by both Rust emulator and QEMU virt during Android Zygote preloading).
+- Pinned witness: `/Users/Shared/agyx-track636-bootclasspath-fix.md`, `flights/flight-01/verify-boot.log.gz`.
+- Observation: During `ZygoteInit.preloadClasses()`, `MediaPlayer.<clinit>` -> `native_init()` called JNI `FindClass("android/net/ProxyInfo")` at `/system/lib64/libmedia_jni.so` offset `0x79334`, failing with `NoClassDefFoundError` because `framework-connectivity.jar` was absent from `BOOTCLASSPATH` (the `com.android.tethering` Mainline APEX loop mount had failed). This caused Zygote to abort with `RuntimeException: Error preloading android.media.MediaPlayer` and exit with signal 9 / status 0, cycling repeatedly without starting `system_server`.
+- Status: **RESOLVED in T636**. In-stream patching appended flattened `/system/system_ext/apex/com.android.tethering/javalib/framework-connectivity.jar` to both `init.rc`'s `export BOOTCLASSPATH` and `/data/system/environ/classpath`. In QEMU 11.1.2 flight-01, Zygote pid 4870 inherited the full 20-jar BOOTCLASSPATH, `MediaPlayer` preloaded with 0 occurrences of `Error preloading android.media.MediaPlayer` or `NoClassDefFoundError`, and boot proceeded past class preloading.
+- Next wall: `surfaceflinger-signal6-abort-loop` (SurfaceFlinger aborts with SIGABRT signal 6 during Gralloc 4 IMapper library suffix lookup, triggering `onrestart restart --only-if-running zygote`, owned by Track T637).
+
+

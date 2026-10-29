@@ -1,0 +1,13 @@
+{
+  "track": "T636",
+  "flight": "flight-01",
+  "start_utc": "2026-10-29T10:54:36Z",
+  "supervisor_pid": 23463,
+  "qemu_pid": 23468,
+  "target_host_seconds": 680,
+  "target_guest_seconds": 660,
+  "boot_image_path": "/Users/Shared/wt-track636-bootclasspath-fix/guest-image/t636-bootclasspath-fixed-initramfs.cpio.gz",
+  "boot_image_sha256": "2a279db4a3085df1b523afba28cf6994ab3a51d0921c6879db5a8858217ccec0",
+  "kernel_sha256": "05c4391767a6ff44f5124796b92d7b98027c37fbf58e81b342ca2adb7d99fa04",
+  "qemu_sha256": "8e5c46dc6752c36afbb706f933e72fef835e35f48881a63cadb06c6d29bac869"
+}

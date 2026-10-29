@@ -1,0 +1,12 @@
+{
+  "track": "T636",
+  "status": "COMPLETED (Guest target reached (661.6s >= 660s))",
+  "updated_utc": "2026-10-29T11:05:42Z",
+  "flight": "flight-01",
+  "host_elapsed_seconds": 666.4,
+  "guest_log_max_seconds": 661.619,
+  "target_host_seconds": 680,
+  "target_guest_seconds": 660,
+  "supervisor_pid": 23463,
+  "qemu_pid": null
+}
