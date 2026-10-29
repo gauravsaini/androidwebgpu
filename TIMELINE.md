@@ -245,3 +245,12 @@
 2. **Cold-boot verdict**: FAIL for PID-1 attestation. The pinned T612 inputs passed SHA preflight. The runner passed the kernel handoff at step `147035427`, guest time `8.141321s`, then halted at step `147106780`, PC `0xffffff800808460c`, on unsupported word `0xad400400` (`LDP Q0,Q1,[X0]`, Image PA `0x4008460c`). PID 1 did not emit a marker; `/init` silence remains undetermined because it never ran. No new initramfs was built.
 3. **Futex and trap evidence**: Exact futex vector at step `49693869` (`ESR=0x96000005`, `FAR=0`, `ELR=0xffffff80082591e4`); Linux fixup PC `0xffffff8008c85a8c` observed at step `49694369`. Vector check PASS, `da_in=1`, `brk_in=0`. Trap inventory: one data-abort line, zero BRK/trap/exception/fault lines; terminal halt was unsupported Q-pair load. UART gzip and complete outcome are preserved under `/Users/Shared/t626-flight/` and `/Users/Shared/outcome-t626.txt`.
 4. **Next blocker**: Implement architectural Q-register state and `LDP Q0,Q1,[X0]`, then repeat a cold boot before deciding whether an instrumented initramfs is needed. Findings: `/Users/Shared/codex-track626-m3-runner-fix.md`.
+
+## UPDATED ON : 2026-10-29
+
+### fix (2026-10-29) — Track T637: Gralloc 5 Stable-C SP-HAL mapper fix for SurfaceFlinger
+
+1. **Gralloc 5 Mapper Implementation**: Implemented Android 14 Gralloc 5 Stable-C SP-HAL (`AIMapper_loadIMapper` / `AIMapperV5`) in `mapper.default.so` installed into `/vendor/lib64/hw/mapper.default.so`. Resolved `surfaceflinger-sigabrt-line3732` where SurfaceFlinger aborted with `gralloc-mapper is missing` during `setupNewDisplayDeviceInternal()`. Under QEMU 11.1.2 oracle boot, SurfaceFlinger loaded `mapper.default.so` via `android_load_sphal_library()`, successfully completed display setup without aborting, and advanced past `SurfaceFlinger::init()+1428` to `SurfaceFlinger::init()+3764` reaching RenderEngine shader cache priming (`primeShaderCache`). Uncovered new wall `surfaceflinger-skia-autobackendtexture-abort` in `AutoBackendTexture`.
+2. **Tests** (before → after): T635 aborted at `setupNewDisplayDeviceInternal()` with `gralloc-mapper is missing` → T637 cleanly loaded mapper (`AIMapper_loadIMapper`), passed display setup with 0 mapper aborts, advanced +2,336 bytes in `SurfaceFlinger::init()` to line 3764; G637-1 MET, G637-2 MET.
+3. **Files changed**: `toolchain/mapper_t637.c`, `toolchain/mapper.default.so`, `tools/build_t637_image.py`, `tools/run_t637_fix.py`, `scripts/supervisor-t637.py`, `files/WALLS.md`, `dafg/GATES.md`, `GATES.md`, `TIMELINE.md`.
+

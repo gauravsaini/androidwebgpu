@@ -1,13 +1,8 @@
 {
-  "timestamp": "2026-10-20T12:36:45Z",
-  "lane": "T590",
-  "runner_pid": 67851,
-  "status": "running",
-  "target_halt_step": 49688578,
-  "current_step": 68000000,
-  "pc": "0xffffff800853a170",
-  "console_bytes": 5542,
-  "irq_in": 432,
-  "irq_out": 433,
-  "note": "Bypassed step 49,688,578 wall cleanly! Boot advanced past 68M steps with console bytes advancing (3936 -> 5542 bytes), 432 IRQs delivered"
+  "timestamp": "2026-10-29T09:47:52+00:00",
+  "lane": "T637",
+  "runner_pid": null,
+  "status": "complete",
+  "current_step": 6,
+  "note": "T637 gralloc-mapper fix complete; Verdict PASS"
 }

@@ -99,3 +99,52 @@
 - Status: **DISCOVERED in T607**. Advertising `AdvSIMD = 0xF` (Not Implemented) in `ID_AA64PFR0_EL1` cleanly skipped `sha256-neon` (+0x4 slot). However, the scalar fallback `sha256-generic` in `arch/arm64/crypto/sha256_glue.c` still calls assembly routine `sha256_block_data_order` (`0xffffff8008c88508`, +0x0 slot) via indirect call. Because assembly functions lack Clang CFI type annotations in this kernel build, Clang CFI unconditionally traps on `brk #0x800` at step 145,268,307, with terminal `machine_halt` livelock at step 208,482,953 PC `0xffffff80081842c0`.
 - Oracle: QEMU advertises `ID_AA64ISAR0_EL1.SHA2=1` (`0x0001_1120`), which causes Linux to bind `sha256-ce` via direct `bl #0xffffff8008084f38`, completely bypassing Clang CFI indirect call checks.
 
+## T635 surfaceflinger-sigabrt-line3732 — guest [RESOLVED in T637]
+
+- Tag: **guest** (Type-1 guest Android userspace `libui` graphic buffer mapper failure in SurfaceFlinger).
+- Rust par bhi lagu: haan (applies to guest userspace libraries and HAL interfaces across both Rust emulator and QEMU virt).
+- Wall name: `surfaceflinger-sigabrt-line3732`.
+- Target artifact: `tombstone_00`.
+- Fault: `signal 6 (SIGABRT), code -1 (SI_QUEUE), fault addr --------`.
+- Abort message: `gralloc-mapper is missing`.
+- Crashing stack:
+  ```text
+  #00 pc 00000000000669e4  /apex/com.android.runtime/lib64/bionic/libc.so (abort+164)
+  #01 pc 00000000000142c0  /system/lib64/liblog.so (__android_log_default_aborter+12)
+  #02 pc 0000000000014410  /system/lib64/liblog.so (__android_log_assert+308)
+  #03 pc 000000000003488c  /system/lib64/libui.so (android::GraphicBufferMapper::GraphicBufferMapper()+356)
+  #04 pc 000000000003433c  /system/lib64/libui.so (android::GraphicBuffer::GraphicBuffer()+248)
+  #05 pc 0000000000034198  /system/lib64/libui.so (android::GraphicBuffer::GraphicBuffer(unsigned int, unsigned int, int, unsigned int, unsigned long, std::__1::basic_string<char, std::__1::char_traits<char>, std::__1::allocator<char> >)+68)
+  #06 pc 00000000000ad428  /system/lib64/libgui.so (android::BufferQueueProducer::allocateBuffers(unsigned int, unsigned int, int, unsigned long)+492)
+  #07 pc 00000000002cc8a4  /system/bin/surfaceflinger (android::SurfaceFlinger::setupNewDisplayDeviceInternal(android::wp<android::IBinder> const&, std::__1::shared_ptr<android::compositionengine::Display>, android::DisplayDeviceState const&, android::sp<android::compositionengine::DisplaySurface> const&, android::sp<android::IGraphicBufferProducer> const&)+2448)
+  #08 pc 00000000002cb120  /system/bin/surfaceflinger (android::SurfaceFlinger::processDisplayAdded(android::wp<android::IBinder> const&, android::DisplayDeviceState const&)+804)
+  #09 pc 000000000037d28c  /system/bin/surfaceflinger (android::SurfaceFlinger::init()+1428)
+  #10 pc 00000000003ae0c4  /system/bin/surfaceflinger (main+1100)
+  #11 pc 000000000005f610  /apex/com.android.runtime/lib64/bionic/libc.so (__libc_init+104)
+  ```
+- Status: **RESOLVED in T637**. Authored and packaged Gralloc 5 Stable-C SP-HAL implementation `mapper.default.so` into `/vendor/lib64/hw/mapper.default.so`. In T637 QEMU flight `fix-01`, `GraphicBufferMapper::GraphicBufferMapper()` invoked `AIMapper_loadIMapper` (UART line 3656: `[  222.180258] T637_MAPPER AIMapper_loadIMapper called; returning AIMapper v5 (T637 fix active)`), completely bypassing the `gralloc-mapper is missing` abort. SurfaceFlinger cleanly passed `setupNewDisplayDeviceInternal` and advanced past `SurfaceFlinger::init()` + 1428 to + 3764.
+
+## T637 surfaceflinger-skia-autobackendtexture-abort — guest
+
+- Tag: **guest** (Type-1 guest Android userspace RenderEngine Skia shader cache priming texture creation abort).
+- Rust par bhi lagu: haan (applies to guest userspace libraries and HAL interfaces across both Rust emulator and QEMU virt).
+- Wall name: `surfaceflinger-skia-autobackendtexture-abort`.
+- Target artifact: `tombstone_00` (flight `fix-01`).
+- Fault: `signal 6 (SIGABRT), code -1 (SI_QUEUE), fault addr --------`.
+- Abort message: `Failed to create a valid texture. [0x7dbd84d970]:[128,128] isProtected:0 isWriteable:1 format:1`.
+- Crashing stack:
+  ```text
+  #00 pc 00000000000669e4  /apex/com.android.runtime/lib64/bionic/libc.so (abort+164)
+  #01 pc 00000000000142c0  /system/lib64/liblog.so (__android_log_default_aborter+12)
+  #02 pc 0000000000014410  /system/lib64/liblog.so (__android_log_assert+308)
+  #03 pc 00000000002e9ca0  /system/bin/surfaceflinger (android::renderengine::skia::AutoBackendTexture::AutoBackendTexture(GrDirectContext*, AHardwareBuffer*, bool, android::renderengine::skia::AutoBackendTexture::CleanupManager&)+524)
+  #04 pc 00000000001be7f4  /system/bin/surfaceflinger (android::renderengine::skia::SkiaRenderEngine::drawLayersInternal(std::__1::shared_ptr<std::__1::promise<android::base::expected<android::sp<android::Fence>, int> > > const&&, android::renderengine::DisplaySettings const&, std::__1::vector<android::renderengine::LayerSettings, std::__1::allocator<android::renderengine::LayerSettings> > const&, std::__1::shared_ptr<android::renderengine::ExternalTexture> const&, bool, android::base::unique_fd_impl<android::base::DefaultCloser>&&)+13068)
+  #05 pc 00000000003ea394  /system/bin/surfaceflinger (android::renderengine::RenderEngine::drawLayers(android::renderengine::DisplaySettings const&, std::__1::vector<android::renderengine::LayerSettings, std::__1::allocator<android::renderengine::LayerSettings> > const&, std::__1::shared_ptr<android::renderengine::ExternalTexture> const&, bool, android::base::unique_fd_impl<android::base::DefaultCloser>&&)+340)
+  #06 pc 000000000040552c  /system/bin/surfaceflinger (android::renderengine::skia::Cache::primeShaderCache(android::renderengine::skia::SkiaRenderEngine*)+1692)
+  #07 pc 0000000000400dcc  /system/bin/surfaceflinger (android::renderengine::skia::SkiaRenderEngine::primeCache()+16)
+  #08 pc 000000000037dbac  /system/bin/surfaceflinger (android::SurfaceFlinger::init()+3764)
+  #09 pc 00000000003ae0c4  /system/bin/surfaceflinger (main+1100)
+  #10 pc 000000000005f610  /apex/com.android.runtime/lib64/bionic/libc.so (__libc_init+104)
+  ```
+- Status: **DISCOVERED in T637**. Following gralloc mapper resolution, SurfaceFlinger completed display setup and reached RenderEngine shader cache priming in `SurfaceFlinger::init()+3764`. During `primeShaderCache()`, `AutoBackendTexture` failed to wrap a 128x128 RGBA_8888 AHardwareBuffer into a Skia backend texture (likely because `IAllocator` stub rejected `allocate2` with `malformed-or-unsupported-descriptor`, leaving AHardwareBuffer unbacked, or SwiftShader GLES backend texture allocation failed).
+

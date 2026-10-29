@@ -1,0 +1,9 @@
+service t637-sf-dump /vendor/bin/t637-sf-tombstone-dump.sh
+    class late_start
+    user root
+    group root
+    disabled
+    seclabel u:r:init:s0
+
+on post-fs-data
+    start t637-sf-dump
