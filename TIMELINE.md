@@ -254,3 +254,12 @@
 2. **Tests** (before → after): T635 aborted at `setupNewDisplayDeviceInternal()` with `gralloc-mapper is missing` → T637 cleanly loaded mapper (`AIMapper_loadIMapper`), passed display setup with 0 mapper aborts, advanced +2,336 bytes in `SurfaceFlinger::init()` to line 3764; G637-1 MET, G637-2 MET.
 3. **Files changed**: `toolchain/mapper_t637.c`, `toolchain/mapper.default.so`, `tools/build_t637_image.py`, `tools/run_t637_fix.py`, `scripts/supervisor-t637.py`, `files/WALLS.md`, `dafg/GATES.md`, `GATES.md`, `TIMELINE.md`.
 
+
+
+## UPDATED ON : 2026-10-30
+
+### feat (2026-10-30) — Track T640: Three-fix-merge (T636 + T637 + T638 combined lineage)
+
+1. **Three-Fix-Merge Implementation**: Merged T636 (20-jar BOOTCLASSPATH via framework-connectivity.jar), T637 (Gralloc 5 Stable-C mapper.default.so SP-HAL), and T638 (SwiftShader soft_egl_create_image anonymous-mmap fallback) into ONE merged initramfs (`t640-three-fix-merge-initramfs.cpio.gz`, SHA-256 `87c90a5866faa500ce226ac83baaa8077ace406604c72b3432a0389f8ed4d277`). Under QEMU 11.1.2 native oracle flight (660.3s guest execution): (a) Zygote consumed 20-jar BOOTCLASSPATH containing framework-connectivity.jar; (b) 0 MediaPlayer preload errors; (c) SurfaceFlinger loaded mapper.default.so with 0 mapper-missing aborts; (d) SurfaceFlinger passed primeShaderCache with 0 texture aborts, successfully completed init(), started bootanim (pid 3235, line 4156), and ran crash-free (0 crashes) throughout flight; (e) Uncovered downstream wall `zygote64-preload-failure-systemserviceregistry` at line 4932; system_server explicitly absent (0 launches).
+2. **Tests** (before → after): Three fixes isolated/partially merged → All three fixes verified simultaneously in ONE initramfs; G640-1 MET, G640-2 MET.
+3. **Files changed**: `tools/extract_swiftshader.py`, `tools/build_t640_merged_image.py`, `tools/supervisor_t640.py`, `toolchain/libGLES_swiftshader_patched.so`, `guest-image/t640-three-fix-merge-initramfs.cpio.gz`, `dafg/GATES.md`, `GATES.md`, `files/WALLS.md`, `heartbeat.json`, `TIMELINE.md`.

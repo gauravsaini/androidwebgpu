@@ -146,5 +146,21 @@
   #09 pc 00000000003ae0c4  /system/bin/surfaceflinger (main+1100)
   #10 pc 000000000005f610  /apex/com.android.runtime/lib64/bionic/libc.so (__libc_init+104)
   ```
-- Status: **DISCOVERED in T637**. Following gralloc mapper resolution, SurfaceFlinger completed display setup and reached RenderEngine shader cache priming in `SurfaceFlinger::init()+3764`. During `primeShaderCache()`, `AutoBackendTexture` failed to wrap a 128x128 RGBA_8888 AHardwareBuffer into a Skia backend texture (likely because `IAllocator` stub rejected `allocate2` with `malformed-or-unsupported-descriptor`, leaving AHardwareBuffer unbacked, or SwiftShader GLES backend texture allocation failed).
+- Status: **RESOLVED in T638**. In Track T638, patched SwiftShader's `soft_egl_create_image` at offset `0x5afc` in `/vendor/lib64/egl/libGLES_swiftshader.so` (and all aliases) with an anonymous `mmap(MAP_PRIVATE|MAP_ANONYMOUS)` fallback for buffers without simplefb backing FDs. RenderEngine Skia shader cache priming (`primeShaderCache`) completed with 0 aborts.
+
+## T640 zygote64-preload-failure-systemserviceregistry — guest
+
+- Tag: **guest** (Type-1 guest Android userspace Zygote class preloading failure).
+- Rust par bhi lagu: haan (applies to guest userspace libraries and Zygote initialization across both Rust emulator and QEMU virt).
+- Wall name: `zygote64-preload-failure-systemserviceregistry`.
+- Observation: With SurfaceFlinger alive, stable, and crash-free (having loaded `mapper.default.so` and passed `primeShaderCache` to start `bootanim`), init no longer sends cascading signal 9 kills to Zygote. Zygote proceeds past `MediaPlayer` preloading (0 errors) until it preloads `android.app.SystemServiceRegistry` at UART line 4932:
+  ```text
+  10-29 14:04:02.914  4031  4031 W zygote64: Landroid/app/SystemServiceRegistry; failed initialization: java.lang.NoClassDefFoundError: Class not found using the boot class loader; no stack trace available
+  10-29 14:04:02.915  4031  4031 E Zygote  : Error preloading android.app.SystemServiceRegistry.
+  10-29 14:04:02.917  4031  4031 E Zygote  : System zygote died with fatal exception
+  10-29 14:04:02.918  4031  4031 D AndroidRuntime: Shutting down VM
+  ```
+- Impact: Zygote exits and restarts, preventing `forkSystemServer()` from ever being called. `system_server` is explicitly absent.
+- Next action: Investigate the missing bootclasspath class required during `SystemServiceRegistry.<clinit>`.
+
 
