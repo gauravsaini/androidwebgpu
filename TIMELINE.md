@@ -254,3 +254,12 @@
 2. **Tests** (before → after): T635 aborted at `setupNewDisplayDeviceInternal()` with `gralloc-mapper is missing` → T637 cleanly loaded mapper (`AIMapper_loadIMapper`), passed display setup with 0 mapper aborts, advanced +2,336 bytes in `SurfaceFlinger::init()` to line 3764; G637-1 MET, G637-2 MET.
 3. **Files changed**: `toolchain/mapper_t637.c`, `toolchain/mapper.default.so`, `tools/build_t637_image.py`, `tools/run_t637_fix.py`, `scripts/supervisor-t637.py`, `files/WALLS.md`, `dafg/GATES.md`, `GATES.md`, `TIMELINE.md`.
 
+## UPDATED ON : 2026-10-29
+
+### feat (2026-10-29) — Track T639: merge and prove combined T636+T637 lineage
+
+1. **Combined Lineage Proof**: Merged T636 classpath fix (`framework-connectivity.jar` in `BOOTCLASSPATH`) and T637 mapper fix (`mapper.default.so` in `/vendor/lib64/hw/`) into single initramfs (`c80fb112...`). In QEMU 11.1.2 flight-01, Zygote PID 5503 inherited verbatim 20-jar `BOOTCLASSPATH` with 0 `MediaPlayer` preload / `NoClassDefFoundError` errors; SurfaceFlinger loaded `mapper.default.so` via `AIMapper_loadIMapper` with 0 `gralloc-mapper is missing` aborts, passed `setupNewDisplayDeviceInternal()`, and reached `primeShaderCache` (halting at known T638 texture wall).
+2. **Tests** (before → after): T636 lacked mapper (crashed at SF signal 6), T637 lacked classpath (19-jar BCP) → T639 unified flight simultaneously proves both: 20-jar BCP verified in Zygote environ, 0 preload errors, mapper loaded, display setup passed; G639-1 MET, G639-2 MET.
+3. **Files changed**: `tools/build_t639_merged_image.py`, `tools/supervisor_t639.py`, `files/WALLS.md`, `dafg/GATES.md`, `GATES.md`, `TIMELINE.md`.
+
+

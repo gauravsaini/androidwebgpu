@@ -8,4 +8,7 @@ node_modules/
 .unlazy/
 /guest-inputs/
 /flights/
+guest-image/*.cpio.gz
+__pycache__/
+*.pyc
 

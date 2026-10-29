@@ -148,3 +148,13 @@
   ```
 - Status: **DISCOVERED in T637**. Following gralloc mapper resolution, SurfaceFlinger completed display setup and reached RenderEngine shader cache priming in `SurfaceFlinger::init()+3764`. During `primeShaderCache()`, `AutoBackendTexture` failed to wrap a 128x128 RGBA_8888 AHardwareBuffer into a Skia backend texture (likely because `IAllocator` stub rejected `allocate2` with `malformed-or-unsupported-descriptor`, leaving AHardwareBuffer unbacked, or SwiftShader GLES backend texture allocation failed).
 
+## T639 merge-classpath-mapper: combined lineage verification — guest
+
+- Tag: **guest** (Type-1 guest Android userspace).
+- Rust par bhi lagu: haan (applies to guest userspace libraries and HAL interfaces across both Rust emulator and QEMU virt).
+- Status: **VERIFIED in T639 (Combined Lineage PASS)**. Merged T636 bootclasspath fix (`framework-connectivity.jar` appended to `BOOTCLASSPATH`) and T637 Gralloc 5 mapper fix (`mapper.default.so` in `/vendor/lib64/hw/`) into single initramfs (`c80fb11251cdce4649636cb312b1b6d447980ac71dcf49fe11c73fce9d2da5c3`). Under QEMU 11.1.2:
+  1. Zygote PID 5503 environ verbatim confirmed 20-jar `BOOTCLASSPATH` ending in `framework-connectivity.jar` (UART line 10364); 0 `MediaPlayer` preload errors and 0 `NoClassDefFoundError` occurrences (resolving `zygote64-preload-failure-mediaplayer`).
+  2. SurfaceFlinger loaded `mapper.default.so` via `AIMapper_loadIMapper` (UART line 4042) with 0 `gralloc-mapper is missing` aborts (resolving `surfaceflinger-sigabrt-line3732`), cleanly passing `setupNewDisplayDeviceInternal()`.
+  3. Boot advanced to `primeShaderCache()` where it safely halted at the known downstream wall `surfaceflinger-skia-autobackendtexture-abort` (owned by T638). Neither fix regressed.
+
+
