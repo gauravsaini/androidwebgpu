@@ -146,5 +146,5 @@
   #09 pc 00000000003ae0c4  /system/bin/surfaceflinger (main+1100)
   #10 pc 000000000005f610  /apex/com.android.runtime/lib64/bionic/libc.so (__libc_init+104)
   ```
-- Status: **DISCOVERED in T637**. Following gralloc mapper resolution, SurfaceFlinger completed display setup and reached RenderEngine shader cache priming in `SurfaceFlinger::init()+3764`. During `primeShaderCache()`, `AutoBackendTexture` failed to wrap a 128x128 RGBA_8888 AHardwareBuffer into a Skia backend texture (likely because `IAllocator` stub rejected `allocate2` with `malformed-or-unsupported-descriptor`, leaving AHardwareBuffer unbacked, or SwiftShader GLES backend texture allocation failed).
+- Status: **RESOLVED in T638**. In T638, the root cause was proved in `/vendor/lib64/egl/libGLES_swiftshader.so`: `soft_egl_create_image` strictly required `'SFB0'` magic with `numInts >= 9` and an open file descriptor (`numFds >= 1`), returning `0` (`EGL_NO_IMAGE_KHR`) on dummy 128x128 shader-cache textures. Patched `soft_egl_create_image` at offset `0x5afc` with a 200-byte handler providing an anonymous `mmap(MAP_PRIVATE|MAP_ANONYMOUS)` fallback. Under QEMU 11.1.2 oracle boot, SurfaceFlinger cleanly passed `primeShaderCache` without `AutoBackendTexture` abort and ran stably with 0 crashes (`sf_crash_count: 0`).
 

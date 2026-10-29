@@ -254,3 +254,12 @@
 2. **Tests** (before → after): T635 aborted at `setupNewDisplayDeviceInternal()` with `gralloc-mapper is missing` → T637 cleanly loaded mapper (`AIMapper_loadIMapper`), passed display setup with 0 mapper aborts, advanced +2,336 bytes in `SurfaceFlinger::init()` to line 3764; G637-1 MET, G637-2 MET.
 3. **Files changed**: `toolchain/mapper_t637.c`, `toolchain/mapper.default.so`, `tools/build_t637_image.py`, `tools/run_t637_fix.py`, `scripts/supervisor-t637.py`, `files/WALLS.md`, `dafg/GATES.md`, `GATES.md`, `TIMELINE.md`.
 
+## UPDATED ON : 2026-10-29
+
+### fix (2026-10-29) — Track T638: SurfaceFlinger Skia primeShaderCache texture fix
+
+1. **AutoBackendTexture Fix**: Resolved `surfaceflinger-skia-autobackendtexture-abort` where SurfaceFlinger aborted with SIGABRT in `AutoBackendTexture::AutoBackendTexture()` at `0x2e9ca0` during `Cache::primeShaderCache()`. Disassembly of `/vendor/lib64/egl/libGLES_swiftshader.so` proved `soft_egl_create_image` strictly required `'SFB0'` magic with `numInts >= 9` and an open file descriptor (`numFds >= 1`), returning `0` (`EGL_NO_IMAGE_KHR`) on dummy 128x128 shader-cache textures. Patched `soft_egl_create_image` at offset `0x5afc` with a 200-byte handler providing an anonymous `mmap(MAP_PRIVATE|MAP_ANONYMOUS)` fallback. Under QEMU 11.1.2 oracle boot, SurfaceFlinger cleanly passed `primeShaderCache` without `AutoBackendTexture` abort and ran stably with 0 crashes (`sf_crash_count: 0`).
+2. **Tests** (before → after): T637 aborted in `AutoBackendTexture::AutoBackendTexture()` with `Failed to create a valid texture. [0x7dbd84d970]:[128,128]` → T638 passed `primeShaderCache` with 0 `AutoBackendTexture` aborts and 0 SurfaceFlinger crashes; G638-1 MET, G638-2 MET.
+3. **Files changed**: `tools/build_t638_image.py`, `tools/run_t638_fix.py`, `GATES.md`, `dafg/GATES.md`, `TIMELINE.md`, `heartbeat.json`.
+
+
