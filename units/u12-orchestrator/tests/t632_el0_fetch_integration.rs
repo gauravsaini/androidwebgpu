@@ -77,18 +77,33 @@ fn t632_el0_fetch_user_exec_page_via_step() {
 }
 
 #[test]
-fn t632_el1_fetch_user_exec_page_denied_via_step() {
+fn t632_el1_fetch_user_exec_page_denied_delivers_prefetch_abort() {
+    // T632b contract change: EL1 fetching the PXN=1 user page still
+    // faults (permission, level 3), but the fault is now DELIVERED to
+    // the EL1 sync vector (VBAR+0x200; VBAR unset here, so 0x200)
+    // instead of halting — the same delivery the QEMU oracle shows
+    // for EL0 demand-paging faults, applied to EL1.
     let mut orch = Orchestrator::new();
     setup_tables(&mut orch);
     let cpu = &mut orch.machine.cpu[0];
     cpu.pc = 0x210158;
     cpu.pstate = 0x05; // EL1h
     match orch.step_vcpu() {
-        StepOutcome::Halted(HaltReason::FetchFault { addr }) => {
-            assert_eq!(addr, 0x210158);
-        }
-        other => panic!("expected FetchFault halt at EL1, got {:?}", other),
+        StepOutcome::Continue => {}
+        other => panic!(
+            "expected Continue (prefetch abort delivered), got {:?}",
+            other
+        ),
     }
+    let cpu = &orch.machine.cpu[0];
+    assert_eq!(cpu.pc, 0x200);
+    assert_eq!(cpu.sysregs.elr_el1, 0x210158);
+    assert_eq!(cpu.sysregs.far_el1, 0x210158);
+    // EC 0x21 (from EL1), IL 1, FSC 0x0F (permission, level 3).
+    assert_eq!(cpu.sysregs.esr_el1, 0x8600_000f);
+    assert_eq!(cpu.sysregs.spsr_el1 & 0x1F, 0x05);
+    assert_eq!(cpu.pstate & 0x1F, 0x05);
+    assert_eq!(orch.halted(), None);
 }
 
 #[test]
@@ -195,4 +210,135 @@ fn t632_msr_ttbr0_then_eret_lands_in_el0() {
     assert_eq!(orch.machine.cpu[0].pc, 0x21015c);
     assert_eq!(orch.machine.cpu[0].pstate & 0x1F, 0x00);
     assert_eq!(orch.machine.cpu[0].sysregs.ttbr0_el1, l1_pa);
+}
+
+// T632b: EL0 exceptions must reach the guest (QEMU -d int oracle).
+//
+// The first EL0 fetch of a fresh mm faults by design (demand paging):
+// QEMU shows ERET to EL0 0x210158, then Prefetch Abort (EC 0x20, ESR
+// 0x82000005, FAR = ELR = 0x210158) to VBAR+0x400, the handler installs
+// the PTE, and ERET returns to 0x210158. The engine halted on that
+// fault instead of delivering it. Same delivery family covers SVC:
+// /init prints the marker with write() syscalls, whose SVC must vector
+// to VBAR+0x400 with ELR = the next instruction.
+
+const VBAR_T632B: u64 = RAM_BASE + 0x20_000;
+
+/// Zeroed TTBR0 tables: a fresh mm with no PTEs installed yet.
+fn setup_empty_tables(orch: &mut Orchestrator) {
+    let l1_pa = RAM_BASE + 0x10_000;
+    for i in 0..512 {
+        write_u64(orch, l1_pa + i * 8, 0);
+    }
+    let cpu = &mut orch.machine.cpu[0];
+    cpu.sysregs.sctlr_el1 = 1;
+    cpu.sysregs.tcr_el1 = 0x0040_0032_b559_3519;
+    cpu.sysregs.ttbr0_el1 = l1_pa;
+    cpu.sysregs.ttbr1_el1 = l1_pa;
+    cpu.sysregs.vbar_el1 = VBAR_T632B;
+}
+
+#[test]
+fn t632b_el0_fetch_unmapped_delivers_prefetch_abort() {
+    let mut orch = Orchestrator::new();
+    setup_empty_tables(&mut orch);
+    let cpu = &mut orch.machine.cpu[0];
+    cpu.pc = 0x210158;
+    cpu.pstate = 0x00; // EL0t
+    match orch.step_vcpu() {
+        StepOutcome::Continue => {}
+        other => panic!(
+            "expected Continue (prefetch abort delivered), got {:?}",
+            other
+        ),
+    }
+    let cpu = &orch.machine.cpu[0];
+    assert_eq!(cpu.pc, VBAR_T632B + 0x400);
+    assert_eq!(cpu.sysregs.elr_el1, 0x210158);
+    assert_eq!(cpu.sysregs.far_el1, 0x210158);
+    assert_eq!(cpu.sysregs.esr_el1, 0x8200_0005);
+    assert_eq!(cpu.sysregs.spsr_el1 & 0x1F, 0x00);
+    assert_eq!(cpu.pstate & 0x1F, 0x05); // now EL1h
+}
+
+#[test]
+fn t632b_el1_fetch_unmapped_delivers_prefetch_abort() {
+    let mut orch = Orchestrator::new();
+    setup_empty_tables(&mut orch);
+    let cpu = &mut orch.machine.cpu[0];
+    cpu.pc = 0x210158;
+    cpu.pstate = 0x05; // EL1h
+    match orch.step_vcpu() {
+        StepOutcome::Continue => {}
+        other => panic!(
+            "expected Continue (prefetch abort delivered), got {:?}",
+            other
+        ),
+    }
+    let cpu = &orch.machine.cpu[0];
+    assert_eq!(cpu.pc, VBAR_T632B + 0x200);
+    assert_eq!(cpu.sysregs.elr_el1, 0x210158);
+    assert_eq!(cpu.sysregs.far_el1, 0x210158);
+    assert_eq!(cpu.sysregs.esr_el1, 0x8600_0005);
+    assert_eq!(cpu.sysregs.spsr_el1 & 0x1F, 0x05);
+    assert_eq!(cpu.pstate & 0x1F, 0x05); // now EL1h
+}
+
+#[test]
+fn t632b_el0_fetch_xn_page_delivers_prefetch_abort() {
+    let mut orch = Orchestrator::new();
+    setup_tables(&mut orch);
+    // Overwrite L3[0x10] (VA 0x210158) with UXN=1: EL0 execute denied.
+    let l3_pa = RAM_BASE + 0x12_000;
+    let user_code_pa = RAM_BASE + 0x13_000;
+    let xn_desc: u64 = (user_code_pa & 0x0000_FFFF_FFFF_F000)
+        | (0b11 << 6)
+        | (1 << 10)
+        | (1 << 53)
+        | (1 << 54)
+        | 0b11;
+    write_u64(&mut orch, l3_pa + 0x10 * 8, xn_desc);
+    let cpu = &mut orch.machine.cpu[0];
+    cpu.sysregs.vbar_el1 = VBAR_T632B;
+    cpu.pc = 0x210158;
+    cpu.pstate = 0x00; // EL0t
+    match orch.step_vcpu() {
+        StepOutcome::Continue => {}
+        other => panic!(
+            "expected Continue (prefetch abort delivered), got {:?}",
+            other
+        ),
+    }
+    let cpu = &orch.machine.cpu[0];
+    assert_eq!(cpu.pc, VBAR_T632B + 0x400);
+    assert_eq!(cpu.sysregs.elr_el1, 0x210158);
+    assert_eq!(cpu.sysregs.far_el1, 0x210158);
+    // Permission fault, level 3: FSC 0x0f.
+    assert_eq!(cpu.sysregs.esr_el1, 0x8200_000f);
+}
+
+const SVC0: u32 = 0xd400_0001; // svc #0 (low bits 00001; 0xd400_0000 is unallocated)
+
+#[test]
+fn t632b_el0_svc_delivers_to_el1() {
+    let mut orch = Orchestrator::new();
+    setup_tables(&mut orch);
+    // Replace the NOP at VA 0x210158 with SVC #0.
+    let user_code_pa = RAM_BASE + 0x13_000;
+    write_word(&mut orch, user_code_pa + 0x158, SVC0);
+    let cpu = &mut orch.machine.cpu[0];
+    cpu.sysregs.vbar_el1 = VBAR_T632B;
+    cpu.pc = 0x210158;
+    cpu.pstate = 0x00; // EL0t
+    match orch.step_vcpu() {
+        StepOutcome::Continue => {}
+        other => panic!("expected Continue (SVC delivered), got {:?}", other),
+    }
+    let cpu = &orch.machine.cpu[0];
+    assert_eq!(cpu.pc, VBAR_T632B + 0x400);
+    // SVC return address is the NEXT instruction (ARM ARM).
+    assert_eq!(cpu.sysregs.elr_el1, 0x21015c);
+    assert_eq!(cpu.sysregs.esr_el1, 0x5600_0000);
+    assert_eq!(cpu.sysregs.spsr_el1 & 0x1F, 0x00);
+    assert_eq!(cpu.pstate & 0x1F, 0x05); // now EL1h
 }

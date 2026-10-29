@@ -610,6 +610,10 @@ pub struct Orchestrator {
     pub data_abort_count: u64,
     /// Track T594: Synchronous BRK exceptions taken to VBAR_EL1.
     pub brk_count: u64,
+    /// Track T632b: Prefetch Abort exceptions delivered to EL1.
+    pub prefetch_abort_count: u64,
+    /// Track T632b: SVC exceptions delivered to EL1.
+    pub svc_count: u64,
     /// Last MMU translation or permission fault recorded on data access.
     pub last_mmu_fault: Option<(u64, Access, DetailedFault)>,
 }
@@ -687,6 +691,8 @@ impl Orchestrator {
             irq_return_count: 0,
             data_abort_count: 0,
             brk_count: 0,
+            prefetch_abort_count: 0,
+            svc_count: 0,
             last_mmu_fault: None,
         };
         #[cfg(not(target_arch = "wasm32"))]
@@ -878,6 +884,16 @@ impl Orchestrator {
     /// Total synchronous BRK debug exception entries.
     pub fn brk_count(&self) -> u64 {
         self.brk_count
+    }
+
+    /// Total Prefetch Abort exception entries.
+    pub fn prefetch_abort_count(&self) -> u64 {
+        self.prefetch_abort_count
+    }
+
+    /// Total SVC exception entries.
+    pub fn svc_count(&self) -> u64 {
+        self.svc_count
     }
 
     /// Number of distinct blocks currently in the JIT cache.
@@ -3664,6 +3680,140 @@ impl Orchestrator {
         Ok(())
     }
 
+    /// Compute architectural ESR_EL1 value for a Prefetch Abort
+    /// (instruction abort). EC = 0x21 from EL1, 0x20 from EL0;
+    /// IL = 1; ISS = IFSC, shared codes with DFSC.
+    pub fn compute_prefetch_abort_esr(is_el1: bool, dfsc: u32) -> u64 {
+        let ec: u64 = if is_el1 { 0x21 } else { 0x20 };
+        let il: u64 = 1;
+        let iss: u64 = dfsc as u64 & 0x3F;
+        (ec << 26) | (il << 25) | iss
+    }
+
+    /// Deliver an architectural Prefetch Abort exception to EL1.
+    /// T632b: the first EL0 fetch of a fresh mm faults by design
+    /// (demand paging — QEMU -d int shows ERET, Prefetch Abort to
+    /// VBAR+0x400, handler installs the PTE, ERET back). The fetch
+    /// path used to halt here instead of delivering.
+    pub fn take_prefetch_abort_exception(
+        &mut self,
+        faulting_pc: u64,
+        df: DetailedFault,
+    ) -> Result<(), HaltReason> {
+        let cpu = &self.machine.cpu[0];
+        let saved_pstate =
+            (cpu.pstate & !0x0000_03C0) | (cpu.sysregs.daif & 0x0000_03C0);
+        let is_el1 = match saved_pstate & 0x1F {
+            0x05 => true, // EL1h
+            0x04 => true, // EL1t
+            0x00 if (cpu.pc >> 63) == 1
+                || (cpu.sysregs.sctlr_el1 & 1 == 0 && cpu.pc >= 0x4000_0000 && cpu.pc < 0x8000_0000) => {
+                // Kernel space with uninitialized mode bits -> EL1h
+                true
+            }
+            0x00 => false, // EL0t (AArch64)
+            _ => {
+                return Err(HaltReason::Unsupported {
+                    addr: cpu.pc,
+                    reason: "Prefetch abort exception from an unsupported PSTATE mode",
+                });
+            }
+        };
+        let source_mode = if is_el1 {
+            match saved_pstate & 0x1F {
+                0x04 => 0x04,
+                _ => 0x05,
+            }
+        } else {
+            0x00
+        };
+        let vector_offset = match source_mode {
+            0x05 => 0x200, // EL1h -> el1h_sync (VBAR_EL1 + 0x200)
+            0x04 => 0x000, // EL1t -> el1t_sync (VBAR_EL1 + 0x000)
+            0x00 => 0x400, // EL0t (AArch64) -> el0_sync (VBAR_EL1 + 0x400)
+            _ => unreachable!(),
+        };
+        let vector_pc = (cpu.sysregs.vbar_el1 & !0x7FF).wrapping_add(vector_offset);
+
+        let esr = Self::compute_prefetch_abort_esr(is_el1, df.dfsc());
+        let cpu = &mut self.machine.cpu[0];
+        cpu.sysregs.elr_el1 = faulting_pc;
+        cpu.sysregs.far_el1 = faulting_pc;
+        cpu.sysregs.esr_el1 = esr;
+        cpu.sysregs.spsr_el1 = (saved_pstate & !0x1F) | source_mode;
+        cpu.sysregs.daif |= 0x3C0;
+        cpu.pstate = (saved_pstate & !(0x0000_03C0 | 0x1F)) | 0x0000_03C0 | 0x05;
+        cpu.pc = vector_pc;
+
+        self.prefetch_abort_count = self.prefetch_abort_count.saturating_add(1);
+        Ok(())
+    }
+
+    /// Compute architectural ESR_EL1 value for an SVC exception.
+    /// EC = 0x15, IL = 1, ISS = imm16.
+    pub fn compute_svc_esr(imm: u16) -> u64 {
+        let ec: u64 = 0x15;
+        let il: u64 = 1;
+        let iss: u64 = imm as u64;
+        (ec << 26) | (il << 25) | iss
+    }
+
+    /// Deliver an architectural SVC exception to EL1. ELR_EL1 is the
+    /// NEXT instruction (ARM ARM: SVC return address follows the SVC).
+    /// FAR_EL1 is untouched (as for BRK).
+    pub fn take_svc_exception(
+        &mut self,
+        faulting_pc: u64,
+        imm: u16,
+    ) -> Result<(), HaltReason> {
+        let cpu = &self.machine.cpu[0];
+        let saved_pstate =
+            (cpu.pstate & !0x0000_03C0) | (cpu.sysregs.daif & 0x0000_03C0);
+        let is_el1 = match saved_pstate & 0x1F {
+            0x05 => true, // EL1h
+            0x04 => true, // EL1t
+            0x00 if (cpu.pc >> 63) == 1
+                || (cpu.sysregs.sctlr_el1 & 1 == 0 && cpu.pc >= 0x4000_0000 && cpu.pc < 0x8000_0000) => {
+                // Kernel space with uninitialized mode bits -> EL1h
+                true
+            }
+            0x00 => false, // EL0t (AArch64)
+            _ => {
+                return Err(HaltReason::Unsupported {
+                    addr: cpu.pc,
+                    reason: "SVC exception from an unsupported PSTATE mode",
+                });
+            }
+        };
+        let source_mode = if is_el1 {
+            match saved_pstate & 0x1F {
+                0x04 => 0x04,
+                _ => 0x05,
+            }
+        } else {
+            0x00
+        };
+        let vector_offset = match source_mode {
+            0x05 => 0x200, // EL1h -> el1h_sync (VBAR_EL1 + 0x200)
+            0x04 => 0x000, // EL1t -> el1t_sync (VBAR_EL1 + 0x000)
+            0x00 => 0x400, // EL0t (AArch64) -> el0_sync (VBAR_EL1 + 0x400)
+            _ => unreachable!(),
+        };
+        let vector_pc = (cpu.sysregs.vbar_el1 & !0x7FF).wrapping_add(vector_offset);
+
+        let esr = Self::compute_svc_esr(imm);
+        let cpu = &mut self.machine.cpu[0];
+        cpu.sysregs.elr_el1 = faulting_pc.wrapping_add(4);
+        cpu.sysregs.esr_el1 = esr;
+        cpu.sysregs.spsr_el1 = (saved_pstate & !0x1F) | source_mode;
+        cpu.sysregs.daif |= 0x3C0;
+        cpu.pstate = (saved_pstate & !(0x0000_03C0 | 0x1F)) | 0x0000_03C0 | 0x05;
+        cpu.pc = vector_pc;
+
+        self.svc_count = self.svc_count.saturating_add(1);
+        Ok(())
+    }
+
     /// Compute architectural ESR_EL1 value for synchronous BRK debug exception.
     /// EC = 0x3C (AArch64 BRK instruction), IL = 1 (32-bit instruction), ISS = imm16.
     pub fn compute_brk_esr(imm: u16) -> u64 {
@@ -3752,6 +3902,21 @@ impl Orchestrator {
         let word = match self.fetch_word(pc) {
             Ok(w) => w,
             Err(reason) => {
+                // T632b: a fetch fault is a Prefetch Abort delivered
+                // to the guest, not a halt. A fresh mm has no PTEs
+                // yet, so the first EL0 fetch faults by design
+                // (demand paging); the kernel installs the PTE and
+                // ERETs back. Recover the DetailedFault for the ESR
+                // (a RAM-bounds failure re-walks clean and still halts).
+                if let Err(df) = self.translate_va_detailed(pc, Access::Execute) {
+                    if let Err(err) = self.take_prefetch_abort_exception(pc, df) {
+                        self.halted = Some(err.clone());
+                        return StepOutcome::Halted(err);
+                    }
+                    self.steps += 1;
+                    self.tick_clock(TIMER_CYCLES_PER_STEP);
+                    return StepOutcome::Continue;
+                }
                 self.halted = Some(reason.clone());
                 return StepOutcome::Halted(reason);
             }
@@ -3871,13 +4036,20 @@ impl Orchestrator {
             if self.survey_mode {
                 return self.survey_skip_instruction(pc, word, Some(kind));
             }
-            // Phase-2 spike: SVC gets its own halt variant so a future SVC
-            // halt is instantly recognizable in traces vs generic Unsupported.
-            let halt = if reason == u2_ir_lift::R_SVC_UNIMPL {
-                HaltReason::Svc { addr: pc }
-            } else {
-                HaltReason::Unsupported { addr: pc, reason }
-            };
+            // T632b: SVC is delivered to the guest sync handler
+            // (VBAR+0x400 from EL0), not halted: /init prints the
+            // marker with write() syscalls.
+            if reason == u2_ir_lift::R_SVC_UNIMPL {
+                let imm = ((word >> 5) & 0xFFFF) as u16;
+                if let Err(err) = self.take_svc_exception(pc, imm) {
+                    self.halted = Some(err.clone());
+                    return StepOutcome::Halted(err);
+                }
+                self.steps += 1;
+                self.tick_clock(TIMER_CYCLES_PER_STEP);
+                return StepOutcome::Continue;
+            }
+            let halt = HaltReason::Unsupported { addr: pc, reason };
             self.halted = Some(halt.clone());
             return StepOutcome::Halted(halt);
         }
@@ -5966,9 +6138,14 @@ mod tests {
     }
 
     #[test]
-    fn gb22_fetch_unmapped_va_is_fetch_fault() {
-        // GB-22: a fetch VA with no mapping faults honestly as FetchFault
-        // at the VA (not a silent wrong-physical read).
+    fn gb22_fetch_unmapped_va_delivers_prefetch_abort() {
+        // GB-22 (contract changed by T632b): a fetch VA with no mapping
+        // used to halt as FetchFault. QEMU -d int proves the first
+        // userspace fetch faults by design (demand paging) and the
+        // fault is delivered to the guest as a Prefetch Abort, so the
+        // engine now delivers instead of halting. Kernel VA here, so
+        // the vector is VBAR+0x200 (EL1h via the uninitialized-mode
+        // rule: default pstate 0x00 with a kernel-space PC).
         let mut o = Orchestrator::new();
         {
             let m = o.machine_mut();
@@ -5980,14 +6157,18 @@ mod tests {
         }
         let outcome = o.step_vcpu();
         assert!(
-            matches!(
-                outcome,
-                StepOutcome::Halted(HaltReason::FetchFault {
-                    addr: 0xffff_ff80_096a_b000
-                })
-            ),
-            "expected FetchFault, got: {outcome:?}"
+            matches!(outcome, StepOutcome::Continue),
+            "expected Continue (prefetch abort delivered), got: {outcome:?}"
         );
+        let cpu = &o.machine().cpu[0];
+        assert_eq!(cpu.pc, 0x200);
+        assert_eq!(cpu.sysregs.elr_el1, 0xffff_ff80_096a_b000);
+        assert_eq!(cpu.sysregs.far_el1, 0xffff_ff80_096a_b000);
+        // EC 0x21 (from EL1), IL 1, FSC 0x05 (translation, level 1).
+        assert_eq!(cpu.sysregs.esr_el1, 0x8600_0005);
+        assert_eq!(cpu.sysregs.spsr_el1 & 0x1F, 0x05);
+        assert_eq!(cpu.pstate & 0x1F, 0x05);
+        assert_eq!(o.halted(), None);
     }
 
     /// Helper: fresh Orchestrator with MMU off (identity), PC at `pc`,
