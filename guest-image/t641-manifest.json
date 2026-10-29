@@ -1,0 +1,46 @@
+{
+  "track": "T641",
+  "description": "Fix android.app.SystemServiceRegistry preload: add missing APEX jars to BOOTCLASSPATH",
+  "created_utc": "2026-10-29T16:05:52Z",
+  "base_image": "/Users/Shared/wt-track641-systemserviceregistry-preload/guest-inputs/t640-three-fix-merge-initramfs.cpio.gz",
+  "base_image_sha256": "87c90a5866faa500ce226ac83baaa8077ace406604c72b3432a0389f8ed4d277",
+  "output_image": "/Users/Shared/wt-track641-systemserviceregistry-preload/guest-image/t641-systemserviceregistry-preload-initramfs.cpio.gz",
+  "output_image_sha256": "c6328c409056aa0afb307fa5afc8d8bc9998a60879de92278c49b7ae09f43298",
+  "output_image_bytes": 984393241,
+  "orig_system_sha256": "8267e3c89b80ae7abd930b2232e5fc763bc5078fedccdea4856a43a43a98e87e",
+  "new_system_sha256": "76a32845807f38761c94abc9913386b444b936c1c21905ce15e256f4e0abbd18",
+  "build_elapsed_seconds": 91.83,
+  "bootclasspath_entries_count": 31,
+  "pinned_missing_class": "android.net.TetheringManager",
+  "pinned_missing_class_jar": "/system/system_ext/apex/com.android.tethering/javalib/framework-tethering.jar",
+  "pinned_missing_class_jar_sha256": "37960d9789ba98293eb957834047431b6a86231b6c55822103a3c2f6798044f6",
+  "new_jars_added": [
+    "/system/system_ext/apex/com.android.tethering/javalib/framework-tethering.jar",
+    "/system/system_ext/apex/com.android.tethering/javalib/framework-connectivity-t.jar",
+    "/system/system_ext/apex/com.android.appsearch/javalib/framework-appsearch.jar",
+    "/system/system_ext/apex/com.android.wifi/javalib/framework-wifi.jar",
+    "/system/system_ext/apex/com.android.media/javalib/updatable-media.jar",
+    "/system/system_ext/apex/com.android.permission/javalib/framework-permission-s.jar",
+    "/system/system_ext/apex/com.android.scheduling/javalib/framework-scheduling.jar",
+    "/system/system_ext/apex/com.android.adservices/javalib/framework-sdksandbox.jar",
+    "/system/system_ext/apex/com.android.adservices/javalib/framework-adservices.jar",
+    "/system/system_ext/apex/com.android.uwb/javalib/framework-uwb.jar",
+    "/system/system_ext/apex/com.android.ondevicepersonalization/javalib/framework-ondevicepersonalization.jar"
+  ],
+  "bootclasspath_31": "/apex/com.android.art/javalib/core-oj.jar:/apex/com.android.art/javalib/core-libart.jar:/apex/com.android.art/javalib/okhttp.jar:/apex/com.android.art/javalib/bouncycastle.jar:/apex/com.android.art/javalib/apache-xml.jar:/system/framework/framework.jar:/system/framework/framework-graphics.jar:/system/framework/ext.jar:/system/framework/telephony-common.jar:/system/framework/voip-common.jar:/system/framework/ims-common.jar:/apex/com.android.i18n/javalib/core-icu4j.jar:/apex/com.android.btservices/javalib/framework-bluetooth.jar:/apex/com.android.conscrypt/javalib/conscrypt.jar:/apex/com.android.devicelock/javalib/framework-devicelock.jar:/apex/com.android.healthfitness/javalib/framework-healthfitness.jar:/apex/com.android.os.statsd/javalib/framework-statsd.jar:/apex/com.android.sdkext/javalib/framework-sdkextensions.jar:/apex/com.android.virt/javalib/framework-virtualization.jar:/system/system_ext/apex/com.android.tethering/javalib/framework-connectivity.jar:/system/system_ext/apex/com.android.tethering/javalib/framework-tethering.jar:/system/system_ext/apex/com.android.tethering/javalib/framework-connectivity-t.jar:/system/system_ext/apex/com.android.appsearch/javalib/framework-appsearch.jar:/system/system_ext/apex/com.android.wifi/javalib/framework-wifi.jar:/system/system_ext/apex/com.android.media/javalib/updatable-media.jar:/system/system_ext/apex/com.android.permission/javalib/framework-permission-s.jar:/system/system_ext/apex/com.android.scheduling/javalib/framework-scheduling.jar:/system/system_ext/apex/com.android.adservices/javalib/framework-sdksandbox.jar:/system/system_ext/apex/com.android.adservices/javalib/framework-adservices.jar:/system/system_ext/apex/com.android.uwb/javalib/framework-uwb.jar:/system/system_ext/apex/com.android.ondevicepersonalization/javalib/framework-ondevicepersonalization.jar",
+  "images": {
+    "kernel": {
+      "path": "/Users/Shared/wt-track641-systemserviceregistry-preload/guest-inputs/Image",
+      "sha256": "05c4391767a6ff44f5124796b92d7b98027c37fbf58e81b342ca2adb7d99fa04"
+    },
+    "initramfs": {
+      "path": "/Users/Shared/wt-track641-systemserviceregistry-preload/guest-image/t641-systemserviceregistry-preload-initramfs.cpio.gz",
+      "sha256": "c6328c409056aa0afb307fa5afc8d8bc9998a60879de92278c49b7ae09f43298",
+      "bytes": 984393241
+    },
+    "base_t640_initramfs": {
+      "path": "/Users/Shared/wt-track641-systemserviceregistry-preload/guest-inputs/t640-three-fix-merge-initramfs.cpio.gz",
+      "sha256": "87c90a5866faa500ce226ac83baaa8077ace406604c72b3432a0389f8ed4d277"
+    }
+  }
+}

@@ -1,8 +1,14 @@
 {
-  "timestamp": "2026-10-29T09:47:52+00:00",
-  "lane": "T637",
-  "runner_pid": null,
-  "status": "complete",
-  "current_step": 6,
-  "note": "T637 gralloc-mapper fix complete; Verdict PASS"
+  "track": "T641",
+  "timestamp": "2026-10-29T16:23:39Z",
+  "status": "COMPLETED (Guest target reached (660.3s >= 660s))",
+  "flight": "flight-01",
+  "current_step": 3,
+  "host_elapsed_seconds": 661.7,
+  "guest_log_max_seconds": 660.28,
+  "target_host_seconds": 680,
+  "target_guest_seconds": 660,
+  "supervisor_pid": 35954,
+  "qemu_pid": null,
+  "note": "Flight in progress: COMPLETED (Guest target reached (660.3s >= 660s)) host=662s guest=660.3s"
 }
