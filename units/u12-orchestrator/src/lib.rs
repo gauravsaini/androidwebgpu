@@ -278,10 +278,25 @@ pub enum StepOutcome {
 
 /// Explicit console device state. `tx_bytes` is the host-observed sink;
 /// `rx_queue` feeds guest reads. No hidden state.
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ConsoleState {
     pub tx_bytes: Vec<u8>,
     pub rx_queue: VecDeque<u8>,
+    pub cr: u32,
+    pub imsc: u32,
+    pub lcr_h: u32,
+}
+
+impl Default for ConsoleState {
+    fn default() -> Self {
+        Self {
+            tx_bytes: Vec::new(),
+            rx_queue: VecDeque::new(),
+            cr: 0x300,
+            imsc: 0,
+            lcr_h: 0,
+        }
+    }
 }
 
 impl ConsoleState {
@@ -1364,12 +1379,25 @@ impl Orchestrator {
     /// this is the vCPU's device interface for trapped MMIO accesses.
     pub fn mmio_read(&mut self, addr: u64) -> Option<u8> {
         if (CONSOLE_BASE..CONSOLE_BASE + CONSOLE_SIZE).contains(&addr) {
-            if addr == CONSOLE_RX {
-                Some(self.console.read_rx())
-            } else {
-                // Defined MMIO region, non-RX offset: reads return 0.
-                Some(0)
-            }
+            let offset = addr - CONSOLE_BASE;
+            let val = match offset {
+                0x000 | 0x008 => self.console.read_rx(),
+                0x018 => (CONSOLE_PL011_FR_VALUE & 0xff) as u8,
+                0x02c => (self.console.lcr_h & 0xff) as u8,
+                0x030 => (self.console.cr & 0xff) as u8,
+                0x031 => ((self.console.cr >> 8) & 0xff) as u8,
+                0x038 => (self.console.imsc & 0xff) as u8,
+                0xfe0 => 0x11,
+                0xfe4 => 0x10,
+                0xfe8 => 0x14,
+                0xfec => 0x00,
+                0xff0 => 0x0d,
+                0xff4 => 0xf0,
+                0xff8 => 0x05,
+                0xffc => 0xb1,
+                _ => 0,
+            };
+            Some(val)
         } else {
             None
         }
@@ -1379,10 +1407,25 @@ impl Orchestrator {
     /// Public: this is the vCPU's device interface for trapped MMIO accesses.
     pub fn mmio_write(&mut self, addr: u64, byte: u8) -> bool {
         if (CONSOLE_BASE..CONSOLE_BASE + CONSOLE_SIZE).contains(&addr) {
-            if addr == CONSOLE_TX {
-                self.console.write_tx(byte);
+            let offset = addr - CONSOLE_BASE;
+            match offset {
+                0x000 => {
+                    self.console.write_tx(byte);
+                }
+                0x02c => {
+                    self.console.lcr_h = (self.console.lcr_h & !0xff) | (byte as u32);
+                }
+                0x030 => {
+                    self.console.cr = (self.console.cr & !0xff) | (byte as u32);
+                }
+                0x031 => {
+                    self.console.cr = (self.console.cr & !0xff00) | ((byte as u32) << 8);
+                }
+                0x038 => {
+                    self.console.imsc = (self.console.imsc & !0xff) | (byte as u32);
+                }
+                _ => {}
             }
-            // Writes to other console offsets are acknowledged, no effect.
             true
         } else {
             false
@@ -4711,13 +4754,32 @@ impl HostOps for WasmHost<'_> {
                 // low bits, upper bits zero.
                 return Ok(self.console.read_rx() as i64);
             }
-            if pa == CONSOLE_PL011_FR {
-                // Flag register: TX never full, RX always empty — a
-                // polling PL011 driver proceeds to write DR immediately.
-                return Ok(CONSOLE_PL011_FR_VALUE as i64);
-            }
-            // Defined MMIO region, other offsets: reads return 0.
-            return Ok(0);
+            let offset = (pa - CONSOLE_BASE) & !3;
+            let shift = ((pa & 3) * 8) as u32;
+            let value: u32 = match offset {
+                0x000 => self.console.read_rx() as u32,
+                0x018 => CONSOLE_PL011_FR_VALUE,
+                0x02c => self.console.lcr_h,
+                0x030 => self.console.cr,
+                0x038 => self.console.imsc,
+                0xfe0 => 0x11,
+                0xfe4 => 0x10,
+                0xfe8 => 0x14,
+                0xfec => 0x00,
+                0xff0 => 0x0d,
+                0xff4 => 0xf0,
+                0xff8 => 0x05,
+                0xffc => 0xb1,
+                _ => 0,
+            };
+            let shifted = value >> shift;
+            let ret = match size {
+                1 => (shifted & 0xff) as i64,
+                2 => (shifted & 0xffff) as i64,
+                4 => value as i64,
+                _ => unreachable!(),
+            };
+            return Ok(ret);
         }
         if (GPU_BASE..GPU_BASE + GPU_SIZE).contains(&pa) {
             if size != 1 {
@@ -4834,10 +4896,22 @@ impl HostOps for WasmHost<'_> {
             if !matches!(size, 1 | 2 | 4) {
                 return Err("mem_store: console MMIO size must be 1, 2 or 4".to_string());
             }
-            if pa == CONSOLE_TX {
-                self.console.write_tx(val as u8);
+            let offset = pa - CONSOLE_BASE;
+            match offset {
+                0x000 => {
+                    self.console.write_tx(val as u8);
+                }
+                0x02c => {
+                    self.console.lcr_h = val as u32;
+                }
+                0x030 => {
+                    self.console.cr = val as u32;
+                }
+                0x038 => {
+                    self.console.imsc = val as u32;
+                }
+                _ => {}
             }
-            // Writes to other console offsets are acknowledged, no effect.
             return Ok(());
         }
         if (GPU_BASE..GPU_BASE + GPU_SIZE).contains(&pa) {
@@ -5259,9 +5333,24 @@ mod tests {
         assert_eq!(got, Ok(0x90));
         let got = with_host(&mut p, |h| h.mem_load(CONSOLE_PL011_FR as i64, 2));
         assert_eq!(got, Ok(0x90));
-        // Other PL011 offsets read as 0.
-        let got = with_host(&mut p, |h| h.mem_load((CONSOLE_BASE + 0xFE0) as i64, 4));
+        // Unused PL011 offsets read as 0.
+        let got = with_host(&mut p, |h| h.mem_load((CONSOLE_BASE + 0x200) as i64, 4));
         assert_eq!(got, Ok(0));
+    }
+
+    #[test]
+    fn uart_pl011_id_registers_match_arm_primecell() {
+        let mut p = host_parts(SysRegs::default());
+        // Arm PrimeCell PL011 PID0-3 (0xFE0..0xFEC): 0x11, 0x10, 0x14, 0x00
+        assert_eq!(with_host(&mut p, |h| h.mem_load((CONSOLE_BASE + 0xFE0) as i64, 4)), Ok(0x11));
+        assert_eq!(with_host(&mut p, |h| h.mem_load((CONSOLE_BASE + 0xFE4) as i64, 4)), Ok(0x10));
+        assert_eq!(with_host(&mut p, |h| h.mem_load((CONSOLE_BASE + 0xFE8) as i64, 4)), Ok(0x14));
+        assert_eq!(with_host(&mut p, |h| h.mem_load((CONSOLE_BASE + 0xFEC) as i64, 4)), Ok(0x00));
+        // PrimeCell CID0-3 (0xFF0..0xFFC): 0x0D, 0xF0, 0x05, 0xB1 (AMBA CID 0xB105F00D)
+        assert_eq!(with_host(&mut p, |h| h.mem_load((CONSOLE_BASE + 0xFF0) as i64, 4)), Ok(0x0D));
+        assert_eq!(with_host(&mut p, |h| h.mem_load((CONSOLE_BASE + 0xFF4) as i64, 4)), Ok(0xF0));
+        assert_eq!(with_host(&mut p, |h| h.mem_load((CONSOLE_BASE + 0xFF8) as i64, 4)), Ok(0x05));
+        assert_eq!(with_host(&mut p, |h| h.mem_load((CONSOLE_BASE + 0xFFC) as i64, 4)), Ok(0xB1));
     }
 
     #[test]

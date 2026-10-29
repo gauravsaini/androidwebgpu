@@ -245,3 +245,12 @@
 2. **Cold-boot verdict**: FAIL for PID-1 attestation. The pinned T612 inputs passed SHA preflight. The runner passed the kernel handoff at step `147035427`, guest time `8.141321s`, then halted at step `147106780`, PC `0xffffff800808460c`, on unsupported word `0xad400400` (`LDP Q0,Q1,[X0]`, Image PA `0x4008460c`). PID 1 did not emit a marker; `/init` silence remains undetermined because it never ran. No new initramfs was built.
 3. **Futex and trap evidence**: Exact futex vector at step `49693869` (`ESR=0x96000005`, `FAR=0`, `ELR=0xffffff80082591e4`); Linux fixup PC `0xffffff8008c85a8c` observed at step `49694369`. Vector check PASS, `da_in=1`, `brk_in=0`. Trap inventory: one data-abort line, zero BRK/trap/exception/fault lines; terminal halt was unsupported Q-pair load. UART gzip and complete outcome are preserved under `/Users/Shared/t626-flight/` and `/Users/Shared/outcome-t626.txt`.
 4. **Next blocker**: Implement architectural Q-register state and `LDP Q0,Q1,[X0]`, then repeat a cold boot before deciding whether an instrumented initramfs is needed. Findings: `/Users/Shared/codex-track626-m3-runner-fix.md`.
+
+
+## UPDATED ON : 2026-10-30
+
+### fix (2026-10-30) — Track T643: rust-init-marker-silence root cause pinned & PL011 PrimeCell MMIO fix
+
+1. **PL011 PrimeCell MMIO & Console Fix**: Pinned silence mechanism: Linux AMBA enumeration for `/pl011@9000000` failed with `-ENODEV (-19)` because U12 orchestrator returned 0 on PrimeCell CID/PID register reads (`0xFE0..0xFFC`). `ttyAMA0` never registered; `ksys_open("/dev/console")` failed with `-ENODEV` (`Warning: unable to open an initial console`); PID 1 launched with invalid stdout/stderr; `write(1, ...)` and `write(2, ...)` returned `-EBADF`, dropping `PATHN-TRACK-B` marker bytes before `/init` went to sleep via `nanosleep`. Pinned final PC `0xffffff80085c95ec` as `find_next_bit+0x4` (scheduler idle). Pinned true jiffies PA to `0x41546980` (legacy `0x4154e3d0` was +0x7a50 off). Implemented PL011 PID0-3 (`0x11`, `0x10`, `0x14`, `0x00`), CID0-3 (`0x0D`, `0xF0`, `0x05`, `0xB1`), CR (`0x300`), IMSC, and LCR_H in `units/u12-orchestrator/src/lib.rs`.
+2. **Tests** (before → after): Unit tests 142 passed → 143 passed (`cargo test -p u12-orchestrator --lib` all 143 passed); release binary built (`22f6672c5823ed2eb0585c43210325b0e8a7c79db5ba6edd45120ad6b930ed52`); proof boot active under detached supervisor.
+3. **Files changed**: `units/u12-orchestrator/src/lib.rs`, `units/u12-orchestrator/src/bin/run_kernel.rs`, `dafg/GATES.md`, `GATES.md`, `docs/GATES.md`, `TIMELINE.md`.

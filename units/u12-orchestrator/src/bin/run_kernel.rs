@@ -352,8 +352,23 @@ fn main() {
     let mut futex_resume_count = 0u64;
     let mut futex_mismatch_count = 0u64;
     let mut pending_futex_steps = Vec::new();
+    let mut el0_steps = 0u64;
+    let mut el1_steps = 0u64;
+    let mut first_el0_step: Option<u64> = None;
+    let mut last_el0_pc: Option<u64> = None;
     for _ in 0..max_steps {
         let step = orch.steps();
+        let is_el0 = (orch.machine().cpu[0].pstate & 0x1f) == 0;
+        if is_el0 {
+            el0_steps += 1;
+            if first_el0_step.is_none() {
+                first_el0_step = Some(step);
+                println!("[el0] FIRST EL0 EXECUTION at step {step}, PC={:#018x}", orch.machine().cpu[0].pc);
+            }
+            last_el0_pc = Some(orch.machine().cpu[0].pc);
+        } else {
+            el1_steps += 1;
+        }
         if orch.machine().cpu[0].pc == FUTEX_FIXUP_RESUME {
             if !pending_futex_steps.is_empty() {
                 let event_step = pending_futex_steps.remove(0);
@@ -648,8 +663,10 @@ fn main() {
     let needles: &[(&str, &[u8])] = &[
         ("Failed to allocate", b"Failed to allocate"),
         ("Kernel panic - not syncing", b"Kernel panic - not syncing"),
+        ("PATHN_RAM_MARKER", b"PATHN_RAM_MARKER"),
+        ("PATHN-TRACK-B", b"[PATHN-TRACK-B]"),
     ];
-    println!("[ram-search] Scanning 1 GiB guest RAM for panic strings...");
+    println!("[ram-search] Scanning 1 GiB guest RAM for panic/marker strings...");
     for (name, needle) in needles {
         let mut count = 0;
         let mut idx = 0;
@@ -665,9 +682,14 @@ fn main() {
         if count == 0 {
             println!("  [CLEAN] No dynamic occurrences of '{}'", name);
         } else {
-            println!("  [PANIC DETECTED] {} dynamic occurrences of '{}'", count, name);
+            println!("  [FOUND] {} dynamic occurrences of '{}'", count, name);
         }
     }
+
+    // EL Execution Histogram
+    println!(
+        "[el-histogram] total_steps={steps} el0_steps={el0_steps} el1_steps={el1_steps} first_el0_step={first_el0_step:?} last_el0_pc={last_el0_pc:?}"
+    );
 
     // Mandatory Cap Rule Verification (Track T607)
     // 1. Distinct PCs in the last 10,000 steps
@@ -679,15 +701,23 @@ fn main() {
     println!("[cap-rule] distinct_pcs_last_10k: {distinct_pcs}");
 
     // 2. Jiffies (guest timer progress)
-    // In ARM64 Linux 4.19, jiffies_64 is at VA 0xffffff800954e3d0 -> PA 0x4154e3d0
-    const JIFFIES_PA: u64 = 0x4154_e3d0;
+    // In ARM64 Linux 4.19, jiffies_64 is at VA 0xffffff8009546980 -> PA 0x41546980.
+    // The previous probe at 0x4154e3d0 was +0x7a50 off (reading unrelated memory).
+    const JIFFIES_PA: u64 = 0x4154_6980;
+    const LEGACY_JIFFIES_PA: u64 = 0x4154_e3d0;
     let jiffies_offset = (JIFFIES_PA - RAM_BASE) as usize;
     let jiffies_val = if jiffies_offset + 8 <= ram.len() {
         u64::from_le_bytes(ram[jiffies_offset..jiffies_offset + 8].try_into().unwrap())
     } else {
         0
     };
-    println!("[cap-rule] jiffies: {jiffies_val} ({jiffies_val:#x}) at PA {JIFFIES_PA:#x}");
+    let legacy_offset = (LEGACY_JIFFIES_PA - RAM_BASE) as usize;
+    let legacy_val = if legacy_offset + 8 <= ram.len() {
+        u64::from_le_bytes(ram[legacy_offset..legacy_offset + 8].try_into().unwrap())
+    } else {
+        0
+    };
+    println!("[cap-rule] jiffies: {jiffies_val} ({jiffies_val:#x}) at PA {JIFFIES_PA:#x} (legacy PA {LEGACY_JIFFIES_PA:#x} reads {legacy_val})");
 
     // 3. UART grep result for "Run /init as init process"
     const INIT_NEEDLE: &[u8] = b"Run /init as init process";

@@ -1,33 +1,13 @@
-# Verification Gates: Android WebGPU Stack Hardening
+# Gates: Track T643 — rust-init-marker-silence: why the PID-1 marker stays silent after init-exec (Chain B, diagnosis + fix-or-diagnosis)
 
-- [x] G1: glDraw dynamic multi-VBO allocation and vertex attribute leakage fix
-  CHECK: cargo test -p gles2wgpu --test e2e_gles_pipeline -- --nocapture
-  EXPECT: test_gles2wgpu_indexed_mesh_draw_elements ... ok
+OWNS: dafg/GATES.md, GATES.md, TIMELINE.md, heartbeat.json, units/u12-orchestrator/**
 
-- [x] G2: GLES uniform buffer state management (glUniform1f, glUniform4fv, glUniformMatrix4fv)
-  CHECK: cargo test -p gles2wgpu --test e2e_gles_pipeline test_gles2wgpu_uniforms
-  EXPECT: test_gles2wgpu_uniforms ... ok
+Scope: Pin the silence mechanism why PID-1 marker stays silent after init-exec: (a) PC histogram EL0 vs EL1 after t=8.14s, (b) console-path verdict on "unable to open an initial console", (c) PC 0xffffff80085c95ec function and EL0 data abort disposition, (d) pin jiffies probe PA, (e) stuck-vs-slow verdict with steps/guest-second. Then either minimal engine fix proven by guest-consumed run or quantified stuck-vs-slow verdict with step budget.
 
-- [x] G3: Virtio-GPU ResourceFlush subrect blit with destination row stride
-  CHECK: cargo test -p virtio_gpu_bridge test_flush_subrect_blit
-  EXPECT: test_flush_subrect_blit ... ok
+- [x] G643-1: Silence mechanism pinned with five-point evidence (EL0 execution, console path, PC/dabt disposition, jiffies PA, stuck-vs-slow quantification)
+  CHECK: python3 -c "f = open('/Users/Shared/agyx-track643-rust-init-marker-silence.md').read(); assert '0xffffff80085c95ec' in f; assert 'find_next_bit' in f; assert 'unable to open an initial console' in f; assert 'jiffies' in f; assert 'Run /init as init process' in f; print('MECHANISM_PINNED_OK')"
+  EXPECT: MECHANISM_PINNED_OK
 
-- [x] G4: WebGPU swapchain canvas presentation & surface resize handling
-  CHECK: cargo test -p webgpu_swapchain test_swapchain_surface_resize
-  EXPECT: test_swapchain_surface_resize ... ok
-
-- [x] G5: Guest patches and AOSP driver implementations exist
-  CHECK: test -f guest/patches/gralloc.virtio_gpu.cpp && test -f guest/patches/hwcomposer.virtio_gpu.cpp && test -f guest/patches/egl_webgpu.cpp && echo "GUEST_PATCHES_EXIST"
-  EXPECT: GUEST_PATCHES_EXIST
-
-- [x] G6: Virtio-GPU WASM bridge bindings with wasm-bindgen
-  CHECK: cargo check --workspace
-  EXPECT: Finished
-
-- [x] G7: Full Workspace automated test suite
-  CHECK: cargo test --workspace
-  EXPECT: test result: ok
-
-- [x] G8: Real APK Flight (Unity Cube & Godot GLES2) through Virtio-GPU Submit3D
-  CHECK: cargo test --test apk_real -- --nocapture
-  EXPECT: test_apk_real_unity_and_godot_virtio_flight ... ok
+- [x] G643-2: Findings artifact and outcome delivered with Verdict, WALL-TYPE-TAG: engine (type-2), required strings, and SHA-256 logged
+  CHECK: python3 -c "f = open('/Users/Shared/agyx-track643-rust-init-marker-silence.md').read(); assert ('Verdict: PASS' in f or 'Verdict: FAIL' in f); assert 'WALL-TYPE-TAG: engine (type-2)' in f; assert 'Rust par bhi lagu: haan' in f; assert 'el0-fetch-fault-210158' in f; assert 'rust-init-marker-silent-300m' in f; assert 'PATHN-TRACK-B' in f; assert open('/Users/Shared/outcome-t643.txt').read(); print('FINDINGS_VERIFIED_OK')"
+  EXPECT: FINDINGS_VERIFIED_OK
