@@ -148,3 +148,39 @@
   ```
 - Status: **DISCOVERED in T637**. Following gralloc mapper resolution, SurfaceFlinger completed display setup and reached RenderEngine shader cache priming in `SurfaceFlinger::init()+3764`. During `primeShaderCache()`, `AutoBackendTexture` failed to wrap a 128x128 RGBA_8888 AHardwareBuffer into a Skia backend texture (likely because `IAllocator` stub rejected `allocate2` with `malformed-or-unsupported-descriptor`, leaving AHardwareBuffer unbacked, or SwiftShader GLES backend texture allocation failed).
 
+## T641/T642 zygote64-system-server-fd-allowlist-not-allowlisted — guest
+
+- Tag: **guest** (Type-1 guest Android userspace Zygote forkSystemServer fd allowlist abort).
+- Rust par bhi lagu: haan (applies to guest userspace libraries across both Rust emulator and QEMU virt).
+- Wall name: `zygote64-system-server-fd-allowlist-not-allowlisted`.
+- Target artifact: Zygote JNI FatalError in `forkSystemServer()`.
+- Fault: `signal 6 (SIGABRT)`.
+- Abort message: `JNI FatalError called: (system_server) Not allowlisted (27): /system/system_ext/apex/com.android.tethering/javalib/framework-connectivity.jar`.
+- Status: **RESOLVED in T642**. Pinpointed enforcement to `FileDescriptorAllowlist::IsAllowed` in `frameworks/base/core/jni/fd_utils.cpp` (`libandroid_runtime.so`), requiring APEX jars to match `/apex/<pkg>/javalib/*.jar`. Bind-mounted all flattened APEXes into `/apex/<pkg>` and updated `BOOTCLASSPATH` to route APEX jars through `/apex/...`. In T642 QEMU flight `flight-01`, 0 occurrences of `Not allowlisted` observed; `system_server` cleanly crossed the fork boundary into its own initialization.
+
+## T642 system-server-apex-namespace-missing — guest
+
+- Tag: **guest** (Type-1 guest Android userspace system_server dynamic linker namespace lookup abort).
+- Rust par bhi lagu: haan (applies to guest userspace libraries across both Rust emulator and QEMU virt).
+- Wall name: `system-server-apex-namespace-missing`.
+- Target artifact: `tombstone_00` (flight `flight-01`).
+- Fault: `signal 6 (SIGABRT), code -1 (SI_QUEUE), fault addr --------`.
+- Abort message: `Error finding namespace of apex: no namespace called com_android_tethering`.
+- Crashing stack:
+  ```text
+  #00 pc 00000000000669e4  /apex/com.android.runtime/lib64/bionic/libc.so (abort+164)
+  #01 pc 0000000000784e80  /apex/com.android.art/lib64/libart.so (art::Runtime::Abort(char const*)+904)
+  #04 pc 0000000000010db4  /apex/com.android.art/lib64/libnativeloader.so (OpenNativeLibrary+2280)
+  #05 pc 000000000052100c  /apex/com.android.art/lib64/libart.so (art::JavaVMExt::LoadNativeLibrary+736)
+  #08 pc 00000000000ac7f0  /system/framework/arm64/boot.oat (java.lang.Runtime.loadLibrary0+752)
+  #10 pc 00000000000b127c  /system/framework/arm64/boot.oat (java.lang.System.loadLibrary+92)
+  #12 pc 00000000000309e4  /apex/com.android.tethering/javalib/framework-connectivity-t.jar (android.net.TrafficStats.<clinit>+4)
+  #14 pc 000000000024fec0  /apex/com.android.art/lib64/libart.so (art::ClassLinker::InitializeClass+3304)
+  #18 pc 000000000074879c  /system/framework/arm64/boot-framework.oat (com.android.internal.os.RuntimeInit.commonInit+508)
+  #19 pc 000000000075470c  /system/framework/arm64/boot-framework.oat (com.android.internal.os.ZygoteInit.zygoteInit+140)
+  #21 pc 0000000000513d3a  /system/framework/framework.jar (com.android.internal.os.ZygoteInit.handleSystemServerProcess+294)
+  #22 pc 0000000000750a88  /system/framework/arm64/boot-framework.oat (com.android.internal.os.ZygoteInit.forkSystemServer+2808)
+  ```
+- Status: **DISCOVERED in T642**. After system_server passes the FD allowlist check during fork, `RuntimeInit.commonInit()` triggers `<clinit>` of `android.net.TrafficStats`, which attempts to load native library via `libnativeloader.so`. Because flattened APEXes are not managed by `apexd` and `linkerconfig` has not generated APEX linker namespaces, `OpenNativeLibrary` cannot find linker namespace `com_android_tethering` and aborts.
+
+

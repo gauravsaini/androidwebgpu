@@ -254,3 +254,12 @@
 2. **Tests** (before → after): T635 aborted at `setupNewDisplayDeviceInternal()` with `gralloc-mapper is missing` → T637 cleanly loaded mapper (`AIMapper_loadIMapper`), passed display setup with 0 mapper aborts, advanced +2,336 bytes in `SurfaceFlinger::init()` to line 3764; G637-1 MET, G637-2 MET.
 3. **Files changed**: `toolchain/mapper_t637.c`, `toolchain/mapper.default.so`, `tools/build_t637_image.py`, `tools/run_t637_fix.py`, `scripts/supervisor-t637.py`, `files/WALLS.md`, `dafg/GATES.md`, `GATES.md`, `TIMELINE.md`.
 
+## UPDATED ON : 2026-10-30
+
+### fix (2026-10-30) — Track T642: system_server FD allowlist resolution & execution past fork
+
+1. **System Server FD Allowlist Resolution**: Pinned `(system_server) Not allowlisted (27)` to `FileDescriptorAllowlist::IsAllowed` in `frameworks/base/core/jni/fd_utils.cpp` (`libandroid_runtime.so`), which enforces that APEX jars match `/apex/<pkg>/javalib/*.jar` across fork boundaries. Bind-mounted all flattened APEXes to `/apex/<pkg>` in Android init's mount namespace before Zygote started, updated `BOOTCLASSPATH` to route all 12 APEX jars via `/apex/...`, and updated `init.rc` synchronously. In QEMU 11.1.2 oracle flight `flight-01` (664.8s guest time, 19,723 UART lines), `(system_server) Not allowlisted` occurrences dropped to 0 (down from 3 in T641). `system_server` cleanly passed `forkSystemServer()`, entered its own initialization (`ZygoteInit.handleSystemServerProcess` -> `zygoteInit` -> `RuntimeInit.commonInit`), and reached a RUNNING state as PID 4263 (UID 1000) with 8 active threads and 6s uptime. Prior stages held (Zygote preload 0 errors, SF started `bootanim` PID 4161). Discovered downstream wall `system-server-apex-namespace-missing` where `android.net.TrafficStats.<clinit>` aborted in `OpenNativeLibrary` on missing linker namespace `com_android_tethering`.
+2. **Tests** (before → after): T641 3/3 allowlist aborts during `forkSystemServer()` with 0s system_server runtime -> T642 0 allowlist aborts (0/3), 4 successful system_server process runs (PID 4263 with 6s uptime, 8 threads), G642-1 PASS, G642-2 PASS.
+3. **Files changed**: `guest-image/t642-system-server-fd-allowlist-initramfs.cpio.gz`, `guest-image/t642-manifest.json`, `scripts/build_t642_fix.py`, `scripts/diag_script_content.sh`, `scripts/supervisor_t642.py`, `files/WALLS.md`, `dafg/GATES.md`, `GATES.md`, `heartbeat.json`, `TIMELINE.md`.
+
+

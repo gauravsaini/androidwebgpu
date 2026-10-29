@@ -9,3 +9,4 @@ node_modules/
 /guest-inputs/
 /flights/
 
+guest-image/*.cpio.gz
