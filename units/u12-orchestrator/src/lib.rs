@@ -1047,6 +1047,64 @@ impl Orchestrator {
             .map_err(|_| HaltReason::FetchFault { addr: va })
     }
 
+    /// T632 diagnostic helper: print CPU mode, sysregs, and the raw
+    /// stage-1 descriptor chain for `va` at a fetch fault.
+    fn t632_dump_fetch_fault(&self, va: u64, df: &DetailedFault) {
+        let cpu = &self.machine.cpu[0];
+        let sr = &cpu.sysregs;
+        let upper = va >> 63 == 1;
+        let (tsz, ttbr) = if upper {
+            ((sr.tcr_el1 >> 16) & 0x3F, sr.ttbr1_el1)
+        } else {
+            (sr.tcr_el1 & 0x3F, sr.ttbr0_el1)
+        };
+        let ia_bits = 64u64.saturating_sub(tsz);
+        let mut table = ttbr & 0x0000_FFFF_FFFF_F000;
+        let mut chain = String::new();
+        for level in 0u32..=3 {
+            let (hi, lo) = match level {
+                0 => (47u32, 39u32),
+                1 => (38, 30),
+                2 => (29, 21),
+                _ => (20, 12),
+            };
+            let _ = hi;
+            if (lo as u64) >= ia_bits {
+                continue;
+            }
+            let idx = (va >> lo) & 0x1FF;
+            match self.ram_offset(table.wrapping_add(idx * 8), 8) {
+                Ok(off) => {
+                    let e = u64::from_le_bytes(
+                        self.machine.ram[off..off + 8].try_into().unwrap(),
+                    );
+                    chain.push_str(&format!(" L{}[{}]={:#018x}", level, idx, e));
+                    if e & 0b11 == 0 {
+                        chain.push_str(" <invalid>");
+                        break;
+                    }
+                    if level == 3 {
+                        break;
+                    }
+                    if e & 0b11 == 0b01 {
+                        chain.push_str(" <block>");
+                        break;
+                    }
+                    table = e & 0x0000_FFFF_FFFF_F000;
+                }
+                Err(_) => {
+                    chain.push_str(" <table-oob>");
+                    break;
+                }
+            }
+        }
+        eprintln!(
+            "[t632-dbg] fetch fault va={:#x} detailed={:?} mode={:#04x}              sctlr={:#x} tcr={:#x} ttbr={:#x} elr={:#x} spsr={:#x} chain:{}",
+            va, df, cpu.pstate & 0x1F, sr.sctlr_el1, sr.tcr_el1, ttbr,
+            sr.elr_el1, sr.spsr_el1, chain
+        );
+    }
+
     /// Translate a data-access VA to a guest-physical address with detailed fault tracking.
     fn translate_va_detailed(&self, va: u64, access: Access) -> Result<u64, DetailedFault> {
         let sysregs = &self.machine.cpu[0].sysregs;
@@ -1066,7 +1124,21 @@ impl Orchestrator {
             0x00 => El::El0,
             _ => El::El1,
         };
-        u4_mmu::translate_detailed_el(&st, &self.machine.ram, RAM_BASE, va, access, el)
+        let res =
+            u4_mmu::translate_detailed_el(&st, &self.machine.ram, RAM_BASE, va, access, el);
+        // T632 diagnostic (env-gated): fetch faults halt the machine and
+        // the halt reason discards the DetailedFault; dump it plus the
+        // raw descriptor chain so one boot discriminates permission vs
+        // translation vs stale EL. Data faults are kernel-handled and
+        // far too frequent to log.
+        if access == Access::Execute {
+            if let Err(df) = &res {
+                if std::env::var_os("T632_DEBUG_FETCH").is_some() {
+                    self.t632_dump_fetch_fault(va, df);
+                }
+            }
+        }
+        res
     }
 
     /// Translate a data-access VA to a guest-physical address for the
