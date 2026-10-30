@@ -322,3 +322,11 @@
 2. **Tests** (before → after): T651 1/1 SettingsProvider crashes (SQLiteCantOpenDatabaseException code 14) → T652 0 SQLiteCantOpenDatabaseException crashes (0/1), all 7 prior regression vectors held at 0; G652-1 through G652-6 MET; Verdict: FAIL (flight-harness wall).
 3. **Files changed**: `guest-image/t652-manifest.json`, `scripts/build_t652_fix.py`, `scripts/supervisor_t652.py`, `GATES.md`, `dafg/GATES.md`, `TIMELINE.md`, `heartbeat.json`.
 
+
+## UPDATED ON : 2026-10-31
+
+### test (2026-10-31) — Track T653: SettingsProvider re-flight with 1200s guest target proves progress into startOtherServices
+
+1. **SettingsProvider Re-flight & startOtherServices Progression**: Re-flighted identical T652 fix image (`c264d438fc2f...`, hardlinked without new initramfs build) under QEMU 11.1.2 with extended 1200s guest target (reached 1206.007s guest time, 63,876 UART lines). Proved `PackageManagerService` completion (`boot_progress_pms_ready: 640703` at line 19065) and entry into `startOtherServices` (line 22536). `InstallSystemProviders` executed at line 23377 with 0 `SQLiteCantOpenDatabaseException` errors and 0 missing directory errors for `com.android.providers.settings`. `system_server` advanced past SettingsProvider into subsequent stages (`StartAlarmManagerService` at line 26920, `DropBoxManagerService` at line 27033), reaching next wall at line 1603 (`DeviceStateManagerService`): Watchdog killing `system_server` (main thread blocked 93s in `SystemSensorManager.nativeCreate` waiting on missing AIDL service `android.hardware.sensors.ISensors/default` at line 33612-33636). Prior regression vectors held at 0 (0 SDK sandbox errors, 0 services extension errors, 0 permissions manager errors, 0 namespace aborts, 0 allowlist aborts, 0 Widevine aborts, 0 DeviceConfig errors, packageCount 165). `sys.boot_completed` is explicitly ABSENT.
+2. **Tests** (before → after): T652 900s timeout during reconcileAppsData before InstallSystemProviders → T653 1200s target reached (1206.0s), SettingsProvider executed cleanly (0/1 crashes), system_server advancing past it into StartAlarmManagerService, unmasking next wall `system-server-startotherservices-devicestatemanager-sensors-hal-watchdog`; G653-1 through G653-7 MET (all PASS); Verdict: PASS.
+3. **Files changed**: `scripts/supervisor_t653.py`, `GATES.md`, `dafg/GATES.md`, `heartbeat.json`, `TIMELINE.md`.
