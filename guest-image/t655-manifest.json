@@ -1,0 +1,15 @@
+{
+  "track": "T655",
+  "description": "Fix NetworkManagementService netd Watchdog timeout: restore /system/bin/netd in netd.rc (offset 0x17c9c000) and mount cgroup2 on /sys/fs/cgroup in t636-diag.sh",
+  "created_utc": "2026-10-30T18:23:26Z",
+  "base_image": "/Users/Shared/wt-track655-system-server-startotherservices-networkmanagementservice-netd-watchdog/guest-inputs/t654-base-image.cpio.gz",
+  "base_image_sha256": "2461d8bbb9c8dc1ea928c20d86cc15c1d1b7b75fce2a530202bab4d8f6d9af44",
+  "base_image_bytes": 984404429,
+  "kernel_image": "/Users/Shared/wt-track655-system-server-startotherservices-networkmanagementservice-netd-watchdog/guest-inputs/Image",
+  "kernel_image_sha256": "05c4391767a6ff44f5124796b92d7b98027c37fbf58e81b342ca2adb7d99fa04",
+  "fix_image": "/Users/Shared/wt-track655-system-server-startotherservices-networkmanagementservice-netd-watchdog/guest-image/t655-system-server-startotherservices-networkmanagementservice-netd-watchdog-initramfs.cpio.gz",
+  "fix_image_sha256": "8b2d3e547f083f67d244bfa3d1c1286ea8dbda21fe0d04da5746514828ef6a0a",
+  "fix_image_bytes": 984404754,
+  "fix_image_inode": 738196003,
+  "elapsed_seconds": 106.25
+}

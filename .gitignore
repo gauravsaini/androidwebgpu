@@ -11,3 +11,5 @@ node_modules/
 
 guest-image/*.cpio.gz
 *.bak
+__pycache__/
+
