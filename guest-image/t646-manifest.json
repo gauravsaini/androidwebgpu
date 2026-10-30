@@ -1,0 +1,26 @@
+{
+  "track": "T646",
+  "description": "Fix Widevine VINTF manifest, bypass printk ratelimit, stream logcat to console, and detect SystemServer exit",
+  "created_utc": "2026-10-30T00:38:15Z",
+  "base_image": "/Users/Shared/wt-track646-system-server-zygote-sigkill/guest-inputs/t644-system-server-apex-namespace-initramfs.cpio.gz",
+  "base_image_sha256": "f466570b7c31da76aa9fcd5574f569cdd3bfc064e204e892d1b6b1e7b99e7c98",
+  "output_image": "/Users/Shared/wt-track646-system-server-zygote-sigkill/guest-image/t646-system-server-zygote-sigkill-initramfs.cpio.gz",
+  "output_image_sha256": "ad918c0559913d0b9d81a4488c34f86bbbc45b9ae0e285bcb2d88e4751af4629",
+  "output_image_bytes": 984403240,
+  "build_elapsed_seconds": 86.27,
+  "images": {
+    "kernel": {
+      "path": "/Users/Shared/wt-track646-system-server-zygote-sigkill/guest-inputs/Image",
+      "sha256": "05c4391767a6ff44f5124796b92d7b98027c37fbf58e81b342ca2adb7d99fa04"
+    },
+    "initramfs": {
+      "path": "/Users/Shared/wt-track646-system-server-zygote-sigkill/guest-image/t646-system-server-zygote-sigkill-initramfs.cpio.gz",
+      "sha256": "ad918c0559913d0b9d81a4488c34f86bbbc45b9ae0e285bcb2d88e4751af4629",
+      "bytes": 984403240
+    },
+    "base_t644_initramfs": {
+      "path": "/Users/Shared/wt-track646-system-server-zygote-sigkill/guest-inputs/t644-system-server-apex-namespace-initramfs.cpio.gz",
+      "sha256": "f466570b7c31da76aa9fcd5574f569cdd3bfc064e204e892d1b6b1e7b99e7c98"
+    }
+  }
+}

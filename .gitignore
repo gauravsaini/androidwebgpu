@@ -10,3 +10,4 @@ node_modules/
 /flights/
 
 guest-image/*.cpio.gz
+*.bak

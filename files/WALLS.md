@@ -190,7 +190,29 @@
 - Wall name: `system-server-package-manager-bootstrap-exit`.
 - Target artifact: `uart.log` (flight `flight-01`).
 - Observation: In T644 `flight-01`, `system_server` runs past `RuntimeInit.commonInit` into `SystemServer.run()`, enters `startBootstrapServices()`, and invokes `ApexService.getActivePackages()` (guest lines 5735, 6903, 8154, 9375, 10481, 11548, 12651, 13812, 15006, 16364, 17662: `apexd: getActivePackages received by ApexService`). After the bootstrap package manager scan phase, `system_server` exits and Zygote restarts (lines 5803, 6945, 8173, 10532, 11558, 12692, 13852: `init: Service 'zygote' (pid ...) received signal 9`). `sys.boot_completed` remains absent.
-- Status: **DISCOVERED in T644**. Next lane investigates downstream PackageManager package scan and subsequent system_server service startup.
+- Status: **PINNED in T646**. In T646 `flight-01`, kernel printk ratelimiting was removed and logcat unmasked directly to console. Causal chain pinned: `system_server` passes `ApexService.getActivePackages()`, starts `FileIntegrityService`, `Installer`, and `DeviceIdentifiersPolicyService`, then crashes starting `FeatureFlagsService` with `NoClassDefFoundError: Failed resolution of: Landroid/provider/DeviceConfig$OnPropertiesChangedListener;`. `RuntimeInit` calls `Process.killProcess(Process.myPid())` sending SIGKILL (9) to `system_server`. Zygote detects child exit (`Exit zygote because system server (pid N) has terminated`) and calls `kill(getpid(), SIGKILL)`, committing suicide. Init reaps Zygote with `init: Service 'zygote' (pid N) received signal 9`. Widevine DRM HAL failure was fixed via VINTF manifest (0 aborts in T646) and proven completely decoupled.
+
+## T646 system-server-deviceconfig-listener-noclassdeffound — guest
+
+- Tag: **guest** (Type-1 guest Android userspace system_server bootstrap crash).
+- Rust par bhi lagu: haan (applies to guest userspace libraries across both Rust emulator and QEMU virt).
+- Wall name: `system-server-deviceconfig-listener-noclassdeffound`.
+- Target artifact: `uart.log` (flight `flight-01`).
+- Fault: `java.lang.NoClassDefFoundError: Failed resolution of: Landroid/provider/DeviceConfig$OnPropertiesChangedListener;`.
+- Crashing stack:
+  ```text
+  10-30 00:44:37.583  4412  4412 E AndroidRuntime: *** FATAL EXCEPTION IN SYSTEM PROCESS: main
+  10-30 00:44:37.583  4412  4412 E AndroidRuntime: java.lang.NoClassDefFoundError: Failed resolution of: Landroid/provider/DeviceConfig$OnPropertiesChangedListener;
+      at com.android.server.flags.FeatureFlagsBinder.<init>(FeatureFlagsBinder.java:45)
+      at com.android.server.flags.FeatureFlagsService.onStart(FeatureFlagsService.java:62)
+      at com.android.server.SystemServiceManager.startService(SystemServiceManager.java:231)
+      at com.android.server.SystemServer.startBootstrapServices(SystemServer.java:1012)
+      at com.android.server.SystemServer.run(SystemServer.java:943)
+      at com.android.server.SystemServer.main(SystemServer.java:660)
+  Caused by: java.lang.ClassNotFoundException: android.provider.DeviceConfig$OnPropertiesChangedListener
+  ```
+- Status: **DISCOVERED in T646**. Downstream lane investigates providing `android.provider.DeviceConfig$OnPropertiesChangedListener` on `BOOTCLASSPATH` or in `framework.jar`.
+
 
 
 

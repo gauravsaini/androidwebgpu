@@ -1,14 +1,14 @@
 {
-  "track": "T644",
-  "timestamp": "2026-10-29T23:40:40Z",
-  "status": "COMPLETED (Guest target reached (660.5s >= 660s))",
+  "track": "T646",
+  "timestamp": "2026-10-30T00:55:00Z",
+  "status": "COMPLETED",
   "flight": "flight-01",
   "current_step": 3,
-  "host_elapsed_seconds": 661.4,
-  "guest_log_max_seconds": 660.497,
+  "host_elapsed_seconds": 666.8,
+  "guest_log_max_seconds": 665.374,
   "target_host_seconds": 680,
   "target_guest_seconds": 660,
-  "supervisor_pid": 53889,
+  "supervisor_pid": 58264,
   "qemu_pid": null,
-  "note": "Flight in progress: COMPLETED (Guest target reached (660.5s >= 660s)) host=661s guest=660.5s"
+  "note": "T646 completed: findings delivered, outcome written, gates verified"
 }
