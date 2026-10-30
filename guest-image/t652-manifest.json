@@ -1,0 +1,39 @@
+{
+  "track": "T652",
+  "description": "Fix system_server SettingsProvider SQLiteCantOpenDatabaseException: start installd and ensure /data/user_de/0/com.android.providers.settings/databases",
+  "created_utc": "2026-10-30T11:48:27Z",
+  "base_image": "/Users/Shared/wt-track652-system-server-startotherservices-settingsprovider-sqlite-cantopen/guest-inputs/t651-system-server-packagemanager-missing-sdk-sandbox-initramfs.cpio.gz",
+  "base_image_sha256": "811fcb03e4e23305cc5bd18997e73ee9c5549dd0669b5ac1b2df629af0469ec7",
+  "base_image_bytes": 984403602,
+  "base_image_inode": 738148981,
+  "output_image": "/Users/Shared/wt-track652-system-server-startotherservices-settingsprovider-sqlite-cantopen/guest-image/t652-system-server-startotherservices-settingsprovider-sqlite-cantopen-initramfs.cpio.gz",
+  "output_image_sha256": "c264d438fc2f8de7b349edcf4e82f9ac26d662934d43f34d40337542f5905cab",
+  "output_image_bytes": 984403890,
+  "output_image_inode": 738159707,
+  "orig_system_sha256": "226099b41470edf58f547a315f599083c3a08a65d90f62aad98d24604b04ee56",
+  "new_system_sha256": "39e621a92408ea2d2157c98ac84c75f2cc84611724b7b1ebf5bc0ff9009c8b46",
+  "build_elapsed_seconds": 125.25,
+  "pinned_mechanism": {
+    "root_cause": "SettingsProvider database init requires /data/user_de/0/com.android.providers.settings/databases/settings.db. While /data/user_de/0 was prepared by vold (lines 3859, 3865, 3866), the package data directory was never created by installd because installd was never started (class main was under on nonencrypted, which was never triggered due to diskless tmpfs /data). PackageManagerService timed out after 10s connecting to installd (InstallerException line 20852) and skipped creating app data directories. ContextImpl mkdir failed with ENOENT, throwing SQLiteCantOpenDatabaseException code 14 SQLITE_CANTOPEN at line 28341.",
+    "fix_components": [
+      "1. init.rc: Added 'start installd' at offset 398934016 so init launches installd daemon during post-fs-data",
+      "2. t636-diag.sh do_prep: Calls '/system/bin/start installd' and ensures /data/user_de/0/com.android.providers.settings/databases exists with ownership 1000:1000 (system:system) and mode 0700"
+    ]
+  },
+  "images": {
+    "kernel": {
+      "path": "/Users/Shared/wt-track652-system-server-startotherservices-settingsprovider-sqlite-cantopen/guest-inputs/Image",
+      "sha256": "05c4391767a6ff44f5124796b92d7b98027c37fbf58e81b342ca2adb7d99fa04"
+    },
+    "initramfs": {
+      "path": "/Users/Shared/wt-track652-system-server-startotherservices-settingsprovider-sqlite-cantopen/guest-image/t652-system-server-startotherservices-settingsprovider-sqlite-cantopen-initramfs.cpio.gz",
+      "sha256": "c264d438fc2f8de7b349edcf4e82f9ac26d662934d43f34d40337542f5905cab",
+      "bytes": 984403890,
+      "inode": 738159707
+    },
+    "base_t651_initramfs": {
+      "path": "/Users/Shared/wt-track652-system-server-startotherservices-settingsprovider-sqlite-cantopen/guest-inputs/t651-system-server-packagemanager-missing-sdk-sandbox-initramfs.cpio.gz",
+      "sha256": "811fcb03e4e23305cc5bd18997e73ee9c5549dd0669b5ac1b2df629af0469ec7"
+    }
+  }
+}

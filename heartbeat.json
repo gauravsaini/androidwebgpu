@@ -1,15 +1,15 @@
 {
-  "track": "T651",
-  "timestamp": "2026-10-30T10:16:00Z",
-  "status": "ALL_GATES_MET_PASS",
+  "track": "T652",
+  "timestamp": "2026-10-30T12:25:00Z",
+  "status": "COMPLETED",
   "flight": "flight-01",
   "current_step": 3,
-  "host_elapsed_seconds": 907.0,
-  "guest_log_max_seconds": 904.446,
+  "host_elapsed_seconds": 906.9,
+  "guest_log_max_seconds": 904.464,
   "target_host_seconds": 1100,
   "target_guest_seconds": 900,
   "supervisor_pid": null,
   "qemu_pid": null,
-  "verdict": "PASS",
-  "note": "Track T651 completed with Verdict: PASS. PMS passed getRequiredSdkSandboxPackageName into startOtherServices. Findings and outcome files delivered."
+  "verdict": "FAIL",
+  "note": "Flight finished with target 900s reached (904.5s). Pinned mechanism addressed, SQLiteCantOpenDatabaseException=0, all regressions hold at 0. 900s window expired during PMS reconcileAppsData before startOtherServices/SettingsProvider.onCreate executed. Reported FAIL under Anti-T648 flight-harness wall rule."
 }
