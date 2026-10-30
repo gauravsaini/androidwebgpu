@@ -1,14 +1,14 @@
 {
-  "track": "T642",
-  "timestamp": "2026-10-29T19:16:45Z",
-  "status": "DELIVERED",
+  "track": "T644",
+  "timestamp": "2026-10-29T23:40:40Z",
+  "status": "COMPLETED (Guest target reached (660.5s >= 660s))",
   "flight": "flight-01",
-  "current_step": 4,
-  "host_elapsed_seconds": 666.6,
-  "guest_log_max_seconds": 664.779,
+  "current_step": 3,
+  "host_elapsed_seconds": 661.4,
+  "guest_log_max_seconds": 660.497,
   "target_host_seconds": 680,
   "target_guest_seconds": 660,
-  "supervisor_pid": null,
+  "supervisor_pid": 53889,
   "qemu_pid": null,
-  "note": "T642 complete: 0 occurrences of Not allowlisted; system_server ran past fork into RuntimeInit.commonInit; downstream wall system-server-apex-namespace-missing named; outcome=PASS"
+  "note": "Flight in progress: COMPLETED (Guest target reached (660.5s >= 660s)) host=661s guest=660.5s"
 }

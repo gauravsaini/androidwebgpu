@@ -263,3 +263,11 @@
 3. **Files changed**: `guest-image/t642-system-server-fd-allowlist-initramfs.cpio.gz`, `guest-image/t642-manifest.json`, `scripts/build_t642_fix.py`, `scripts/diag_script_content.sh`, `scripts/supervisor_t642.py`, `files/WALLS.md`, `dafg/GATES.md`, `GATES.md`, `heartbeat.json`, `TIMELINE.md`.
 
 
+
+## UPDATED ON : 2026-10-30
+
+### fix (2026-10-30) — Track T644: system_server APEX linker namespace resolution
+
+1. **APEX Linker Namespace Resolution**: Pinned missing linker namespace `com_android_tethering` in `libnativeloader.so` (`OpenNativeLibrary` -> `android_get_exported_namespace`) to absence of `/linkerconfig/ld.config.txt` for flattened APEXes. Generated `/linkerconfig/ld.config.txt` and `/apex/apex-info-list.xml` during early prep, providing visible namespaces for all 31 APEX packages (including `com_android_tethering`), exported `system` namespace for ART OAT loading (`art::GetSystemLinkerNamespace`), `art` alias, and complete APEX library search paths in `namespace.default`. In QEMU 11.1.2 oracle flight `flight-01` (660.5s guest time), 0 occurrences of `no namespace called com_android_tethering` observed (eliminated from 4 in T642). `system_server` cleanly passed `RuntimeInit.commonInit` into `SystemServer.run()`, reached `startBootstrapServices()`, and called `ApexService.getActivePackages()` across Binder. Prior stages held (0 `Not allowlisted`, Zygote preload 0 errors, SF starting `bootanim`). `sys.boot_completed` remains absent. Discovered downstream wall `system-server-package-manager-bootstrap-exit`.
+2. **Tests** (before → after): T642 4/4 namespace aborts (`no namespace called com_android_tethering`) → T644 0 namespace aborts (0/4), 4 `system_server` runs reaching `SystemServer.run()` and `ApexService.getActivePackages()`, G644-1 PASS, G644-2 PASS.
+3. **Files changed**: `guest-image/t644-system-server-apex-namespace-initramfs.cpio.gz`, `guest-image/t644-manifest.json`, `scripts/build_t644_fix.py`, `scripts/generate_linker_config.py`, `scripts/supervisor_t644.py`, `files/WALLS.md`, `dafg/GATES.md`, `GATES.md`, `heartbeat.json`, `TIMELINE.md`.

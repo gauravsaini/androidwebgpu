@@ -181,6 +181,16 @@
   #21 pc 0000000000513d3a  /system/framework/framework.jar (com.android.internal.os.ZygoteInit.handleSystemServerProcess+294)
   #22 pc 0000000000750a88  /system/framework/arm64/boot-framework.oat (com.android.internal.os.ZygoteInit.forkSystemServer+2808)
   ```
-- Status: **DISCOVERED in T642**. After system_server passes the FD allowlist check during fork, `RuntimeInit.commonInit()` triggers `<clinit>` of `android.net.TrafficStats`, which attempts to load native library via `libnativeloader.so`. Because flattened APEXes are not managed by `apexd` and `linkerconfig` has not generated APEX linker namespaces, `OpenNativeLibrary` cannot find linker namespace `com_android_tethering` and aborts.
+- Status: **RESOLVED in T644**. Generated `/linkerconfig/ld.config.txt` and `/apex/apex-info-list.xml` during early prep, providing visible namespaces for all flattened APEXes (including `com_android_tethering`), exported `system` namespace for ART OAT loading, `art` alias, and comprehensive APEX library search paths in `namespace.default`. In T644 QEMU flight `flight-01`, 0 occurrences of `no namespace called com_android_tethering` observed across 660.5s continuous uptime; `system_server` cleanly passed `RuntimeInit.commonInit` into `SystemServer.run()`, reaching bootstrap package manager service initialization (`ApexService.getActivePackages()`). Findings: `/Users/Shared/agyx-track644-system-server-apex-namespace.md`.
+
+## T644 system-server-package-manager-bootstrap-exit — guest
+
+- Tag: **guest** (Type-1 guest Android userspace system_server bootstrap lifecycle).
+- Rust par bhi lagu: haan (applies to guest userspace across both Rust emulator and QEMU virt).
+- Wall name: `system-server-package-manager-bootstrap-exit`.
+- Target artifact: `uart.log` (flight `flight-01`).
+- Observation: In T644 `flight-01`, `system_server` runs past `RuntimeInit.commonInit` into `SystemServer.run()`, enters `startBootstrapServices()`, and invokes `ApexService.getActivePackages()` (guest lines 5735, 6903, 8154, 9375, 10481, 11548, 12651, 13812, 15006, 16364, 17662: `apexd: getActivePackages received by ApexService`). After the bootstrap package manager scan phase, `system_server` exits and Zygote restarts (lines 5803, 6945, 8173, 10532, 11558, 12692, 13852: `init: Service 'zygote' (pid ...) received signal 9`). `sys.boot_completed` remains absent.
+- Status: **DISCOVERED in T644**. Next lane investigates downstream PackageManager package scan and subsequent system_server service startup.
+
 
 
