@@ -1,0 +1,37 @@
+{
+  "track": "T650",
+  "description": "Fix system_server PackageManagerService getRequiredServicesExtensionPackageLPr(): wire ExtServices into /system/system_ext/priv-app",
+  "created_utc": "2026-10-30T07:51:32Z",
+  "base_image": "/Users/Shared/wt-track650-system-server-packagemanager-missing-services-extension/guest-inputs/t648-system-server-packagemanager-no-permission-controller-initramfs.cpio.gz",
+  "base_image_sha256": "446f45ccd386f85ab0b27ebb7c7452e7deb7ac7bc0dc720292d7566e18ac73f8",
+  "output_image": "/Users/Shared/wt-track650-system-server-packagemanager-missing-services-extension/guest-image/t650-system-server-packagemanager-missing-services-extension-initramfs.cpio.gz",
+  "output_image_sha256": "5cff40e94e4c67465f5e74d64a41a26ee2ecf94d93f0ec88944b22e91b2489f7",
+  "output_image_bytes": 984403269,
+  "orig_system_sha256": "0de65d829d8a8b0ddcddc2c06b6dbe5961c5eef42b3da6aee8dc1261ad1b3764",
+  "new_system_sha256": "226e11c6ff8427d98e631b1ac32cdfdc60c5bd10c422e77deafb68a175803980",
+  "build_elapsed_seconds": 110.58,
+  "pinned_mechanism": {
+    "package": "android.ext.services",
+    "config_key": "config_servicesExtensionPackage",
+    "providing_apk": "/system/system_ext/apex/com.android.extservices/priv-app/ExtServices@UQ1A.231205.015/ExtServices.apk",
+    "providing_apk_inode": 4106,
+    "providing_dir_inode": 4105,
+    "wiring_target": "/system/system_ext/priv-app/ExtServices",
+    "reason_for_missing_package": "apexd failed to activate compressed com.android.extservices.capex due to FS_IOC_GETFLAGS failure on non-f2fs /data; PMS only queries active apexes from apexd and standard partition folders, so ExtServices.apk was never scanned"
+  },
+  "images": {
+    "kernel": {
+      "path": "/Users/Shared/wt-track650-system-server-packagemanager-missing-services-extension/guest-inputs/Image",
+      "sha256": "05c4391767a6ff44f5124796b92d7b98027c37fbf58e81b342ca2adb7d99fa04"
+    },
+    "initramfs": {
+      "path": "/Users/Shared/wt-track650-system-server-packagemanager-missing-services-extension/guest-image/t650-system-server-packagemanager-missing-services-extension-initramfs.cpio.gz",
+      "sha256": "5cff40e94e4c67465f5e74d64a41a26ee2ecf94d93f0ec88944b22e91b2489f7",
+      "bytes": 984403269
+    },
+    "base_t648_initramfs": {
+      "path": "/Users/Shared/wt-track650-system-server-packagemanager-missing-services-extension/guest-inputs/t648-system-server-packagemanager-no-permission-controller-initramfs.cpio.gz",
+      "sha256": "446f45ccd386f85ab0b27ebb7c7452e7deb7ac7bc0dc720292d7566e18ac73f8"
+    }
+  }
+}

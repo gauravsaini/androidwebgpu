@@ -296,3 +296,12 @@
 2. **Tests** (before → after): T648 scan incomplete at 660s (0 scan completions, lookup unexecuted) → T649 system scan complete (3 hits, packageCount 163), `getRequiredPermissionControllerLPr` executed and resolved, unmasking next wall `system-server-packagemanager-missing-services-extension`; G649-1 MET, G649-2 MET, G649-3 MET, G649-4 MET.
 3. **Files changed**: `scripts/supervisor_t649.py`, `scripts/supervisor_t648.py`, `GATES.md`, `dafg/GATES.md`, `heartbeat.json`, `TIMELINE.md`.
 
+## UPDATED ON : 2026-10-30
+
+### fix (2026-10-30) — Track T650: services extension package resolution in PackageManagerService
+
+1. **Services Extension Package Resolution**: Pinned `RuntimeException: Required services extension package is missing, check config_servicesExtensionPackage.` at `PackageManagerService.getRequiredServicesExtensionPackageLPr()` (line 2498) to missing scan of `ExtServices.apk`. `config_servicesExtensionPackage` is `android.ext.services` located in `/system/system_ext/apex/com.android.extservices/priv-app/ExtServices@UQ1A.231205.015/ExtServices.apk` (inode 4106 in dir 4105). Because `apexd` cannot decompress compressed APEXes on non-f2fs `/data`, PMS missed it. Patched `/system/system_ext/priv-app` ext4 directory block 458818 in `system.img` to register `ExtServices` (inode 4105) alongside `PermissionController`, making it a factory system app. In QEMU 11.1.2 flight (903.416s guest, 27,143 lines), `ExtServices` was scanned, system apps packageCount increased 163 → 164, and `getRequiredServicesExtensionPackageLPr` executed without throwing (missing services extension exception dropped 2 → 0). `system_server` advanced past line 2304 into line 2314, reaching the next wall: `RuntimeException: There should exactly one sdk sandbox package; found 0: matches=[]` at `PackageManagerService.getRequiredSdkSandboxPackageName` (line 3686). Prior stages held (0 namespace aborts, 0 allowlist aborts, 0 Widevine aborts, 0 DeviceConfig errors, 0 permissions manager errors, bootanim active). `sys.boot_completed` remains absent.
+2. **Tests** (before → after): T649 2/2 services extension crashes & zygote suicides → T650 0 services extension crashes (0/2), packageCount 163 → 164, PMS advancing past line 2304 to line 2314, unmasking next wall `system-server-packagemanager-missing-sdk-sandbox`; G650-1 MET, G650-2 MET, G650-3 MET, G650-4 MET, G650-5 MET, G650-6 MET.
+3. **Files changed**: `guest-image/t650-manifest.json`, `scripts/build_t650_fix.py`, `scripts/supervisor_t650.py`, `GATES.md`, `dafg/GATES.md`, `TIMELINE.md`, `heartbeat.json`.
+
+
