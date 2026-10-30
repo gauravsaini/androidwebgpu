@@ -1,0 +1,32 @@
+{
+  "track": "T647",
+  "description": "Fix system_server DeviceConfig.OnPropertiesChangedListener NoClassDefFoundError: add framework-configinfrastructure.jar to BOOTCLASSPATH",
+  "created_utc": "2026-10-30T02:10:30Z",
+  "base_image": "/Users/Shared/wt-track647-system-server-deviceconfig-listener/guest-inputs/t646-system-server-zygote-sigkill-initramfs.cpio.gz",
+  "base_image_sha256": "ad918c0559913d0b9d81a4488c34f86bbbc45b9ae0e285bcb2d88e4751af4629",
+  "output_image": "/Users/Shared/wt-track647-system-server-deviceconfig-listener/guest-image/t647-system-server-deviceconfig-listener-initramfs.cpio.gz",
+  "output_image_sha256": "9333d37efd516d3b4ed614b6755b5b9c88e9d5b114cb4e4105f338c5ac9ecbef",
+  "output_image_bytes": 984403035,
+  "orig_system_sha256": "dcbb36311068b52db59a856f47aa696991638131b3653cf7a418eeebaeac87ad",
+  "new_system_sha256": "640bf156bd14246b8fe269b28c568b5e5cb664341dde2093ee36d6e50314ae1b",
+  "build_elapsed_seconds": 102.73,
+  "bootclasspath_entries_count": 32,
+  "pinned_missing_class": "android.provider.DeviceConfig$OnPropertiesChangedListener",
+  "pinned_providing_jar": "/apex/com.android.configinfrastructure/javalib/framework-configinfrastructure.jar",
+  "bootclasspath_32_apex": "/apex/com.android.art/javalib/core-oj.jar:/apex/com.android.art/javalib/core-libart.jar:/apex/com.android.art/javalib/okhttp.jar:/apex/com.android.art/javalib/bouncycastle.jar:/apex/com.android.art/javalib/apache-xml.jar:/system/framework/framework.jar:/system/framework/framework-graphics.jar:/system/framework/ext.jar:/system/framework/telephony-common.jar:/system/framework/voip-common.jar:/system/framework/ims-common.jar:/apex/com.android.i18n/javalib/core-icu4j.jar:/apex/com.android.btservices/javalib/framework-bluetooth.jar:/apex/com.android.conscrypt/javalib/conscrypt.jar:/apex/com.android.devicelock/javalib/framework-devicelock.jar:/apex/com.android.healthfitness/javalib/framework-healthfitness.jar:/apex/com.android.os.statsd/javalib/framework-statsd.jar:/apex/com.android.sdkext/javalib/framework-sdkextensions.jar:/apex/com.android.virt/javalib/framework-virtualization.jar:/apex/com.android.tethering/javalib/framework-connectivity.jar:/apex/com.android.tethering/javalib/framework-tethering.jar:/apex/com.android.tethering/javalib/framework-connectivity-t.jar:/apex/com.android.appsearch/javalib/framework-appsearch.jar:/apex/com.android.wifi/javalib/framework-wifi.jar:/apex/com.android.media/javalib/updatable-media.jar:/apex/com.android.permission/javalib/framework-permission-s.jar:/apex/com.android.scheduling/javalib/framework-scheduling.jar:/apex/com.android.adservices/javalib/framework-sdksandbox.jar:/apex/com.android.adservices/javalib/framework-adservices.jar:/apex/com.android.uwb/javalib/framework-uwb.jar:/apex/com.android.ondevicepersonalization/javalib/framework-ondevicepersonalization.jar:/apex/com.android.configinfrastructure/javalib/framework-configinfrastructure.jar",
+  "images": {
+    "kernel": {
+      "path": "/Users/Shared/wt-track647-system-server-deviceconfig-listener/guest-inputs/Image",
+      "sha256": "05c4391767a6ff44f5124796b92d7b98027c37fbf58e81b342ca2adb7d99fa04"
+    },
+    "initramfs": {
+      "path": "/Users/Shared/wt-track647-system-server-deviceconfig-listener/guest-image/t647-system-server-deviceconfig-listener-initramfs.cpio.gz",
+      "sha256": "9333d37efd516d3b4ed614b6755b5b9c88e9d5b114cb4e4105f338c5ac9ecbef",
+      "bytes": 984403035
+    },
+    "base_t646_initramfs": {
+      "path": "/Users/Shared/wt-track647-system-server-deviceconfig-listener/guest-inputs/t646-system-server-zygote-sigkill-initramfs.cpio.gz",
+      "sha256": "ad918c0559913d0b9d81a4488c34f86bbbc45b9ae0e285bcb2d88e4751af4629"
+    }
+  }
+}
