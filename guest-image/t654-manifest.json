@@ -1,0 +1,15 @@
+{
+  "track": "T654",
+  "description": "Fix system_server DeviceStateManagerService SensorManager Watchdog timeout: restore sensors-hal-multihal service in vendor.img and empty hals.conf so HalProxyAidl registers ISensors/default with 0 sensors cleanly",
+  "created_utc": "2026-10-30T15:39:04Z",
+  "base_image": "/Users/Shared/wt-track654-system-server-startotherservices-devicestatemanager-sensors-hal-watchdog/guest-inputs/t653-base-image.cpio.gz",
+  "base_image_sha256": "c264d438fc2f8de7b349edcf4e82f9ac26d662934d43f34d40337542f5905cab",
+  "base_image_bytes": 984403890,
+  "kernel_image": "/Users/Shared/wt-track654-system-server-startotherservices-devicestatemanager-sensors-hal-watchdog/guest-inputs/Image",
+  "kernel_image_sha256": "05c4391767a6ff44f5124796b92d7b98027c37fbf58e81b342ca2adb7d99fa04",
+  "fix_image": "/Users/Shared/wt-track654-system-server-startotherservices-devicestatemanager-sensors-hal-watchdog/guest-image/t654-system-server-startotherservices-devicestatemanager-sensors-hal-watchdog-initramfs.cpio.gz",
+  "fix_image_sha256": "2461d8bbb9c8dc1ea928c20d86cc15c1d1b7b75fce2a530202bab4d8f6d9af44",
+  "fix_image_bytes": 984404429,
+  "fix_image_inode": 738183474,
+  "elapsed_seconds": 108.37
+}
