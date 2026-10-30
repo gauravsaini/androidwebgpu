@@ -305,3 +305,11 @@
 3. **Files changed**: `guest-image/t650-manifest.json`, `scripts/build_t650_fix.py`, `scripts/supervisor_t650.py`, `GATES.md`, `dafg/GATES.md`, `TIMELINE.md`, `heartbeat.json`.
 
 
+
+## UPDATED ON : 2026-10-30
+
+### fix (2026-10-30) — Track T651: SDK sandbox package resolution in PackageManagerService
+
+1. **SDK Sandbox Package Resolution**: Pinned `RuntimeException: There should exactly one sdk sandbox package; found 0: matches=[]` at `PackageManagerService.getRequiredSdkSandboxPackageName` (line 3686) to missing scan of `SdkSandbox.apk`. PMS queries Intent with action `SdkSandboxManagerLocal.SERVICE_INTERFACE = "com.android.sdksandbox.SdkSandboxService"`. Target package `com.android.sdksandbox` resides in `/system/system_ext/apex/com.android.adservices/app/SdkSandbox@UQ1A.231205.015/SdkSandbox.apk` (inode 3666 in dir 3665). Because `apexd` cannot decompress compressed APEXes on non-f2fs `/data`, PMS missed it. Patched `/system/system_ext/priv-app` ext4 directory block 458818 in `system.img` to register `SdkSandbox` (inode 3665) alongside `ExtServices` and `PermissionController`. In QEMU 11.1.2 flight (904.4s guest, 37,428 lines), `SdkSandbox` was scanned, system apps packageCount increased 164 → 165, and `getRequiredSdkSandboxPackageName` passed with 0 fatal errors. `system_server` advanced through all bootstrap and core services (`startCoreServices` at line 25510) and entered `startOtherServices` (line 26585), reaching next wall: `SQLiteCantOpenDatabaseException` (code 14 SQLITE_CANTOPEN) in `SettingsProvider.onCreate` at line 28341 (`/data/user_de/0/com.android.providers.settings/databases` ENOENT). Prior stages held (0 permissions manager errors, 0 services extension errors, 0 namespace aborts, 0 allowlist aborts, 0 Widevine aborts, 0 DeviceConfig errors). `sys.boot_completed` remains absent.
+2. **Tests** (before → after): T650 1/1 SDK sandbox crashes (`found 0: matches=[]`) → T651 0 SDK sandbox crashes (0/1), packageCount 164 → 165, PMS completing bootstrap services and core services into `startOtherServices`, unmasking next wall `system-server-startotherservices-settingsprovider-sqlite-cantopen`; G651-1 through G651-6 MET (all PASS).
+3. **Files changed**: `guest-image/t651-manifest.json`, `scripts/build_t651_fix.py`, `scripts/supervisor_t651.py`, `GATES.md`, `dafg/GATES.md`, `TIMELINE.md`, `heartbeat.json`.

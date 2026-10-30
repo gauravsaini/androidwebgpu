@@ -1,14 +1,15 @@
 {
-  "track": "T650",
-  "timestamp": "2026-10-30T08:32:19Z",
-  "status": "COMPLETED (Flight done, Verdict: PASS, gates all MET)",
+  "track": "T651",
+  "timestamp": "2026-10-30T10:16:00Z",
+  "status": "ALL_GATES_MET_PASS",
   "flight": "flight-01",
-  "current_step": 2,
-  "host_elapsed_seconds": 906.9,
-  "guest_log_max_seconds": 903.416,
+  "current_step": 3,
+  "host_elapsed_seconds": 907.0,
+  "guest_log_max_seconds": 904.446,
   "target_host_seconds": 1100,
   "target_guest_seconds": 900,
   "supervisor_pid": null,
   "qemu_pid": null,
-  "note": "Flight-01 complete: system_server passed getRequiredServicesExtensionPackageLPr; next wall pinned"
+  "verdict": "PASS",
+  "note": "Track T651 completed with Verdict: PASS. PMS passed getRequiredSdkSandboxPackageName into startOtherServices. Findings and outcome files delivered."
 }
