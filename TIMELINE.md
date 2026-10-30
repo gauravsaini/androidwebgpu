@@ -348,3 +348,11 @@
 3. **Files changed**: `guest-image/t655-manifest.json`, `scripts/build_t655_fix.py`, `scripts/supervisor_t655.py`, `GATES.md`, `dafg/GATES.md`, `TIMELINE.md`, `heartbeat.json`.
 
 
+
+## UPDATED ON : 2026-10-31
+
+### fix (2026-10-31) — Track T656: Pre-provisioning apexdata netstats directory unblocks NetworkStatsServiceInitializer into startOtherServices downstream stages
+
+1. **NetworkStatsService Pre-Provisioning & Downstream Progression**: Pinned `IllegalStateException: Cannot write into stats data directory: /data/misc/apexdata/com.android.tethering/netstats` in `NetworkStatsService$Dependencies.getOrCreateStatsDir()` (line 662) to missing `/data/misc/apexdata/com.android.tethering` directory and `0711 root:root` permissions on `/data/misc/apexdata` (non-root `system_server` UID 1000 failed `mkdirs()` with `EACCES`). APEXes are flattened and bind-mounted, bypassing `apexd` device-protected directory creation. Pre-provisioned `/data/misc/apexdata/com.android.tethering/netstats` in `t636-diag.sh` with ownership `1000:1000` (`system:system`) and modes `0771`/`0770`. In QEMU 11.1.2 flight (1200.4s guest target), `NetworkStatsServiceInitializer` started (line 35011), initialized `NetworkStatsService` without error, and registered `"netstats"` (line 35101). `system_server` advanced past `NetworkStatsServiceInitializer` into `StartNetworkPolicyManagerService` (line 35103) and `StartWifi` (line 35126) / `WifiService` (line 35127). Unmasked next wall: `WifiService` constructor `NullPointerException` at `WifiInjector.<init>` (WifiInjector.java:287) invoked from `SystemServer.startOtherServices` (SystemServer.java:2015). Prior regression vectors held at 0; `sys.boot_completed` ABSENT (0).
+2. **Tests** (before → after): T655 `NetworkStatsServiceInitializer` failed at line 34024 (`Cannot write into stats data directory: /data/misc/apexdata/com.android.tethering/netstats`) → T656 `NetworkStatsServiceInitializer` initialized cleanly, registered `"netstats"`, advancing `system_server` into `StartNetworkPolicyManagerService` and `StartWifi`; G656-1 through G656-8 MET (all PASS); Verdict: PASS.
+3. **Files changed**: `guest-image/t656-manifest.json`, `scripts/build_t656_fix.py`, `scripts/supervisor_t656.py`, `GATES.md`, `TIMELINE.md`, `heartbeat.json`.

@@ -1,0 +1,15 @@
+{
+  "track": "T656",
+  "description": "Fix NetworkStatsService netstats apexdata write failure: pre-provision /data/misc/apexdata/com.android.tethering/netstats (0770/0771 1000:1000) in t636-diag.sh",
+  "created_utc": "2026-10-30T20:48:09Z",
+  "base_image": "/Users/Shared/wt-track656-system-server-startotherservices-networkstatsservice-apexdata-write/guest-inputs/t655-base-image.cpio.gz",
+  "base_image_sha256": "8b2d3e547f083f67d244bfa3d1c1286ea8dbda21fe0d04da5746514828ef6a0a",
+  "base_image_bytes": 984404754,
+  "kernel_image": "/Users/Shared/wt-track656-system-server-startotherservices-networkstatsservice-apexdata-write/guest-inputs/Image",
+  "kernel_image_sha256": "05c4391767a6ff44f5124796b92d7b98027c37fbf58e81b342ca2adb7d99fa04",
+  "fix_image": "/Users/Shared/wt-track656-system-server-startotherservices-networkstatsservice-apexdata-write/guest-image/t656-system-server-startotherservices-networkstatsservice-apexdata-write-initramfs.cpio.gz",
+  "fix_image_sha256": "7993ebbfed9f56302456c0b57a10289fccbfe8d53bc32f40a38397845eb528b2",
+  "fix_image_bytes": 984404886,
+  "fix_image_inode": 738205918,
+  "elapsed_seconds": 102.93
+}
