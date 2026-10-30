@@ -1,14 +1,14 @@
 {
-  "track": "T648",
-  "timestamp": "2026-10-30T04:15:14Z",
-  "status": "COMPLETED (All gates passed G648-1, G648-2, G648-3)",
+  "track": "T649",
+  "timestamp": "2026-10-30T05:23:00Z",
+  "status": "COMPLETED (Verdict: PASS)",
   "flight": "flight-01",
   "current_step": 3,
-  "host_elapsed_seconds": 661.9,
-  "guest_log_max_seconds": 660.183,
-  "target_host_seconds": 700,
-  "target_guest_seconds": 660,
-  "supervisor_pid": null,
-  "qemu_pid": null,
-  "note": "T648 flight completed, PMS permission manager exception eliminated, findings and outcome delivered."
+  "host_elapsed_seconds": 902.5,
+  "guest_log_max_seconds": 900.923,
+  "target_host_seconds": 1100,
+  "target_guest_seconds": 900,
+  "supervisor_pid": 71971,
+  "qemu_pid": 71972,
+  "note": "Re-flight completed: PMS system scan completed (packageCount: 163), getRequiredPermissionControllerLPr executed and resolved com.android.permissioncontroller, next wall identified: getRequiredServicesExtensionPackageLPr missing android.ext.services"
 }

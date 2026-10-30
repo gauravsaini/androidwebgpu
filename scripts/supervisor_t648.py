@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Detached supervisor for T648 QEMU 11.1.2 guest fix flight."""
+"""Detached supervisor for T648/T649 QEMU 11.1.2 guest fix flight."""
 from __future__ import annotations
 
 import datetime
@@ -14,7 +14,7 @@ import sys
 import time
 from pathlib import Path
 
-WORKTREE = Path("/Users/Shared/wt-track648-system-server-packagemanager-no-permission-controller")
+WORKTREE = Path(__file__).resolve().parent.parent
 FLIGHT = WORKTREE / "flights/flight-01"
 LOG = FLIGHT / "uart.log"
 STDERR = FLIGHT / "qemu-stderr.log"
@@ -24,8 +24,8 @@ KERNEL = WORKTREE / "guest-inputs/Image"
 BASE_IMAGE = WORKTREE / "guest-inputs/t647-system-server-deviceconfig-listener-initramfs.cpio.gz"
 IMAGE = WORKTREE / "guest-image/t648-system-server-packagemanager-no-permission-controller-initramfs.cpio.gz"
 
-TARGET_HOST_SECONDS = 700
-TARGET_GUEST_SECONDS = 660
+TARGET_HOST_SECONDS = 1100
+TARGET_GUEST_SECONDS = 900
 POLL_SECONDS = 5
 
 EXPECTED = {
@@ -103,7 +103,7 @@ def guest_log_max_seconds() -> float:
 
 def update_heartbeat(status: str, elapsed: float, guest_seconds: float, pid: int | None = None) -> None:
     hb = {
-        "track": "T648",
+        "track": "T649",
         "timestamp": utc_now(),
         "status": status,
         "flight": "flight-01",
@@ -151,7 +151,7 @@ def main():
     (FLIGHT / "qemu-command.txt").write_text(" ".join(cmd) + "\n")
 
     preflight = {
-        "track": "T648",
+        "track": "T649",
         "flight": "flight-01",
         "created_utc": utc_now(),
         "qemu_version": qemu_version,
@@ -234,7 +234,7 @@ def main():
 
     ended_utc = utc_now()
     flight_end = {
-        "track": "T648",
+        "track": "T649",
         "flight": "flight-01",
         "started_utc": started_utc,
         "ended_utc": ended_utc,
