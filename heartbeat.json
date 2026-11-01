@@ -1,14 +1,14 @@
 {
-  "track": "T656",
-  "timestamp": "2026-10-30T21:48:53Z",
-  "status": "COMPLETED (Recovery completed, findings file delivered)",
+  "track": "T657",
+  "timestamp": "2026-11-01T09:57:27Z",
+  "status": "COMPLETED (Guest target reached (1202.6s >= 1200s))",
   "flight": "flight-01",
   "current_step": 4,
-  "host_elapsed_seconds": 1203.8,
-  "guest_log_max_seconds": 1200.369,
+  "host_elapsed_seconds": 1205.0,
+  "guest_log_max_seconds": 1202.577,
   "target_host_seconds": 1500,
   "target_guest_seconds": 1200,
-  "supervisor_pid": 48757,
+  "supervisor_pid": 30008,
   "qemu_pid": null,
-  "note": "Recovery completed: findings file delivered to /Users/Shared/agyx-track656-system-server-startotherservices-networkstatsservice-apexdata-write.md, Verdict PASS"
+  "note": "Flight in progress: COMPLETED (Guest target reached (1202.6s >= 1200s)) host=1205s guest=1202.6s"
 }

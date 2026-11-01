@@ -1,0 +1,15 @@
+{
+  "track": "T657",
+  "description": "Fix WifiInjector NPE reading null Resources: supply authentic uncompressed com.android.wifi.apex in /system/apex so apexd activates it and PMS scans ServiceWifiResources.apk",
+  "created_utc": "2026-11-01T09:33:57Z",
+  "base_image": "/Users/Shared/wt-track657-system-server-startotherservices-wifi-wifiinjector-npe/guest-inputs/t656-base-image.cpio.gz",
+  "base_image_sha256": "7993ebbfed9f56302456c0b57a10289fccbfe8d53bc32f40a38397845eb528b2",
+  "base_image_bytes": 984404886,
+  "kernel_image": "/Users/Shared/wt-track657-system-server-startotherservices-wifi-wifiinjector-npe/guest-inputs/Image",
+  "kernel_image_sha256": "05c4391767a6ff44f5124796b92d7b98027c37fbf58e81b342ca2adb7d99fa04",
+  "fix_image": "/Users/Shared/wt-track657-system-server-startotherservices-wifi-wifiinjector-npe/guest-image/t657-system-server-startotherservices-wifi-wifiinjector-npe-initramfs.cpio.gz",
+  "fix_image_sha256": "e19481445ae86bb334d63502c42070d7f0e8637398458aeb19925852db4e4a70",
+  "fix_image_bytes": 984422578,
+  "fix_image_inode": 740359118,
+  "elapsed_seconds": 70.19
+}
