@@ -391,3 +391,11 @@
 
 
 
+
+## UPDATED ON : 2026-11-02
+
+### fix (2026-11-02) — Track T661: Preserving DE mirror mounts eliminates Zygote DE mount failure and unmasks CE mirror inode lookup wall
+
+1. **DE Mirror Mount Preservation & Phase 550 Analysis**: Pinned absence of `/data_mirror/data_de/null/0` to `UserDataPreparer.reconcileUsers()` calling `Os.getxattr(path, "user.serial")` on Linux 4.19 tmpfs (`ENOTSUP`), causing `vold.destroyUserStorage` to delete `/data/user_de/0` via `rmdir`. Built fix initramfs pre-provisioning `/data/user_de/0` and app directories (`com.android.permissioncontroller`, `com.android.systemui`, `com.android.providers.settings`) with self-bind mounts (`EBUSY` on `rmdir`) and dynamic watcher daemon. In QEMU 11.1.2 flight (1203.2s host, 1201.5s guest), missing DE mirror mount failure was 100% eliminated (0 occurrences of `Failed to mount /data_mirror` in log vs T660 line 17065). `PermissionPolicyService.onBootPhase(550)` executed at line 17589. Unmasked next wall: Zygote CE mirror inode lookup failed at line 17658 (`Unable to find com.android.permissioncontroller:49935 in /data_mirror/data_ce/null/0` at `com_android_internal_os_Zygote.cpp:1126`), causing `PermissionPolicyService` to throw `RuntimeException` at line 18541. Prior regression vectors held at 0; `sys.boot_completed` ABSENT (0). Honest FAIL per Anti-T648 protocol.
+2. **Tests** (before → after): T660 Zygote aborted at line 17065 on missing `/data_mirror/data_de/null/0/com.android.permissioncontroller` mount → T661 DE mirror mount succeeded for all apps, `PermissionPolicyService.onBootPhase(550)` ran at line 17589, unmasking CE mirror inode lookup wall at line 17658; G661-1 through G661-8 MET; Verdict: FAIL.
+3. **Files changed**: `guest-image/t661-system-server-phase550-permissionpolicyservice-permissioncontroller-mirror-mount-nosuchfile-initramfs.cpio.gz`, `scripts/build_t661_fix.py`, `scripts/supervisor_t661.py`, `evidence/root_cause_pinned.json`, `GATES.md`, `TIMELINE.md`.

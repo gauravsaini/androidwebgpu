@@ -1,0 +1,4 @@
+# Recovery note — first-agent 04:45 heartbeat (read before rebuilding diagnosis)
+The first T661 agent wrote its own heartbeat.json at 2026-11-02 04:45 (phase: investigation_and_fix_build) before dying on UPSTREAM_ERROR. Its claimed lead, NOT yet driver-verified:
+- Root cause pinned to vold destruction of /data/user_de/0 due to tmpfs xattr ENOTSUP in reconcileUsers, wiping /data_mirror/data_de/null/0.
+Treat this as a LEAD, not a pinned mechanism: verify it against AOSP source (vold reconcileUsers, tmpfs xattr behaviour) AND guest evidence before building the fix on it. If it verifies, it reframes the wall from "mount missing" to "vold wipes the mirror path during user reconcile". If it does not verify, record the refutation and keep the original brief's lead (mount/directory/vold-setup supply chain).

@@ -1,0 +1,25 @@
+{
+  "track": "T661",
+  "description": "system-server-phase550-permissionpolicyservice-permissioncontroller-mirror-mount-nosuchfile fix",
+  "created_utc": "2026-11-01T19:54:25Z",
+  "base_image": {
+    "path": "/Users/Shared/wt-track661-system-server-phase550-permissionpolicyservice-permissioncontroller-mirror-mount-nosuchfile/guest-inputs/t660-base-image.cpio.gz",
+    "sha256": "b6e06117205960849f99effeb249384a280205103a5c656cc815f9f0e53ab1f4",
+    "st_nlink": 2
+  },
+  "kernel": {
+    "path": "/Users/Shared/wt-track661-system-server-phase550-permissionpolicyservice-permissioncontroller-mirror-mount-nosuchfile/guest-inputs/Image",
+    "sha256": "05c4391767a6ff44f5124796b92d7b98027c37fbf58e81b342ca2adb7d99fa04"
+  },
+  "fix_image": {
+    "path": "/Users/Shared/wt-track661-system-server-phase550-permissionpolicyservice-permissioncontroller-mirror-mount-nosuchfile/guest-image/t661-system-server-phase550-permissionpolicyservice-permissioncontroller-mirror-mount-nosuchfile-initramfs.cpio.gz",
+    "sha256": "2f201b5552d6391958a513f5e9921e9a282a35465ae7387ec793d65572c4dcdc",
+    "size_bytes": 953921250
+  },
+  "modifications": [
+    "t636-diag.sh do_prep: Provisioned /data/user_de/0 (0771 1000:1000) and self-bind-mounted user 0 DE directories to prevent vold.destroyUserStorage rmdir (EBUSY protection)",
+    "t636-diag.sh do_prep: Bound /data/user_de/0 onto /data_mirror/data_de/null/0 and /data/user/0 onto /data_mirror/data_ce/null/0",
+    "t636-diag.sh do_prep: Pre-created and provisioned DE directories for com.android.permissioncontroller (10097:10097), com.android.systemui (10083:10083), com.android.providers.settings (1000:1000) with self-bind mounts",
+    "t636-diag.sh background: Added watch_de_mirrors continuous daemon to maintain mounts and provision DE directories for all apps in /data/data/* and /data/user/0/*"
+  ]
+}
