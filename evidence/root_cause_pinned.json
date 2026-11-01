@@ -1,22 +1,29 @@
 {
-  "track": "T661",
-  "failure_stage": "Phase 550 (PHASE_ACTIVITY_MANAGER_READY) / PermissionPolicyService & WallpaperManagerService",
-  "failure_process": "com.android.permissioncontroller (pid 5716) and com.android.systemui (pid 5714)",
-  "first_failing_line": "uart.log:17017: jni_internal.cc:825] JNI FatalError called: (com.android.systemui) frameworks/base/core/jni/com_android_internal_os_Zygote.cpp:800: Failed to mount /data_mirror/data_de/null/0/com.android.systemui to /data/user_de/0/com.android.systemui: No such file or directory; uart.log:17065: jni_internal.cc:825] JNI FatalError called: (com.android.permissioncontroller) frameworks/base/core/jni/com_android_internal_os_Zygote.cpp:800: Failed to mount /data_mirror/data_de/null/0/com.android.permissioncontroller to /data/user_de/0/com.android.permissioncontroller: No such file or directory",
-  "downstream_cascade": "uart.log:17679-17680: PermissionControllerManager: Service com.android.permissioncontroller/... died; uart.log:17697: Failed to boot service com.android.server.policy.PermissionPolicyService: onBootPhase threw an exception during phase 550; uart.log:17735: System zygote died with fatal exception",
+  "track": "T662",
+  "name": "system-server-phase550-permissionpolicyservice-permissioncontroller-ce-mirror-inode-lookup",
+  "pinned_wall": "Zygote CE mirror inode lookup failure (Unable to find <pkg>:<ce_data_inode> in /data_mirror/data_ce/null/0 at frameworks/base/core/jni/com_android_internal_os_Zygote.cpp:1126)",
+  "evidence": {
+    "flight_log": "flights/flight-01/uart.log.numbered.txt",
+    "line_17652": "Unable to find com.android.systemui:49116 in /data_mirror/data_ce/null/0",
+    "line_17658": "Unable to find com.android.permissioncontroller:49935 in /data_mirror/data_ce/null/0",
+    "line_18536": "PermissionPolicyService: Error granting/upgrading runtime permissions for user 0",
+    "line_18541": "java.lang.RuntimeException: Failed to boot service com.android.server.policy.PermissionPolicyService: onBootPhase threw an exception during phase 550"
+  },
   "supply_chain_analysis": {
-    "init_rc_configuration": "init.rc on post-fs-data (lines 954-975) creates tmpfs /data_mirror and binds /data/user_de onto /data_mirror/data_de/null ('mount none /data/user_de /data_mirror/data_de/null bind rec'). Therefore /data_mirror/data_de/null/0 directly mirrors /data/user_de/0.",
-    "vold_user0_preparation": "init_user0 (init.rc line 1012, uart.log:3972) calls vold.prepareUserStorage to prepare user 0 storage, successfully creating /data/user_de/0 with mode 0771 system:system.",
-    "destruction_event": "During PackageManagerService.systemReady() (uart.log:15485-15486), UserManagerService.reconcileUsers() -> UserDataPreparer.reconcileUsers() calls enforceSerialNumber() which invokes Os.getxattr(path, 'user.serial'). On this virtual guest, /data is mounted as tmpfs on Linux 4.19.130 (guest-inputs/Image). Linux 4.19 tmpfs (mm/shmem.c) does not support user.* extended attributes (shmem_user_xattr_handler added in Linux 6.6), returning ENOTSUP (errno 95). UserDataPreparer catches this as a validation failure and logs: 'PackageManager: Destroying user directory /data/user_de/0 because we failed to enforce serial number: java.io.IOException: getxattr failed: ENOTSUP (Operation not supported on transport endpoint)', then invokes vold.destroyUserStorage(volumeUuid, 0, flags).",
-    "asymmetric_destruction": "For /data/user/0, init.rc had bind-mounted /data/data onto /data/user/0 ('mount none /data/data /data/user/0 bind rec'). Because /data/user/0 was a mount point, vfs_rmdir returned EBUSY (logged at uart.log:15768: 'Failed to destroy /data/user/0: Device or resource busy'), preserving /data/user/0. For /data/user_de/0, it was NOT a mount point, so FsCrypt.cpp::destroy_dir called rmdir('/data/user_de/0'), which succeeded (uart.log:15771). Because /data_mirror/data_de/null is a bind-mount of /data/user_de, /data_mirror/data_de/null/0 was simultaneously wiped out.",
-    "subsequent_installd_failure": "Because /data/user_de/0 was deleted, all subsequent installd calls to create app DE subdirectories failed with 'cutils: Failed to mkdir(/data/user_de/0/...): No such file or directory' (uart.log:21795).",
-    "zygote_sigabrt": "When PermissionPolicyService reached Phase 550 and bound PermissionControllerService, ActivityManager forked com.android.permissioncontroller and com.android.systemui. In com_android_internal_os_Zygote.cpp:800 (mountAppData), mount('/data_mirror/data_de/null/0/<pkg>', '/data/user_de/0/<pkg>', MS_BIND | MS_REC) failed with ENOENT because neither directory existed, triggering JNI FatalError (SIGABRT)."
+    "expected_inode_origin": "installd InstalldNativeService::createAppDataLocked queries get_path_inode() on /data/data/<pkg> (via create_data_user_ce_package_path) and returns it to PackageManagerService, which records it in PackageSetting (PackageUserState.ceDataInode). PMS passes it via Zygote socket argument --pkg-data-info-map to Zygote.",
+    "guest_inode_confirmation": "uart.log:12499 and :13514 confirm path='/data/data/com.android.permissioncontroller' dev='tmpfs' ino=49935. The expected inode 49935 exactly matched the tmpfs inode created by installd during PMS first-boot package scan.",
+    "destruction_event": "During PackageManagerService.systemReady(), UserManagerService.reconcileUsers() -> UserDataPreparer.reconcileUsers() executes enforceSerialNumber() which invokes Os.getxattr(path, 'user.serial'). On Linux 4.19 tmpfs, this returns ENOTSUP (errno 95). UserDataPreparer logs 'Destroying user directory /data/user/0 because we failed to enforce serial number' (line 16470) and invokes destroyUserDataLI(..., FLAG_STORAGE_CE) -> installd.destroyUserData -> delete_dir_contents_and_dir('/data/data', true). While T661 protected /data/user_de/0 with self-bind mounts, /data/data packages had no self-bind mounts and were wiped.",
+    "zygote_lookup_mechanism": "In com_android_internal_os_Zygote.cpp:getAppDataDirName(), Zygote checks stat('/data_mirror/data_ce/null/0/<pkg>'). Because /data/data was wiped or not mirrored in /data_mirror/data_ce/null/0, stat returned ENOENT. Zygote fell back to readdir('/data_mirror/data_ce/null/0') looking for d_ino == ce_data_inode. The directory was absent, so readdir exhausted all entries without finding the inode, triggering fail_fn(CREATE_ERROR('Unable to find...')) and JNI FatalError SIGABRT."
   },
   "ruled_out_alternatives": [
-    "init.rc missing /data_mirror definition: ruled out (init.rc lines 954-975 properly defines /data_mirror, /data_mirror/data_de/null, and bind mounts /data/user_de onto it)",
-    "vold never prepared user 0 storage: ruled out (vold prepared /data/user_de/0 cleanly at uart.log:3972 during init_user0)",
-    "SELinux denial on /data_mirror: ruled out (guest SELinux is fully permissive, all denials marked permissive=1)",
-    "Zygote app data isolation bug: ruled out (Zygote behavior is standard AOSP App Data Directory Isolation; it fails only because the source and target paths do not exist due to prior destruction)"
+    "SELinux policy denials: Permissive mode confirmed (permissive=1, enforcing=0).",
+    "Zygote code bug: Standard AOSP 13 App Data Directory Isolation implementation.",
+    "Static packages.xml corruption: Database is generated dynamically during first-boot scan.",
+    "Direct Boot decryption failure: Virtual guest uses emulated FBE without hardware Keystore lock on user 0."
   ],
-  "pinned_fix_mechanism": "Supply and preserve /data/user_de/0 and /data_mirror/data_de/null/0 by: (1) In prep: ensuring /data/user_de/0 exists with mode 0771 system:system, self-bind-mounting /data/user_de/0 onto itself so rmdir returns EBUSY (preventing vold destruction, matching /data/user/0's survival mechanism), and bind-mounting /data/user_de/0 onto /data_mirror/data_de/null/0; (2) In bg: running a continuous watcher that ensures /data/user_de/0 and /data_mirror/data_de/null/0 exist, pre-creates and maintains DE directories for all apps (including com.android.permissioncontroller, com.android.systemui, com.android.providers.settings, and all packages in /data/data/*), ensuring any fork at any time has its DE mirror and target paths present."
+  "fix_strategy": {
+    "do_prep": "Pre-create, provision (UID 10108 for permissioncontroller, 10083 for systemui, 1000 for settings, mode 0700), and self-bind mount packages in /data/data, bind-mount to /data/user/0, and bind-mount to /data_mirror/data_ce/null/0.",
+    "watcher_daemon": "Maintain /data_mirror/data_ce/null/0 and /data/user/0; dynamically self-bind mount any package in /data/data/* to protect from deletion (EBUSY on rmdir/unlink) and mirror into /data_mirror/data_ce/null/0 and /data_mirror/data_de/null/0.",
+    "t661_de_preservation": "All T661 DE self-bind mounts and mirror mechanisms preserved intact."
+  }
 }
