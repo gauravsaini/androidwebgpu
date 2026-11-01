@@ -254,3 +254,11 @@
 1. **PL011 PrimeCell MMIO & Console Fix**: Pinned silence mechanism: Linux AMBA enumeration for `/pl011@9000000` failed with `-ENODEV (-19)` because U12 orchestrator returned 0 on PrimeCell CID/PID register reads (`0xFE0..0xFFC`). `ttyAMA0` never registered; `ksys_open("/dev/console")` failed with `-ENODEV` (`Warning: unable to open an initial console`); PID 1 launched with invalid stdout/stderr; `write(1, ...)` and `write(2, ...)` returned `-EBADF`, dropping `PATHN-TRACK-B` marker bytes before `/init` went to sleep via `nanosleep`. Pinned final PC `0xffffff80085c95ec` as `find_next_bit+0x4` (scheduler idle). Pinned true jiffies PA to `0x41546980` (legacy `0x4154e3d0` was +0x7a50 off). Implemented PL011 PID0-3 (`0x11`, `0x10`, `0x14`, `0x00`), CID0-3 (`0x0D`, `0xF0`, `0x05`, `0xB1`), CR (`0x300`), IMSC, and LCR_H in `units/u12-orchestrator/src/lib.rs`.
 2. **Tests** (before → after): Unit tests 142 passed → 143 passed (`cargo test -p u12-orchestrator --lib` all 143 passed); release binary built (`22f6672c5823ed2eb0585c43210325b0e8a7c79db5ba6edd45120ad6b930ed52`); proof boot active under detached supervisor.
 3. **Files changed**: `units/u12-orchestrator/src/lib.rs`, `units/u12-orchestrator/src/bin/run_kernel.rs`, `dafg/GATES.md`, `GATES.md`, `docs/GATES.md`, `TIMELINE.md`.
+
+## UPDATED ON : 2026-10-31
+
+### feat (2026-10-31) — Track T645: M3 ten-run reproducibility proven (10/10 consecutive passes)
+
+1. **M3 Ten-Run Reproducibility**: Completed 10 consecutive accepted cold boots (run-01..run-10) on fixed U12 engine (commit `22f314e`, binary SHA `99cea85318c7...`). All 10 runs hit exact guest PID-1 marker `[PATHN-TRACK-B] ARM64 STATIC /INIT LAUNCHED (PID 1)` at step 147,321,644, exited 0 on marker-stop, and passed the futex regression vector with 0 mismatches. `rust-init-marker-silent-300m` wall permanently retired. Gates G645-1 and G645-2 passed; terminal Verdict: PASS delivered.
+2. **Tests** (before → after): Single T643 proof boot → 10/10 consecutive verified accepted boots (147,321,644 steps, exit 0, futex PASS). Gates G645-1 and G645-2 MET.
+3. **Files changed**: `GATES.md`, `dafg/GATES.md`, `TIMELINE.md`, `scripts/supervisor-t645.py`, `/Users/Shared/agyx-track645-m3-ten-run.md`, `/Users/Shared/outcome-t645.txt`.
