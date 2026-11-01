@@ -1,0 +1,12 @@
+{
+  "track": "T658",
+  "component": "ConnectivityService",
+  "exception": "java.lang.IllegalStateException: No connectivity resource package found",
+  "callsite": "android.net.connectivity.com.android.net.module.util.DeviceConfigUtils.getConnectivityResourcesPackageName(DeviceConfigUtils.java:302)",
+  "package_name": "com.android.connectivity.resources",
+  "source_apex": "com.android.tethering",
+  "apk_path": "/apex/com.android.tethering/priv-app/ServiceConnectivityResources@UQ1A.231205.015/ServiceConnectivityResources.apk",
+  "action": "com.android.server.connectivity.intent.action.SERVICE_CONNECTIVITY_RESOURCES_APK",
+  "mechanism": "apexd fails decompression of .capex onto tmpfs /data (FS_IOC_GETFLAGS ioctl fails ENOTTY). Consequently com.android.tethering is not mounted or activated, PackageManagerService never scans its priv-app directory, and ServiceConnectivityResources.apk is not indexed.",
+  "class_fix": "Replace all 15 .capex files in /system/apex with authentic uncompressed original_apex (.apex), eliminating decompression on tmpfs /data completely."
+}

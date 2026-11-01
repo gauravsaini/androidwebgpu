@@ -1,0 +1,137 @@
+{
+  "track": "T658",
+  "created_epoch": 1793532022,
+  "kernel_path": "/Users/Shared/wt-track658-system-server-startotherservices-connectivityservice-noresourcepackage/guest-inputs/Image",
+  "kernel_sha256": "05c4391767a6ff44f5124796b92d7b98027c37fbf58e81b342ca2adb7d99fa04",
+  "base_image_path": "/Users/Shared/wt-track658-system-server-startotherservices-connectivityservice-noresourcepackage/guest-inputs/t657-base-image.cpio.gz",
+  "base_image_sha256": "e19481445ae86bb334d63502c42070d7f0e8637398458aeb19925852db4e4a70",
+  "fix_image_path": "/Users/Shared/wt-track658-system-server-startotherservices-connectivityservice-noresourcepackage/guest-image/t658-system-server-startotherservices-connectivityservice-noresourcepackage-initramfs.cpio.gz",
+  "fix_image_sha256": "220fcef8fb0536d48f818a04ff0ccecadabaaf8e03a93cf1d0554dfd36e2223a",
+  "old_initramfs_size": 984422578,
+  "new_initramfs_size": 953919459,
+  "old_system_img_size": 2328248320,
+  "new_system_img_size": 2596683776,
+  "converted_apex_count": 15,
+  "inventory": [
+    {
+      "name": "com.android.adservices.capex",
+      "apex_name": "com.android.adservices.apex",
+      "capex_size": 11206656,
+      "apex_size": 22855680,
+      "net_delta": 11649024,
+      "converted": true
+    },
+    {
+      "name": "com.android.appsearch.capex",
+      "apex_name": "com.android.appsearch.apex",
+      "capex_size": 1527808,
+      "apex_size": 3833856,
+      "net_delta": 2306048,
+      "converted": true
+    },
+    {
+      "name": "com.android.cellbroadcast.capex",
+      "apex_name": "com.android.cellbroadcast.apex",
+      "capex_size": 5296128,
+      "apex_size": 16310272,
+      "net_delta": 11014144,
+      "converted": true
+    },
+    {
+      "name": "com.android.configinfrastructure.capex",
+      "apex_name": "com.android.configinfrastructure.apex",
+      "capex_size": 180224,
+      "apex_size": 393216,
+      "net_delta": 212992,
+      "converted": true
+    },
+    {
+      "name": "com.android.extservices.capex",
+      "apex_name": "com.android.extservices.apex",
+      "capex_size": 14254080,
+      "apex_size": 29290496,
+      "net_delta": 15036416,
+      "converted": true
+    },
+    {
+      "name": "com.android.ipsec.capex",
+      "apex_name": "com.android.ipsec.apex",
+      "capex_size": 425984,
+      "apex_size": 950272,
+      "net_delta": 524288,
+      "converted": true
+    },
+    {
+      "name": "com.android.media.capex",
+      "apex_name": "com.android.media.apex",
+      "capex_size": 2859008,
+      "apex_size": 6705152,
+      "net_delta": 3846144,
+      "converted": true
+    },
+    {
+      "name": "com.android.media.swcodec.capex",
+      "apex_name": "com.android.media.swcodec.apex",
+      "capex_size": 11063296,
+      "apex_size": 25763840,
+      "net_delta": 14700544,
+      "converted": true
+    },
+    {
+      "name": "com.android.mediaprovider.capex",
+      "apex_name": "com.android.mediaprovider.apex",
+      "capex_size": 3985408,
+      "apex_size": 10219520,
+      "net_delta": 6234112,
+      "converted": true
+    },
+    {
+      "name": "com.android.neuralnetworks.capex",
+      "apex_name": "com.android.neuralnetworks.apex",
+      "capex_size": 3829760,
+      "apex_size": 7901184,
+      "net_delta": 4071424,
+      "converted": true
+    },
+    {
+      "name": "com.android.ondevicepersonalization.capex",
+      "apex_name": "com.android.ondevicepersonalization.apex",
+      "capex_size": 1060864,
+      "apex_size": 2535424,
+      "net_delta": 1474560,
+      "converted": true
+    },
+    {
+      "name": "com.android.permission.capex",
+      "apex_name": "com.android.permission.apex",
+      "capex_size": 6225920,
+      "apex_size": 18935808,
+      "net_delta": 12709888,
+      "converted": true
+    },
+    {
+      "name": "com.android.scheduling.capex",
+      "apex_name": "com.android.scheduling.apex",
+      "capex_size": 155648,
+      "apex_size": 389120,
+      "net_delta": 233472,
+      "converted": true
+    },
+    {
+      "name": "com.android.tethering.capex",
+      "apex_name": "com.android.tethering.apex",
+      "capex_size": 11644928,
+      "apex_size": 23470080,
+      "net_delta": 11825152,
+      "converted": true
+    },
+    {
+      "name": "com.android.uwb.capex",
+      "apex_name": "com.android.uwb.apex",
+      "capex_size": 1622016,
+      "apex_size": 3964928,
+      "net_delta": 2342912,
+      "converted": true
+    }
+  ]
+}
