@@ -1,14 +1,8 @@
 {
-  "track": "T659",
-  "timestamp": "2026-11-01T13:29:53Z",
-  "status": "COMPLETED (Guest target reached (1202.4s >= 1200s))",
-  "flight": "flight-01",
-  "current_step": 4,
-  "host_elapsed_seconds": 1204.1,
-  "guest_log_max_seconds": 1202.388,
-  "target_host_seconds": 1500,
-  "target_guest_seconds": 1200,
-  "supervisor_pid": 39837,
-  "qemu_pid": null,
-  "note": "Flight in progress: COMPLETED (Guest target reached (1202.4s >= 1200s)) host=1204s guest=1202.4s"
+  "track": "T660",
+  "status": "PASS",
+  "timestamp": 1793548338,
+  "time_str": "2026-11-02T02:52:18+1100",
+  "phase": "completed",
+  "verdict": "PASS"
 }

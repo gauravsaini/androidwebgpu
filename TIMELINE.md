@@ -381,4 +381,13 @@
 2. **Tests** (before → after): T658 Watchdog kill blocked 88s in `StartAudioService` on `media.audio_policy` → T659 `AudioService` initialized cleanly, published stream volume defaults, advancing `system_server` into `StartSoundTriggerMiddlewareService` through Phase 550; G659-1 through G659-8 MET (all PASS); Verdict: PASS.
 3. **Files changed**: `guest-image/t659-manifest.json`, `scripts/build_t659_fix.py`, `scripts/supervisor_t659.py`, `evidence/root_cause_pinned.json`, `GATES.md`, `dafg/GATES.md`, `TIMELINE.md`, `heartbeat.json`.
 
+## UPDATED ON : 2026-11-02
+
+### fix (2026-11-02) — Track T660: Restoring framework-mediaprovider.jar to BOOTCLASSPATH unblocks JobStatus and Phase 550 services
+
+1. **BOOTCLASSPATH Restoration & Phase 550 Progression**: Pinned `NoClassDefFoundError: Failed resolution of: Landroid/provider/MediaStore$Images$Media;` at `JobStatus.<clinit>` (JobStatus.java:179) to hardcoded `BOOTCLASSPATH_32_APEX` override in `init.rc` and `t636-diag.sh` that omitted `/apex/com.android.mediaprovider/javalib/framework-mediaprovider.jar` despite `com.android.mediaprovider` APEX being activated and mounted. ART marked `JobStatus` defective, causing `NetworkWatchlistService$Lifecycle` calling `JobScheduler.schedule` in Phase 550 to fail with re-init rejection and crash `system_server`. Stream-patched `system.img` inode 694 (`init.rc`) and `t636-diag.sh` to include `framework-mediaprovider.jar` in `BOOTCLASSPATH`. In QEMU 11.1.2 flight (1202.6s guest time), `JobStatus` initialized cleanly during `StartDiskStatsService` (line 14666, 0 `NoClassDefFoundError` occurrences), `NetworkWatchlistService$Lifecycle` scheduled its job cleanly in Phase 550 (line 16713), and `system_server` advanced past it through 90+ subsequent services in Phase 550 (total 142 services completed). Unmasked next wall: `PermissionPolicyService` in Phase 550 (line 16905) failed because Zygote could not mount `/data_mirror/data_de/null/0/com.android.permissioncontroller` (lines 17065, 17697). Prior regression vectors held at 0; `sys.boot_completed` ABSENT (0).
+2. **Tests** (before → after): T659 fatal `JobStatus` re-init rejection and `am_crash` during `NetworkWatchlistService$Lifecycle` in Phase 550 → T660 `JobStatus` initialized cleanly, `NetworkWatchlistService` scheduled without exception, advancing `system_server` across 142 services in Phase 550 to `PermissionPolicyService`; G660-1 through G660-8 MET (all PASS); Verdict: PASS.
+3. **Files changed**: `guest-image/t660-manifest.json`, `scripts/build_t660_fix.py`, `scripts/supervisor_t660.py`, `evidence/root_cause_pinned.json`, `GATES.md`, `TIMELINE.md`, `heartbeat.json`.
+
+
 

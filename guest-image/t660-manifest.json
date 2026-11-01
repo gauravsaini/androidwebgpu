@@ -1,0 +1,25 @@
+{
+  "track": "T660",
+  "description": "system-server-phase550-jobstatus-mediastore-images-media-noclassdeffounderror fix",
+  "created_utc": "2026-11-01T15:20:02Z",
+  "base_image": {
+    "path": "/Users/Shared/wt-track660-system-server-phase550-jobstatus-mediastore-images-media-noclassdeffounderror/guest-inputs/t659-base-image.cpio.gz",
+    "sha256": "fe1809ffbb3ee91252a009442c8956264df1bcac022dd731d86c7555cea2eb6c",
+    "st_nlink": 2
+  },
+  "kernel": {
+    "path": "/Users/Shared/wt-track660-system-server-phase550-jobstatus-mediastore-images-media-noclassdeffounderror/guest-inputs/Image",
+    "sha256": "05c4391767a6ff44f5124796b92d7b98027c37fbf58e81b342ca2adb7d99fa04"
+  },
+  "fix_image": {
+    "path": "/Users/Shared/wt-track660-system-server-phase550-jobstatus-mediastore-images-media-noclassdeffounderror/guest-image/t660-system-server-phase550-jobstatus-mediastore-images-media-noclassdeffounderror-initramfs.cpio.gz",
+    "sha256": "b6e06117205960849f99effeb249384a280205103a5c656cc815f9f0e53ab1f4",
+    "size_bytes": 953919996
+  },
+  "modifications": [
+    "system.img init.rc: Added :/apex/com.android.mediaprovider/javalib/framework-mediaprovider.jar to export BOOTCLASSPATH",
+    "system.img inode 694: Updated size 60142 -> 60210",
+    "t636-diag.sh: Updated BOOTCLASSPATH_32_APEX -> BOOTCLASSPATH_33_APEX containing framework-mediaprovider.jar",
+    "t636-diag.sh: Updated classpath watchers and added T660 verification block"
+  ]
+}
