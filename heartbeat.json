@@ -1,14 +1,12 @@
 {
-  "timestamp_utc": "2026-11-01T20:17:27Z",
-  "status": "Flight ended: Guest target reached (1201.5s >= 1200s)",
   "track": "T661",
+  "status": "COMPLETED",
+  "verdict": "FAIL",
+  "phase": "findings_delivered",
+  "timestamp_utc": "2026-11-01T20:54:21Z",
+  "gates": "G661-1_TO_G661-8_MET",
   "flight": "flight-01",
-  "current_step": 4,
-  "host_elapsed_seconds": 1203.2,
-  "guest_log_max_seconds": 1201.498,
-  "target_host_seconds": 1500,
-  "target_guest_seconds": 1200,
-  "supervisor_pid": 54118,
-  "qemu_pid": null,
-  "note": "Flight in progress: Flight ended: Guest target reached (1201.5s >= 1200s) host=1203s guest=1201.5s"
+  "fix_image_sha256": "2f201b5552d6391958a513f5e9921e9a282a35465ae7387ec793d65572c4dcdc",
+  "outcome_file": "/Users/Shared/outcome-t661.txt",
+  "findings_file": "/Users/Shared/agyx-track661-system-server-phase550-permissionpolicyservice-permissioncontroller-mirror-mount-nosuchfile.md"
 }
