@@ -1,12 +1,23 @@
 {
-  "track": "T658",
-  "component": "ConnectivityService",
-  "exception": "java.lang.IllegalStateException: No connectivity resource package found",
-  "callsite": "android.net.connectivity.com.android.net.module.util.DeviceConfigUtils.getConnectivityResourcesPackageName(DeviceConfigUtils.java:302)",
-  "package_name": "com.android.connectivity.resources",
-  "source_apex": "com.android.tethering",
-  "apk_path": "/apex/com.android.tethering/priv-app/ServiceConnectivityResources@UQ1A.231205.015/ServiceConnectivityResources.apk",
-  "action": "com.android.server.connectivity.intent.action.SERVICE_CONNECTIVITY_RESOURCES_APK",
-  "mechanism": "apexd fails decompression of .capex onto tmpfs /data (FS_IOC_GETFLAGS ioctl fails ENOTTY). Consequently com.android.tethering is not mounted or activated, PackageManagerService never scans its priv-app directory, and ServiceConnectivityResources.apk is not indexed.",
-  "class_fix": "Replace all 15 .capex files in /system/apex with authentic uncompressed original_apex (.apex), eliminating decompression on tmpfs /data completely."
+  "track": "T659",
+  "failure_stage": "StartAudioService",
+  "failure_class": "com.android.server.audio.AudioService",
+  "failure_location": "SystemServer.startOtherServices(SystemServer.java:2204)",
+  "system_server_blocking_call": "AudioProductStrategy.native_list_audio_product_strategies()",
+  "watchdog_kill_timeout_seconds": 88,
+  "service_waited_on": "media.audio_policy",
+  "providing_daemon": "/system/bin/audioserver",
+  "audioserver_failure": "EffectsFactoryHalHidl queries hwservicemanager for android.hardware.audio.effect; registration fails, AudioPolicyService not published",
+  "hal_dependency": "vendor.audio-hal (/vendor/bin/hw/android.hardware.audio.service)",
+  "hal_status": "Binary present (134,176 bytes, vendor.img inode 79), registers android.hardware.audio@7.1::IDevicesFactory/default successfully, then crashes SIGABRT on registering android.hardware.audio.effect@7.0::IEffectsFactory/default",
+  "abort_message": "Could not register Audio Effect API: Service android.hardware.audio.effect@7.0::IEffectsFactory/default must be in VINTF manifest",
+  "vintf_manifest_status": "Genuinely absent. In T646, t636-diag.sh bind-mounted /data/manifest.xml over /vendor/etc/vintf/manifest.xml with a partial manifest (composer, allocator, mapper, widevine) omitting android.hardware.audio.effect. Furthermore, vendor/etc/vintf/manifest.xml in initramfs root was also replaced with this partial manifest, and vendor/etc/vintf/manifest/ contains no audio.effect fragment.",
+  "audioserver_config_status": "Present and valid (/vendor/etc/audio_policy_configuration.xml version 7.0, audio_effects.xml, primary_audio_policy_configuration.xml).",
+  "pinned_supply_path": "VINTF manifest entry for android.hardware.audio.effect@7.0::IEffectsFactory/default",
+  "ruled_out_alternatives": [
+    "HAL binary missing: ruled out (present in vendor/bin/hw/android.hardware.audio.service)",
+    "HAL library missing: ruled out (android.hardware.audio.effect@7.0-impl.so present in vendor/lib64/hw/)",
+    "audioserver config missing: ruled out (audio_policy_configuration.xml present in vendor/etc/)",
+    "system_server Java bytecode mismatch: ruled out (blocking on IPC getService for media.audio_policy)"
+  ]
 }
