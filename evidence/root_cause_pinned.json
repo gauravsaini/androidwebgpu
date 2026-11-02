@@ -1,31 +1,39 @@
 {
-  "track": "T664",
-  "name": "system-server-startbootstrapservices-installer-invalidatemounts-watchdog-96s",
+  "track": "T665",
+  "name": "system-server-user-unlock-userdatapreparer-getxattr-enotsup-fatal-recovery-reboot",
   "dominant_cause": {
-    "pinned_mechanism": "Diagnostic background loop CPU starvation and process/audit storm under QEMU emulation. In T663, t636-diag.sh ran multiple unthrottled background loops that continuously spawned subprocesses (toybox basename, tr, cat, pidof, mountpoint, mount, getprop). Specifically: (1) watch_zygote_environ iterated over all /proc/[0-9]* entries every 1 second, invoking toybox basename and tr for every process; when reading /proc/*/cmdline of non-toolbox daemons (vold, hal_*, etc.), it triggered SELinux denials (avc: denied { read/open } for comm='toybox') causing audit backlog overflow (audit_lost=51) and flooding the PL011 serial console via logcat; (2) watch_system_server polled every 200ms spawning getprop and toybox pidof; (3) watch_mirrors executed mountpoint -q every 500ms on tmpfs directories (/data/user_de/0, /data_mirror/...), which always fails in toybox because st_dev of a tmpfs child matches its tmpfs parent, causing it to execute mount -o bind repeatedly. Under QEMU TCG emulation, this continuous fork/exec storm and audit logging consumed all available CPU slices. When system_server reached Installer.connect() -> invalidateMounts() -> IInstalld.invalidateMounts(), installd (PID 2427) was starved of CPU while reading /proc/mounts and unable to return the Binder transaction. After 96 seconds of blockage, Watchdog killed system_server (PID 7917) at raw line 13498/14450.",
+    "pinned_mechanism": "UserDataPreparer.prepareUserData(0) on user unlock calls prepareUserDataLI -> enforceSerialNumber -> getSerialNumber -> Os.getxattr(path, 'user.serial'). On this virtual guest, /data is mounted on Linux tmpfs in early-ramdisk. Linux kernel 4.19 (mm/shmem.c) only supports security.* and trusted.* xattrs in shmem_xattr_handlers; user.* xattrs were not implemented in tmpfs until Linux 6.6. Calling getxattr returns ENOTSUP (errno 95: Operation not supported on transport endpoint). getSerialNumber only catches ENODATA, rethrowing ENOTSUP as IOException. prepareUserDataLI catches IOException, destroys user data, retries once with allowRecover=false, fails again, and invokes RecoverySystem.rebootPromptAndWipeUserData(context, 'prepareUserData failed for system user'). RecoverySystem delegates to uncrypt (setup-bcb), which fails with 'failed to set bootloader message: failed to find /misc partition' because the virtual machine lacks a /misc partition. RecoverySystem.bootCommand throws IOException('Reboot failed (no permissions?)'), wrapped by prepareUserDataLI in RuntimeException('error rebooting into recovery'). This uncaught RuntimeException on android.fg handler thread crashes system_server outright (T664 raw lines 44738, 61568).",
     "candidates_analysis": {
-      "candidate_a_diag_loop_cpu_starvation": {
-        "status": "RULED IN (DOMINANT CAUSE)",
-        "evidence": "In T663 flight-01, during the 96s block: 978 audit lines were emitted (10.2/s), 624 PIDs were created in 141s (4.4/s), audit buffer overflowed (audit_lost=51). ProcessCpuTracker in system_server failed with ENOENT trying to stat short-lived toybox PIDs (8543, 8553, 8556, 8559). SysRq CPU0 backtrace at line 13460 showed installd actively executing seq_read -> show_vfsmnt -> __d_path -> prepend_path, proving it was not deadlocked but starved of execution time under the process storm."
+      "candidate_tmpfs_xattr_class": {
+        "status": "RULED IN (PRIMARY FAULT)",
+        "evidence": "Kernel 4.19 mm/shmem.c lacks shmem_user_xattr_handler. Os.getxattr(path, 'user.serial') returns ENOTSUP (errno 95). UserDataPreparer.java:349 only catches ENODATA and rethrows ENOTSUP as IOException."
       },
-      "candidate_b_installd_invalidatemounts_cost_itself": {
-        "status": "RULED OUT",
-        "evidence": "In T660, Installer.onStart() took exactly 69 ms (line 10522). In T661, Installer.onStart() took exactly 160 ms (line 10599). In both tracks, installd parsed the identical ~45 mount lines from /proc/mounts under mMountsLock. The inherent cost of invalidateMounts itself is <200 ms and cannot explain a 96-second delay."
+      "candidate_misc_partition_absence": {
+        "status": "RULED IN (SECONDARY FAULT / CRASH VECTOR)",
+        "evidence": "fstab.virt contains only loop0 (/system) and loop1 (/vendor). uncrypt (setup-bcb) fails: 'uncrypt: failed to set bootloader message: failed to find /misc partition', causing RecoverySystem to throw unhandled RuntimeException on android.fg."
       },
-      "candidate_c_qemu_emulation_slowness_independent_of_diag_loops": {
+      "candidate_prior_prepare_step_failure": {
         "status": "RULED OUT",
-        "evidence": "QEMU 11.1.2 running on the exact same host hardware under identical emulation flags completed Installer.onStart() in 69 ms (T660) and 160 ms (T661). Pure emulation slowness without background loop contention adds negligible overhead (<100 ms)."
+        "evidence": "vold storage.prepareUserStorage completed with 0 errors for all subdirectories (T664 raw lines 43541-43553). enforceSerialNumber was the very first step to fail."
+      },
+      "candidate_serial_enforcement_integer_logic": {
+        "status": "RULED OUT",
+        "evidence": "Integer comparison (serialNumber == userInfo.serialNumber) was never reached because Os.getxattr threw ENOTSUP immediately."
+      },
+      "candidate_genuinely_corrupt_user0_dir": {
+        "status": "RULED OUT",
+        "evidence": "User 0 directories /data/user/0, /data/user_de/0, /data/system_de/0, /data/system_ce/0 exist and are valid."
+      },
+      "tmpfs_xattr_class": {
+        "status": "RULED IN (PRIMARY FAULT)",
+        "evidence": "Kernel 4.19 mm/shmem.c lacks shmem_user_xattr_handler. Os.getxattr(path, 'user.serial') returns ENOTSUP (errno 95). UserDataPreparer.java:349 only catches ENODATA and rethrows ENOTSUP as IOException."
       }
     },
-    "measurements": {
-      "t660_installer_duration_ms": 69,
-      "t661_installer_duration_ms": 160,
-      "t662_installer_duration_ms": 61815,
-      "t663_installer_duration_ms": ">96000 (killed by Watchdog at 96s)",
-      "t663_proc_mounts_line_count": 47,
-      "t663_audit_lines_during_block": 978,
-      "t663_pids_created_during_block": 624
+    "attempted_fix": {
+      "shape": "Candidate Shape 1: Patch UserDataPreparer.getSerialNumber in classes2.dex of services.jar at offset 0x2c33f0: catch (ErrnoException) { return -1; }",
+      "fix_image_sha256": "65717920eff93f51fbb3f96eb370a4e467f0a0042fde696fb509b578a3a2f7d5",
+      "unmasked_wall": "Modifying services.jar bytecode changed classes2.dex CRC32 from 0xfa0310b9 to 0xdf90e1bc, causing odrefresh --check to exit with 79 (kCompilationRequired, raw line 5665) and trigger dex2oat64 on-device boot classpath recompilation (raw line 6081). The resulting boot-framework.oat in dalvik-cache caused ZygoteInit to crash with SIGSEGV (SEGV_MAPERR) in art::ArtField::GetDeclaringClass at raw line 7861."
     },
-    "pinned_fix": "1. In watch_zygote_environ: exit immediately (return 0) once Zygote environment is marked (T642_ZYGOTE_ENVIRON_END); use shell parameter expansion ${proc##*/} instead of toybox basename; eliminate all background /proc scanning during system_server startup.\n2. In watch_system_server: increase sleep interval from 0.2s to 2.0s, and check /proc/$active_ss_pid directly when alive instead of repeatedly invoking pidof.\n3. In watch_mirrors: root mirror bind-mounts (/data/user_de/0, /data_mirror/...) are already established in do_prep() and must NOT be repeatedly mounted in a loop; increase package check sleep from 0.5s to 1.0s; retain in-memory seen_packages cache.\n4. Preserve all T663 fixes intact: no pre-creation of dynamic UID packages (>10000), preserve CE/DE mirror mounts, 0 .capex."
+    "resolution_recommendation_for_next_lane": "Avoid modifying services.jar in system.img to protect ART boot profiles. Instead, mount an ext4 filesystem backed by loopback on /data in early-ramdisk (or format /dev/ram0 using brd). On ext4, getxattr returns ENODATA instead of ENOTSUP, and setxattr succeeds natively."
   }
 }

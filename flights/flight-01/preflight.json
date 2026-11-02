@@ -1,7 +1,7 @@
 {
-  "track": "T664",
+  "track": "T665",
   "flight": "flight-01",
-  "created_utc": "2026-11-02T01:57:43Z",
+  "created_utc": "2026-11-02T09:59:36Z",
   "qemu_version": "QEMU emulator version 11.1.2",
   "command": [
     "/opt/homebrew/bin/qemu-system-aarch64",
@@ -14,22 +14,22 @@
     "-smp",
     "4",
     "-kernel",
-    "/Users/Shared/wt-track664-system-server-startbootstrapservices-installer-invalidatemounts-watchdog-96s/guest-inputs/Image",
+    "/Users/Shared/wt-track665-system-server-user-unlock-userdatapreparer-getxattr-enotsup-fatal-recovery-reboot/guest-inputs/Image",
     "-initrd",
-    "/Users/Shared/wt-track664-system-server-startbootstrapservices-installer-invalidatemounts-watchdog-96s/guest-image/t664-system-server-startbootstrapservices-installer-invalidatemounts-watchdog-96s-initramfs.cpio.gz",
+    "/Users/Shared/wt-track665-system-server-user-unlock-userdatapreparer-getxattr-enotsup-fatal-recovery-reboot/guest-image/t665-system-server-user-unlock-userdatapreparer-getxattr-enotsup-fatal-recovery-reboot-initramfs.cpio.gz",
     "-append",
-    "console=ttyAMA0,115200 earlycon loglevel=8 debug rdinit=/early-ramdisk androidboot.hardware=virt androidboot.selinux=permissive androidboot.veritymode=disabled enforcing=0 printk.ratelimit=0 androidboot.t663_base_initramfs_sha256=6b38578c7966f722b795cbe10bc5fa60f3e9b6443cf3104ed367f0d2be5c0ff1 androidboot.t664_fix_initramfs_sha256=2f7f60df311472680b302aad23d94e449d7634695747535b850bf86b0c8cb10b androidboot.t664_flight_target=1200",
+    "console=ttyAMA0,115200 earlycon loglevel=8 debug rdinit=/early-ramdisk androidboot.hardware=virt androidboot.selinux=permissive androidboot.veritymode=disabled enforcing=0 printk.ratelimit=0 androidboot.t664_base_initramfs_sha256=2f7f60df311472680b302aad23d94e449d7634695747535b850bf86b0c8cb10b androidboot.t665_fix_initramfs_sha256=65717920eff93f51fbb3f96eb370a4e467f0a0042fde696fb509b578a3a2f7d5 androidboot.t665_flight_target=1200",
     "-display",
     "none",
     "-serial",
-    "file:/Users/Shared/wt-track664-system-server-startbootstrapservices-installer-invalidatemounts-watchdog-96s/flights/flight-01/uart.log",
+    "file:/Users/Shared/wt-track665-system-server-user-unlock-userdatapreparer-getxattr-enotsup-fatal-recovery-reboot/flights/flight-01/uart.log",
     "-monitor",
     "none",
     "-no-reboot"
   ],
   "inputs": {
     "kernel": {
-      "path": "/Users/Shared/wt-track664-system-server-startbootstrapservices-installer-invalidatemounts-watchdog-96s/guest-inputs/Image",
+      "path": "/Users/Shared/wt-track665-system-server-user-unlock-userdatapreparer-getxattr-enotsup-fatal-recovery-reboot/guest-inputs/Image",
       "sha256": "05c4391767a6ff44f5124796b92d7b98027c37fbf58e81b342ca2adb7d99fa04",
       "bytes": 23073280
     },
@@ -39,14 +39,14 @@
       "bytes": 31498864
     },
     "base_image": {
-      "path": "/Users/Shared/wt-track664-system-server-startbootstrapservices-installer-invalidatemounts-watchdog-96s/guest-inputs/t663-base-image.cpio.gz",
-      "sha256": "6b38578c7966f722b795cbe10bc5fa60f3e9b6443cf3104ed367f0d2be5c0ff1",
-      "bytes": 953921495
-    },
-    "boot_image": {
-      "path": "/Users/Shared/wt-track664-system-server-startbootstrapservices-installer-invalidatemounts-watchdog-96s/guest-image/t664-system-server-startbootstrapservices-installer-invalidatemounts-watchdog-96s-initramfs.cpio.gz",
+      "path": "/Users/Shared/wt-track665-system-server-user-unlock-userdatapreparer-getxattr-enotsup-fatal-recovery-reboot/guest-inputs/t664-base-image.cpio.gz",
       "sha256": "2f7f60df311472680b302aad23d94e449d7634695747535b850bf86b0c8cb10b",
       "bytes": 953921146
+    },
+    "boot_image": {
+      "path": "/Users/Shared/wt-track665-system-server-user-unlock-userdatapreparer-getxattr-enotsup-fatal-recovery-reboot/guest-image/t665-system-server-user-unlock-userdatapreparer-getxattr-enotsup-fatal-recovery-reboot-initramfs.cpio.gz",
+      "sha256": "65717920eff93f51fbb3f96eb370a4e467f0a0042fde696fb509b578a3a2f7d5",
+      "bytes": 953928074
     }
   }
 }

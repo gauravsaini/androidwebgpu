@@ -1,12 +1,12 @@
 {
-  "track": "T664",
+  "track": "T665",
   "flight": "flight-01",
-  "started_utc": "2026-11-02T01:57:43Z",
-  "ended_utc": "2026-11-02T02:17:51Z",
-  "host_elapsed_seconds": 1207.4,
-  "guest_log_max_seconds": 1203.63,
-  "stop_reason": "Guest target reached (1203.6s >= 1200s)",
-  "log_bytes": 10430056,
-  "log_lines": 67897,
-  "log_sha256": "0fd963ff897153d5c40b3391cdc461ec8e40a92895b1c9efc76818f4521961f4"
+  "started_utc": "2026-11-02T09:59:36Z",
+  "ended_utc": "2026-11-02T10:19:40Z",
+  "host_elapsed_seconds": 1203.87,
+  "guest_log_max_seconds": 1201.84,
+  "stop_reason": "Guest target reached (1201.8s >= 1200s)",
+  "log_bytes": 12972330,
+  "log_lines": 82088,
+  "log_sha256": "830d08d44f5614440f222125af751015ce292e8d176c8ea42524bb46e4b3bdd8"
 }
