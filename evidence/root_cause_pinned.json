@@ -1,36 +1,61 @@
 {
-  "track": "T668",
-  "mission": "system-server-early-cycle-deaths-gnss-watchdog-gatekeeper-npe",
-  "base_image_sha256": "186c7ae2815ca8da39564a4290e69c6e3041e8e4ad606fb862488d497971a680",
+  "track": "T669",
+  "mission": "biometrics-fingerprint-aidl-lazy-hal-and-idmap-propertyset-watchdog-60s",
+  "base_image_sha256": "7b93fdb23af4edef3300af94fc49743e41256d771b5982db1f70427c45849155",
   "canonical_kernel_sha256": "05c4391767a6ff44f5124796b92d7b98027c37fbf58e81b342ca2adb7d99fa04",
   "system_img_sha256": "7527d1cf03a65f90a971c9b1b3f77b024b7df9addbc2b868648df415a7777a08",
-  "cycle_1_death": {
-    "death_type": "Watchdog kill",
-    "mechanism": "Blocked in handler on main thread (main) waiting on lazy ranchu HALs (GNSS HAL native_class_init_once and Fingerprint HAL FingerprintProvider.getHalInstance during startUser 0)",
-    "stacks": [
-      "GnssNative.native_class_init_once -> android_location_gnss_hal_GnssNative_set_gps_service_handle -> waitForVintfService<IGnssAidl>",
-      "FingerprintProvider.getHalInstance -> waitForDeclaredService('android.hardware.biometrics.fingerprint.IFingerprint/default')"
-    ],
-    "root_cause": "vendor.gnss.ranchu and vendor.biometrics.fingerprint-service.ranchu are defined with 'class hal', 'oneshot', and 'disabled' in vendor.img. Under QEMU, hwservicemanager continuously floods init's control message queue with requests for missing android.hardware.media.c2@1.0::IComponentStore/software, dropping ctl.interface_start messages for lazy HALs. Furthermore, /system/bin/start is rejected with SELinux ctl_start_prop denial. Unstarted lazy HALs cause SystemServer's main thread to block for over 60-90s until Watchdog kills system_server.",
-    "alternatives_ruled_out": [
-      "PropertyInvalidatedCache lock contention (ruled out by thread stack: no invalidateCacheLocked contention, pure synchronous HAL init wait)",
-      "Zygote crash / SIGSEGV (ruled out: Zygote PID remained alive throughout)",
-      "Hardware GNSS/Fingerprint failure (ruled out: ranchu HALs are pure software mocks that run successfully when started)"
-    ]
+  "built_fix_image_sha256": "c6c431f49f5e24f11cc1a289f8bfade7cdc75b6adc69ee7b42f3de9f21593548",
+  "dual_block_characterization": {
+    "watchdog_header": "11-02 17:35:48.818 4064 4156 W Watchdog: *** WATCHDOG KILLING SYSTEM PROCESS: Blocked in handler on on foreground thread (android.fg) for 60s, Blocked in handler on on main thread (main) for 60s",
+    "main_thread_half": {
+      "role": "ELIMINATED_IN_T669",
+      "tid": 3765,
+      "name": "main",
+      "blocked_duration_in_t669": "0 seconds (completely eliminated)",
+      "stack_prior_to_fix": [
+        "at android.os.ServiceManager.waitForServiceNative(Native Method)",
+        "at android.os.ServiceManager.waitForService(ServiceManager.java:284)",
+        "at android.os.ServiceManager.waitForDeclaredService(ServiceManager.java:303)",
+        "at com.android.server.biometrics.sensors.fingerprint.aidl.FingerprintProvider.getHalInstance(FingerprintProvider.java:266)",
+        "at com.android.server.biometrics.sensors.fingerprint.aidl.Sensor$1$$ExternalSyntheticLambda3.get(R8$$SyntheticClass:0)",
+        "at com.android.server.biometrics.sensors.HalClientMonitor.getFreshDaemon(HalClientMonitor.java:66)",
+        "at com.android.server.biometrics.sensors.fingerprint.aidl.FingerprintStartUserClient.startHalOperation(FingerprintStartUserClient.java:61)",
+        "at com.android.server.biometrics.sensors.fingerprint.aidl.FingerprintStartUserClient.start(FingerprintStartUserClient.java:55)",
+        "at com.android.server.biometrics.sensors.UserAwareBiometricScheduler.startNextOperationIfIdle(UserAwareBiometricScheduler.java:149)",
+        "at com.android.server.biometrics.sensors.BiometricScheduler.scheduleClientMonitor(BiometricScheduler.java:395)",
+        "at com.android.server.biometrics.sensors.fingerprint.aidl.FingerprintProvider.scheduleForSensor(FingerprintProvider.java:303)",
+        "at com.android.server.biometrics.sensors.fingerprint.aidl.FingerprintProvider.lambda$scheduleInternalCleanup$13(FingerprintProvider.java:611)"
+      ],
+      "mechanism": "Pre-created /data/vendor_de/0/fpdata (0700 1000:1000) and early direct-spawned /vendor/bin/hw/android.hardware.biometrics.fingerprint-service.ranchu from t636-diag.sh prep with supervision. IFingerprint/default registered early with servicemanager (lines 4204, 4619). FingerprintProvider.getHalInstance() acquired the HAL cleanly without blocking on main thread."
+    },
+    "android_fg_half": {
+      "role": "ACTIVE_SUCCESSOR_BLOCKER",
+      "tid": 3834,
+      "name": "android.fg",
+      "blocked_duration_in_t669": "94 seconds (line 43448)",
+      "stack": [
+        "at android.os.SystemProperties.native_set(Native Method)",
+        "at android.os.SystemProperties.set(SystemProperties.java:235)",
+        "at android.os.SystemService.stop(SystemService.java:71)",
+        "at com.android.server.om.IdmapDaemon.stopIdmapService(IdmapDaemon.java:295)",
+        "at com.android.server.om.IdmapDaemon.-$$Nest$smstopIdmapService(IdmapDaemon.java:0)",
+        "at com.android.server.om.IdmapDaemon$Connection.lambda$close$0(IdmapDaemon.java:103)",
+        "at com.android.server.om.IdmapDaemon$Connection.$r8$lambda$Lq_boLfg36JXR8o9iEpyv6cFWGI(IdmapDaemon.java:0)",
+        "at com.android.server.om.IdmapDaemon$Connection$$ExternalSyntheticLambda0.run(R8$$SyntheticClass:0)",
+        "at android.os.Handler.handleCallback(Handler.java:958)",
+        "at android.os.Handler.dispatchMessage(Handler.java:99)",
+        "at android.os.Looper.loopOnce(Looper.java:205)",
+        "at android.os.Looper.loop(Looper.java:294)",
+        "at android.os.HandlerThread.run(HandlerThread.java:67)",
+        "at com.android.server.ServiceThread.run(ServiceThread.java:46)"
+      ],
+      "mechanism": "OverlayManagerService closed its connection to idmap2d after user 0 overlay verification. Connection.close() posted IdmapDaemon.stopIdmapService() to android.fg, calling SystemService.stop('idmap2d') -> SystemProperties.set('ctl.stop', 'idmap2d'). Because init processes only 1 control message per main loop iteration and the control message queue was saturated with dropped messages due to hwservicemanager repeatedly polling missing android.hardware.media.c2@1.0::IComponentStore/software (lines 37718-41268), android.fg blocked inside __system_property_set waiting on /dev/socket/property_service for init to reply, leading to Watchdog killing system_server PID 3765 at line 42754.",
+      "ruling_out_evidence": "In Flight-01, the main thread was completely unblocked (0s), yet android.fg still blocked for 94s. This disproved the hypothesis that android.fg was merely a co-present symptom of main-thread lazy HAL waiting. The init property socket / control queue congestion is independently sustained by hwservicemanager media.c2 flooding."
+    }
   },
-  "cycle_2_death": {
-    "death_type": "NullPointerException / system-process FATAL",
-    "mechanism": "LockSettingsService$DeviceProvisionedObserver.reportDeviceSetupComplete() calls IGateKeeperService.reportDeviceSetupComplete() on a null reference",
-    "stack": "LockSettingsService$DeviceProvisionedObserver.reportDeviceSetupComplete -> LockSettingsService.getGateKeeperService -> ServiceManager.getService('android.service.gatekeeper.IGateKeeperService') -> null -> NPE",
-    "root_cause": "gatekeeperd is defined with 'class late_start' in system/etc/init/gatekeeperd.rc. In the initramfs boot scripts, class_start late_start is triggered by 'on nonencrypted', which was never executed under QEMU loopback mount. gatekeeperd was never started by init. Additionally, gatekeeperd requires /data/misc/gatekeeper to exist (chdir) and runs as system:system (1000:1000 0700). LockSettingsService.getGateKeeperService() logged 'Unable to acquire GateKeeperService', returned null, and caused a fatal NPE upon device provisioning completion.",
-    "alternatives_ruled_out": [
-      "android.fg FATAL (ruled out: this crash is on the main thread, not android.fg)",
-      "Storage/ACL failure (ruled out: ext4 /data and tmpfs /data/media were healthy, user 0 CE storage unlock had not even been reached yet)",
-      "Missing HIDL GateKeeper HAL (ruled out: android.hardware.gatekeeper@1.0::IGatekeeper/default PID was running and registered with hwservicemanager; only the gatekeeperd binder daemon was missing)"
-    ]
-  },
-  "pinned_fix": {
-    "hal_daemons": "Directly spawn vendor.gnss.ranchu, vendor.biometrics.fingerprint-service.ranchu, and android.hardware.gatekeeper@1.0-service.software from t636-diag.sh prep and supervise them continuously in watch_early_services(), eliminating reliance on dropped ctl.interface_start messages and bypassing ctl_start SELinux restrictions.",
-    "gatekeeperd": "Pre-create /data/misc/gatekeeper (0700 1000:1000) in early-ramdisk and t636-diag.sh, directly spawn /system/bin/gatekeeperd /data/misc/gatekeeper from t636-diag.sh prep, ensuring IGateKeeperService is registered with servicemanager before LockSettingsService provisions the device."
+  "successor_wall": {
+    "name": "idmap-systemproperties-stop-init-control-queue-watchdog-60s",
+    "wall_type_tag": "guest type-1",
+    "cycle_attribution": "Cycle 1 killed by Watchdog at line 42754; Cycle 2 started line 47322 and survived to flight end (line 115101)"
   }
 }

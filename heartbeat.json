@@ -1,14 +1,14 @@
 {
-  "timestamp_utc": "2026-11-02T14:40:57Z",
-  "status": "FINISHED",
-  "track": "T667",
+  "timestamp_utc": "2026-11-02T20:10:10Z",
+  "status": "Flight complete (Guest target reached (1202.7s >= 1200s))",
+  "track": "T669",
   "flight": "flight-01",
   "current_step": 4,
-  "host_elapsed_seconds": 1205.4,
-  "guest_log_max_seconds": 1203.289,
+  "host_elapsed_seconds": 1204.5,
+  "guest_log_max_seconds": 1202.728,
   "target_host_seconds": 1500,
   "target_guest_seconds": 1200,
-  "supervisor_pid": 26811,
+  "supervisor_pid": 44515,
   "qemu_pid": null,
-  "note": "Flight in progress: FINISHED host=1205s guest=1203.3s"
+  "note": "Flight in progress: Flight complete (Guest target reached (1202.7s >= 1200s)) host=1204s guest=1202.7s"
 }
