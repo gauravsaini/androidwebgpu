@@ -1,37 +1,36 @@
 {
-  "track": "T667",
-  "lane": "vold-posix-acl-enotsup-user-unlock-android-fg-fatal",
-  "dominant_cause": {
-    "pinned_mechanism": "Canonical Linux 4.19 kernel lacks CONFIG_EXT4_FS_POSIX_ACL=y; ext4 returns EOPNOTSUPP on setxattr('system.posix_acl_default')"
+  "track": "T668",
+  "mission": "system-server-early-cycle-deaths-gnss-watchdog-gatekeeper-npe",
+  "base_image_sha256": "186c7ae2815ca8da39564a4290e69c6e3041e8e4ad606fb862488d497971a680",
+  "canonical_kernel_sha256": "05c4391767a6ff44f5124796b92d7b98027c37fbf58e81b342ca2adb7d99fa04",
+  "system_img_sha256": "7527d1cf03a65f90a971c9b1b3f77b024b7df9addbc2b868648df415a7777a08",
+  "cycle_1_death": {
+    "death_type": "Watchdog kill",
+    "mechanism": "Blocked in handler on main thread (main) waiting on lazy ranchu HALs (GNSS HAL native_class_init_once and Fingerprint HAL FingerprintProvider.getHalInstance during startUser 0)",
+    "stacks": [
+      "GnssNative.native_class_init_once -> android_location_gnss_hal_GnssNative_set_gps_service_handle -> waitForVintfService<IGnssAidl>",
+      "FingerprintProvider.getHalInstance -> waitForDeclaredService('android.hardware.biometrics.fingerprint.IFingerprint/default')"
+    ],
+    "root_cause": "vendor.gnss.ranchu and vendor.biometrics.fingerprint-service.ranchu are defined with 'class hal', 'oneshot', and 'disabled' in vendor.img. Under QEMU, hwservicemanager continuously floods init's control message queue with requests for missing android.hardware.media.c2@1.0::IComponentStore/software, dropping ctl.interface_start messages for lazy HALs. Furthermore, /system/bin/start is rejected with SELinux ctl_start_prop denial. Unstarted lazy HALs cause SystemServer's main thread to block for over 60-90s until Watchdog kills system_server.",
+    "alternatives_ruled_out": [
+      "PropertyInvalidatedCache lock contention (ruled out by thread stack: no invalidateCacheLocked contention, pure synchronous HAL init wait)",
+      "Zygote crash / SIGSEGV (ruled out: Zygote PID remained alive throughout)",
+      "Hardware GNSS/Fingerprint failure (ruled out: ranchu HALs are pure software mocks that run successfully when started)"
+    ]
   },
-  "pinned_mechanism": {
-    "kernel_sha256": "05c4391767a6ff44f5124796b92d7b98027c37fbf58e81b342ca2adb7d99fa04",
-    "kernel_version": "Linux version 4.19.130-00651-g4da740c10dc0-ab6640132",
-    "kernel_config": {
-      "CONFIG_EXT4_FS": "y",
-      "CONFIG_EXT4_FS_POSIX_ACL": "not set",
-      "CONFIG_EXT4_FS_SECURITY": "y",
-      "CONFIG_TMPFS_POSIX_ACL": "y",
-      "CONFIG_TMPFS_XATTR": "y",
-      "CONFIG_FS_POSIX_ACL": "y",
-      "CONFIG_F2FS_FS_POSIX_ACL": "y"
-    },
-    "guest_evidence": {
-      "first_failing_line_num": 36684,
-      "first_failing_line": "11-02 12:22:36.824   947   947 E vold    : Failed to set default ACL on /data/media/0: Operation not supported on transport endpoint",
-      "callsite_vold": "system/vold/FsCrypt.cpp -> SetDefaultAcl(media_ce_path, 02770, AID_MEDIA_RW, AID_MEDIA_RW, {AID_MEDIA_RW})",
-      "callsite_utils": "system/vold/Utils.cpp -> setxattr(path.c_str(), XATTR_NAME_POSIX_ACL_DEFAULT, acl_header, size, 0)",
-      "target_path": "/data/media/0",
-      "xattr_name": "system.posix_acl_default",
-      "errno": 95,
-      "error_string": "Operation not supported on transport endpoint (EOPNOTSUPP)",
-      "secondary_fault": "UserDataPreparer.java:132 -> error rebooting into recovery -> IOException: Reboot failed (no permissions?) due to missing /misc partition"
-    },
-    "alternatives_ruled_out": {
-      "mount_option_gap": "In Linux 4.19 fs/ext4/super.c, Opt_acl is guarded by #ifdef CONFIG_EXT4_FS_POSIX_ACL. When unconfigured, passing acl mount option triggers '(no)acl options not supported'. Superblock default mount options (tune2fs -o acl) are ignored by kernel without the config.",
-      "vold_side_misuse": "Vold uses standard XATTR_NAME_POSIX_ACL_DEFAULT ('system.posix_acl_default'), path /data/media/0, and flags 0 per AOSP FUSE/storage spec. No namespace or flag misuse.",
-      "subtree_location": "In T666, /data/media resided directly on the ext4 /dev/loop2 /data mount without a dedicated mount point, subjecting it to ext4 xattr handlers."
-    },
-    "fix_layer": "filesystem/mount arrangement: mount tmpfs on /data/media in early-ramdisk (mode=0770, uid=1023, gid=1023), verified in t636-diag.sh. Kernel CONFIG_TMPFS_POSIX_ACL=y sets SB_POSIXACL on tmpfs, so setxattr succeeds. /data remains ext4 on /dev/loop2, preserving user.serial ENODATA semantics."
+  "cycle_2_death": {
+    "death_type": "NullPointerException / system-process FATAL",
+    "mechanism": "LockSettingsService$DeviceProvisionedObserver.reportDeviceSetupComplete() calls IGateKeeperService.reportDeviceSetupComplete() on a null reference",
+    "stack": "LockSettingsService$DeviceProvisionedObserver.reportDeviceSetupComplete -> LockSettingsService.getGateKeeperService -> ServiceManager.getService('android.service.gatekeeper.IGateKeeperService') -> null -> NPE",
+    "root_cause": "gatekeeperd is defined with 'class late_start' in system/etc/init/gatekeeperd.rc. In the initramfs boot scripts, class_start late_start is triggered by 'on nonencrypted', which was never executed under QEMU loopback mount. gatekeeperd was never started by init. Additionally, gatekeeperd requires /data/misc/gatekeeper to exist (chdir) and runs as system:system (1000:1000 0700). LockSettingsService.getGateKeeperService() logged 'Unable to acquire GateKeeperService', returned null, and caused a fatal NPE upon device provisioning completion.",
+    "alternatives_ruled_out": [
+      "android.fg FATAL (ruled out: this crash is on the main thread, not android.fg)",
+      "Storage/ACL failure (ruled out: ext4 /data and tmpfs /data/media were healthy, user 0 CE storage unlock had not even been reached yet)",
+      "Missing HIDL GateKeeper HAL (ruled out: android.hardware.gatekeeper@1.0::IGatekeeper/default PID was running and registered with hwservicemanager; only the gatekeeperd binder daemon was missing)"
+    ]
+  },
+  "pinned_fix": {
+    "hal_daemons": "Directly spawn vendor.gnss.ranchu, vendor.biometrics.fingerprint-service.ranchu, and android.hardware.gatekeeper@1.0-service.software from t636-diag.sh prep and supervise them continuously in watch_early_services(), eliminating reliance on dropped ctl.interface_start messages and bypassing ctl_start SELinux restrictions.",
+    "gatekeeperd": "Pre-create /data/misc/gatekeeper (0700 1000:1000) in early-ramdisk and t636-diag.sh, directly spawn /system/bin/gatekeeperd /data/misc/gatekeeper from t636-diag.sh prep, ensuring IGateKeeperService is registered with servicemanager before LockSettingsService provisions the device."
   }
 }

@@ -1,0 +1,22 @@
+{
+  "track": "T668",
+  "description": "system-server-early-cycle-deaths-gnss-watchdog-gatekeeper-npe",
+  "pinned_mechanism": "Pre-create /data/misc/gatekeeper (0700 system:system), directly spawn gatekeeperd and vendor.gnss.ranchu early in t636-diag.sh (bypassing ctl.start SELinux restrictions) and continuously supervise them, eliminating GNSS HAL 91s Watchdog kill and GateKeeper NPE while preserving ext4 /data and tmpfs /data/media",
+  "base_image": {
+    "path": "/Users/Shared/wt-track668-system-server-early-cycle-deaths-gnss-watchdog-gatekeeper-npe/guest-inputs/t667-base-image.cpio.gz",
+    "sha256": "186c7ae2815ca8da39564a4290e69c6e3041e8e4ad606fb862488d497971a680",
+    "bytes": 954449778,
+    "st_nlink": 2
+  },
+  "canonical_kernel": {
+    "path": "/Users/Shared/wt-track668-system-server-early-cycle-deaths-gnss-watchdog-gatekeeper-npe/guest-inputs/Image",
+    "sha256": "05c4391767a6ff44f5124796b92d7b98027c37fbf58e81b342ca2adb7d99fa04"
+  },
+  "system_img_sha256": "7527d1cf03a65f90a971c9b1b3f77b024b7df9addbc2b868648df415a7777a08",
+  "fix_image": {
+    "path": "/Users/Shared/wt-track668-system-server-early-cycle-deaths-gnss-watchdog-gatekeeper-npe/guest-image/t668-system-server-early-cycle-deaths-gnss-watchdog-gatekeeper-npe-initramfs.cpio.gz",
+    "sha256": "7b93fdb23af4edef3300af94fc49743e41256d771b5982db1f70427c45849155",
+    "bytes": 954449991
+  },
+  "built_utc": "2026-11-02T17:22:39Z"
+}
