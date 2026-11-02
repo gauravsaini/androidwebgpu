@@ -1,14 +1,14 @@
 {
-  "timestamp_utc": "2026-11-02T20:10:10Z",
-  "status": "Flight complete (Guest target reached (1202.7s >= 1200s))",
-  "track": "T669",
+  "timestamp_utc": "2026-11-02T23:02:26Z",
+  "status": "Flight complete - PASS - First cycle survived 1203.5s guest time with 0 Watchdog kills",
+  "track": "T670",
   "flight": "flight-01",
   "current_step": 4,
-  "host_elapsed_seconds": 1204.5,
-  "guest_log_max_seconds": 1202.728,
+  "host_elapsed_seconds": 1205.6,
+  "guest_log_max_seconds": 1203.53,
   "target_host_seconds": 1500,
   "target_guest_seconds": 1200,
-  "supervisor_pid": 44515,
+  "supervisor_pid": 51108,
   "qemu_pid": null,
-  "note": "Flight in progress: Flight complete (Guest target reached (1202.7s >= 1200s)) host=1204s guest=1202.7s"
+  "note": "Track T670 PASSED: idmap property stop queue saturation eliminated, first cycle PID 6513 survived flight end"
 }

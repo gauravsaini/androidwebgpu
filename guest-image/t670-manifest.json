@@ -1,0 +1,24 @@
+{
+  "track": "T670",
+  "mission": "idmap-systemproperties-stop-init-control-queue-watchdog-60s",
+  "created_utc": "2026-11-02T22:40:19Z",
+  "base_image": {
+    "path": "/Users/Shared/wt-track670-idmap-systemproperties-stop-init-control-queue-watchdog-60s/guest-inputs/t669-base-image.cpio.gz",
+    "sha256": "c6c431f49f5e24f11cc1a289f8bfade7cdc75b6adc69ee7b42f3de9f21593548",
+    "bytes": 954450069
+  },
+  "canonical_kernel": {
+    "path": "/Users/Shared/wt-track670-idmap-systemproperties-stop-init-control-queue-watchdog-60s/guest-inputs/Image",
+    "sha256": "05c4391767a6ff44f5124796b92d7b98027c37fbf58e81b342ca2adb7d99fa04",
+    "bytes": 23073280
+  },
+  "system_img": {
+    "sha256": "7527d1cf03a65f90a971c9b1b3f77b024b7df9addbc2b868648df415a7777a08",
+    "untouched": true
+  },
+  "fix_image": {
+    "path": "/Users/Shared/wt-track670-idmap-systemproperties-stop-init-control-queue-watchdog-60s/guest-image/t670-idmap-systemproperties-stop-init-control-queue-watchdog-60s-initramfs.cpio.gz",
+    "sha256": "afb2991f59288d1de1b9855b6cbcb6e8050bde3e9a23d2391d3f17c892a3d022",
+    "bytes": 954450678
+  }
+}

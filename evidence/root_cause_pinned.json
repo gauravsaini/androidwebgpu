@@ -1,61 +1,30 @@
 {
-  "track": "T669",
-  "mission": "biometrics-fingerprint-aidl-lazy-hal-and-idmap-propertyset-watchdog-60s",
-  "base_image_sha256": "7b93fdb23af4edef3300af94fc49743e41256d771b5982db1f70427c45849155",
+  "track": "T670",
+  "mission": "idmap-systemproperties-stop-init-control-queue-watchdog-60s",
+  "base_image_sha256": "c6c431f49f5e24f11cc1a289f8bfade7cdc75b6adc69ee7b42f3de9f21593548",
   "canonical_kernel_sha256": "05c4391767a6ff44f5124796b92d7b98027c37fbf58e81b342ca2adb7d99fa04",
   "system_img_sha256": "7527d1cf03a65f90a971c9b1b3f77b024b7df9addbc2b868648df415a7777a08",
-  "built_fix_image_sha256": "c6c431f49f5e24f11cc1a289f8bfade7cdc75b6adc69ee7b42f3de9f21593548",
-  "dual_block_characterization": {
-    "watchdog_header": "11-02 17:35:48.818 4064 4156 W Watchdog: *** WATCHDOG KILLING SYSTEM PROCESS: Blocked in handler on on foreground thread (android.fg) for 60s, Blocked in handler on on main thread (main) for 60s",
-    "main_thread_half": {
-      "role": "ELIMINATED_IN_T669",
-      "tid": 3765,
-      "name": "main",
-      "blocked_duration_in_t669": "0 seconds (completely eliminated)",
-      "stack_prior_to_fix": [
-        "at android.os.ServiceManager.waitForServiceNative(Native Method)",
-        "at android.os.ServiceManager.waitForService(ServiceManager.java:284)",
-        "at android.os.ServiceManager.waitForDeclaredService(ServiceManager.java:303)",
-        "at com.android.server.biometrics.sensors.fingerprint.aidl.FingerprintProvider.getHalInstance(FingerprintProvider.java:266)",
-        "at com.android.server.biometrics.sensors.fingerprint.aidl.Sensor$1$$ExternalSyntheticLambda3.get(R8$$SyntheticClass:0)",
-        "at com.android.server.biometrics.sensors.HalClientMonitor.getFreshDaemon(HalClientMonitor.java:66)",
-        "at com.android.server.biometrics.sensors.fingerprint.aidl.FingerprintStartUserClient.startHalOperation(FingerprintStartUserClient.java:61)",
-        "at com.android.server.biometrics.sensors.fingerprint.aidl.FingerprintStartUserClient.start(FingerprintStartUserClient.java:55)",
-        "at com.android.server.biometrics.sensors.UserAwareBiometricScheduler.startNextOperationIfIdle(UserAwareBiometricScheduler.java:149)",
-        "at com.android.server.biometrics.sensors.BiometricScheduler.scheduleClientMonitor(BiometricScheduler.java:395)",
-        "at com.android.server.biometrics.sensors.fingerprint.aidl.FingerprintProvider.scheduleForSensor(FingerprintProvider.java:303)",
-        "at com.android.server.biometrics.sensors.fingerprint.aidl.FingerprintProvider.lambda$scheduleInternalCleanup$13(FingerprintProvider.java:611)"
-      ],
-      "mechanism": "Pre-created /data/vendor_de/0/fpdata (0700 1000:1000) and early direct-spawned /vendor/bin/hw/android.hardware.biometrics.fingerprint-service.ranchu from t636-diag.sh prep with supervision. IFingerprint/default registered early with servicemanager (lines 4204, 4619). FingerprintProvider.getHalInstance() acquired the HAL cleanly without blocking on main thread."
-    },
-    "android_fg_half": {
-      "role": "ACTIVE_SUCCESSOR_BLOCKER",
-      "tid": 3834,
-      "name": "android.fg",
-      "blocked_duration_in_t669": "94 seconds (line 43448)",
-      "stack": [
-        "at android.os.SystemProperties.native_set(Native Method)",
-        "at android.os.SystemProperties.set(SystemProperties.java:235)",
-        "at android.os.SystemService.stop(SystemService.java:71)",
-        "at com.android.server.om.IdmapDaemon.stopIdmapService(IdmapDaemon.java:295)",
-        "at com.android.server.om.IdmapDaemon.-$$Nest$smstopIdmapService(IdmapDaemon.java:0)",
-        "at com.android.server.om.IdmapDaemon$Connection.lambda$close$0(IdmapDaemon.java:103)",
-        "at com.android.server.om.IdmapDaemon$Connection.$r8$lambda$Lq_boLfg36JXR8o9iEpyv6cFWGI(IdmapDaemon.java:0)",
-        "at com.android.server.om.IdmapDaemon$Connection$$ExternalSyntheticLambda0.run(R8$$SyntheticClass:0)",
-        "at android.os.Handler.handleCallback(Handler.java:958)",
-        "at android.os.Handler.dispatchMessage(Handler.java:99)",
-        "at android.os.Looper.loopOnce(Looper.java:205)",
-        "at android.os.Looper.loop(Looper.java:294)",
-        "at android.os.HandlerThread.run(HandlerThread.java:67)",
-        "at com.android.server.ServiceThread.run(ServiceThread.java:46)"
-      ],
-      "mechanism": "OverlayManagerService closed its connection to idmap2d after user 0 overlay verification. Connection.close() posted IdmapDaemon.stopIdmapService() to android.fg, calling SystemService.stop('idmap2d') -> SystemProperties.set('ctl.stop', 'idmap2d'). Because init processes only 1 control message per main loop iteration and the control message queue was saturated with dropped messages due to hwservicemanager repeatedly polling missing android.hardware.media.c2@1.0::IComponentStore/software (lines 37718-41268), android.fg blocked inside __system_property_set waiting on /dev/socket/property_service for init to reply, leading to Watchdog killing system_server PID 3765 at line 42754.",
-      "ruling_out_evidence": "In Flight-01, the main thread was completely unblocked (0s), yet android.fg still blocked for 94s. This disproved the hypothesis that android.fg was merely a co-present symptom of main-thread lazy HAL waiting. The init property socket / control queue congestion is independently sustained by hwservicemanager media.c2 flooding."
+  "built_fix_image_sha256": "afb2991f59288d1de1b9855b6cbcb6e8050bde3e9a23d2391d3f17c892a3d022",
+  "verdict": "PASS",
+  "pinned_mechanism": {
+    "root_cause": "In T669, hwservicemanager repeatedly flooded init with 4,160 ctl.interface_start requests for android.hardware.media.c2@1.0::IComponentStore/software (libc error 0x20). This saturated init's control queue (capped at 100) on /dev/socket/property_service. When OverlayManagerService called IdmapDaemon.stopIdmapService() after user 0 unlock on android.fg, SystemService.stop('idmap2d') blocked in SystemProperties.native_set waiting on init's socket for 94 seconds until Watchdog killed system_server (PID 3765) with SIG 9.",
+    "resolution": "Pre-registered android.hardware.media.c2@1.0, 1.1, 1.2::IComponentStore/software by bind-mounting flattened APEX /system/system_ext/apex/com.android.media.swcodec to /apex/com.android.media.swcodec in t636-diag.sh do_prep, pre-creating /data/misc/apexdata/com.android.media.swcodec and /data/data/com.android.media.swcodec (0771 1000:1000), direct early-spawning /apex/com.android.media.swcodec/bin/mediaswcodec with supervision, and declaring the service and interface mappings in vendor/etc/init/mediaswcodec.rc and vendor/etc/init/hw/mediaswcodec.rc in root CPIO.",
+    "evidence_of_resolution": {
+      "mediaswcodec_spawned": "raw line 2781 / 3718 (T670_MEDIASWCODEC_EARLY_SPAWNED)",
+      "service_registered": "raw line 4371 (Registered android.hardware.media.c2@1.2::IComponentStore/software)",
+      "dropped_software_messages": 0,
+      "idmap_ctl_stop_latency": "32 milliseconds (raw line 28464 at 298.584s to line 28469 at 298.616s)",
+      "android_fg_stall_duration": "0 seconds",
+      "watchdog_kills": 0,
+      "cycle_count": 1,
+      "first_cycle_pid": 6513,
+      "first_cycle_unlock": "raw line 44167 (finishUserUnlocking-0)",
+      "first_cycle_ce_unlock": "raw line 44134 (Unlocked CE storage for unsecured user 0)",
+      "first_cycle_boot_completed": "raw line 43943 (init: processing action (sys.boot_completed=1))",
+      "first_cycle_survival_at_flight_end": "raw line 126212 (T642_BOOT_STATE system_server_pids=6513 at 1200.802s kernel timestamp / 1203.53s guest time)"
     }
   },
-  "successor_wall": {
-    "name": "idmap-systemproperties-stop-init-control-queue-watchdog-60s",
-    "wall_type_tag": "guest type-1",
-    "cycle_attribution": "Cycle 1 killed by Watchdog at line 42754; Cycle 2 started line 47322 and survived to flight end (line 115101)"
-  }
+  "prior_regression_vectors_clean": 20,
+  "wall_type_tag": "guest type-1",
+  "rust_par_bhi_lagu": "haan"
 }
