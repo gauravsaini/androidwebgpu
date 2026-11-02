@@ -1,39 +1,31 @@
 {
-  "track": "T663",
-  "name": "system-server-phase550-permissioncontroller-dynamic-uid-and-mount-contention",
-  "fault_a_dynamic_uid_mismatch": {
-    "pinned_mechanism": "On first boot without a pre-existing /data/system/packages.xml, PackageManagerService scans APKs in parallel (ParallelPackageParser) and sequentially assigns the lowest available App ID starting from Process.FIRST_APPLICATION_UID (10000) via AppIdSettingMap.acquireAndRegisterNewAppId (Settings.registerAppIdLPw). Because package parsing finishes in non-deterministic order depending on worker thread execution, the UID assigned to com.android.permissioncontroller varies across boots (e.g. 10097 in T661, 10088 in T662). installd does not assign the UID; PMS passes the assigned UID to installd.createAppDataLocked. When installd calls fs_prepare_dir_strict (libcutils/fs.cpp:fs_prepare_path_impl), it strictly checks sb.st_uid == uid && sb.st_gid == gid. If the directory already exists with a fixed UID (e.g. 10108 pre-created by t636-diag.sh in do_prep or watch_mirrors), libcutils detects the mismatch and prints 'Expected path ... with owner 10088:10088 but found 10108:10108' and returns -1, causing createAppDataLocked to fail with ENOENT.",
-    "guest_evidence": {
-      "t662_uart_lines": {
-        "14276": "Expected path /data/data/com.android.permissioncontroller with owner 10088:10088 but found 10108:10108",
-        "14277": "Failed to prepare /data/data/com.android.permissioncontroller: No such file or directory",
-        "14367": "PackageManager: Failed to create app data for com.android.permissioncontroller, but trying to recover: com.android.server.pm.Installer$InstallerException: Failed to prepare /data/data/com.android.permissioncontroller",
-        "14376": "Expected path /data/data/com.android.permissioncontroller with owner 10088:10088 but found 10108:10108"
+  "track": "T664",
+  "name": "system-server-startbootstrapservices-installer-invalidatemounts-watchdog-96s",
+  "dominant_cause": {
+    "pinned_mechanism": "Diagnostic background loop CPU starvation and process/audit storm under QEMU emulation. In T663, t636-diag.sh ran multiple unthrottled background loops that continuously spawned subprocesses (toybox basename, tr, cat, pidof, mountpoint, mount, getprop). Specifically: (1) watch_zygote_environ iterated over all /proc/[0-9]* entries every 1 second, invoking toybox basename and tr for every process; when reading /proc/*/cmdline of non-toolbox daemons (vold, hal_*, etc.), it triggered SELinux denials (avc: denied { read/open } for comm='toybox') causing audit backlog overflow (audit_lost=51) and flooding the PL011 serial console via logcat; (2) watch_system_server polled every 200ms spawning getprop and toybox pidof; (3) watch_mirrors executed mountpoint -q every 500ms on tmpfs directories (/data/user_de/0, /data_mirror/...), which always fails in toybox because st_dev of a tmpfs child matches its tmpfs parent, causing it to execute mount -o bind repeatedly. Under QEMU TCG emulation, this continuous fork/exec storm and audit logging consumed all available CPU slices. When system_server reached Installer.connect() -> invalidateMounts() -> IInstalld.invalidateMounts(), installd (PID 2427) was starved of CPU while reading /proc/mounts and unable to return the Binder transaction. After 96 seconds of blockage, Watchdog killed system_server (PID 7917) at raw line 13498/14450.",
+    "candidates_analysis": {
+      "candidate_a_diag_loop_cpu_starvation": {
+        "status": "RULED IN (DOMINANT CAUSE)",
+        "evidence": "In T663 flight-01, during the 96s block: 978 audit lines were emitted (10.2/s), 624 PIDs were created in 141s (4.4/s), audit buffer overflowed (audit_lost=51). ProcessCpuTracker in system_server failed with ENOENT trying to stat short-lived toybox PIDs (8543, 8553, 8556, 8559). SysRq CPU0 backtrace at line 13460 showed installd actively executing seq_read -> show_vfsmnt -> __d_path -> prepend_path, proving it was not deadlocked but starved of execution time under the process storm."
       },
-      "t661_uart_lines": {
-        "11558": "Expected path /data/user_de/0/com.android.permissioncontroller with owner 10108:10108 but found 10097:10097"
+      "candidate_b_installd_invalidatemounts_cost_itself": {
+        "status": "RULED OUT",
+        "evidence": "In T660, Installer.onStart() took exactly 69 ms (line 10522). In T661, Installer.onStart() took exactly 160 ms (line 10599). In both tracks, installd parsed the identical ~45 mount lines from /proc/mounts under mMountsLock. The inherent cost of invalidateMounts itself is <200 ms and cannot explain a 96-second delay."
+      },
+      "candidate_c_qemu_emulation_slowness_independent_of_diag_loops": {
+        "status": "RULED OUT",
+        "evidence": "QEMU 11.1.2 running on the exact same host hardware under identical emulation flags completed Installer.onStart() in 69 ms (T660) and 160 ms (T661). Pure emulation slowness without background loop contention adds negligible overhead (<100 ms)."
       }
     },
-    "ruled_out_alternatives": [
-      "create it ownerless and let installd own it: Ruled out because fs_prepare_path_impl in libcutils requires exact match sb.st_uid == uid. If owned by root (0) or system (1000) or ownerless, sb.st_uid != uid and libcutils fails immediately.",
-      "derive the UID from scan order before boot: Ruled out because ParallelPackageParser uses a multi-threaded ForkJoinPool. APK parsing completion order is non-deterministic under QEMU emulation.",
-      "pre-create with fixed packages.xml: Ruled out because injecting a complete packages.xml for all 164 system packages violates minimal intervention and risks schema/signature desynchronization."
-    ],
-    "pinned_fix": "Do NOT pre-create com.android.permissioncontroller (or any non-system package with dynamic UID > 10000) in do_prep or watch_mirrors. Let installd create /data/data/$pkg and /data/user_de/0/$pkg dynamically during PMS package scan. Because the directory does not exist when installd prepares it, fs_prepare_dir_strict executes mkdir(), chown(uid, gid), and chmod(0700) with the exact UID PMS assigned, succeeding with 0 errors and returning the genuine tmpfs inode to PMS."
-  },
-  "fault_b_mount_contention": {
-    "pinned_mechanism": "In T662 t636-diag.sh, the background daemon watch_mirrors iterated over /data/data/* and executed 'mount -o bind $pdir $pdir' unconditionally every 50ms without checking whether $pdir was already a mountpoint. Over 800+ seconds of boot, this stacked hundreds of thousands of mount structures on top of each other in the Linux kernel VFS mount table. Every VFS path traversal, open, stat, and mount/unmount operation took kernel locks (namespace_sem and mount_lock), causing extreme lock contention and thread starvation. At guest time 957s, the system_server main thread was blocked inside BinderProxy.transactNative for 91s, triggering the Watchdog killing of system_server (PID 4812) at line 36608.",
-    "guest_evidence": {
-      "t662_uart_lines": {
-        "36608": "Watchdog: *** WATCHDOG KILLING SYSTEM PROCESS: Blocked in handler on  on main thread (main) for 91s",
-        "36619": "Watchdog: main annotated stack trace:",
-        "36621": "Watchdog:     at android.os.BinderProxy.transactNative(Native Method)",
-        "36622": "Watchdog:     at android.os.BinderProxy.transact(BinderProxy.java:584)"
-      }
+    "measurements": {
+      "t660_installer_duration_ms": 69,
+      "t661_installer_duration_ms": 160,
+      "t662_installer_duration_ms": 61815,
+      "t663_installer_duration_ms": ">96000 (killed by Watchdog at 96s)",
+      "t663_proc_mounts_line_count": 47,
+      "t663_audit_lines_during_block": 978,
+      "t663_pids_created_during_block": 624
     },
-    "pinned_fix": "Make watch_mirrors completely idempotent and event-efficient: (1) Check 'mountpoint -q $path' before running any bind mount; if already a mountpoint, skip immediately; (2) Maintain an in-memory list of already processed packages (seen_packages) so that existing packages are skipped instantly with zero subprocess calls; (3) Increase the daemon sleep interval from 50ms to 500ms (0.5s); (4) Ensure each package is mounted at most once, capping total package mounts at exactly the number of packages (~50) instead of accumulating hundreds of thousands of mount structures."
-  },
-  "ce_and_de_mirror_coordination": {
-    "mechanism": "/data_mirror/data_ce/null/0 is bind mounted to /data/data, and /data_mirror/data_de/null/0 is bind mounted to /data/user_de/0 in do_prep. When installd creates /data/data/$pkg, watch_mirrors detects it, applies an idempotent self-bind mount to /data/data/$pkg and /data/user_de/0/$pkg, preserving their dynamic UIDs and exact tmpfs inodes while making rmdir return EBUSY when UserDataPreparer.reconcileUsers executes. When Zygote forks app processes at Phase 550, stat(/data_mirror/data_ce/null/0/<pkg>) succeeds immediately and readdir finds the matching ce_data_inode."
+    "pinned_fix": "1. In watch_zygote_environ: exit immediately (return 0) once Zygote environment is marked (T642_ZYGOTE_ENVIRON_END); use shell parameter expansion ${proc##*/} instead of toybox basename; eliminate all background /proc scanning during system_server startup.\n2. In watch_system_server: increase sleep interval from 0.2s to 2.0s, and check /proc/$active_ss_pid directly when alive instead of repeatedly invoking pidof.\n3. In watch_mirrors: root mirror bind-mounts (/data/user_de/0, /data_mirror/...) are already established in do_prep() and must NOT be repeatedly mounted in a loop; increase package check sleep from 0.5s to 1.0s; retain in-memory seen_packages cache.\n4. Preserve all T663 fixes intact: no pre-creation of dynamic UID packages (>10000), preserve CE/DE mirror mounts, 0 .capex."
   }
 }
