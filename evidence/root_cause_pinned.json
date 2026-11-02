@@ -1,39 +1,30 @@
 {
-  "track": "T665",
-  "name": "system-server-user-unlock-userdatapreparer-getxattr-enotsup-fatal-recovery-reboot",
+  "track": "T666",
+  "name": "system-server-art-odrefresh-boot-profile-recompile-zygote-segv",
   "dominant_cause": {
-    "pinned_mechanism": "UserDataPreparer.prepareUserData(0) on user unlock calls prepareUserDataLI -> enforceSerialNumber -> getSerialNumber -> Os.getxattr(path, 'user.serial'). On this virtual guest, /data is mounted on Linux tmpfs in early-ramdisk. Linux kernel 4.19 (mm/shmem.c) only supports security.* and trusted.* xattrs in shmem_xattr_handlers; user.* xattrs were not implemented in tmpfs until Linux 6.6. Calling getxattr returns ENOTSUP (errno 95: Operation not supported on transport endpoint). getSerialNumber only catches ENODATA, rethrowing ENOTSUP as IOException. prepareUserDataLI catches IOException, destroys user data, retries once with allowRecover=false, fails again, and invokes RecoverySystem.rebootPromptAndWipeUserData(context, 'prepareUserData failed for system user'). RecoverySystem delegates to uncrypt (setup-bcb), which fails with 'failed to set bootloader message: failed to find /misc partition' because the virtual machine lacks a /misc partition. RecoverySystem.bootCommand throws IOException('Reboot failed (no permissions?)'), wrapped by prepareUserDataLI in RuntimeException('error rebooting into recovery'). This uncaught RuntimeException on android.fg handler thread crashes system_server outright (T664 raw lines 44738, 61568).",
+    "pinned_mechanism": "In T665, modifying services.jar inside system.img changed classes2.dex CRC32 from 0xfa0310b9 to 0xdf90e1bc, which invalidated the precompiled ART boot profile signatures (boot-image.prof / cache-info.xml). At boot, odrefresh detected the profile checksum mismatch, exited with code 79 (kCompilationRequired), and invoked dex2oat64 to recompile the boot classpath into /data/misc/apexdata/com.android.art/dalvik-cache/arm64/. When ZygoteInit started, ART loaded the newly compiled boot artifacts, causing ZygoteInit to crash with SIGSEGV (SEGV_MAPERR, fault addr 0x0) in art::ArtField::GetDeclaringClass (#04 boot-framework.oat ZygoteInit.main+2164) before system_server could launch. The underlying wall from T665 (UserDataPreparer failing on tmpfs /data because Linux 4.19 lacks shmem_user_xattr_handler for user.* xattrs) must therefore be solved at the filesystem layer without modifying services.jar or any boot-classpath JAR: mounting an ext4 filesystem on /data natively supports user.* xattrs. Os.getxattr(path, 'user.serial') returns ENODATA (errno 61) instead of ENOTSUP (errno 95). UserDataPreparer.getSerialNumber natively catches ENODATA and returns -1, and enforceSerialNumber calls setSerialNumber which succeeds without entering the recovery reboot wipe path. The four paths checked by enforceSerialNumber (/data/user/0, /data/user_de/0, /data/system_de/0, /data/system_ce/0) all reside on /data and are 100% covered by the ext4 mount.",
     "candidates_analysis": {
-      "candidate_tmpfs_xattr_class": {
-        "status": "RULED IN (PRIMARY FAULT)",
-        "evidence": "Kernel 4.19 mm/shmem.c lacks shmem_user_xattr_handler. Os.getxattr(path, 'user.serial') returns ENOTSUP (errno 95). UserDataPreparer.java:349 only catches ENODATA and rethrows ENOTSUP as IOException."
+      "candidate_jar_bytecode_patching": {
+        "status": "RULED OUT (CAUSES UNACCEPTABLE ART PROFILE MISMATCH & ZYGOTE SIGSEGV)",
+        "evidence": "T665 flight-01 evidence: odrefresh exit(79) at raw line 5665, dex2oat64 profile dex checksum mismatch at raw line 6169, odrefresh exit(80) at raw line 6586, Zygote SIGSEGV in art::ArtField::GetDeclaringClass at raw line 7209/7861. Bytecode patching system.img invalidates boot-image.prof signatures."
       },
-      "candidate_misc_partition_absence": {
-        "status": "RULED IN (SECONDARY FAULT / CRASH VECTOR)",
-        "evidence": "fstab.virt contains only loop0 (/system) and loop1 (/vendor). uncrypt (setup-bcb) fails: 'uncrypt: failed to set bootloader message: failed to find /misc partition', causing RecoverySystem to throw unhandled RuntimeException on android.fg."
+      "candidate_filesystem_layer_ext4_mount": {
+        "status": "RULED IN (PINNED FIX POINT)",
+        "evidence": "On ext4, user.* xattrs are natively supported (fs/ext4/xattr.c). Unset xattr returns ENODATA. UserDataPreparer.java:349 catches ENODATA and returns -1. enforceSerialNumber(:299) logs 'Serial number missing ...; assuming current is valid' and calls setSerialNumber(:349), which succeeds on ext4 without throwing IOException. The wipe path is avoided natively without altering system.img."
       },
-      "candidate_prior_prepare_step_failure": {
-        "status": "RULED OUT",
-        "evidence": "vold storage.prepareUserStorage completed with 0 errors for all subdirectories (T664 raw lines 43541-43553). enforceSerialNumber was the very first step to fail."
+      "candidate_checked_paths_scope": {
+        "status": "CONFIRMED COMPLETE",
+        "evidence": "UserDataPreparer.enforceSerialNumber checks exactly 4 paths: getDataUserDeDirectory (/data/user_de/0), getDataSystemDeDirectory (/data/system_de/0), getDataUserCeDirectory (/data/user/0), and getDataSystemCeDirectory (/data/system_ce/0). All four are subdirectories of /data; mounting ext4 on /data natively provides ext4 semantics for all four."
       },
-      "candidate_serial_enforcement_integer_logic": {
-        "status": "RULED OUT",
-        "evidence": "Integer comparison (serialNumber == userInfo.serialNumber) was never reached because Os.getxattr threw ENOTSUP immediately."
-      },
-      "candidate_genuinely_corrupt_user0_dir": {
-        "status": "RULED OUT",
-        "evidence": "User 0 directories /data/user/0, /data/user_de/0, /data/system_de/0, /data/system_ce/0 exist and are valid."
-      },
-      "tmpfs_xattr_class": {
-        "status": "RULED IN (PRIMARY FAULT)",
-        "evidence": "Kernel 4.19 mm/shmem.c lacks shmem_user_xattr_handler. Os.getxattr(path, 'user.serial') returns ENOTSUP (errno 95). UserDataPreparer.java:349 only catches ENODATA and rethrows ENOTSUP as IOException."
+      "candidate_brd_ram0_vs_loop_userdata": {
+        "status": "PRIMARY SHAPE: loop-mounted ext4 image (with kernel brd ram0 fallback)",
+        "evidence": "Loop-mounting userdata.img on /dev/loop2 in early-ramdisk matches the existing loop0/system.img and loop1/vendor.img architecture cleanly and reliably without requiring kernel brd memory pre-allocation."
       }
     },
     "attempted_fix": {
-      "shape": "Candidate Shape 1: Patch UserDataPreparer.getSerialNumber in classes2.dex of services.jar at offset 0x2c33f0: catch (ErrnoException) { return -1; }",
-      "fix_image_sha256": "65717920eff93f51fbb3f96eb370a4e467f0a0042fde696fb509b578a3a2f7d5",
-      "unmasked_wall": "Modifying services.jar bytecode changed classes2.dex CRC32 from 0xfa0310b9 to 0xdf90e1bc, causing odrefresh --check to exit with 79 (kCompilationRequired, raw line 5665) and trigger dex2oat64 on-device boot classpath recompilation (raw line 6081). The resulting boot-framework.oat in dalvik-cache caused ZygoteInit to crash with SIGSEGV (SEGV_MAPERR) in art::ArtField::GetDeclaringClass at raw line 7861."
-    },
-    "resolution_recommendation_for_next_lane": "Avoid modifying services.jar in system.img to protect ART boot profiles. Instead, mount an ext4 filesystem backed by loopback on /data in early-ramdisk (or format /dev/ram0 using brd). On ext4, getxattr returns ENODATA instead of ENOTSUP, and setxattr succeeds natively."
+      "shape": "Primary Shape: Mount ext4 filesystem on /data in early-ramdisk backed by loop2 (/ramdisk-images/userdata.img 512M) formatted with ext_attr, user_xattr, acl, leaving system.img 100% untouched",
+      "base_image_sha256": "2f7f60df311472680b302aad23d94e449d7634695747535b850bf86b0c8cb10b",
+      "kernel_sha256": "05c4391767a6ff44f5124796b92d7b98027c37fbf58e81b342ca2adb7d99fa04"
+    }
   }
 }
