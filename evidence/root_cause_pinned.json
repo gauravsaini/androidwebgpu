@@ -1,29 +1,39 @@
 {
-  "track": "T662",
-  "name": "system-server-phase550-permissionpolicyservice-permissioncontroller-ce-mirror-inode-lookup",
-  "pinned_wall": "Zygote CE mirror inode lookup failure (Unable to find <pkg>:<ce_data_inode> in /data_mirror/data_ce/null/0 at frameworks/base/core/jni/com_android_internal_os_Zygote.cpp:1126)",
-  "evidence": {
-    "flight_log": "flights/flight-01/uart.log.numbered.txt",
-    "line_17652": "Unable to find com.android.systemui:49116 in /data_mirror/data_ce/null/0",
-    "line_17658": "Unable to find com.android.permissioncontroller:49935 in /data_mirror/data_ce/null/0",
-    "line_18536": "PermissionPolicyService: Error granting/upgrading runtime permissions for user 0",
-    "line_18541": "java.lang.RuntimeException: Failed to boot service com.android.server.policy.PermissionPolicyService: onBootPhase threw an exception during phase 550"
+  "track": "T663",
+  "name": "system-server-phase550-permissioncontroller-dynamic-uid-and-mount-contention",
+  "fault_a_dynamic_uid_mismatch": {
+    "pinned_mechanism": "On first boot without a pre-existing /data/system/packages.xml, PackageManagerService scans APKs in parallel (ParallelPackageParser) and sequentially assigns the lowest available App ID starting from Process.FIRST_APPLICATION_UID (10000) via AppIdSettingMap.acquireAndRegisterNewAppId (Settings.registerAppIdLPw). Because package parsing finishes in non-deterministic order depending on worker thread execution, the UID assigned to com.android.permissioncontroller varies across boots (e.g. 10097 in T661, 10088 in T662). installd does not assign the UID; PMS passes the assigned UID to installd.createAppDataLocked. When installd calls fs_prepare_dir_strict (libcutils/fs.cpp:fs_prepare_path_impl), it strictly checks sb.st_uid == uid && sb.st_gid == gid. If the directory already exists with a fixed UID (e.g. 10108 pre-created by t636-diag.sh in do_prep or watch_mirrors), libcutils detects the mismatch and prints 'Expected path ... with owner 10088:10088 but found 10108:10108' and returns -1, causing createAppDataLocked to fail with ENOENT.",
+    "guest_evidence": {
+      "t662_uart_lines": {
+        "14276": "Expected path /data/data/com.android.permissioncontroller with owner 10088:10088 but found 10108:10108",
+        "14277": "Failed to prepare /data/data/com.android.permissioncontroller: No such file or directory",
+        "14367": "PackageManager: Failed to create app data for com.android.permissioncontroller, but trying to recover: com.android.server.pm.Installer$InstallerException: Failed to prepare /data/data/com.android.permissioncontroller",
+        "14376": "Expected path /data/data/com.android.permissioncontroller with owner 10088:10088 but found 10108:10108"
+      },
+      "t661_uart_lines": {
+        "11558": "Expected path /data/user_de/0/com.android.permissioncontroller with owner 10108:10108 but found 10097:10097"
+      }
+    },
+    "ruled_out_alternatives": [
+      "create it ownerless and let installd own it: Ruled out because fs_prepare_path_impl in libcutils requires exact match sb.st_uid == uid. If owned by root (0) or system (1000) or ownerless, sb.st_uid != uid and libcutils fails immediately.",
+      "derive the UID from scan order before boot: Ruled out because ParallelPackageParser uses a multi-threaded ForkJoinPool. APK parsing completion order is non-deterministic under QEMU emulation.",
+      "pre-create with fixed packages.xml: Ruled out because injecting a complete packages.xml for all 164 system packages violates minimal intervention and risks schema/signature desynchronization."
+    ],
+    "pinned_fix": "Do NOT pre-create com.android.permissioncontroller (or any non-system package with dynamic UID > 10000) in do_prep or watch_mirrors. Let installd create /data/data/$pkg and /data/user_de/0/$pkg dynamically during PMS package scan. Because the directory does not exist when installd prepares it, fs_prepare_dir_strict executes mkdir(), chown(uid, gid), and chmod(0700) with the exact UID PMS assigned, succeeding with 0 errors and returning the genuine tmpfs inode to PMS."
   },
-  "supply_chain_analysis": {
-    "expected_inode_origin": "installd InstalldNativeService::createAppDataLocked queries get_path_inode() on /data/data/<pkg> (via create_data_user_ce_package_path) and returns it to PackageManagerService, which records it in PackageSetting (PackageUserState.ceDataInode). PMS passes it via Zygote socket argument --pkg-data-info-map to Zygote.",
-    "guest_inode_confirmation": "uart.log:12499 and :13514 confirm path='/data/data/com.android.permissioncontroller' dev='tmpfs' ino=49935. The expected inode 49935 exactly matched the tmpfs inode created by installd during PMS first-boot package scan.",
-    "destruction_event": "During PackageManagerService.systemReady(), UserManagerService.reconcileUsers() -> UserDataPreparer.reconcileUsers() executes enforceSerialNumber() which invokes Os.getxattr(path, 'user.serial'). On Linux 4.19 tmpfs, this returns ENOTSUP (errno 95). UserDataPreparer logs 'Destroying user directory /data/user/0 because we failed to enforce serial number' (line 16470) and invokes destroyUserDataLI(..., FLAG_STORAGE_CE) -> installd.destroyUserData -> delete_dir_contents_and_dir('/data/data', true). While T661 protected /data/user_de/0 with self-bind mounts, /data/data packages had no self-bind mounts and were wiped.",
-    "zygote_lookup_mechanism": "In com_android_internal_os_Zygote.cpp:getAppDataDirName(), Zygote checks stat('/data_mirror/data_ce/null/0/<pkg>'). Because /data/data was wiped or not mirrored in /data_mirror/data_ce/null/0, stat returned ENOENT. Zygote fell back to readdir('/data_mirror/data_ce/null/0') looking for d_ino == ce_data_inode. The directory was absent, so readdir exhausted all entries without finding the inode, triggering fail_fn(CREATE_ERROR('Unable to find...')) and JNI FatalError SIGABRT."
+  "fault_b_mount_contention": {
+    "pinned_mechanism": "In T662 t636-diag.sh, the background daemon watch_mirrors iterated over /data/data/* and executed 'mount -o bind $pdir $pdir' unconditionally every 50ms without checking whether $pdir was already a mountpoint. Over 800+ seconds of boot, this stacked hundreds of thousands of mount structures on top of each other in the Linux kernel VFS mount table. Every VFS path traversal, open, stat, and mount/unmount operation took kernel locks (namespace_sem and mount_lock), causing extreme lock contention and thread starvation. At guest time 957s, the system_server main thread was blocked inside BinderProxy.transactNative for 91s, triggering the Watchdog killing of system_server (PID 4812) at line 36608.",
+    "guest_evidence": {
+      "t662_uart_lines": {
+        "36608": "Watchdog: *** WATCHDOG KILLING SYSTEM PROCESS: Blocked in handler on  on main thread (main) for 91s",
+        "36619": "Watchdog: main annotated stack trace:",
+        "36621": "Watchdog:     at android.os.BinderProxy.transactNative(Native Method)",
+        "36622": "Watchdog:     at android.os.BinderProxy.transact(BinderProxy.java:584)"
+      }
+    },
+    "pinned_fix": "Make watch_mirrors completely idempotent and event-efficient: (1) Check 'mountpoint -q $path' before running any bind mount; if already a mountpoint, skip immediately; (2) Maintain an in-memory list of already processed packages (seen_packages) so that existing packages are skipped instantly with zero subprocess calls; (3) Increase the daemon sleep interval from 50ms to 500ms (0.5s); (4) Ensure each package is mounted at most once, capping total package mounts at exactly the number of packages (~50) instead of accumulating hundreds of thousands of mount structures."
   },
-  "ruled_out_alternatives": [
-    "SELinux policy denials: Permissive mode confirmed (permissive=1, enforcing=0).",
-    "Zygote code bug: Standard AOSP 13 App Data Directory Isolation implementation.",
-    "Static packages.xml corruption: Database is generated dynamically during first-boot scan.",
-    "Direct Boot decryption failure: Virtual guest uses emulated FBE without hardware Keystore lock on user 0."
-  ],
-  "fix_strategy": {
-    "do_prep": "Pre-create, provision (UID 10108 for permissioncontroller, 10083 for systemui, 1000 for settings, mode 0700), and self-bind mount packages in /data/data, bind-mount to /data/user/0, and bind-mount to /data_mirror/data_ce/null/0.",
-    "watcher_daemon": "Maintain /data_mirror/data_ce/null/0 and /data/user/0; dynamically self-bind mount any package in /data/data/* to protect from deletion (EBUSY on rmdir/unlink) and mirror into /data_mirror/data_ce/null/0 and /data_mirror/data_de/null/0.",
-    "t661_de_preservation": "All T661 DE self-bind mounts and mirror mechanisms preserved intact."
+  "ce_and_de_mirror_coordination": {
+    "mechanism": "/data_mirror/data_ce/null/0 is bind mounted to /data/data, and /data_mirror/data_de/null/0 is bind mounted to /data/user_de/0 in do_prep. When installd creates /data/data/$pkg, watch_mirrors detects it, applies an idempotent self-bind mount to /data/data/$pkg and /data/user_de/0/$pkg, preserving their dynamic UIDs and exact tmpfs inodes while making rmdir return EBUSY when UserDataPreparer.reconcileUsers executes. When Zygote forks app processes at Phase 550, stat(/data_mirror/data_ce/null/0/<pkg>) succeeds immediately and readdir finds the matching ce_data_inode."
   }
 }

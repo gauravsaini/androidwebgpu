@@ -1,0 +1,259 @@
+#!/usr/bin/env python3
+"""Supervisor for Track T663 QEMU 11.1.2 guest flight with 1200s guest target."""
+from __future__ import annotations
+
+import datetime
+import gzip
+import hashlib
+import json
+import os
+import re
+import shutil
+import subprocess
+import sys
+import time
+from pathlib import Path
+
+WORKTREE = Path(__file__).resolve().parent.parent
+FLIGHT = WORKTREE / "flights/flight-01"
+LOG = FLIGHT / "uart.log"
+STDERR = FLIGHT / "qemu-stderr.log"
+
+QEMU = Path("/opt/homebrew/bin/qemu-system-aarch64")
+KERNEL = WORKTREE / "guest-inputs/Image"
+BASE_IMAGE = WORKTREE / "guest-inputs/t662-base-image.cpio.gz"
+IMAGE = WORKTREE / "guest-image/t663-system-server-phase550-permissioncontroller-dynamic-uid-and-mount-contention-initramfs.cpio.gz"
+
+TARGET_HOST_SECONDS = 1500
+TARGET_GUEST_SECONDS = 1200
+POLL_SECONDS = 5
+
+EXPECTED = {
+    "kernel": "05c4391767a6ff44f5124796b92d7b98027c37fbf58e81b342ca2adb7d99fa04",
+    "base_image": "713408462a08355e1c9edbc1ddf4f8b7c792ceb32d7de13a918bb9dbed0ef810",
+}
+
+GUEST_TIME_RE = re.compile(rb"^\[\s*([0-9]+\.[0-9]+)\]")
+
+
+def utc_now() -> str:
+    return datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def sha256_file(path: Path) -> str:
+    h = hashlib.sha256()
+    with open(path, "rb") as f:
+        for chunk in iter(lambda: f.read(8 * 1024 * 1024), b""):
+            h.update(chunk)
+    return h.hexdigest()
+
+
+def atomic_json(path: Path, value: dict) -> None:
+    path = Path(path)
+    temp = path.with_suffix(path.suffix + ".partial")
+    with open(temp, "w", encoding="utf-8") as f:
+        json.dump(value, f, indent=2)
+        f.write("\n")
+    os.replace(temp, path)
+
+
+def check_disk_space() -> float:
+    stat = os.statvfs("/System/Volumes/Data")
+    free_bytes = stat.f_bavail * stat.f_frsize
+    free_gib = free_bytes / (1024 ** 3)
+    if free_gib < 2.0:
+        raise RuntimeError(
+            f"DISK HYGIENE: free disk space {free_gib:.2f} GiB is under 2.0 GiB threshold! Self-throttling."
+        )
+    return free_gib
+
+
+def verify_inputs() -> dict:
+    paths = {
+        "kernel": KERNEL,
+        "qemu": QEMU,
+        "base_image": BASE_IMAGE,
+        "boot_image": IMAGE,
+    }
+    records = {}
+    for name, path in paths.items():
+        if not path.is_file():
+            raise FileNotFoundError(f"Required input missing: {path}")
+        digest = sha256_file(path)
+        if name in EXPECTED:
+            expected = EXPECTED[name]
+            if digest != expected:
+                raise ValueError(f"Input SHA mismatch for {name}: {digest} != {expected}")
+        records[name] = {"path": str(path), "sha256": digest, "bytes": path.stat().st_size}
+        print(f"[PREFLIGHT] {name}: {digest} ({path.stat().st_size} bytes) OK")
+    return records
+
+
+def guest_log_max_seconds() -> float:
+    if not LOG.exists():
+        return 0.0
+    last = 0.0
+    with open(LOG, "rb") as f:
+        for line in f:
+            match = GUEST_TIME_RE.match(line)
+            if match:
+                try:
+                    t = float(match.group(1))
+                    if t > last:
+                        last = t
+                except ValueError:
+                    pass
+    return last
+
+
+def update_heartbeat(status: str, elapsed: float, guest_seconds: float, pid: int | None = None) -> None:
+    hb = {
+        "timestamp_utc": utc_now(),
+        "status": status,
+        "track": "T663",
+        "flight": "flight-01",
+        "current_step": 4,
+        "host_elapsed_seconds": round(elapsed, 1),
+        "guest_log_max_seconds": round(guest_seconds, 3),
+        "target_host_seconds": TARGET_HOST_SECONDS,
+        "target_guest_seconds": TARGET_GUEST_SECONDS,
+        "supervisor_pid": os.getpid(),
+        "qemu_pid": pid,
+        "note": f"Flight in progress: {status} host={elapsed:.0f}s guest={guest_seconds:.1f}s",
+    }
+    atomic_json(WORKTREE / "heartbeat.json", hb)
+    if FLIGHT.exists():
+        atomic_json(FLIGHT / "heartbeat.json", hb)
+
+
+def main():
+    free_gib = check_disk_space()
+    print(f"[SUPERVISOR] Disk check passed: {free_gib:.2f} GiB available on /System/Volumes/Data.")
+
+    FLIGHT.mkdir(parents=True, exist_ok=True)
+    inputs = verify_inputs()
+
+    qemu_version = subprocess.run(
+        [str(QEMU), "--version"], capture_output=True, text=True, check=True
+    ).stdout.splitlines()[0]
+
+    boot_sha = inputs["boot_image"]["sha256"]
+    base_sha = inputs["base_image"]["sha256"]
+    cmd = [
+        str(QEMU),
+        "-machine", "virt,gic-version=2,virtio-mmio-transports=1",
+        "-cpu", "cortex-a57",
+        "-m", "8192",
+        "-smp", "4",
+        "-kernel", str(KERNEL),
+        "-initrd", str(IMAGE),
+        "-append", f"console=ttyAMA0,115200 earlycon loglevel=8 debug rdinit=/early-ramdisk androidboot.hardware=virt androidboot.selinux=permissive androidboot.veritymode=disabled enforcing=0 printk.ratelimit=0 androidboot.t662_base_initramfs_sha256={base_sha} androidboot.t663_fix_initramfs_sha256={boot_sha} androidboot.t663_flight_target=1200",
+        "-display", "none",
+        "-serial", f"file:{LOG}",
+        "-monitor", "none",
+        "-no-reboot",
+    ]
+
+    (FLIGHT / "qemu-command.txt").write_text(" ".join(cmd) + "\n")
+
+    preflight = {
+        "track": "T663",
+        "flight": "flight-01",
+        "created_utc": utc_now(),
+        "qemu_version": qemu_version,
+        "command": cmd,
+        "inputs": inputs,
+    }
+    atomic_json(FLIGHT / "preflight.json", preflight)
+
+    # Clean existing logs if running fresh
+    if LOG.exists():
+        LOG.unlink()
+    if STDERR.exists():
+        STDERR.unlink()
+
+    print("[SUPERVISOR] Launching QEMU 11.1.2 guest flight...")
+    started_utc = utc_now()
+    started = time.monotonic()
+    last_hb = -100.0
+
+    with open(STDERR, "wb") as stderr_f:
+        proc = subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=stderr_f)
+        update_heartbeat("QEMU guest launched", 0.0, 0.0, proc.pid)
+        print(f"[SUPERVISOR] QEMU pid={proc.pid} started at {started_utc}")
+
+        stop_reason = "unknown"
+        while True:
+            elapsed = time.monotonic() - started
+            guest_seconds = guest_log_max_seconds()
+            rc = proc.poll()
+            if rc is not None:
+                stop_reason = f"QEMU process exited with returncode {rc}"
+                break
+            if guest_seconds >= TARGET_GUEST_SECONDS:
+                stop_reason = f"Guest target reached ({guest_seconds:.1f}s >= {TARGET_GUEST_SECONDS}s)"
+                proc.terminate()
+                try:
+                    proc.wait(timeout=15)
+                except subprocess.TimeoutExpired:
+                    proc.kill()
+                    proc.wait()
+                break
+            if elapsed >= TARGET_HOST_SECONDS:
+                stop_reason = f"Host timeout reached ({elapsed:.1f}s >= {TARGET_HOST_SECONDS}s)"
+                proc.terminate()
+                try:
+                    proc.wait(timeout=15)
+                except subprocess.TimeoutExpired:
+                    proc.kill()
+                    proc.wait()
+                break
+
+            if elapsed - last_hb >= 15.0:
+                last_hb = elapsed
+                update_heartbeat("RUNNING", elapsed, guest_seconds, proc.pid)
+                print(f"[SUPERVISOR] host={elapsed:.1f}s guest={guest_seconds:.1f}s target={TARGET_GUEST_SECONDS}s")
+
+            time.sleep(POLL_SECONDS)
+
+        ended_utc = utc_now()
+        total_elapsed = time.monotonic() - started
+        final_guest_seconds = guest_log_max_seconds()
+        print(f"[SUPERVISOR] QEMU finished: {stop_reason} at {ended_utc} (host={total_elapsed:.1f}s, guest={final_guest_seconds:.1f}s)")
+        update_heartbeat("FINISHED", total_elapsed, final_guest_seconds, None)
+
+        # Compress log and write numbered version for line referencing
+        if LOG.exists():
+            log_bytes = LOG.stat().st_size
+            log_sha = sha256_file(LOG)
+            gz_path = FLIGHT / "uart.log.gz"
+            with open(LOG, "rb") as f_in, gzip.open(gz_path, "wb") as f_out:
+                shutil.copyfileobj(f_in, f_out)
+            
+            # Numbered log
+            num_path = FLIGHT / "uart.log.numbered.txt"
+            line_count = 0
+            with open(LOG, "r", encoding="utf-8", errors="replace") as f_in, open(num_path, "w", encoding="utf-8") as f_out:
+                for idx, line in enumerate(f_in, start=1):
+                    f_out.write(f"{idx:6d}: {line}")
+                    line_count = idx
+
+            print(f"[SUPERVISOR] Log saved: {log_bytes} bytes ({line_count} lines), SHA: {log_sha}")
+
+            flight_end = {
+                "track": "T663",
+                "flight": "flight-01",
+                "started_utc": started_utc,
+                "ended_utc": ended_utc,
+                "host_elapsed_seconds": round(total_elapsed, 2),
+                "guest_log_max_seconds": round(final_guest_seconds, 3),
+                "stop_reason": stop_reason,
+                "log_bytes": log_bytes,
+                "log_lines": line_count,
+                "log_sha256": log_sha,
+            }
+            atomic_json(FLIGHT / "flight-end.json", flight_end)
+
+
+if __name__ == "__main__":
+    main()
