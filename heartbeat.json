@@ -10,5 +10,5 @@
   "target_guest_seconds": 1200,
   "supervisor_pid": 17683,
   "qemu_pid": null,
-  "note": "Flight in progress: FINISHED host=1205s guest=1203.1s"
+  "note": "Flight complete: honest FAIL pinned vold POSIX ACL EOPNOTSUPP wall"
 }
