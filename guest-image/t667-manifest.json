@@ -1,0 +1,22 @@
+{
+  "track": "T667",
+  "description": "vold-posix-acl-enotsup-user-unlock-android-fg-fatal",
+  "pinned_mechanism": "Mount tmpfs on /data/media in early-ramdisk with native POSIX ACL support (CONFIG_TMPFS_POSIX_ACL=y), allowing vold SetDefaultAcl to succeed natively while preserving ext4 /data mount on /dev/loop2 and user.serial ENODATA semantics",
+  "base_image": {
+    "path": "/Users/Shared/wt-track667-vold-posix-acl-enotsup-user-unlock-android-fg-fatal/guest-inputs/t666-base-image.cpio.gz",
+    "sha256": "34463d5c23b13e1f58707462236bbfbc43f326249da3a578c9a01576c25a2a6c",
+    "bytes": 954448594,
+    "st_nlink": 2
+  },
+  "canonical_kernel": {
+    "path": "/Users/Shared/wt-track667-vold-posix-acl-enotsup-user-unlock-android-fg-fatal/guest-inputs/Image",
+    "sha256": "05c4391767a6ff44f5124796b92d7b98027c37fbf58e81b342ca2adb7d99fa04"
+  },
+  "system_img_sha256": "7527d1cf03a65f90a971c9b1b3f77b024b7df9addbc2b868648df415a7777a08",
+  "fix_image": {
+    "path": "/Users/Shared/wt-track667-vold-posix-acl-enotsup-user-unlock-android-fg-fatal/guest-image/t667-vold-posix-acl-enotsup-user-unlock-android-fg-fatal-initramfs.cpio.gz",
+    "sha256": "186c7ae2815ca8da39564a4290e69c6e3041e8e4ad606fb862488d497971a680",
+    "bytes": 954449778
+  },
+  "built_utc": "2026-11-02T14:16:18Z"
+}

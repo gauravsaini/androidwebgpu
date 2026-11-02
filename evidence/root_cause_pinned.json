@@ -1,30 +1,37 @@
 {
-  "track": "T666",
-  "name": "system-server-art-odrefresh-boot-profile-recompile-zygote-segv",
+  "track": "T667",
+  "lane": "vold-posix-acl-enotsup-user-unlock-android-fg-fatal",
   "dominant_cause": {
-    "pinned_mechanism": "In T665, modifying services.jar inside system.img changed classes2.dex CRC32 from 0xfa0310b9 to 0xdf90e1bc, which invalidated the precompiled ART boot profile signatures (boot-image.prof / cache-info.xml). At boot, odrefresh detected the profile checksum mismatch, exited with code 79 (kCompilationRequired), and invoked dex2oat64 to recompile the boot classpath into /data/misc/apexdata/com.android.art/dalvik-cache/arm64/. When ZygoteInit started, ART loaded the newly compiled boot artifacts, causing ZygoteInit to crash with SIGSEGV (SEGV_MAPERR, fault addr 0x0) in art::ArtField::GetDeclaringClass (#04 boot-framework.oat ZygoteInit.main+2164) before system_server could launch. The underlying wall from T665 (UserDataPreparer failing on tmpfs /data because Linux 4.19 lacks shmem_user_xattr_handler for user.* xattrs) must therefore be solved at the filesystem layer without modifying services.jar or any boot-classpath JAR: mounting an ext4 filesystem on /data natively supports user.* xattrs. Os.getxattr(path, 'user.serial') returns ENODATA (errno 61) instead of ENOTSUP (errno 95). UserDataPreparer.getSerialNumber natively catches ENODATA and returns -1, and enforceSerialNumber calls setSerialNumber which succeeds without entering the recovery reboot wipe path. The four paths checked by enforceSerialNumber (/data/user/0, /data/user_de/0, /data/system_de/0, /data/system_ce/0) all reside on /data and are 100% covered by the ext4 mount.",
-    "candidates_analysis": {
-      "candidate_jar_bytecode_patching": {
-        "status": "RULED OUT (CAUSES UNACCEPTABLE ART PROFILE MISMATCH & ZYGOTE SIGSEGV)",
-        "evidence": "T665 flight-01 evidence: odrefresh exit(79) at raw line 5665, dex2oat64 profile dex checksum mismatch at raw line 6169, odrefresh exit(80) at raw line 6586, Zygote SIGSEGV in art::ArtField::GetDeclaringClass at raw line 7209/7861. Bytecode patching system.img invalidates boot-image.prof signatures."
-      },
-      "candidate_filesystem_layer_ext4_mount": {
-        "status": "RULED IN (PINNED FIX POINT)",
-        "evidence": "On ext4, user.* xattrs are natively supported (fs/ext4/xattr.c). Unset xattr returns ENODATA. UserDataPreparer.java:349 catches ENODATA and returns -1. enforceSerialNumber(:299) logs 'Serial number missing ...; assuming current is valid' and calls setSerialNumber(:349), which succeeds on ext4 without throwing IOException. The wipe path is avoided natively without altering system.img."
-      },
-      "candidate_checked_paths_scope": {
-        "status": "CONFIRMED COMPLETE",
-        "evidence": "UserDataPreparer.enforceSerialNumber checks exactly 4 paths: getDataUserDeDirectory (/data/user_de/0), getDataSystemDeDirectory (/data/system_de/0), getDataUserCeDirectory (/data/user/0), and getDataSystemCeDirectory (/data/system_ce/0). All four are subdirectories of /data; mounting ext4 on /data natively provides ext4 semantics for all four."
-      },
-      "candidate_brd_ram0_vs_loop_userdata": {
-        "status": "PRIMARY SHAPE: loop-mounted ext4 image (with kernel brd ram0 fallback)",
-        "evidence": "Loop-mounting userdata.img on /dev/loop2 in early-ramdisk matches the existing loop0/system.img and loop1/vendor.img architecture cleanly and reliably without requiring kernel brd memory pre-allocation."
-      }
+    "pinned_mechanism": "Canonical Linux 4.19 kernel lacks CONFIG_EXT4_FS_POSIX_ACL=y; ext4 returns EOPNOTSUPP on setxattr('system.posix_acl_default')"
+  },
+  "pinned_mechanism": {
+    "kernel_sha256": "05c4391767a6ff44f5124796b92d7b98027c37fbf58e81b342ca2adb7d99fa04",
+    "kernel_version": "Linux version 4.19.130-00651-g4da740c10dc0-ab6640132",
+    "kernel_config": {
+      "CONFIG_EXT4_FS": "y",
+      "CONFIG_EXT4_FS_POSIX_ACL": "not set",
+      "CONFIG_EXT4_FS_SECURITY": "y",
+      "CONFIG_TMPFS_POSIX_ACL": "y",
+      "CONFIG_TMPFS_XATTR": "y",
+      "CONFIG_FS_POSIX_ACL": "y",
+      "CONFIG_F2FS_FS_POSIX_ACL": "y"
     },
-    "attempted_fix": {
-      "shape": "Primary Shape: Mount ext4 filesystem on /data in early-ramdisk backed by loop2 (/ramdisk-images/userdata.img 512M) formatted with ext_attr, user_xattr, acl, leaving system.img 100% untouched",
-      "base_image_sha256": "2f7f60df311472680b302aad23d94e449d7634695747535b850bf86b0c8cb10b",
-      "kernel_sha256": "05c4391767a6ff44f5124796b92d7b98027c37fbf58e81b342ca2adb7d99fa04"
-    }
+    "guest_evidence": {
+      "first_failing_line_num": 36684,
+      "first_failing_line": "11-02 12:22:36.824   947   947 E vold    : Failed to set default ACL on /data/media/0: Operation not supported on transport endpoint",
+      "callsite_vold": "system/vold/FsCrypt.cpp -> SetDefaultAcl(media_ce_path, 02770, AID_MEDIA_RW, AID_MEDIA_RW, {AID_MEDIA_RW})",
+      "callsite_utils": "system/vold/Utils.cpp -> setxattr(path.c_str(), XATTR_NAME_POSIX_ACL_DEFAULT, acl_header, size, 0)",
+      "target_path": "/data/media/0",
+      "xattr_name": "system.posix_acl_default",
+      "errno": 95,
+      "error_string": "Operation not supported on transport endpoint (EOPNOTSUPP)",
+      "secondary_fault": "UserDataPreparer.java:132 -> error rebooting into recovery -> IOException: Reboot failed (no permissions?) due to missing /misc partition"
+    },
+    "alternatives_ruled_out": {
+      "mount_option_gap": "In Linux 4.19 fs/ext4/super.c, Opt_acl is guarded by #ifdef CONFIG_EXT4_FS_POSIX_ACL. When unconfigured, passing acl mount option triggers '(no)acl options not supported'. Superblock default mount options (tune2fs -o acl) are ignored by kernel without the config.",
+      "vold_side_misuse": "Vold uses standard XATTR_NAME_POSIX_ACL_DEFAULT ('system.posix_acl_default'), path /data/media/0, and flags 0 per AOSP FUSE/storage spec. No namespace or flag misuse.",
+      "subtree_location": "In T666, /data/media resided directly on the ext4 /dev/loop2 /data mount without a dedicated mount point, subjecting it to ext4 xattr handlers."
+    },
+    "fix_layer": "filesystem/mount arrangement: mount tmpfs on /data/media in early-ramdisk (mode=0770, uid=1023, gid=1023), verified in t636-diag.sh. Kernel CONFIG_TMPFS_POSIX_ACL=y sets SB_POSIXACL on tmpfs, so setxattr succeeds. /data remains ext4 on /dev/loop2, preserving user.serial ENODATA semantics."
   }
 }
