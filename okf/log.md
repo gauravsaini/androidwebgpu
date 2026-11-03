@@ -51,3 +51,10 @@
 - NDK r29 built a generic AArch64 Android shared object, but a Composer 2.1 header check failed because generated HIDL platform headers are absent; no AOSP platform build tree was found.
 - Stopped at Step 2 with an evidenced FAIL. No fix image or T675 flight exists; boot, frame commit, first-cycle, and regression vectors remain unobserved. Full search record is in the T675 findings file.
 - Commit with the requested author identity was attempted and blocked by `Operation not permitted` creating the shared worktree's `.git/worktrees/.../index.lock`; changes remain staged and nothing was pushed.
+
+## 2026-11-03 — T676 AOSP composer-source acquisition branch
+
+- Verified the staged T670 base initramfs, canonical kernel, embedded system image, QEMU 11.1.2 executable, and T673 UART hashes from this worktree; the embedded service ELF also matches T674's pinned SHA.
+- Searched public AOSP Gitiles and source indexes for `SimpleFBClient`, `SimpleFBCarveout`, `blitFromBuffer`, the Composer 2.1 service, and the SDK arm64 product config. Generic Composer 2.1 and Goldfish HWC sources were found, but they do not contain the guest ELF's SimpleFB implementation. The Android 14 r43 SDK product chain names Composer 3, exposing a public-config mismatch with this guest's Composer 2.1 binary.
+- Stopped at the Step 2.1 source identification wall before downloading or building. No fix image or T676 flight exists; `sys.boot_completed`, frame commit, first-cycle, and T664–T675 regression checks remain unobserved.
+- Added `branches/t676-emulator-composer-source-fmq-acquisition.md`; full Step 1 hashes and candidate paths/revisions are in `/Users/Shared/agyx-track676-emulator-composer-source-and-fmq-fix.md`.
