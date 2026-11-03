@@ -498,3 +498,12 @@
 3. **Files changed**: `scripts/supervisor_t672.py`, `scripts/analyze_t672_flight.py`, `flights/flight-01/*`, `heartbeat.json`, `TIMELINE.md`, `/Users/Shared/agyx-track672-stability-repeat-confirmation.md`, `/Users/Shared/outcome-t672.txt`.
 
 
+
+
+## UPDATED ON : 2026-11-03
+
+### test (2026-11-03) — Track T673: Pinned Stage 5 display wall to composer FMQ command omission and unreachable blit pipeline
+
+1. **Stage 5 Display Frame Commit Audit**: Flew certified T670 lineage (`afb2991f...`) under QEMU 11.1.2 arm64 for 1209.78s host duration (1207.27s guest duration, exit code 0). Disproved frame commit into `fb0` (MMIO 0x5F000000): pinned failure to Link 4 (`commit call`) in display pipeline. `SimpleFBClient::executeCommands` (0x687c8) early-returns on empty handle vectors without reading input FMQ or writing validation results to output FMQ. SurfaceFlinger's `chooseCompositionStrategy` and `presentOrValidate` failed with `NoResources (6)` on all 555 frames (lines 43788+). Disassembly revealed `FramebufferDevice::blitFromBuffer` (0x69b40) has 0 callers flight-wide. Physical memory snapshot byte diffs (0x5F000000) traced to `SimpleFBCarveout::allocateSlot` gralloc scratch chunks, not SurfaceFlinger composition output. Launcher3 NPE crash loop (43 FATALs) proven separable (started line 70343, vs display failure line 43788). All 22 regressions clean.
+2. **Tests** (before → after): Stage 5 display unconfirmed since T620 → T673 exact display wall pinned to composer executeCommands FMQ omission and missing blit callers; Verdict: FAIL.
+3. **Files changed**: `scripts/supervisor_t673.py`, `scripts/analyze_t673_flight.py`, `evidence/root_cause_pinned.json`, `flights/flight-01/*`, `heartbeat.json`, `TIMELINE.md`, `/Users/Shared/agyx-track673-stage5-display-frame-commit.md`, `/Users/Shared/outcome-t673.txt`.

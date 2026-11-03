@@ -1,18 +1,41 @@
 {
-  "track": "T672",
+  "track": "T673",
   "flight": "flight-01",
-  "stop_reason": "Guest target reached (1203.4s >= 1200s)",
-  "started_utc": "2026-11-03T02:06:26Z",
-  "ended_utc": "2026-11-03T02:26:31Z",
-  "host_elapsed_seconds": 1205.1,
-  "guest_log_max_seconds": 1203.42,
+  "stop_reason": "Guest target reached (1207.3s >= 1200s)",
+  "started_utc": "2026-11-03T03:23:32Z",
+  "ended_utc": "2026-11-03T03:43:41Z",
+  "host_elapsed_seconds": 1209.78,
+  "guest_log_max_seconds": 1207.275,
   "qemu_exit_code": 0,
-  "log_bytes": 18033700,
-  "log_lines": 126531,
-  "log_sha256": "c8b2ea4ff9e70b53e272688c961f3c24c2015b1c4f9e983e438cd73f076f2055",
+  "log_bytes": 15700153,
+  "log_lines": 102632,
+  "log_sha256": "67ce242c21f8d3471580c3d1a8e9cb4bce95d286747417c42b0efd6dad8f464d",
+  "snapshots": {
+    "simplefb-snapshot-01.bin": {
+      "path": "/Users/Shared/wt-track673-stage5-display-frame-commit/flights/flight-01/simplefb-snapshot-01.bin",
+      "bytes": 3145728,
+      "sha256": "bb8fff4dee5c1568fe34ae4ddfc90f33bb9e2a3f1d236a3cd30fb0bd68da8985"
+    },
+    "simplefb-snapshot-02.bin": {
+      "path": "/Users/Shared/wt-track673-stage5-display-frame-commit/flights/flight-01/simplefb-snapshot-02.bin",
+      "bytes": 3145728,
+      "sha256": "3d92d648bec43bead7f10ef2ba2657c7dd7bd2ce10904857a6a0a61b54ad66ec"
+    },
+    "simplefb-snapshot-03.bin": {
+      "path": "/Users/Shared/wt-track673-stage5-display-frame-commit/flights/flight-01/simplefb-snapshot-03.bin",
+      "bytes": 3145728,
+      "sha256": "ce2eb3202729e0ac2abdfb60f4cc9b19aca991ca763e9c2124f65bc629edd2b9"
+    },
+    "simplefb-snapshot-final.bin": {
+      "path": "/Users/Shared/wt-track673-stage5-display-frame-commit/flights/flight-01/simplefb-snapshot-final.bin",
+      "bytes": 3145728,
+      "sha256": "d0fc964da329992501287157a86bbdca805d20b423d8531e0432a5164440a44f"
+    }
+  },
+  "snapshot_differing_bytes": 310603,
   "inputs": {
     "kernel": {
-      "path": "/Users/Shared/wt-track672-stability-repeat-confirmation/guest-inputs/Image",
+      "path": "/Users/Shared/wt-track673-stage5-display-frame-commit/guest-inputs/Image",
       "sha256": "05c4391767a6ff44f5124796b92d7b98027c37fbf58e81b342ca2adb7d99fa04",
       "bytes": 23073280
     },
@@ -22,7 +45,7 @@
       "bytes": 31498864
     },
     "flight_image": {
-      "path": "/Users/Shared/wt-track672-stability-repeat-confirmation/guest-inputs/t670-base-image.cpio.gz",
+      "path": "/Users/Shared/wt-track673-stage5-display-frame-commit/guest-inputs/t670-base-image.cpio.gz",
       "sha256": "afb2991f59288d1de1b9855b6cbcb6e8050bde3e9a23d2391d3f17c892a3d022",
       "bytes": 954450678
     }
