@@ -36,3 +36,10 @@
 - Opened T626 as a separate Chain B engine branch. The runner marker predicate now ignores the kernel handoff printk and watches guest PID-1 UART markers; the red-green regression is complete.
 - Cold-boot evidence is complete under `/Users/Shared/t626-flight/`. T612's Image, DTB, and initramfs hashes matched preflight, and the runner remains isolated from the pinned T612 worktree. The runner continued past the kernel handoff but halted before PID 1 at step `147106780`, PC `0xffffff800808460c`, on unsupported `LDP Q0,Q1,[X0]` (`0xad400400`). Verdict is FAIL for PID-1 attestation; do not call the initramfs silent because `/init` never ran.
 - The futex vector passed exactly once, with its Linux fixup PC observed 500 steps later; counts were `da_in=1`, `brk_in=0`. UART was gzip-compressed at flight end. No replacement initramfs was created because it could not be consumed before resolving the Q-pair engine blocker. Full evidence and hashes are in `okf/branches/t626-m3-runner-fix.md` and `/Users/Shared/codex-track626-m3-runner-fix.md`.
+
+## 2026-11-03 — T674 composer FMQ recovery branch
+
+- Added `branches/t674-composer-fmq-blit.md` as a separate display-wall recovery branch. Verified the T670 base, kernel, embedded system image, QEMU, and T670/T672/T673 reference log hashes before any boot; no T674 boot occurred.
+- Rechecked T673's first `presentOrValidate` failure at raw line 43788 and its 555-failure series. Audited the composer ELF inside `vendor.img`: the empty-handle path skips both FMQs and reports zero output words. The ELF has one conditional static `blitFromBuffer` call at `0x688a8`, correcting T673's “zero callers” static claim without rewriting that historical record.
+- No fix image was built because the SimpleFB implementation and Android build dependencies are absent. T674's flight and first-cycle checks remain unobserved; its failure and death note are recorded separately.
+- The required Git commit could not be created: the workspace sandbox denied the shared worktree `index.lock` write. T674 notes remain uncommitted in the worktree.
