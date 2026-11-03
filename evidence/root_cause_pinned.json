@@ -1,6 +1,6 @@
 {
-  "track": "T671",
-  "mission": "propertyinvalidatedcache-autocorker-slow-delivery-main-219s",
+  "track": "T672",
+  "mission": "stability-repeat-confirmation",
   "base_image_sha256": "afb2991f59288d1de1b9855b6cbcb6e8050bde3e9a23d2391d3f17c892a3d022",
   "canonical_kernel_sha256": "05c4391767a6ff44f5124796b92d7b98027c37fbf58e81b342ca2adb7d99fa04",
   "system_img_sha256": "7527d1cf03a65f90a971c9b1b3f77b024b7df9addbc2b868648df415a7777a08",
@@ -9,27 +9,29 @@
   "wall_type_tag": "guest type-1",
   "rust_par_bhi_lagu": "haan",
   "status_sys_boot_completed": "PROCESSED",
-  "pinned_mechanism": {
-    "classification": "benign-queue-residence",
-    "root_cause": "The 219,658ms slow delivery warning on PropertyInvalidatedCache$AutoCorker$1 (raw line 40169 at 22:50:27.222) was caused by pre-loop queue residence in Looper.getMainLooper().mQueue during SystemServer.run()'s monolithic synchronous service bootstrap cascade. The message was enqueued with a 50ms cork delay at 22:46:47.514 by PackageManager.sCacheAutoCorker during StartPackageManagerService / UserManagerService startup, while the main thread was synchronously executing service initialization before entering Looper.loop().",
-    "delivery_vs_dispatch": "Delivery wait took 219.658s (queue residence time); actual dispatch execution took < 44ms (raw line 40169 to 40170).",
-    "why_no_watchdog_kill": "Watchdog monitors thread responsiveness and monitor lock contention via HandlerChecker.scheduleCheckLocked(), which enqueues probes using mHandler.postAtFrontOfQueue(this), bypassing queued messages. Furthermore, known long initialization sections (packagemanagermain, dexopt) explicitly paused Watchdog checking. At no point was the main thread blocked in a handler or monitor for >= 60 seconds.",
-    "wall_status": "RETIRED",
-    "evidence_of_resolution": {
-      "message_enqueue_timestamp": "22:46:47.514 (raw line 25927 region, uptime ~266.3s)",
-      "message_delivery_timestamp": "22:50:27.222 (raw line 40169)",
-      "autocorker_dispatch_latency": "< 44ms (raw lines 40169 to 40170)",
-      "queue_drained": "raw line 58238 (Looper: Drained)",
-      "subsequent_autocorker_dispatches": "308ms (line 47172), 219ms (line 55851)",
-      "subsequent_autocorker_delivery": "204ms (line 58237)",
-      "watchdog_kills": 0,
-      "cycle_count": 1,
-      "first_cycle_pid": 6513,
-      "first_cycle_unlock": "raw line 44167 (finishUserUnlocking-0)",
-      "first_cycle_ce_unlock": "raw line 44134 (Unlocked CE storage for unsecured user 0)",
-      "first_cycle_boot_completed": "raw line 43943 (init: processing action (sys.boot_completed=1))",
-      "first_cycle_survival_at_flight_end": "raw line 126212 (T642_BOOT_STATE system_server_pids=6513 at 1200.802s kernel timestamp / 1203.53s guest time)"
-    }
-  },
-  "prior_regression_vectors_clean": 20
+  "stability_repeat_confirmation": {
+    "flight_target_seconds": 1200,
+    "guest_duration_seconds": 1203.42,
+    "host_duration_seconds": 1205.1,
+    "qemu_exit_code": 0,
+    "cycle_count": 1,
+    "first_cycle_pid": 6534,
+    "system_server_start_line": 24553,
+    "ce_storage_unlocked_line": 43585,
+    "finish_user_unlocking_line": 43588,
+    "before_user_unlock_line": 43601,
+    "sys_boot_completed_line": 44349,
+    "sys_boot_completed_uptime": 511.38,
+    "first_ce_property_line": 44147,
+    "ce_available_true_count": 60,
+    "survival_at_flight_end_line": "124804/124805 (uptime=1176.46)",
+    "watchdog_kills": 0,
+    "system_fatals": 0,
+    "idmap_stop_latency_ms": 286,
+    "autocorker_bootstrap_delivery_line": 40837,
+    "autocorker_bootstrap_delivery_wait_ms": 216882,
+    "autocorker_dispatch_ms": 43,
+    "post_loop_autocorker_slow_deliveries_above_60s": 0,
+    "prior_regression_vectors_clean": 20
+  }
 }

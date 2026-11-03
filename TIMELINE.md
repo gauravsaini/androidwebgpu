@@ -488,3 +488,13 @@
 2. **Tests** (before → after): T670 AutoCorker 219.7s slow delivery signal on main thread → T671 message provenance pinned to PMS startup at 22:46:47.514, main dispatch duration < 44ms, Watchdog non-fire proven by `postAtFrontOfQueue` and explicit pauses, queue drained (line 58238), 0 Watchdog kills, Cycle 1 (PID 6513) survived through flight end with `boot_completed=1` and `ce_available=true`; Verdict: PASS.
 3. **Files changed**: `evidence/root_cause_pinned.json`, `heartbeat.json`, `TIMELINE.md`, `/Users/Shared/agyx-track671-propertyinvalidatedcache-autocorker-slow-delivery-main-219s.md`, `/Users/Shared/outcome-t671.txt`.
 
+
+## UPDATED ON : 2026-11-03
+
+### test (2026-11-03) — Track T672: Repeat-confirmed T670's first-cycle clean boot on unchanged certified lineage (TEN-PASSES)
+
+1. **Stability Repeat Confirmation**: Repeat-flew the certified T670 fix image (`afb2991f...`) unchanged under QEMU 11.1.2 arm64 for 1205.10s host duration (1203.42s guest duration, target 1200s, exit code 0). Verified the first-cycle bar a second time: single `system_server` cycle (PID 6534, started line 24553) reached CE storage unlock (`Unlocked CE storage for unsecured user 0` line 43585), completed user unlock (`finishUserUnlocking-0` line 43588, `UM.onBeforeUnlockUser-0` line 43601), processed `sys.boot_completed=1` (line 44349 at guest uptime 511.38s), set CE available property (line 44147, 60 BOOT_STATE lines), and survived continuously to flight end (final BOOT_STATE line 124804/124805, uptime 1176.46s). Watchdog kills flight-wide: 0. System process FATALs: 0. Idmap `ctl.stop` dispatch completed in 286ms (line 28434). AutoCorker slow delivery at line 40837 replicated the benign bootstrap pre-loop queue wait (216,882ms wait, 43ms execution), with 0 post-loop deliveries above 60s. All 20 regression vectors held at 0.
+2. **Tests** (before → after): T670 single clean first-cycle flight → T672 repeated clean first-cycle boot verified with identical stability markers on unchanged artifact; all 20 regression vectors held at 0; Verdict: PASS.
+3. **Files changed**: `scripts/supervisor_t672.py`, `scripts/analyze_t672_flight.py`, `flights/flight-01/*`, `heartbeat.json`, `TIMELINE.md`, `/Users/Shared/agyx-track672-stability-repeat-confirmation.md`, `/Users/Shared/outcome-t672.txt`.
+
+

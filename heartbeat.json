@@ -1,14 +1,14 @@
 {
-  "timestamp_utc": "2026-11-03T01:34:00Z",
-  "status": "Investigation complete - PASS - PropertyInvalidatedCache AutoCorker slow delivery proven benign by exact provenance and retired",
-  "track": "T671",
+  "timestamp_utc": "2026-11-03T02:26:31Z",
+  "status": "Flight complete (Guest target reached (1203.4s >= 1200s)) - PASS",
+  "track": "T672",
   "flight": "flight-01",
   "current_step": 4,
-  "host_elapsed_seconds": 1205.6,
-  "guest_log_max_seconds": 1203.53,
+  "host_elapsed_seconds": 1205.1,
+  "guest_log_max_seconds": 1203.42,
   "target_host_seconds": 1500,
   "target_guest_seconds": 1200,
-  "supervisor_pid": 51108,
+  "supervisor_pid": 57948,
   "qemu_pid": null,
-  "note": "Track T671 PASSED: AutoCorker 219s slow delivery pinned to pre-loop queue residence during SystemServer.run(); dispatch took <44ms; Watchdog inapplicable by construction (postAtFrontOfQueue); wall retired"
+  "note": "Flight in progress: Flight complete (Guest target reached (1203.4s >= 1200s)) host=1205s guest=1203.4s"
 }

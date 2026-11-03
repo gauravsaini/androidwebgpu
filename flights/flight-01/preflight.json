@@ -1,7 +1,7 @@
 {
-  "track": "T670",
+  "track": "T672",
   "flight": "flight-01",
-  "created_utc": "2026-11-02T22:42:19Z",
+  "created_utc": "2026-11-03T02:06:26Z",
   "qemu_version": "QEMU emulator version 11.1.2",
   "command": [
     "/opt/homebrew/bin/qemu-system-aarch64",
@@ -14,22 +14,22 @@
     "-smp",
     "4",
     "-kernel",
-    "/Users/Shared/wt-track670-idmap-systemproperties-stop-init-control-queue-watchdog-60s/guest-inputs/Image",
+    "/Users/Shared/wt-track672-stability-repeat-confirmation/guest-inputs/Image",
     "-initrd",
-    "/Users/Shared/wt-track670-idmap-systemproperties-stop-init-control-queue-watchdog-60s/guest-image/t670-idmap-systemproperties-stop-init-control-queue-watchdog-60s-initramfs.cpio.gz",
+    "/Users/Shared/wt-track672-stability-repeat-confirmation/guest-inputs/t670-base-image.cpio.gz",
     "-append",
-    "console=ttyAMA0,115200 earlycon loglevel=8 debug rdinit=/early-ramdisk androidboot.hardware=virt androidboot.selinux=permissive androidboot.veritymode=disabled enforcing=0 printk.ratelimit=0 brd.rd_nr=1 brd.rd_size=524288 androidboot.t669_base_initramfs_sha256=c6c431f49f5e24f11cc1a289f8bfade7cdc75b6adc69ee7b42f3de9f21593548 androidboot.t670_fix_initramfs_sha256=afb2991f59288d1de1b9855b6cbcb6e8050bde3e9a23d2391d3f17c892a3d022 androidboot.t670_flight_target=1200",
+    "console=ttyAMA0,115200 earlycon loglevel=8 debug rdinit=/early-ramdisk androidboot.hardware=virt androidboot.selinux=permissive androidboot.veritymode=disabled enforcing=0 printk.ratelimit=0 brd.rd_nr=1 brd.rd_size=524288 androidboot.t670_fix_initramfs_sha256=afb2991f59288d1de1b9855b6cbcb6e8050bde3e9a23d2391d3f17c892a3d022 androidboot.t672_flight_target=1200 androidboot.t672_repeat_test=1",
     "-display",
     "none",
     "-serial",
-    "file:/Users/Shared/wt-track670-idmap-systemproperties-stop-init-control-queue-watchdog-60s/flights/flight-01/uart.log",
+    "file:/Users/Shared/wt-track672-stability-repeat-confirmation/flights/flight-01/uart.log",
     "-monitor",
     "none",
     "-no-reboot"
   ],
   "inputs": {
     "kernel": {
-      "path": "/Users/Shared/wt-track670-idmap-systemproperties-stop-init-control-queue-watchdog-60s/guest-inputs/Image",
+      "path": "/Users/Shared/wt-track672-stability-repeat-confirmation/guest-inputs/Image",
       "sha256": "05c4391767a6ff44f5124796b92d7b98027c37fbf58e81b342ca2adb7d99fa04",
       "bytes": 23073280
     },
@@ -38,13 +38,8 @@
       "sha256": "8e5c46dc6752c36afbb706f933e72fef835e35f48881a63cadb06c6d29bac869",
       "bytes": 31498864
     },
-    "base_image": {
-      "path": "/Users/Shared/wt-track670-idmap-systemproperties-stop-init-control-queue-watchdog-60s/guest-inputs/t669-base-image.cpio.gz",
-      "sha256": "c6c431f49f5e24f11cc1a289f8bfade7cdc75b6adc69ee7b42f3de9f21593548",
-      "bytes": 954450069
-    },
-    "boot_image": {
-      "path": "/Users/Shared/wt-track670-idmap-systemproperties-stop-init-control-queue-watchdog-60s/guest-image/t670-idmap-systemproperties-stop-init-control-queue-watchdog-60s-initramfs.cpio.gz",
+    "flight_image": {
+      "path": "/Users/Shared/wt-track672-stability-repeat-confirmation/guest-inputs/t670-base-image.cpio.gz",
       "sha256": "afb2991f59288d1de1b9855b6cbcb6e8050bde3e9a23d2391d3f17c892a3d022",
       "bytes": 954450678
     }
