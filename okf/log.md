@@ -43,3 +43,11 @@
 - Rechecked T673's first `presentOrValidate` failure at raw line 43788 and its 555-failure series. Audited the composer ELF inside `vendor.img`: the empty-handle path skips both FMQs and reports zero output words. The ELF has one conditional static `blitFromBuffer` call at `0x688a8`, correcting T673's “zero callers” static claim without rewriting that historical record.
 - No fix image was built because the SimpleFB implementation and Android build dependencies are absent. T674's flight and first-cycle checks remain unobserved; its failure and death note are recorded separately.
 - The required Git commit could not be created: the workspace sandbox denied the shared worktree `index.lock` write. T674 notes remain uncommitted in the worktree.
+
+## 2026-11-03 — T675 composer source/toolchain acquisition branch
+
+- Verified all five pinned Step 1 input hashes, including the embedded `system.img` streamed from the T670 base CPIO and the T673 UART from its reference worktree.
+- Confirmed the Android 14 emulator build fingerprint, then exhausted repository/history and local source searches. The only SimpleFB service artifacts found are duplicate ELF binaries; AOSP's licensed Composer 2.1 code is a contract/reference, not the SimpleFB source.
+- NDK r29 built a generic AArch64 Android shared object, but a Composer 2.1 header check failed because generated HIDL platform headers are absent; no AOSP platform build tree was found.
+- Stopped at Step 2 with an evidenced FAIL. No fix image or T675 flight exists; boot, frame commit, first-cycle, and regression vectors remain unobserved. Full search record is in the T675 findings file.
+- Commit with the requested author identity was attempted and blocked by `Operation not permitted` creating the shared worktree's `.git/worktrees/.../index.lock`; changes remain staged and nothing was pushed.
