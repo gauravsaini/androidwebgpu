@@ -58,3 +58,10 @@
 - Searched public AOSP Gitiles and source indexes for `SimpleFBClient`, `SimpleFBCarveout`, `blitFromBuffer`, the Composer 2.1 service, and the SDK arm64 product config. Generic Composer 2.1 and Goldfish HWC sources were found, but they do not contain the guest ELF's SimpleFB implementation. The Android 14 r43 SDK product chain names Composer 3, exposing a public-config mismatch with this guest's Composer 2.1 binary.
 - Stopped at the Step 2.1 source identification wall before downloading or building. No fix image or T676 flight exists; `sys.boot_completed`, frame commit, first-cycle, and T664–T675 regression checks remain unobserved.
 - Added `branches/t676-emulator-composer-source-fmq-acquisition.md`; full Step 1 hashes and candidate paths/revisions are in `/Users/Shared/agyx-track676-emulator-composer-source-and-fmq-fix.md`.
+
+## 2026-11-04 — T677 Composer 2.1 contract reimplementation branch
+
+- Opened T677 as a separate branch from T676: T676 searched for the guest-specific SimpleFB source; T677 attempted the public Composer 2.1 reimplementation route.
+- Passed the 8 GiB disk gate and SHA-verified the T676-hardlinked base, kernel, embedded system image, QEMU 11.1.2 binary, and T673 UART.
+- Pinned filtered metadata clones of `platform/hardware/interfaces` at `android14-release` `40e9f1537e308ed49e3b561ce333e3f2bb64f31e` and `main` `1a56e38edc2f2f6189ef405ee1edce554e15cbc0`. Neither tree listed the requested default `ComposerClient.cpp`; fetching T676's reference commit `f06d4203accc96302c5c6e7287bea5fd7a563f08` failed because `android.googlesource.com` did not resolve.
+- Stopped at Step 2 with an evidenced FAIL. No service build, install analysis, fix initramfs, or flight was started; display, first-cycle, and regression gates remain unobserved. Full record: `/Users/Shared/agyx-track677-composer-2-1-contract-reimplementation.md`.
