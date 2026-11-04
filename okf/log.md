@@ -65,3 +65,9 @@
 - Passed the 8 GiB disk gate and SHA-verified the T676-hardlinked base, kernel, embedded system image, QEMU 11.1.2 binary, and T673 UART.
 - Pinned filtered metadata clones of `platform/hardware/interfaces` at `android14-release` `40e9f1537e308ed49e3b561ce333e3f2bb64f31e` and `main` `1a56e38edc2f2f6189ef405ee1edce554e15cbc0`. Neither tree listed the requested default `ComposerClient.cpp`; fetching T676's reference commit `f06d4203accc96302c5c6e7287bea5fd7a563f08` failed because `android.googlesource.com` did not resolve.
 - Stopped at Step 2 with an evidenced FAIL. No service build, install analysis, fix initramfs, or flight was started; display, first-cycle, and regression gates remain unobserved. Full record: `/Users/Shared/agyx-track677-composer-2-1-contract-reimplementation.md`.
+
+## 2026-11-04 — T678 DNS-cleared Composer 2.1 acquisition branch
+
+- Continued the Composer 2.1 reimplementation branch with fresh hardlinks to T677's three guest inputs; inode and SHA-256 checks passed, including the embedded `ramdisk-images/system.img` streamed from the base CPIO. QEMU 11.1.2 was present and hashed; the 8 GiB disk gate passed at 11 GiB available.
+- Rechecked source acquisition from this execution environment. `dscacheutil` returned no host record, `nslookup` could not bind its resolver socket, `curl` could not resolve `android.googlesource.com`, and the permitted GitHub mirror `git ls-remote` could not resolve `github.com`.
+- Stopped at Step 2 with an evidenced FAIL. Neither route yielded a project tree or pinned revision, so the Composer 2.1 tree listing and `default/ComposerClient.cpp` existence question remain unadjudicated. No service build, install analysis, fix image, or flight was started. Full record: `/Users/Shared/agyx-track678-composer-2-1-dns-cleared-acquisition.md`.
