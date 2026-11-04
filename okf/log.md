@@ -71,3 +71,10 @@
 - Continued the Composer 2.1 reimplementation branch with fresh hardlinks to T677's three guest inputs; inode and SHA-256 checks passed, including the embedded `ramdisk-images/system.img` streamed from the base CPIO. QEMU 11.1.2 was present and hashed; the 8 GiB disk gate passed at 11 GiB available.
 - Rechecked source acquisition from this execution environment. `dscacheutil` returned no host record, `nslookup` could not bind its resolver socket, `curl` could not resolve `android.googlesource.com`, and the permitted GitHub mirror `git ls-remote` could not resolve `github.com`.
 - Stopped at Step 2 with an evidenced FAIL. Neither route yielded a project tree or pinned revision, so the Composer 2.1 tree listing and `default/ComposerClient.cpp` existence question remain unadjudicated. No service build, install analysis, fix image, or flight was started. Full record: `/Users/Shared/agyx-track678-composer-2-1-dns-cleared-acquisition.md`.
+
+## 2026-11-04 — T679 Composer 2.1 local-tree build branch
+
+- Continued T678 using the driver-staged `android14-release` tree at `40e9f1537e308ed49e3b561ce333e3f2bb64f31e`; the required contract and Composer utility files were present, and all pinned guest-input hashes matched.
+- The Composer 2.1 build stopped at Step 3: the host has generic NDK/host clang only, with no Soong, `hidl-gen`, generated Composer HIDL headers, or full Android platform build tree. Static init/fstab evidence identifies the embedded read-only `vendor.img` as the safe replacement path; no image was changed.
+- A requested supplementary `git show` triggered a partial-clone lazy-fetch attempt for missing f06d4203 blobs; DNS failed before any blob was fetched. No further network calls were made. The deviation is recorded in the full findings.
+- No service, fix initramfs, or QEMU flight exists; `sys.boot_completed`, framebuffer commit, first-cycle bar, and T664–T678 regressions remain unobserved. Full record: `/Users/Shared/agyx-track679-composer-2-1-local-tree-build.md`.
