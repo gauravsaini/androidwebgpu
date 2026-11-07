@@ -1,0 +1,160 @@
+# Track T694 — Launch-path DIAGNOSIS (why lanes never start)
+
+## Mission
+
+Successor to driver-certified T693 honest FAIL. Four consecutive lanes never
+started: T690 (box, TUI loop), T691 (box), T692 (box), T693 (Mac). This lane
+is DIAGNOSIS ONLY: find WHY the agent process stays alive but never executes
+the brief, and deliver a verified working launch recipe for the next lane.
+
+STRICTLY NO guest flight, NO kernel rebuild, NO flight retry, NO QEMU or
+emulator run, NO pushing, NO committing, NO touching any other worktree,
+NO starting any second agent, NO killing any process (pgrep/ps are read-only
+here — never kill, never TERM anything).
+
+## Step 0 — Prove you are alive FIRST (within 5 minutes of starting)
+
+Before ANY other work: write one line to `progress-t694.txt` in the workdir
+("Step 0 alive <UTC timestamp>") and write `heartbeat.json` in the workdir
+with the current UTC timestamp and track T694. The driver monitors these
+files; a lane whose progress/heartbeat never appear is treated as wedged.
+After EVERY step below, append one progress line and refresh heartbeat.json.
+If you are still on a "New session" spinner after 10 minutes with no tool
+having run, file Verdict FAIL at once (findings + outcome + death note) and
+stop — do not sit silent.
+
+## Background evidence (driver-verified at launch)
+
+Never-start chain (4 consecutive):
+
+| Track | Host | Launcher | Signature |
+|---|---|---|---|
+| T690 | box opencode | box launch, TERM default | TUI loop, log 8,314,233,756 B, box disk to 100% |
+| T691 | box opencode | box launch | log frozen 26,080 B, zero tool calls in 3h02m |
+| T692 | box opencode | box launch, TERM=dumb + CI=true | log frozen 27,512 B, "New session" spinner, exited on its own ~01:50 AEDT |
+| T693 | Mac opencode v2.2.5 | nohup + --standalone + --prompt + --auto, stdin /dev/null, log /Users/Shared/codex-logs/track693-opencode.log | log frozen 62,057 B since 02:17:21, zero steps in 3h03m, PID 29036 killed at wedge trigger 05:17 AEDT, two-sample dead |
+
+Key fact: the T693 launcher is the SAME SHAPE as the last WORKING Mac
+opencode launch. T688 (PASS, findings-t688.md written, log 31,625,114 B,
+2026-11-07 13:07) was launched by /Users/Shared/launch-t688-op.sh:
+`nohup /opt/homebrew/bin/opencode --standalone --prompt "<brief>" --auto
+> /Users/Shared/codex-logs/track688-opencode.log 2>&1 < /dev/null &`.
+T693 used the identical shape with a different brief path and log name —
+and never started. So the launch command shape alone does NOT explain it.
+Something changed between T688 (2026-11-07 ~13:07) and T693 (2026-11-08
+02:17), or the difference is in the prompt/brief, the environment, the
+model endpoint, or opencode itself.
+
+Mac opencode config at launch (~/.config/opencode/opencode.json): provider
+"experiential", baseURL https://api.experientiallabs.ai/v1, model
+gpt-5.6-luna (glm-5.3-flash-abliterated). This is NOT the box config (the
+box defaults to the experimental qwen35-tpu endpoint — a separate issue).
+NEVER copy the apiKey or any secret into findings, progress, or any file —
+record provider name, baseURL, and model name only.
+
+Other context: codex is down on a usage limit until 5 Dec 2026, so opencode
+is the only Mac execution route. AGYX IS BANNED — never use it, never
+launch it, never count it. Mac disk 15 Gi free at T694 launch (93% used).
+T693's log grew +121 B at 05:20:41 — terminal-teardown ANSI on kill, not
+agent work; its tail is a pure ANSI repaint of the spinner + prompt text.
+
+## Workdir and deliverables (Mac paths)
+
+- Workdir: /Users/Shared/wt-track694-launch-path-diagnosis (plain directory,
+  no git branch — diagnosis writes findings only, no code changes).
+- Findings: /Users/Shared/wt-track694-launch-path-diagnosis/findings-t694.md
+- Outcome: /Users/Shared/wt-track694-launch-path-diagnosis/outcome-t694.txt
+  (single word PASS or FAIL, plus nothing else on the verdict line)
+- Death note: /Users/Shared/wt-track694-launch-path-diagnosis/DEATH_NOTE-T694.md
+- Progress: /Users/Shared/wt-track694-launch-path-diagnosis/progress-t694.txt
+  (one appended line per completed step)
+- Heartbeat: /Users/Shared/wt-track694-launch-path-diagnosis/heartbeat.json
+  (refresh after every step, never >10 min stale)
+- Launch log: /Users/Shared/codex-logs/track694-opencode.log
+- You do NOT push, commit, or touch any other worktree. When findings,
+  outcome and death note are written, your work is done — stop with a short
+  plain-text summary and no further tool calls.
+
+## Steps
+
+### Step 1 — Record the environment (read-only)
+
+Record verbatim: `/opt/homebrew/bin/opencode --version`; the Mac opencode
+config provider name, baseURL, and model name (REDACT the apiKey — never
+write it anywhere); `echo $TERM`, `env | grep -i -E "^(CI|TERM|SSH|LANG|HOME)="`;
+`df -h /System/Volumes/Data`; live opencode PIDs via `pgrep -af opencode`
+(read-only — DO NOT kill anything, DO NOT touch PIDs 33866, 87890, 94999,
+95001, 99833, 99835 or any other live process). Note the date/time each
+reading was taken.
+
+### Step 2 — Forensics on the four frozen logs (read-only)
+
+For each of T690/T691/T692/T693, record: log path, exact byte size, mtime,
+and the last non-ANSI text in the tail (strip ANSI escapes; quote the last
+readable words). T693: /Users/Shared/codex-logs/track693-opencode.log
+(62,057 B + 121 B teardown). T690/T691/T692 logs live on the box
+(/home/muse/t690-symbolgate-flight/, /home/muse/t691-symbolgate-flight/,
+/home/muse/t692-symbolgate-flight/); reach them via the Mac's box SSH
+(`ssh -i ~/.ssh/id_ed25519_remote muse@100.104.140.2`) if reachable — if
+the box is unreachable, record that honestly and use the driver-recorded
+sizes (T690 8,314,233,756 B; T691 26,080 B; T692 27,512 B). Compare the four
+tails: same spinner text? same prompt rendering? any error line? any
+difference between the box logs and the Mac log?
+
+### Step 3 — Compare the working launch with the failing one
+
+Diff the launchers: /Users/Shared/launch-t688-op.sh (worked, PASS) vs
+/Users/Shared/launch-t693-op.sh (never started). Record EVERY difference:
+prompt wording, brief path, log path, flags, env, cwd, redirection. Also
+compare brief sizes (T688 brief vs T693 brief, 18,955 B) and prompt lengths.
+Check whether opencode itself changed between 2026-11-07 13:07 (T688 done)
+and 2026-11-08 02:17 (T693 launched): version history, binary mtime
+(`stat -f "%Sm %N" /opt/homebrew/bin/opencode` — note: the binary is a
+symlink; stat the target too), any auto-update marker. List every variable
+that differs and every variable that is identical — the answer lives in
+that table.
+
+### Step 4 — Controlled minimal probes (the decisive step)
+
+In a SCRATCH directory only (e.g. /tmp/t694-probe-<n>/, never a lane
+worktree), run opencode on a TRIVIAL prompt (e.g. "Write the word PROBE-OK
+and the current UTC time into probe-out.txt in this directory, then stop.")
+with a hard timeout (120 s per probe; `timeout 120 ...` or `gtimeout`,
+kill the probe process after the timeout — these are YOUR OWN probe
+processes, the only ones you may kill). Vary ONE variable at a time and
+record for each variant whether the agent executed (probe-out.txt appeared,
+tool calls happened) or sat on the spinner:
+
+- (a) exact T693 shape: nohup + --standalone + --prompt + --auto, stdin
+  /dev/null, stdout to a log file, backgrounded.
+- (b) same as (a) but WITHOUT --auto.
+- (c) same as (a) but with TERM=dumb and CI=true.
+- (d) same as (a) but with a SHORT prompt (one sentence) instead of a
+  brief-file prompt.
+- (e) foreground (no nohup, no backgrounding) with a 120 s timeout, if the
+  earlier variants all fail — run it inside `script` or with stdin
+  /dev/null and record whether it differs.
+
+Stop probing as soon as ONE variant executes — that is the answer. Do NOT
+run more than 6 probes total. If ALL variants fail, that is itself the
+finding: record it, plus which step (prompt render? model call? tool loop?)
+each variant reached, from its log tail.
+
+### Step 5 — Root cause + verified launch recipe
+
+Write the verdict: the single most likely root cause (one paragraph: what
+breaks, where in the chain, and the evidence for it), what you ruled out
+and why (one line each), and the EXACT recommended launch command for the
+next lane (full command, flags, env, cwd, redirection — copy-paste ready).
+Verdict PASS = root cause identified AND at least one probe variant
+demonstrated execution. Verdict FAIL = cause not pinned down (still file
+full findings with everything ruled out — a ruled-out list is a result).
+
+## Timeout discipline (standing rule, locked 2026-11-07)
+
+Expected total time 1–2 hours worst case (forensics: minutes; probes:
+minutes each; findings: minutes). Work steadily through the steps in order;
+do not pause between steps. Heartbeat after EVERY step. If a step is
+blocked, file the FAIL findings for that step at once — do not sit on a
+blocker silently. If you finish early, finish: write findings, outcome,
+death note, stop.
