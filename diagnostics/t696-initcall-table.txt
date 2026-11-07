@@ -1,0 +1,13 @@
+__initcall_start: ffffff8009250b48
+__initcall0_start: ffffff8009250b9c
+__initcall1_start: ffffff8009250bac
+__initcall2_start: ffffff8009250c80
+__initcall3_start: ffffff8009250cec
+__initcall4_start: ffffff8009250d20
+__initcall5_start: ffffff8009250e98
+__initcallrootfs_start: ffffff8009250f44
+__initcall6_start: ffffff8009250f48
+__initcall7_start: ffffff80092515dc
+__initcall_end:   ffffff800925165c
+table_size_bytes: 2836
+suffixed_initcall_sections_count: 0

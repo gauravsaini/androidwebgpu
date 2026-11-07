@@ -1,0 +1,9 @@
+ffffff8008b2ee50 t __die
+ffffff8009180000 R __init_begin
+ffffff8009270000 R __init_end
+ffffff8008b50000 T _etext
+ffffff8008b37ecc T dump_stack
+ffffff80080a4200 T free_initmem
+ffffff8008b2f4dc T panic
+ffffff8008b30a40 T printk
+ffffff8008b2edd8 T show_regs

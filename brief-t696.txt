@@ -1,0 +1,476 @@
+# Track T696 — Route B rebuild: non-LTO + linker-script globs (Mac agyx, build on box)
+
+## Mission
+
+Successor to driver-certified T695 honest FAIL. Route A is DEAD on a
+SECOND, distinct Clang 21 defect (T695, driver-verified 2026-11-08):
+ThinLTO section-suffixing (`.initcall*.init..<suffix>`) orphaned all
+initcall sections into `.data` — `__initcall_start ==
+__initcall_end == 0xffffff8009293c48` (empty initcall table, 0
+initcalls executed; driver re-count via box llvm-readelf: 713 suffixed
+initcall sections, 0 non-suffixed), zero drivers initialized, guest
+panic at 0.113 s ("Attempted to kill init!"). The T688 defect
+(`.text.unlikely` orphaned into the init range, free_initmem zeroing,
+`bl printk` executing `udf #0x0`) was FIXED by Route A — the symbol
+gate PASSES on the Route A Image (all five key functions below
+_etext 0xffffff8008b70000, driver-run and agent-confirmed). Route A
+therefore fixed defect 1 and exposed defect 2. This lane executes
+Route B from the T688 rebuild recipe (`rebuild-recipe.md`, in the
+worktree, 10,923 B): the deterministic fix — ONE linker-script edit
+teaching the 4.19 linker script the clang suffix globs — on the
+NON-LTO T686 config (`CONFIG_LTO_NONE=y`, clang 21). Non-LTO removes
+the ThinLTO suffixing that caused defect 2; the linker-script globs
+remove the orphaning that caused defect 1. Both defects are addressed
+by construction; the gates below prove it before any flight.
+
+Launch route: MAC via AGYX (ban lifted 2026-10-29, Mac only). The
+route was proven by T695 itself (launched 08:47 AEDT 2026-11-08, agent
+started, Steps 0–5 complete, findings filed) and by the trivial probe
+immediately before it (08:44 AEDT, PID 39696, completed in under 1
+minute). NOT opencode (5 consecutive never-starts T690–T694 under
+2.2.5 `--standalone --prompt --auto`) and NOT box opencode (box
+config defaults to the experimental qwen35-tpu endpoint). The build
+runs ON THE BOX (kernel source + NDK toolchain live there) driven over
+box SSH from the Mac worktree; the flight runs on Mac QEMU 11.1.2, the
+proven flight harness (T670–T695 flights; the T695 A/B control on Mac
+QEMU reached Freeing unused kernel memory at 26.321218 s and init
+first stage at 29.496160 s).
+
+Background (T688 root cause + T695 second defect, both
+driver-verified):
+- Defect 1 (T686/T688): Linux 4.19 `TEXT_TEXT` matches
+  `.text.unlikely` and `.text.hot` exactly. Clang 12+ emits
+  `.text.unlikely.` / `.text.hot.` (trailing dot), so LLD
+  orphan-places the cold sections into the freeable init range;
+  free_initmem zeroes them; `bl printk` executes `udf #0x0`; nested
+  die() self-deadlocks on die_lock. Canonical kernel (clang 11.0.1)
+  places printk 0xffffff8008216980 below _etext and boots.
+- Defect 2 (T695): Clang 21 ThinLTO suffixes `.initcall*.init`
+  sections (`.initcall6.init.<suffix>` etc.); LLD orphan-places all
+  713 of them into `.data`; `__initcall_start == __initcall_end`
+  (empty table); 0 initcalls run; kernel_init_freeable falls back to
+  prepare_namespace → mount_block_root → printk_all_partitions → Oops
+  (DABT reading VA 0x100) → 'Kernel panic - not syncing: Attempted to
+  kill init! exitcode=0x0000000b' at guest 0.113 s. Freeing unused
+  kernel memory + init first stage NOT reached; fb0 never registered.
+- Route B (this lane): keep the T686 config unchanged
+  (`CONFIG_LTO_NONE=y`, clang 21, DEVMEM/FB/FB_SIMPLE/
+  DRM_FBDEV_EMULATION=y) and apply the ONE linker-script edit below.
+  Non-LTO means no ThinLTO suffixing (defect 2 gone by construction);
+  the globs mean the cold sections land in .text (defect 1 gone by
+  construction).
+
+## Timeout discipline (standing rule, locked 2026-11-07)
+
+- Expected total time for this lane is 4–6 hours worst case (input
+  verify: minutes; rebuild: tens of minutes; gates: minutes; flight:
+  host cap 1200 s; A/B control: host cap 1200 s; findings: minutes).
+  Work steadily through the steps in order; do not pause between steps.
+- Heartbeat: after EACH step completes (pass or fail), immediately
+  append one line to `progress-t696.txt` in the workdir with the step
+  number, the result, and a UTC timestamp, and update the workdir
+  `heartbeat.json` file's timestamp. The driver monitors these files;
+  a lane whose log and progress files stay frozen past the timeout is
+  treated as wedged, killed, and certified FAIL without further warning.
+- If a step is blocked, file the FAIL findings for that step at once —
+  do not sit on a blocker silently.
+- Route note: agyx agents can historically take 10+ minutes to first
+  heartbeat. If NO progress file exists within 15 minutes of launch,
+  the driver treats the lane as never-started (wedge trigger launch +
+  3 h still applies).
+
+## Workdir and deliverables (Mac paths)
+
+- Worktree: /Users/Shared/wt-track696-routeb-rebuild-agyx (branch
+  t696, from the T695 commit a5b1393). All new work inside it, plus
+  /tmp scratch only.
+- Box workdir: /home/muse/t696-routeb-rebuild/ (create it; brief copy,
+  build log copy, gate outputs). The BUILD itself runs in the existing
+  T686 tree /home/muse/t686-kernel/src (see Step 2) — do NOT copy the
+  kernel source tree (box disk is tight, 8.9 GiB free at lane start).
+- Box SSH from the Mac: `ssh -i ~/.ssh/id_ed25519_remote
+  muse@100.104.140.2 '<cmd>'`. The box opencode config hazard does NOT
+  apply here — no box agent is launched; the Mac agyx agent drives the
+  box over plain SSH only.
+- Guest inputs (stage into the worktree `guest-inputs/` by hardlinking
+  (`ln`, same filesystem — the Mac disk is tight, do NOT copy) from
+  /Users/Shared/guest-inputs/, then re-verify every SHA yourself before
+  use; any mismatch = STOP and file FAIL naming the input wall, do not
+  guess). The driver synced these to /Users/Shared/guest-inputs/ at
+  staging and verified every SHA there:
+  - `guest-inputs/Image` — from /Users/Shared/guest-inputs/Image, SHA
+    05c4391767a6ff44f5124796b92d7b98027c37fbf58e81b342ca2adb7d99fa04
+    (23,073,280 B) — the canonical kernel, for the Step 5 A/B control.
+  - `guest-inputs/extracted_kernel.config` — from
+    /Users/Shared/guest-inputs/extracted_kernel.config, SHA
+    d840310a6579c6e4cd47e060c36fbe2a5905c9d969888758b0b04e1290994bd8
+    (133,733 B) — the canonical config, delta reference only.
+  - `guest-inputs/modified.dtb` — from
+    /Users/Shared/guest-inputs/modified.dtb, SHA
+    e83a6437908bead89bf8a062050639aa702d11c554397d2200bcf4104f6a7389
+    (1,920 B) — the T687 DTB, use unchanged in every flight.
+  - `guest-inputs/base-t683-fix.cpio.gz` — from
+    /Users/Shared/guest-inputs/base-t683-fix.cpio.gz, SHA
+    8fb3c9dea65b0e6fdd06a2fad92c5292d71d3429fdaf8d27568953384948dd70
+    (958,780,579 B) — the T683 fix initramfs, use unchanged.
+  - `guest-inputs/system.img` — from
+    /Users/Shared/guest-inputs/system.img, SHA
+    98fc0b02f5ae9788da0bf4f1a73d472df6d384080a1d323c5878d57a08c6433d
+    (2,059,816,960 B).
+  - `guest-inputs/android.hardware.graphics.composer@2.1-service` —
+    from /Users/Shared/guest-inputs/android.hardware.graphics.composer@2.1-service,
+    SHA ddc1e4dd01b91df543be1a83a065308662cf92ee6babd774f6eb014c4a59b132
+    (19,941,040 B), for reference only.
+  - `guest-inputs/routeA-Image` — from
+    /Users/Shared/guest-inputs/routeA-Image, SHA
+    11adf23681682ea302ecd5c3fd312b381dbaabd7f65b93543e9a72462df5e367
+    (20,384,256 B) — the T689 Route A kernel, reference only (its
+    symbol-gate PASS values are the comparison baseline; do NOT fly
+    it in this lane).
+  - `findings-t688.md` — in the worktree root (inherited from the git
+    tree), SHA 181a15807def6d9d2fd6f028b944342fc5578fc7043b5dcda9fc59bc599a1632
+    (23,120 B). Read it in full (root cause, reference symbol
+    addresses, rebuild recipe source). If the file is missing or its
+    SHA mismatches, STOP and file FAIL naming the input wall.
+  - `rebuild-recipe.md` — in the worktree root (inherited from the git
+    tree), SHA 63ace6451ef89e34315a9a93bd7333e31e3ea7e0fa9a3bec86b998201ca28f2b
+    (10,923 B). Read it in full. It is the source recipe for this
+    lane; Route B is its section "Route B — deterministic fix".
+  - `findings-t695.md` — in the worktree root (inherited from the git
+    tree), SHA 55a9ba0d31c7361df8573cf77e6eade544846b11b61c611f44799f6c639a2348
+    (20,939 B). Read it in full (the second defect, its evidence, and
+    the adjudication that names Route B as the next rebuild).
+  - The NEW Route B Image is built in Step 2 and staged as
+    `guest-inputs/routeB-Image` in Step 3 (SHA recorded there). It does
+    not exist at staging time — that is expected, not a missing input.
+- Toolchain (box, known present): NDK r29 at
+  /home/muse/t681-link/toolchain/android-ndk-r29 (clang 21.0.0, LLD
+  21.0.0, llvm-nm at
+  `toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-nm`); toolchain-bin
+  at /home/muse/t686-kernel/toolchain-bin (`as ->
+  /usr/bin/aarch64-linux-gnu-as` + aarch64-linux-gnu-* binutils
+  symlinks; required because 4.19 passes `-no-integrated-as`). Do NOT
+  use the NDK's Android-target clang wrapper; use generic NDK clang
+  with `--target=aarch64-linux-gnu`.
+- Flight QEMU (Mac): /opt/homebrew/bin/qemu-system-aarch64, QEMU
+  11.1.2 (proven flight harness, T670–T695). Record the QEMU version
+  string verbatim in the findings.
+- Supervisor: `scripts/supervisor_t696.py` in the worktree, adapted
+  from the T695 supervisor (`scripts/supervisor_t695.py`, in the
+  worktree): same machine shape (-machine virt,gic-version=2,
+  virtio-mmio-transports=1, -smp 4, same DTB/initramfs/system.img/
+  loader, INITRD_ADDR 0x110000000, fully detached setsid+nohup, stdin
+  /dev/null), with ONLY these changes: kernel =
+  guest-inputs/routeB-Image (SHA recorded in Step 3), drive id
+  t696system, the androidboot SHA tags updated to the T696 kernel
+  (t696_kernel_sha256= <routeB SHA>), host cap 1200 s, guest target
+  1200 s, a unique gdb port per flight, track/flight constants renamed
+  T695→T696. Record every adaptation in the findings.
+- Findings: /Users/Shared/wt-track696-routeb-rebuild-agyx/findings-t696.md
+- Outcome: /Users/Shared/wt-track696-routeb-rebuild-agyx/outcome-t696.txt
+  (single word PASS or FAIL, plus nothing else on the verdict line)
+- Death note: /Users/Shared/wt-track696-routeb-rebuild-agyx/DEATH_NOTE-T696.md
+- Progress: /Users/Shared/wt-track696-routeb-rebuild-agyx/progress-t696.txt
+  (one appended line per completed step, see Timeout discipline)
+- You do NOT push, commit, or touch any other worktree. The driver
+  handles all repo bookkeeping at certification. You do NOT delete
+  anything outside the worktree. When findings, outcome and death note
+  are written, your work is done — stop with a short plain-text summary
+  and no further tool calls. Do NOT start any second agent.
+
+## Steps
+
+### Step 0 — Disk gates (Mac + box)
+
+Mac: run `df -h /System/Volumes/Data`. Available space must be at
+least 8 GiB (staged flight inputs ~3.4 GiB plus flight outputs plus the
+20 MB Route B Image). Box: run `df -h /home/muse` over box SSH.
+Available space must be at least 5 GiB (the rebuild re-links in the
+existing T686 tree; no source-tree copy). If either is below, stop
+immediately (WAIT-DISK) and file Verdict FAIL naming the disk wall with
+both df readings. Record both readings in the findings. Do not build,
+copy, nor download anything on a failed gate.
+
+### Step 1 — Verify all inputs + read the T688/T695 records
+
+SHA-verify every staged input listed above (canonical Image + config
++ DTB + initramfs + system.img + ELF + routeA-Image + findings-t688.md
++ rebuild-recipe.md + findings-t695.md). Read findings-t688.md,
+rebuild-recipe.md and findings-t695.md in full. Any missing input or
+SHA mismatch = STOP and file Verdict FAIL naming the input wall. No
+network fetch in this step: every input is local (Mac guest-inputs/ or
+the worktree).
+
+Then verify the build base on the box (over SSH, no agent launch on
+the box): in /home/muse/t686-kernel/src, `git rev-parse HEAD` MUST
+print `4da740c10dc0f2de632686e8cc0274cfa52e67e4` (Linux 4.19.130) and
+`git status --porcelain` MUST be clean (no uncommitted changes from
+T686). Verify the build config: the tree's `.config` (or
+/home/muse/t686-kernel/out/.config if the T686 build used O=out) MUST
+carry `CONFIG_LTO_NONE=y`, `# CONFIG_LTO_CLANG is not set`,
+`CONFIG_DEVMEM=y`, `CONFIG_FB=y`, `CONFIG_FB_SIMPLE=y`,
+`CONFIG_DRM_FBDEV_EMULATION=y` and `CONFIG_UNUSED_KSYMS_WHITELIST=""`.
+If the config does not match, regenerate it from the canonical config
+(guest-inputs/extracted_kernel.config, SHA d840310a) plus the recorded
+T686 delta (/home/muse/t686-kernel/config-delta-t686.txt, and
+findings-t686.md in /home/muse/t686-kernel/), run `make olddefconfig`,
+and confirm the regenerated config SHA is
+502e79c3de81ccefb0bbcc54a82ba5d068b57d34657b1899374a43a6ba7d701e. Any
+deviation you cannot resolve from the recorded delta = STOP and file
+FAIL naming the config wall — do not invent config lines.
+
+### Step 2 — Apply Route B and rebuild (box, over SSH)
+
+Exactly ONE source edit, in /home/muse/t686-kernel/src/
+`include/asm-generic/vmlinux.lds.h`, in `TEXT_TEXT` (per
+rebuild-recipe.md Route B):
+
+```
+-		*(.text.hot TEXT_MAIN .text.fixup .text.unlikely)	\
+-		*(.text..refcount)					\
+-		*(.ref.text)						\
++		*(.text.hot .text.hot.* TEXT_MAIN .text.fixup)		\
++		*(.text.unlikely .text.unlikely.*)			\
++		*(.text.unknown .text.unknown.*)			\
++		*(.text..refcount)					\
++		*(.ref.text .ref.text.*)				\
+```
+
+Why each pattern: `.text.unlikely.*` matches clang's
+`.text.unlikely.` and `.text.unlikely.<function>` (the actual T686
+orphan); `.text.hot.*` matches `.text.hot.` (same LLVM change, hot
+half); `.text.unknown.*` covers clang's unknown-profile bucket;
+`.ref.text.*` future-proofs `__ref` against suffixing. The old exact
+names stay, so older compilers keep working. Do NOT edit the arm64
+`vmlinux.lds.S`; `TEXT_TEXT` is the shared macro it expands. Record
+the exact `git diff` of this edit in the findings (it must show ONLY
+this file, ONLY these lines).
+
+Build with the exact T686 command (from the box, in
+/home/muse/t686-kernel/src, log to
+/home/muse/t696-routeb-rebuild/build.log, run DETACHED with
+setsid+nohup so an agent death cannot kill the build, then poll the
+log — do not block the agent session on the build):
+
+```
+make -j5 ARCH=arm64 \
+  CROSS_COMPILE=/home/muse/t686-kernel/toolchain-bin/aarch64-linux-gnu- \
+  CLANG_TRIPLE=aarch64-linux-gnu- \
+  CC=clang LD=ld.lld AR=llvm-ar NM=llvm-nm \
+  OBJCOPY=llvm-objcopy OBJDUMP=llvm-objdump STRIP=llvm-strip \
+  HOSTCC=gcc HOSTCXX=g++ \
+  KCFLAGS="-fno-builtin-sprintf" \
+  Image
+```
+
+`KCFLAGS="-fno-builtin-sprintf"` is mandatory: clang 21 rewrites
+`sprintf(p,"%s",...)` in `tty_io.c` to `stpcpy`, which 4.19 does not
+provide. Do not remove it. The NDK clang/LLD binaries come from
+/home/muse/t681-link/toolchain/android-ndk-r29 — put its
+`toolchains/llvm/prebuilt/linux-x86_64/bin` first on PATH for the build
+(the T686 build-clang.sh in /home/muse/t686-kernel/ shows the exact
+PATH setup; read it and follow it, do not improvise).
+
+- If the build exits non-zero: do NOT debug the compiler at length.
+  Record the last 50 lines of build.log verbatim in the findings, file
+  Verdict FAIL naming the build wall, and stop. (Route C — canonical
+  clang 11 — is the NEXT lane's job, never this lane's.)
+- If the build exits 0: record the new Image SHA-256 and size, the
+  vmlinux SHA-256, and the version string. Copy ONLY the built Image
+  (arch/arm64/boot/Image, ~20 MB) to the Mac worktree as
+  guest-inputs/routeB-Image (scp over the Mac↔box SSH; the vmlinux
+  stays on the box at /home/muse/t686-kernel/src/vmlinux — do NOT copy
+  the 307 MB vmlinux to the Mac). SHA-verify the copied Image on the
+  Mac against the box SHA before any gate or flight.
+
+### Step 3 — Pre-boot gates (mandatory, before ANY flight)
+
+Run BOTH gates on the box via SSH (NDK llvm-nm / llvm-readelf on
+/home/muse/t686-kernel/src/vmlinux). Record every address verbatim.
+
+Gate 3a — symbol gate (T688 defect must be gone):
+
+```
+llvm-nm vmlinux | grep -E ' (printk|__die|panic|dump_stack|show_regs|_etext|__init_begin|__init_end|free_initmem)$'
+```
+
+Required: every one of printk, __die, panic, dump_stack, show_regs
+has an address STRICTLY below _etext (and therefore below
+__init_begin). Reference values: Route A (PASS) printk
+0xffffff800811a4c4, __die 0xffffff8008096bbc, panic
+0xffffff80080b7770, dump_stack 0xffffff8008b41a64, show_regs
+0xffffff800808ec28, _etext 0xffffff8008b70000; T686 (FAIL) had all
+five at 0xffffff800923xxxx inside init; canonical printk
+0xffffff8008216980 below _etext.
+
+Gate 3b — initcall-table gate (T695 defect must be gone; NEW, this
+lane's decisive gate):
+
+```
+llvm-nm vmlinux | grep -E ' (__initcall_start|__initcall_end)$'
+llvm-readelf -S vmlinux | grep -c '\.initcall.*\.init\.'
+llvm-readelf -S vmlinux | grep '\.initcall' | head -20
+```
+
+Required: `__initcall_start < __initcall_end` with a POPULATED table
+(T686 contrast: start 0xffffff800924ab48, end 0xffffff800924b65c,
+2,836 B populated; Route A FAIL: start == end ==
+0xffffff8009293c48, empty). Required: the count of suffixed
+`.initcall*.init.<suffix>` sections orphaned into `.data` is ZERO
+(Route A had 713). A table of a few hundred bytes or more with zero
+orphaned suffixed sections = PASS. An empty table (start == end) or
+any orphaned suffixed initcall section = FAIL.
+
+- If EITHER gate fails: file Verdict FAIL with the exact addresses /
+  counts, do NOT fly, do NOT rebuild again in this lane (Route C is
+  the next lane's job). Record which gate failed and the exact values.
+- If BOTH gates pass: proceed to Step 4.
+
+### Step 4 — Flight on the Mac QEMU (only if both gates pass)
+
+Flight shape: the T695 supervisor shape adapted for this lane (see
+Workdir section), kernel = guest-inputs/routeB-Image, DTB =
+modified.dtb (e83a6437…), initramfs = base-t683-fix.cpio.gz
+(8fb3c9de…), system.img = system.img (98fc0b02…), host cap 1200 s,
+guest target 1200 s, fully detached. Do NOT modify the DTB, initramfs,
+system image, or Composer ELF.
+Passing result, in order:
+1. `Freeing unused kernel memory: ...` appears (T686 never reaches
+   it; T695 never reaches it).
+2. `init: init first stage started!` (T686/T695 never reach it), then
+   second stage/services.
+3. No `uart-pl011 ... no DMA platform data`-then-silence hang; no
+   udf/Oops/panic/die_lock spin; and specifically NO 'Kernel panic -
+   not syncing: Attempted to kill init!' (the T695 signature — its
+   reappearance means the initcall table is still empty despite the
+   gate, record it exactly).
+4. `simple-framebuffer ... fb0: simplefb registered!` still appears
+   (the framebuffer half of T686 must not regress).
+Record the UART SHA-256, line count, guest seconds at each marker, and
+the flight-end record. If the new kernel hangs at ~25 s like T686 or
+panics at ~0.1 s like T695, the route has FAILED — record exactly what
+differs from the gate prediction and file Verdict FAIL. Do NOT re-fly
+a gate-failed Image (Step 3 already forbids it).
+
+### Step 5 — A/B control
+
+Boot the CANONICAL kernel Image (05c43917…) with the SAME modified.dtb,
+initramfs, system.img, machine shape and supervisor on the Mac QEMU
+11.1.2. It must reach `Freeing unused kernel memory` and `init: init
+first stage started!`. Run it BEFORE the Step 4 flight if the harness
+is unproven in this lane — if it does NOT boot, the harness is
+unproven — STOP and file FAIL naming the harness wall, do not fly the
+new kernel on an unproven harness. (T695's A/B control on the Mac QEMU
+reached Freeing unused kernel memory at 26.321218 s and init first
+stage at 29.496160 s; this control re-proves the harness on this Mac.)
+
+### Step 6 — Adjudicate
+
+- Symbol gate (3a): name the verdict (PASS/FAIL) with the five
+  addresses + _etext + __init_begin + __init_end verbatim.
+- Initcall-table gate (3b): name the verdict (PASS/FAIL) with
+  __initcall_start / __initcall_end verbatim, the table size, and the
+  orphaned-suffixed-section count (must be 0).
+- First failing link of the T686 kernel: restate it in one line (cold
+  .text.unlikely. orphaned into init range → free_initmem zeroes it →
+  bl printk executes udf #0x0 → nested die() self-deadlocks on
+  die_lock), and state whether the Route B Image removes it, with the
+  gate + flight evidence.
+- Second failing link (T695): restate it in one line (ThinLTO
+  suffixes .initcall sections → LLD orphans 713 into .data → empty
+  initcall table → 0 initcalls → panic 'Attempted to kill init!' at
+  0.113 s), and state whether the Route B Image removes it, with the
+  gate + flight evidence.
+- sys.boot_completed: explicitly state the observed value. The 1200 s
+  guest window is not expected to reach a completed Android boot;
+  record the T642_BOOT_STATE lines if present, and state plainly that
+  no `sys.boot_completed=1` was observed if so. State explicitly that
+  `Freeing unused kernel memory` and `init first stage` were or were
+  not observed, with guest seconds.
+- No frame-commit claim: this lane proves the kernel reaches userspace
+  with fb0 registered. A frame commit by guest-origin evidence is the
+  NEXT lane's job — do not claim it here.
+- TEN-PASSES: NOT run in this lane (one flight + A/B control only) —
+  record this honestly; no 10/10 claim.
+- Regressions: T664–T695 fixes must not regress; state the regression
+  check explicitly (DTB, initramfs, system image, Composer ELF
+  untouched and re-verified; simplefb still binds; Route A reference
+  values recorded, not flown).
+
+## Done criteria
+
+- Step 0 disk gates (Mac + box) observed and recorded, or a FAIL
+  naming the disk wall.
+- Step 1 input SHAs all verified (including findings-t688.md,
+  rebuild-recipe.md, findings-t695.md), build-base HEAD =
+  4da740c10dc0, tree clean, config verified (or regenerated to SHA
+  502e79c3…), or a FAIL naming the input/config wall.
+- Step 2 Route B edit applied (git diff shows ONLY
+  include/asm-generic/vmlinux.lds.h, ONLY the recipe lines) and the
+  build exited 0, with the new Image + vmlinux SHAs recorded and the
+  Image copied to the Mac and SHA-verified there — or a FAIL naming
+  the build wall with the last 50 build-log lines.
+- Step 3 BOTH gates passed with all addresses / table size / orphan
+  count recorded verbatim, or a FAIL naming the exact failed gate with
+  its values. No flight of a gate-failed Image, ever.
+- Step 4 flight passed on the Route B kernel (Freeing unused kernel
+  memory + init first stage + fb0: simplefb registered!, no hang/udf/
+  Oops/panic, no T695 panic signature), or a FAIL naming the exact
+  first failing link.
+- Step 5 A/B control passed on the same Mac QEMU, or a FAIL naming the
+  harness wall.
+- Verdict PASS requires ALL of: inputs verified, Route B build exit 0,
+  both gates passed, flight passing, A/B control passing on the same
+  Mac QEMU. Anything less is an honest Verdict FAIL naming the exact
+  first failing link with its evidence lines. TEN-PASSES is NOT
+  required in this lane — record it as not-run, no 10/10 claim.
+- No DTB/initramfs/system.img/ELF modification in this lane. No second
+  rebuild in this lane. Route C is the next lane's job, never this
+  lane's.
+- Write the verdict line literally as `Verdict: PASS` or `Verdict:
+  FAIL`, with no markdown bold or other markup on that line, so the
+  driver's gate check reads it exactly.
+- Findings carry a `sys.boot_completed` line stating the observed value
+  explicitly (1, 0, or not observed, with the cycle it was observed in).
+- Findings carry a `WALL-TYPE-TAG:` line (guest type-1 on FAIL, or
+  `none — Route B kernel rebuilt and flown` on PASS) and a
+  `Rust par bhi lagu:` line (haan — the same guest kernel is required
+  regardless of implementation language).
+- Findings carry explicit `Freeing unused kernel memory` and
+  `init first stage` lines stating whether each marker was observed
+  (with guest seconds) or not observed.
+- Findings carry the Route B `git diff` (only the linker-script edit)
+  and both gate outputs verbatim.
+- Every register value, PC, address, and SHA the findings cite MUST
+  appear in a preserved file — no uncited values (T687/T688 variance).
+- Progress heartbeat kept: progress-t696.txt has one line per completed
+  step and heartbeat.json is refreshed per step.
+- Findings, outcome and death note all written in the worktree before
+  the lane ends. No push, no commit, no second agent.
+
+## Standing evidentiary rules
+
+- TEN-PASSES: reproducibility = 10 consecutive passes before any "reproducible" claim.
+- GUEST-MARKER-ONLY: boot markers count only when printed by the guest process, never the harness.
+- NO-MISSING-INPUTS: missing inputs = hard gate, not a guess.
+- GUEST-CONSUMES-ARTIFACT: injection tracks must prove the guest actually consumes the artifact.
+- QEMU-REGRESSION-VECTORS: decoder/emulator work needs QEMU-matched regression vectors per class.
+- INITRAMFS-DECISION: the T679 vendor.img CPIO-member install route is executed in this lane if a vendor-side fix is built.
+- DEATH-NOTE: every lane ends with findings or a death certificate — no unclosed lanes.
+- FINDINGS-OR-AUTO-FAIL: no verdict is accepted without its findings file on disk.
+- RECONSTRUCTED-TAG: a findings file reconstructed by the reviewer must carry an explicit "reconstructed by reviewer" tag with date.
+- WALL-TYPE-TAG: every wall is tagged guest / WASM / engine; only type-1 (guest) walls are shared with Rust, and every type-1 fix records "Rust par bhi lagu: haan/nahi".
+- DISPLAY-SCAFFOLD: display lanes prove frame commit by guest-origin evidence only; snapshot byte differences are never frame-commit proof.
+- CHAIN-B-CAP-RULE: Chain B lanes cap the boot at the agreed step count.
+
+## Wedge guard (T690 + T691 + T692 + T693 + T694 + T695 lessons)
+- T690 executed Step 0, then made NO tool call for 3h02m while its interface repainted (~44 MB/min of ANSI churn, 8.3 GB total, box disk to 100%). It was killed and certified FAIL.
+- T691 never started at all: zero tool calls in 3h02m, log frozen at 26,080 B since launch ("New session" spinner). It was killed and certified FAIL.
+- T692 never started at all: zero tool calls in 2h31m, log frozen at 27,512 B since launch ("New session" spinner), then the agent exited on its own ~01:50 AEDT with no findings. It was certified FAIL. The hardened launch (TERM=dumb + CI=true) did NOT fix the never-start on the box.
+- T693 never started at all on the MAC: zero tool calls in 3h03m, log frozen at 62,057 B since launch ("New session" spinner). It was killed and certified FAIL.
+- T694 never started at all on the MAC: zero tool calls in ~3h10m, log frozen at 20,875 B since launch (TUI welcome screen). It was killed and certified FAIL. The diagnosis lane itself never started.
+- All five ran opencode 2.2.5 `--standalone --prompt --auto`. This lane runs on AGYX (Mac only, ban lifted 2026-10-29) — T695 started and completed on AGYX, and the route probe for T695 completed in under 1 minute.
+- The agyx nohup log stays 0 B while the agent works — the driver judges this lane by progress files + PID, never by the log. Keep progress-t696.txt and heartbeat.json fresh after every step.
+- After EVERY step, immediately append the progress line to progress-t696.txt and refresh heartbeat.json. Never go more than 10 minutes without a tool call while work remains.
+- If a tool call fails twice, or you cannot proceed for any reason, write the FAIL findings at once and exit — never sit idle in the interface.
+- If the interface shows any usage, quota, limit, or billing dialog, record its exact text in the findings and exit — do not wait for it to clear.
