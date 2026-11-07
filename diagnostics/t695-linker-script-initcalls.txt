@@ -1,0 +1,30 @@
+#define INIT_CALLS_LEVEL(level)						\
+		__initcall##level##_start = .;				\
+		KEEP(*(.initcall##level##.init))			\
+		KEEP(*(.initcall##level##s.init))			\
+
+#define INIT_CALLS							\
+		__initcall_start = .;					\
+		KEEP(*(.initcallearly.init))				\
+		INIT_CALLS_LEVEL(0)					\
+		INIT_CALLS_LEVEL(1)					\
+		INIT_CALLS_LEVEL(2)					\
+		INIT_CALLS_LEVEL(3)					\
+		INIT_CALLS_LEVEL(4)					\
+		INIT_CALLS_LEVEL(5)					\
+		INIT_CALLS_LEVEL(rootfs)				\
+		INIT_CALLS_LEVEL(6)					\
+		INIT_CALLS_LEVEL(7)					\
+		__initcall_end = .;
+
+#define CON_INITCALL							\
+		__con_initcall_start = .;				\
+		KEEP(*(.con_initcall.init))				\
+		__con_initcall_end = .;
+
+#define SECURITY_INITCALL						\
+		__security_initcall_start = .;				\
+		KEEP(*(.security_initcall.init))			\
+		__security_initcall_end = .;
+
+#ifdef CONFIG_BLK_DEV_INITRD

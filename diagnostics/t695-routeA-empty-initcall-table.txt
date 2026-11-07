@@ -1,0 +1,26 @@
+=== Route A vmlinux (__initcall table is EMPTY at 0xffffff8009293c48) ===
+ffffff8009293c48 D __initcall0_start
+ffffff8009293c48 D __initcall1_start
+ffffff8009293c48 D __initcall2_start
+ffffff8009293c48 D __initcall3_start
+ffffff8009293c48 D __initcall4_start
+ffffff8009293c48 D __initcall5_start
+ffffff8009293c48 D __initcall6_start
+ffffff8009293c48 D __initcall7_start
+ffffff8009293c48 D __initcall_end
+ffffff8009293c48 D __initcall_start
+ffffff8009293c48 D __initcallrootfs_start
+
+=== T686 vmlinux (non-LTO, populated __initcall table spanning 0xffffff800924ab48 to 0xffffff800924b65c) ===
+ffffff800924ab9c D __initcall0_start
+ffffff800924abac D __initcall1_start
+ffffff800924ac80 D __initcall2_start
+ffffff800924acec D __initcall3_start
+ffffff800924ad20 D __initcall4_start
+ffffff800924ae98 D __initcall5_start
+ffffff800924af48 D __initcall6_start
+ffffff800924b5dc D __initcall7_start
+ffffff800924b65c D __initcall_end
+ffffff800924ab48 D __initcall_start
+ffffff800924b010 d __initcall_start_dirtytime_writeback6
+ffffff800924af44 D __initcallrootfs_start

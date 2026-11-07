@@ -1,0 +1,309 @@
+# Track T695 — Re-flight on the Route A Image (Mac, agyx route)
+
+## Mission
+
+Successor to driver-certified T694 honest FAIL. The Route A kernel
+(T689 build, config-only LTO restore per the T688 rebuild recipe) is
+now SYMBOL-GATED PASS — the driver ran the mandatory pre-boot symbol
+gate at T692 certification (NDK r29 llvm-nm on the Route A vmlinux,
+2026-11-08 ~02:00 AEDT): printk 0xffffff800811a4c4, __die
+0xffffff8008096bbc, panic 0xffffff80080b7770, dump_stack
+0xffffff8008b41a64, show_regs 0xffffff800808ec28 — all STRICTLY below
+_etext 0xffffff8008b70000 and __init_begin 0xffffff80091c0000 (init
+range [0xffffff80091c0000, 0xffffff80092b0000)). Route A FIXED the T688
+defect (T686 had all five inside init at 0xffffff800923xxxx; canonical
+printk 0xffffff8008216980 below _etext). This lane does NOT rebuild the
+kernel. It confirms the gate on the Mac-synced Image and, only if the
+gate confirms, re-flies the Route A kernel on the Mac QEMU.
+
+Launch route changed on evidence: NOT opencode, NOT the box. FIVE
+consecutive opencode lanes never started (T690 TUI loop, T691/T692 box,
+T693/T694 Mac, all zero tool calls under opencode 2.2.5
+`--standalone --prompt --auto`), and the T694 diagnosis lane itself
+never started — the opencode launch path is broken cross-host. The
+T694 driver ran the launcher comparison at certification: the T688 /
+T693 / T694 launcher files are the IDENTICAL invocation shape, so the
+launcher file is excluded as the variable; the serve child DID spawn,
+so the failure is downstream of process spawn. The box opencode config
+now defaults to the experimental qwen35-tpu endpoint
+(~/.config/opencode/opencode.json, written 2026-11-08 01:55 AEDT).
+This lane runs on the MAC via AGYX — the route was PROVEN minutes
+before launch by a trivial probe (2026-11-08 08:44 AEDT, PID 39696:
+progress-probe.txt + findings-probe.md written in under 1 minute,
+agent exited cleanly). AgYX ban was lifted 2026-10-29 (Mac only).
+Flight runs on Mac QEMU 11.1.2, the proven flight harness (T670–T688
+flights; the T688 A/B control on Mac QEMU reached Freeing unused
+kernel memory at 26.095196 s and init first stage at 29.207838 s).
+
+Background (T688 root cause, driver-verified):
+- The T686 Image (clang 21.0.0 / LLD 21.0.0) placed its cold functions
+  inside the freeable init range [__init_begin 0xffffff8009170000,
+  __init_end 0xffffff8009270000). free_initmem() passes that range with
+  poison w2=0 to free_reserved_area(), which memsets every page; the
+  `bl printk` at free_reserved_area+420 (0xffffff80081ec4b8) then
+  executes `udf #0x0` at printk+0. The undefined-instruction exception
+  enters die(), takes die_lock (0xffffff80093b514c, value 0x101), calls
+  __die() — also zeroed — faults again, and the second die() spins
+  forever on the same die_lock. Only CPU0 is online, so this is a
+  re-entrant self-deadlock.
+- Compiler-side cause: Linux 4.19 TEXT_TEXT matches `.text.unlikely`
+  exactly; clang 12+ emits `.text.unlikely.` with a trailing dot, so
+  LLD orphan-places the section into the init range. The canonical
+  kernel (clang 11.0.1) places printk 0xffffff8008216980 below _etext
+  and boots to userspace in the A/B control.
+- Route A (T689, already built) restores the canonical LTO trio
+  (CONFIG_LTO=y, CONFIG_THINLTO=y, CONFIG_LTO_CLANG=y) in the hope the
+  LTO layout moves the cold functions back below _etext. Full hardening
+  parity was NOT applied (CFI/SHADOW_CALL_STACK still unset) — record
+  that, do not change it in this lane. The driver-run gate above shows
+  the layout DID move back below _etext. This lane proves the flight.
+
+## Timeout discipline (standing rule, locked 2026-11-07)
+
+- Expected total time for this lane is 3–4 hours worst case (input
+  verify: minutes; gate confirm: minutes; A/B control: host cap 1200 s;
+  flight: host cap 1200 s; findings: minutes). Work steadily through
+  the steps in order; do not pause between steps.
+- Heartbeat: after EACH step completes (pass or fail), immediately append
+  one line to `progress-t695.txt` in the workdir with the step number,
+  the result, and a UTC timestamp, and update the workdir `heartbeat.json`
+  file's timestamp. The driver monitors these files; a lane whose log and
+  progress files stay frozen past the timeout is treated as wedged, killed,
+  and certified FAIL without further warning.
+- If a step is blocked, file the FAIL findings for that step at once — do
+  not sit on a blocker silently.
+- Route note: agyx agents can historically take 10+ minutes to first
+  heartbeat, but the route probe for this lane completed in under 1
+  minute. If NO progress file exists within 15 minutes of launch, the
+  driver treats the lane as never-started (wedge trigger launch + 3h
+  still applies).
+
+## Workdir and deliverables (Mac paths)
+
+- Worktree: /Users/Shared/wt-track695-reflight-routea-agyx (branch t695,
+  from the T694 commit e3e71ec). All new work inside it, plus /tmp
+  scratch only.
+- Guest inputs (stage into the worktree `guest-inputs/` by hardlinking
+  (`ln`, same filesystem — the Mac disk is tight, do NOT copy) from
+  /Users/Shared/guest-inputs/, then re-verify every SHA yourself before
+  use; any mismatch = STOP and file FAIL naming the input wall, do not
+  guess). The driver synced these to /Users/Shared/guest-inputs/ at
+  staging and verified every SHA there:
+  - `guest-inputs/routeA-Image` — from /Users/Shared/guest-inputs/routeA-Image, SHA
+    11adf23681682ea302ecd5c3fd312b381dbaabd7f65b93543e9a72462df5e367
+    (20,384,256 B) — the T689 Route A kernel, the subject of this lane.
+  - `guest-inputs/Image` — from /Users/Shared/guest-inputs/Image, SHA
+    05c4391767a6ff44f5124796b92d7b98027c37fbf58e81b342ca2adb7d99fa04
+    (23,073,280 B) — the canonical kernel, for the Step 4 A/B control.
+  - `guest-inputs/extracted_kernel.config` — from /Users/Shared/guest-inputs/extracted_kernel.config, SHA
+    d840310a6579c6e4cd47e060c36fbe2a5905c9d969888758b0b04e1290994bd8
+    (133,733 B) — the canonical config, delta reference only.
+  - `guest-inputs/modified.dtb` — from /Users/Shared/guest-inputs/modified.dtb, SHA
+    e83a6437908bead89bf8a062050639aa702d11c554397d2200bcf4104f6a7389
+    (1,920 B) — the T687 DTB, use unchanged in every flight.
+  - `guest-inputs/base-t683-fix.cpio.gz` — from /Users/Shared/guest-inputs/base-t683-fix.cpio.gz, SHA
+    8fb3c9dea65b0e6fdd06a2fad92c5292d71d3429fdaf8d27568953384948dd70
+    (958,780,579 B) — the T683 fix initramfs, use unchanged.
+  - `guest-inputs/system.img` — from /Users/Shared/guest-inputs/system.img, SHA
+    98fc0b02f5ae9788da0bf4f1a73d472df6d384080a1d323c5878d57a08c6433d
+    (2,059,816,960 B).
+  - `guest-inputs/android.hardware.graphics.composer@2.1-service` —
+    from /Users/Shared/guest-inputs/android.hardware.graphics.composer@2.1-service,
+    SHA ddc1e4dd01b91df543be1a83a065308662cf92ee6babd774f6eb014c4a59b132
+    (19,941,040 B), for reference only.
+  - `findings-t688.md` — in the worktree root (inherited from the git
+    tree), SHA 181a15807def6d9d2fd6f028b944342fc5578fc7043b5dcda9fc59bc599a1632
+    (23,120 B). Read it in full (it holds the root cause, the
+    reference symbol addresses, and the rebuild recipe). If the file is
+    missing or its SHA mismatches, STOP and file FAIL naming the input
+    wall.
+- Flight QEMU (Mac): /opt/homebrew/bin/qemu-system-aarch64, QEMU 11.1.2
+  (proven flight harness, T670–T688). Record the QEMU version string
+  verbatim in the findings.
+- Supervisor: `scripts/supervisor_t695.py` in the worktree, adapted from
+  the T687 supervisor
+  (`scripts/supervisor_t687.py`, in the worktree): same machine shape
+  (-machine virt,gic-version=2,virtio-mmio-transports=1, -smp 4, same
+  DTB/initramfs/system.img/loader, INITRD_ADDR 0x110000000, fully
+  detached setsid+nohup, stdin /dev/null), with ONLY these changes:
+  kernel = guest-inputs/routeA-Image (SHA 11adf236), drive id t695system,
+  the androidboot SHA tags updated to the T695 kernel (t695_kernel_sha256=
+  11adf236…), host cap 1200 s, guest target 1200 s, a unique gdb port per
+  flight, track/flight constants renamed T687→T695. Record every
+  adaptation in the findings.
+- Findings: /Users/Shared/wt-track695-reflight-routea-agyx/findings-t695.md
+- Outcome: /Users/Shared/wt-track695-reflight-routea-agyx/outcome-t695.txt (single
+  word PASS or FAIL, plus nothing else on the verdict line)
+- Death note: /Users/Shared/wt-track695-reflight-routea-agyx/DEATH_NOTE-T695.md
+- Progress: /Users/Shared/wt-track695-reflight-routea-agyx/progress-t695.txt (one
+  appended line per completed step, see Timeout discipline)
+- You do NOT push, commit, or touch any other worktree. The driver handles
+  all repo bookkeeping at certification. You do NOT delete anything
+  outside the worktree. When findings, outcome and death note are written,
+  your work is done — stop with a short plain-text summary and no further
+  tool calls. Do NOT start any second agent.
+
+## Steps
+
+### Step 0 — Mac disk gate
+
+Run `df -h /System/Volumes/Data`. Available space must be at least 8 GiB
+(staged flight inputs ~3.4 GiB plus flight outputs). If below, stop
+immediately (WAIT-DISK) and file Verdict FAIL naming the disk wall with
+the df reading. Record the reading in the findings. Do not build, copy,
+nor download anything on a failed gate.
+
+### Step 1 — Verify all inputs + read the T688 record
+
+SHA-verify every staged input listed above (Route A Image + canonical
+Image + config + DTB + initramfs + system.img + ELF + findings-t688.md).
+Read findings-t688.md and rebuild-recipe.md (in the worktree) in
+full. Any missing input or SHA mismatch = STOP and file Verdict FAIL
+naming the input wall. No network fetch in this step: every input is
+local (Mac guest-inputs/ or the worktree).
+
+### Step 2 — Confirm the pre-boot symbol gate (mandatory, before ANY flight)
+
+The driver already ran this gate at T692 certification and it PASSED
+(addresses in the Mission section). Confirm it yourself, two ways:
+(a) SHA-verify the staged guest-inputs/routeA-Image = 11adf236 (proves
+the flown Image is the gated one); (b) re-run llvm-nm on the Route A
+vmlinux via the Mac's box SSH
+(`ssh -i ~/.ssh/id_ed25519_remote muse@100.104.140.2
+'/home/muse/t681-link/toolchain/android-ndk-r29/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-nm
+/home/muse/t689-rebuild/src/vmlinux | grep -E " (printk|__die|panic|dump_stack|show_regs|_etext|__init_begin|__init_end|free_initmem)$"'`)
+and record the five addresses + _etext + __init_begin + __init_end
+verbatim, confirming they match the driver-run values (printk
+0xffffff800811a4c4, __die 0xffffff8008096bbc, panic 0xffffff80080b7770,
+dump_stack 0xffffff8008b41a64, show_regs 0xffffff800808ec28, _etext
+0xffffff8008b70000, __init_begin 0xffffff80091c0000, __init_end
+0xffffff80092b0000). If the box SSH is unreachable, the SHA check (a)
+plus the driver-run record suffices — record the fallback honestly, do
+not guess addresses.
+- If ALL five are below _etext, the gate CONFIRMS — proceed to Step 3.
+- If ANY is >= __init_begin, the gate FAILS: file Verdict FAIL with the
+  exact addresses, do NOT fly, do NOT start a Route B rebuild in this
+  lane (Route B is the next lane's job). Record which symbols are inside
+  and their exact addresses.
+
+### Step 3 — Re-flight on the Mac QEMU (only if the symbol gate confirms)
+
+Flight shape: the T687 supervisor shape adapted for this lane (see
+Workdir section), kernel = guest-inputs/routeA-Image, DTB =
+modified.dtb (e83a6437…), initramfs = base-t683-fix.cpio.gz
+(8fb3c9de…), system.img = system.img (98fc0b02…), host cap 1200 s,
+guest target 1200 s, fully detached. Do NOT modify the DTB, initramfs,
+system image, or Composer ELF.
+Passing result, in order:
+1. `Freeing unused kernel memory: ...` appears (T686 never reaches it).
+2. `init: init first stage started!` (T686 never reaches it), then
+   second stage/services.
+3. No `uart-pl011 ... no DMA platform data`-then-silence hang; no
+   udf/Oops/panic/die_lock spin.
+4. `simple-framebuffer ... fb0: simplefb registered!` still appears
+   (the framebuffer half of T686 must not regress).
+Record the UART SHA-256, line count, guest seconds at each marker, and
+the flight-end record. If the new kernel hangs at ~25 s like T686, the
+route has FAILED — record exactly what differs from the symbol gate
+prediction and file Verdict FAIL. Do NOT re-fly a symbol-gate-failed
+Image (Step 2 already forbids it).
+
+### Step 4 — A/B control
+
+Boot the CANONICAL kernel Image (05c43917…) with the SAME modified.dtb,
+initramfs, system.img, machine shape and supervisor on the Mac QEMU
+11.1.2. It must reach `Freeing unused kernel memory` and `init: init
+first stage started!`. Run it BEFORE the Step 3 flight if the harness is
+unproven in this lane — if it does NOT boot, the box harness is unproven
+— STOP and file FAIL naming the harness wall, do not fly the new kernel
+on an unproven harness. (T688's A/B control on the Mac QEMU reached
+Freeing unused kernel memory at 26.095196 s and init first stage at
+29.207838 s; this control re-proves the harness on this Mac.)
+
+### Step 5 — Adjudicate
+
+- Symbol gate: name the verdict (PASS/FAIL) with the five addresses +
+  _etext + __init_begin + __init_end verbatim.
+- First failing link of the T686 kernel: restate it in one line (cold
+  .text.unlikely. orphaned into init range → free_initmem zeroes it →
+  bl printk executes udf #0x0 → nested die() self-deadlocks on
+  die_lock), and state whether the Route A Image removes it, with the
+  gate + flight evidence.
+- sys.boot_completed: explicitly state the observed value. The 1200 s
+  guest window is not expected to reach a completed Android boot;
+  record the T642_BOOT_STATE lines if present, and state plainly that
+  no `sys.boot_completed=1` was observed if so. State explicitly that
+  `Freeing unused kernel memory` and `init first stage` were or were not
+  observed, with guest seconds.
+- No frame-commit claim: this lane proves the kernel reaches userspace
+  with fb0 registered. A frame commit by guest-origin evidence is the
+  NEXT lane's job — do not claim it here.
+- TEN-PASSES: NOT run in this lane (one flight + A/B control only) —
+  record this honestly; no 10/10 claim.
+- Regressions: T664–T694 fixes must not regress; state the regression
+  check explicitly (DTB, initramfs, system image, Composer ELF
+  untouched and re-verified; simplefb still binds).
+
+## Done criteria
+
+- Step 0 disk gate observed and recorded, or a FAIL naming the disk wall.
+- Step 1 input SHAs all verified (including findings-t688.md), or a FAIL naming the input wall.
+- Step 2 symbol gate confirmed with all five addresses + _etext +
+  __init_begin + __init_end recorded verbatim, or a FAIL naming the
+  gate wall with the exact inside-init addresses. No flight of a
+  symbol-gate-failed Image, ever.
+- Step 3 re-flight passed on the Route A kernel (Freeing unused kernel
+  memory + init first stage + fb0: simplefb registered!, no hang/udf/
+  Oops/panic), or a FAIL naming the exact first failing link.
+- Step 4 A/B control passed on the same Mac QEMU, or a FAIL naming the harness wall.
+- Verdict PASS requires ALL of: inputs verified, symbol gate confirmed
+  (all five below _etext), re-flight passing, A/B control passing on
+  the same Mac QEMU. Anything less is an honest Verdict FAIL naming
+  the exact first failing link with its evidence lines. TEN-PASSES is
+  NOT required in this lane — record it as not-run, no 10/10 claim.
+- No kernel rebuild, no DTB/initramfs/system.img/ELF modification in
+  this lane. Route B is the next lane's job, never this lane's.
+- Write the verdict line literally as `Verdict: PASS` or `Verdict:
+  FAIL`, with no markdown bold or other markup on that line, so the
+  driver's gate check reads it exactly.
+- Findings carry a `sys.boot_completed` line stating the observed value
+  explicitly (1, 0, or not observed, with the cycle it was observed in).
+- Findings carry a `WALL-TYPE-TAG:` line (guest type-1 on FAIL, or
+  `none — Route A kernel re-flown` on PASS) and a
+  `Rust par bhi lagu:` line (haan — the same guest kernel is required
+  regardless of implementation language).
+- Findings carry explicit `Freeing unused kernel memory` and
+  `init first stage` lines stating whether each marker was observed
+  (with guest seconds) or not observed.
+- Every register value, PC, address, and SHA the findings cite MUST
+  appear in a preserved file — no uncited values (T687/T688 variance).
+- Progress heartbeat kept: progress-t695.txt has one line per completed
+  step and heartbeat.json is refreshed per step.
+- Findings, outcome and death note all written in the worktree before the
+  lane ends. No push, no commit, no second agent.
+
+## Standing evidentiary rules
+
+- TEN-PASSES: reproducibility = 10 consecutive passes before any "reproducible" claim.
+- GUEST-MARKER-ONLY: boot markers count only when printed by the guest process, never the harness.
+- NO-MISSING-INPUTS: missing inputs = hard gate, not a guess.
+- GUEST-CONSUMES-ARTIFACT: injection tracks must prove the guest actually consumes the artifact.
+- QEMU-REGRESSION-VECTORS: decoder/emulator work needs QEMU-matched regression vectors per class.
+- INITRAMFS-DECISION: the T679 vendor.img CPIO-member install route is executed in this lane if a vendor-side fix is built.
+- DEATH-NOTE: every lane ends with findings or a death certificate — no unclosed lanes.
+- FINDINGS-OR-AUTO-FAIL: no verdict is accepted without its findings file on disk.
+- RECONSTRUCTED-TAG: a findings file reconstructed by the reviewer must carry an explicit "reconstructed by reviewer" tag with date.
+- WALL-TYPE-TAG: every wall is tagged guest / WASM / engine; only type-1 (guest) walls are shared with Rust, and every type-1 fix records "Rust par bhi lagu: haan/nahi".
+- DISPLAY-SCAFFOLD: display lanes prove frame commit by guest-origin evidence only; snapshot byte differences are never frame-commit proof.
+- CHAIN-B-CAP-RULE: Chain B lanes cap the boot at the agreed step count.
+
+## Wedge guard (T690 + T691 + T692 + T693 + T694 lessons)
+- T690 executed Step 0, then made NO tool call for 3h02m while its interface repainted (~44 MB/min of ANSI churn, 8.3 GB total, box disk to 100%). It was killed and certified FAIL.
+- T691 never started at all: zero tool calls in 3h02m, log frozen at 26,080 B since launch ("New session" spinner). It was killed and certified FAIL.
+- T692 never started at all: zero tool calls in 2h31m, log frozen at 27,512 B since launch ("New session" spinner), then the agent exited on its own ~01:50 AEDT with no findings. It was certified FAIL. The hardened launch (TERM=dumb + CI=true) did NOT fix the never-start on the box.
+- T693 never started at all on the MAC: zero tool calls in 3h03m, log frozen at 62,057 B since launch ("New session" spinner). It was killed and certified FAIL.
+- T694 never started at all on the MAC: zero tool calls in ~3h10m, log frozen at 20,875 B since launch (TUI welcome screen). It was killed and certified FAIL. The diagnosis lane itself never started.
+- All five ran opencode 2.2.5 `--standalone --prompt --auto`. This lane runs on AGYX (Mac only, ban lifted 2026-10-29) — the route probe for this lane completed in under 1 minute.
+- After EVERY step, immediately append the progress line to progress-t695.txt and refresh heartbeat.json. Never go more than 10 minutes without a tool call while work remains.
+- If a tool call fails twice, or you cannot proceed for any reason, write the FAIL findings at once and exit — never sit idle in the interface.
+- If the interface shows any usage, quota, limit, or billing dialog, record its exact text in the findings and exit — do not wait for it to clear.
