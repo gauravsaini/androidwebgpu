@@ -1,0 +1,43 @@
+{
+  "track": "T702",
+  "timestamp_utc": "2026-11-08T06:39:31Z",
+  "original_system_img_sha256": "98fc0b02f5ae9788da0bf4f1a73d472df6d384080a1d323c5878d57a08c6433d",
+  "original_system_img_bytes": 2059816960,
+  "new_system_img_sha256": "8cab6e8987615ad2b51fc659418de0fa34c0d1706b16022175aefb5960e7ee39",
+  "new_system_img_bytes": 2059816960,
+  "original_apk_sha256": "7626f26b8fc7b905d551edff3058335a67a5b8779385a90e447ce5ef349f9563",
+  "new_apk_sha256": "8a28e1dbb416f1f6a3279082279dd9441db53cad10353892f8a32c08a85cd97c",
+  "new_apk_bytes": 25654202,
+  "patched_dex": "classes7.dex",
+  "patches": [
+    {
+      "target": "BitmapRenderer.createHardwareBitmap",
+      "offset": "0x199a10",
+      "old_hex": "39000700",
+      "new_hex": "00000000",
+      "description": "Nop out if-nez v0, 0009 branch to hardware Picture path; forces fallthrough to createSoftwareBitmap"
+    },
+    {
+      "target": "BitmapRenderer.<clinit>",
+      "offset": "0x199a90",
+      "old_hex": "1210",
+      "new_hex": "1200",
+      "description": "Set USE_HARDWARE_BITMAP = false (const/4 v0, #0)"
+    },
+    {
+      "target": "DotRenderer.<init>",
+      "offset": "0x19b112",
+      "old_hex": "6e10150302000a02",
+      "new_hex": "0102000000000000",
+      "description": "Replace invoke-virtual getHeight + move-result with move v2, v0 (pill height) + 3 nops"
+    }
+  ],
+  "preflight_proof": {
+    "verified_in_image": true,
+    "apk_path_in_guest": "/system/system_ext/priv-app/Launcher3QuickStep/Launcher3QuickStep.apk",
+    "file_mode": "0100644",
+    "uid": 0,
+    "gid": 0,
+    "selinux_context": "u:object_r:system_file:s0"
+  }
+}

@@ -1,18 +1,18 @@
 {
-  "track": "T700",
+  "track": "T702",
   "flight": "flight-ab",
-  "stop_reason": "Guest target reached (241.1s >= 240s)",
-  "started_utc": "2026-11-08T04:13:39Z",
-  "ended_utc": "2026-11-08T04:17:45Z",
-  "host_elapsed_seconds": 245.6,
-  "guest_log_max_seconds": 241.106,
+  "stop_reason": "Guest target reached (243.3s >= 240s)",
+  "started_utc": "2026-11-08T07:24:11Z",
+  "ended_utc": "2026-11-08T07:28:16Z",
+  "host_elapsed_seconds": 245.59,
+  "guest_log_max_seconds": 243.283,
   "qemu_exit_code": 0,
-  "log_bytes": 1946273,
-  "log_lines": 12119,
-  "log_sha256": "8ac276e1a895fd0a6dc2cecf3b99414ea49911143313be7a2811f95929fed738",
+  "log_bytes": 2242296,
+  "log_lines": 13294,
+  "log_sha256": "75feb0116f4e4be366d4120fada697a7792de187e8fc8c9a3cc0bc3044f8f7a7",
   "inputs": {
     "kernel": {
-      "path": "/Users/Shared/wt-track700-extended-window/guest-inputs/Image",
+      "path": "guest-inputs/canonical-Image",
       "sha256": "05c4391767a6ff44f5124796b92d7b98027c37fbf58e81b342ca2adb7d99fa04",
       "bytes": 23073280
     },
@@ -22,18 +22,18 @@
       "bytes": 31498864
     },
     "dtb": {
-      "path": "/Users/Shared/wt-track700-extended-window/guest-inputs/modified.dtb",
+      "path": "/Users/Shared/wt-track702-launcher3-crashloop-cure/guest-inputs/modified.dtb",
       "sha256": "e83a6437908bead89bf8a062050639aa702d11c554397d2200bcf4104f6a7389",
       "bytes": 1920
     },
     "boot_image": {
-      "path": "/Users/Shared/wt-track700-extended-window/guest-image/t699-systemserver-fb0-fix.cpio.gz",
+      "path": "/Users/Shared/wt-track702-launcher3-crashloop-cure/guest-inputs/t699-systemserver-fb0-fix.cpio.gz",
       "sha256": "c9fe657decd3f636131a7dfa1b2816d69ebdf15aea61b2b53265b8953760d23b",
       "bytes": 958780579
     },
     "system_img": {
-      "path": "/Users/Shared/wt-track700-extended-window/guest-inputs/system.img",
-      "sha256": "98fc0b02f5ae9788da0bf4f1a73d472df6d384080a1d323c5878d57a08c6433d",
+      "path": "/Users/Shared/wt-track702-launcher3-crashloop-cure/guest-inputs/system.img",
+      "sha256": "8cab6e8987615ad2b51fc659418de0fa34c0d1706b16022175aefb5960e7ee39",
       "bytes": 2059816960
     }
   }

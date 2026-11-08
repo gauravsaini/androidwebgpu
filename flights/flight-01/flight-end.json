@@ -1,18 +1,18 @@
 {
-  "track": "T700",
+  "track": "T702",
   "flight": "flight-01",
-  "stop_reason": "Guest target reached (2403.0s >= 2400s)",
-  "started_utc": "2026-11-08T03:27:05Z",
-  "ended_utc": "2026-11-08T04:07:09Z",
-  "host_elapsed_seconds": 2404.55,
-  "guest_log_max_seconds": 2403.03,
+  "stop_reason": "Guest target reached (2402.6s >= 2400s)",
+  "started_utc": "2026-11-08T06:43:03Z",
+  "ended_utc": "2026-11-08T07:23:08Z",
+  "host_elapsed_seconds": 2404.78,
+  "guest_log_max_seconds": 2402.627,
   "qemu_exit_code": 0,
-  "log_bytes": 15936275,
-  "log_lines": 108514,
-  "log_sha256": "7ef491cc1b6740393e6ba2f08319f53b5b7154ac73a138d437acb3eb2d37f6b5",
+  "log_bytes": 17635126,
+  "log_lines": 120804,
+  "log_sha256": "8c9895c97351783e0fffcaafccd70fdb25efa48016d89d5578615bf281381a26",
   "inputs": {
     "kernel": {
-      "path": "/Users/Shared/wt-track700-extended-window/guest-inputs/routeB-Image",
+      "path": "/Users/Shared/wt-track702-launcher3-crashloop-cure/guest-inputs/routeB-Image",
       "sha256": "3f45272f003365bac026c71cec7baa7c48b588879fe03a0366251e26022b27f3",
       "bytes": 20126208
     },
@@ -22,18 +22,18 @@
       "bytes": 31498864
     },
     "dtb": {
-      "path": "/Users/Shared/wt-track700-extended-window/guest-inputs/modified.dtb",
+      "path": "/Users/Shared/wt-track702-launcher3-crashloop-cure/guest-inputs/modified.dtb",
       "sha256": "e83a6437908bead89bf8a062050639aa702d11c554397d2200bcf4104f6a7389",
       "bytes": 1920
     },
     "boot_image": {
-      "path": "/Users/Shared/wt-track700-extended-window/guest-image/t699-systemserver-fb0-fix.cpio.gz",
+      "path": "/Users/Shared/wt-track702-launcher3-crashloop-cure/guest-inputs/t699-systemserver-fb0-fix.cpio.gz",
       "sha256": "c9fe657decd3f636131a7dfa1b2816d69ebdf15aea61b2b53265b8953760d23b",
       "bytes": 958780579
     },
     "system_img": {
-      "path": "/Users/Shared/wt-track700-extended-window/guest-inputs/system.img",
-      "sha256": "98fc0b02f5ae9788da0bf4f1a73d472df6d384080a1d323c5878d57a08c6433d",
+      "path": "/Users/Shared/wt-track702-launcher3-crashloop-cure/guest-inputs/system.img",
+      "sha256": "8cab6e8987615ad2b51fc659418de0fa34c0d1706b16022175aefb5960e7ee39",
       "bytes": 2059816960
     }
   }
