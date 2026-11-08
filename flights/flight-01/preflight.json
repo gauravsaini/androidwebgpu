@@ -1,7 +1,7 @@
 {
-  "track": "T703",
+  "track": "T704",
   "flight": "flight-01",
-  "created_utc": "2026-11-08T08:16:07Z",
+  "created_utc": "2026-11-08T11:49:35Z",
   "qemu_version": "QEMU emulator version 11.1.2",
   "command": [
     "/opt/homebrew/bin/qemu-system-aarch64",
@@ -14,30 +14,30 @@
     "-smp",
     "4",
     "-kernel",
-    "/Users/Shared/wt-track703-delete-aot-shadow/guest-inputs/routeB-Image",
+    "/Users/Shared/wt-track704-embedded-system-img-fix/guest-inputs/routeB-Image",
     "-dtb",
-    "/Users/Shared/wt-track703-delete-aot-shadow/guest-inputs/modified.dtb",
+    "/Users/Shared/wt-track704-embedded-system-img-fix/guest-inputs/t704-modified.dtb",
     "-device",
-    "loader,file=/Users/Shared/wt-track703-delete-aot-shadow/guest-inputs/t699-systemserver-fb0-fix.cpio.gz,addr=0x110000000,force-raw=on",
+    "loader,file=/Users/Shared/wt-track704-embedded-system-img-fix/guest-inputs/t704-systemserver-fb0-fix.cpio.gz,addr=0x110000000,force-raw=on",
     "-drive",
-    "if=none,id=t703system,file=/Users/Shared/wt-track703-delete-aot-shadow/guest-inputs/system.img,format=raw,readonly=on",
+    "if=none,id=t704system,file=/Users/Shared/wt-track704-embedded-system-img-fix/guest-inputs/system.img,format=raw,readonly=on",
     "-device",
-    "virtio-blk-device,drive=t703system",
+    "virtio-blk-device,drive=t704system",
     "-append",
-    "console=ttyAMA0,115200 earlycon loglevel=8 debug rdinit=/early-ramdisk androidboot.hardware=virt androidboot.selinux=permissive androidboot.veritymode=disabled enforcing=0 printk.ratelimit=0 brd.rd_nr=1 brd.rd_size=524288 androidboot.t703_fix_initramfs_sha256=c9fe657decd3f636131a7dfa1b2816d69ebdf15aea61b2b53265b8953760d23b androidboot.t703_flight_target=2400 androidboot.t703_dtb_sha256=e83a6437908bead89bf8a062050639aa702d11c554397d2200bcf4104f6a7389 androidboot.t703_system_sha256=afc0add0a3585b54831836ed051a5e98e59ba9317f6e5b570be4bb2b4d720fe7 androidboot.t703_kernel_sha256=3f45272f003365bac026c71cec7baa7c48b588879fe03a0366251e26022b27f3",
+    "console=ttyAMA0,115200 earlycon loglevel=8 debug rdinit=/early-ramdisk androidboot.hardware=virt androidboot.selinux=permissive androidboot.veritymode=disabled enforcing=0 printk.ratelimit=0 brd.rd_nr=1 brd.rd_size=524288 androidboot.t704_fix_initramfs_sha256=95861d2a777b819e16b687ac98f49bced1b355dc48244cd616db3f427b9c5d17 androidboot.t704_flight_target=2400 androidboot.t704_dtb_sha256=5e98d2acbfed69522cc7efa65aa0eadd0dc419c846795b1d2a7eafe22935963c androidboot.t704_system_sha256=afc0add0a3585b54831836ed051a5e98e59ba9317f6e5b570be4bb2b4d720fe7 androidboot.t704_kernel_sha256=3f45272f003365bac026c71cec7baa7c48b588879fe03a0366251e26022b27f3",
     "-gdb",
     "tcp:127.0.0.1:1246",
     "-display",
     "none",
     "-serial",
-    "file:/Users/Shared/wt-track703-delete-aot-shadow/flights/flight-01/uart.log",
+    "file:/Users/Shared/wt-track704-embedded-system-img-fix/flights/flight-01/uart.log",
     "-monitor",
     "none",
     "-no-reboot"
   ],
   "inputs": {
     "kernel": {
-      "path": "/Users/Shared/wt-track703-delete-aot-shadow/guest-inputs/routeB-Image",
+      "path": "/Users/Shared/wt-track704-embedded-system-img-fix/guest-inputs/routeB-Image",
       "sha256": "3f45272f003365bac026c71cec7baa7c48b588879fe03a0366251e26022b27f3",
       "bytes": 20126208
     },
@@ -47,17 +47,17 @@
       "bytes": 31498864
     },
     "dtb": {
-      "path": "/Users/Shared/wt-track703-delete-aot-shadow/guest-inputs/modified.dtb",
-      "sha256": "e83a6437908bead89bf8a062050639aa702d11c554397d2200bcf4104f6a7389",
+      "path": "/Users/Shared/wt-track704-embedded-system-img-fix/guest-inputs/t704-modified.dtb",
+      "sha256": "5e98d2acbfed69522cc7efa65aa0eadd0dc419c846795b1d2a7eafe22935963c",
       "bytes": 1920
     },
     "boot_image": {
-      "path": "/Users/Shared/wt-track703-delete-aot-shadow/guest-inputs/t699-systemserver-fb0-fix.cpio.gz",
-      "sha256": "c9fe657decd3f636131a7dfa1b2816d69ebdf15aea61b2b53265b8953760d23b",
-      "bytes": 958780579
+      "path": "/Users/Shared/wt-track704-embedded-system-img-fix/guest-inputs/t704-systemserver-fb0-fix.cpio.gz",
+      "sha256": "95861d2a777b819e16b687ac98f49bced1b355dc48244cd616db3f427b9c5d17",
+      "bytes": 957349225
     },
     "system_img": {
-      "path": "/Users/Shared/wt-track703-delete-aot-shadow/guest-inputs/system.img",
+      "path": "/Users/Shared/wt-track704-embedded-system-img-fix/guest-inputs/system.img",
       "sha256": "afc0add0a3585b54831836ed051a5e98e59ba9317f6e5b570be4bb2b4d720fe7",
       "bytes": 2059816960
     }

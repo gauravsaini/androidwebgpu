@@ -1,14 +1,14 @@
 {
-  "timestamp_utc": "2026-11-08T09:04:52Z",
-  "status": "Flight complete (Guest target reached (243.9s >= 240s))",
-  "track": "T703",
+  "timestamp_utc": "2026-11-08T11:48:25Z",
+  "status": "Flight complete (Guest target reached (242.3s >= 240s))",
+  "track": "T704",
   "flight": "flight-ab",
   "current_step": 3,
   "host_elapsed_seconds": 245.6,
-  "guest_log_max_seconds": 243.913,
-  "target_host_seconds": 280,
+  "guest_log_max_seconds": 242.301,
+  "target_host_seconds": 260,
   "target_guest_seconds": 240,
-  "supervisor_pid": 67568,
+  "supervisor_pid": 73664,
   "qemu_pid": null,
-  "note": "Flight in progress: Flight complete (Guest target reached (243.9s >= 240s)) host=246s guest=243.9s"
+  "note": "Flight in progress: Flight complete (Guest target reached (242.3s >= 240s)) host=246s guest=242.3s"
 }

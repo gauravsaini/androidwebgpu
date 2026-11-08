@@ -1,0 +1,21 @@
+Step 0 PASS: df -h /System/Volumes/Data = 10 GiB avail (10522 MB, >= 8 GiB gate), no WAIT-DISK. 2026-11-08T09:56:07Z
+Step 1 PASS: all staged inputs verified (findings-t703.md 6e6582ab, findings-t702.md 708128c0, flight-01 UART 232ef424, flight-ab UART 411867e5, de-shadowed system.img afc0add0, Route B Image 3f45272f, fix initramfs c9fe657d, modified.dtb e83a6437, Composer ELF ddc1e4dd, extracted_kernel.config d840310a). findings-t703.md and findings-t702.md read in full. CONFIG_VIRTIO_BLK is '# CONFIG_VIRTIO_BLK is not set' verbatim in extracted_kernel.config, blocking Option 1 without kernel rebuild; Option 2 selected as primary. Bypass proven: extracted early-ramdisk script confirmed losetup -r /dev/loop0 /ramdisk-images/system.img and CPIO listing confirmed ramdisk-images/system.img embedded. 2026-11-08T09:58:45Z
+Step 2 PASS: Option 2 initramfs rebuilt (guest-inputs/t704-systemserver-fb0-fix.cpio.gz, size 957349225 B, SHA 95861d2a777b819e16b687ac98f49bced1b355dc48244cd616db3f427b9c5d17); embedded ramdisk-images/system.img patched with DEX patch (APK 8a28e1db) + AOT deletion (SHA 85e74aaf83c9393cc8d75e38b0fe61ae6c037d4a37563ab7cf5dff4979589ddc); DTB re-aligned byte-exactly (guest-inputs/t704-modified.dtb, size 1920 B, SHA 5e98d2acbfed69522cc7efa65aa0eadd0dc419c846795b1d2a7eafe22935963c, linux,initrd-end = <0x01 0x490ffd69>); preflight proofs verified (early-ramdisk loop0 line, embedded image SHA, DTB exact match). 2026-11-08T10:21:18Z
+Step 3a PASS: Smoke flight complete (125.40s host, 123.42s guest, 4987 lines, 385030 B, SHA df1297f56ad750d24da3870644c1f11b5020147e6493ee4f444993678dfa6b6e); intended mount proven: [T552] guest attached embedded images to loop0/loop1, [T431] keeper restored PID1:/dev/block/loop0 as block 7:0, [ 28.338390] init: [libfs_mgr] __mount(source=/dev/block/loop0,target=/system,type=ext4)=0: Success; Launcher3 crash count 0 in window. 2026-11-08T10:29:36Z
+Flight in progress (flight-01): host=301s guest=299.3s pid=71081. 2026-11-08T10:36:08Z
+Flight in progress (flight-01): host=601s guest=600.3s pid=71081. 2026-11-08T10:41:09Z
+Flight in progress (flight-01): host=902s guest=900.6s pid=71081. 2026-11-08T10:46:10Z
+Flight in progress (flight-01): host=1203s guest=1200.5s pid=71081. 2026-11-08T10:51:11Z
+Flight in progress (flight-01): host=1504s guest=1503.3s pid=71081. 2026-11-08T10:56:12Z
+Flight in progress (flight-01): host=1806s guest=1804.4s pid=71081. 2026-11-08T11:01:14Z
+Flight in progress (flight-01): host=2107s guest=2106.1s pid=71081. 2026-11-08T11:06:15Z
+Step 3c PASS: Canonical A/B control flight-ab complete (245.61s host, 242.30s guest, 13394 lines, 2302087 B, SHA 403ac1178a281b9c29bc94f35a039b1a70f5d7a9346f2fe9b9266b53778df845); canonical mount_all failure baseline confirmed: read-only fs error at /cache/recovery, toybox inaccessible loop lines 1344-13394; boot_completed empty throughout 240s window. 2026-11-08T11:48:25Z
+Flight in progress (flight-01): host=301s guest=299.3s pid=73938. 2026-11-08T11:54:35Z
+Flight in progress (flight-01): host=601s guest=600.1s pid=73938. 2026-11-08T11:59:36Z
+Flight in progress (flight-01): host=902s guest=901.1s pid=73938. 2026-11-08T12:04:37Z
+Flight in progress (flight-01): host=1203s guest=1202.1s pid=73938. 2026-11-08T12:09:38Z
+Flight in progress (flight-01): host=1505s guest=1503.3s pid=73938. 2026-11-08T12:14:39Z
+Flight in progress (flight-01): host=1806s guest=1805.1s pid=73938. 2026-11-08T12:19:41Z
+Flight in progress (flight-01): host=2108s guest=2106.7s pid=73938. 2026-11-08T12:24:43Z
+Step 3b FAIL: Flight-01 complete (2404.67s host, 2403.10s guest, 137000 lines, 21067786 B, SHA 17ce2fa03e635614b64e8649a8c33ee438d556bd7ee0af11cccb3c649ab7a420); guest loop0 mount verified; odrefresh exited with 81 due to services.jar dex verification checksum error (5255acfa, expected 0d4f3e31) from ext4 shared_blocks mutation; ZygoteInit crashed 198x with SIGSEGV in art::ArtField::GetDeclaringClass; system_server did not fork; queueBuffer 0, presentDisplay 0. 2026-11-08T12:29:40Z
+Step 4 PASS: Adjudication and deliverables complete (findings-t704.md, outcome-t704.txt FAIL, DEATH_NOTE-T704.md, TIMELINE.md, progress-t704.txt, heartbeat.json CLOSED). 2026-11-08T12:33:00Z

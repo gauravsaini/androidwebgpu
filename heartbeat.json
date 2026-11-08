@@ -1,7 +1,15 @@
 {
-  "timestamp_utc": "2026-11-08T09:30:00Z",
-  "status": "CLOSED — FAIL: Adjudication and final deliverables complete. Groundbreaking root cause discovered: guest userspace mounts embedded ramdisk-images/system.img from initramfs.",
-  "track": "T703",
+  "timestamp_utc": "2026-11-08T12:33:00Z",
+  "status": "CLOSED",
+  "track": "T704",
+  "flight": "flight-01",
   "current_step": 4,
-  "note": "Lane complete. Handing off to Track T704."
+  "verdict": "FAIL",
+  "host_elapsed_seconds": 2404.67,
+  "guest_log_max_seconds": 2403.102,
+  "target_host_seconds": 2500,
+  "target_guest_seconds": 2400,
+  "supervisor_pid": null,
+  "qemu_pid": null,
+  "note": "Lane T704 closed with honest FAIL: Option 1 blocked by CONFIG_VIRTIO_BLK=n, Option 2 mounted loop0 as /system, odrefresh failed on services.jar due to ext4 shared_blocks mutation, queueBuffer: 0"
 }
