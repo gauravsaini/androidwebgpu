@@ -2,7 +2,7 @@
 import json
 from pathlib import Path
 
-WORKTREE = Path("/Users/Shared/wt-track705-virtio-blk-kernel-rebuild")
+WORKTREE = Path("/Users/Shared/wt-track706-clean-gsi-hwc-hotplug")
 LOG = WORKTREE / "flights/smoke/uart.log"
 END = WORKTREE / "flights/smoke/flight-end.json"
 

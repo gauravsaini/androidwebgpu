@@ -1,0 +1,12 @@
+{
+  "verdict": "PASS",
+  "target_img_path": "/mnt/sdb1/kernel-critical/lane-images/t706-system.img",
+  "target_img_sha256": "2de0533e93a90298e043ee71ca19a2c4545df601ceafc9e14fb507ef56506601",
+  "target_img_size": 2059816960,
+  "block_145414_sha256": "4ea21150edc8a12cbbefa883251e77bf106f8f88e4a07673ca9fc416925269ea",
+  "block_145414_expected": "4ea21150edc8a12cbbefa883251e77bf106f8f88e4a07673ca9fc416925269ea",
+  "patched_apk_sha256": "8a28e1dbb416f1f6a3279082279dd9441db53cad10353892f8a32c08a85cd97c",
+  "services_jar_sha256": "d41080524ff81b8693a453f4d5cfe8a119be433f3e375a0780683acc71f20d6e",
+  "oat_dir_absent": true,
+  "e2fsck_exit_code": 0
+}

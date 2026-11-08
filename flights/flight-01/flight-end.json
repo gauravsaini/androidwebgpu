@@ -1,18 +1,18 @@
 {
-  "track": "T705",
+  "track": "T706",
   "flight": "flight-01",
-  "stop_reason": "Guest target reached (2402.1s >= 2400s)",
-  "started_utc": "2026-11-08T14:26:17Z",
-  "ended_utc": "2026-11-08T15:06:19Z",
-  "host_elapsed_seconds": 2402.76,
-  "guest_log_max_seconds": 2402.067,
+  "stop_reason": "Guest target reached (2406.8s >= 2400s)",
+  "started_utc": "2026-11-08T18:49:45Z",
+  "ended_utc": "2026-11-08T19:29:53Z",
+  "host_elapsed_seconds": 2407.74,
+  "guest_log_max_seconds": 2406.817,
   "qemu_exit_code": 0,
-  "log_bytes": 5091977,
-  "log_lines": 45314,
-  "log_sha256": "b255056bfb607bcf1bddf4d8298600406365b1a68a884e48db9e030d58454a58",
+  "log_bytes": 5735995,
+  "log_lines": 53664,
+  "log_sha256": "3e8121d08c8e1f2176eb3d1e5274137f7019220baefb264c2730abc0367ca1d0",
   "inputs": {
     "kernel": {
-      "path": "/Users/Shared/wt-track705-virtio-blk-kernel-rebuild/guest-inputs/t705-Image",
+      "path": "/Users/Shared/wt-track706-clean-gsi-hwc-hotplug/guest-inputs/t705-Image",
       "sha256": "53d9563e1c1bae4be4cab2f62ab1bf6331445bf0e629c66b3fa43114988e2859",
       "bytes": 20126208
     },
@@ -22,18 +22,18 @@
       "bytes": 31498864
     },
     "dtb": {
-      "path": "/Users/Shared/wt-track705-virtio-blk-kernel-rebuild/guest-inputs/t705-modified.dtb",
+      "path": "/Users/Shared/wt-track706-clean-gsi-hwc-hotplug/guest-inputs/t705-modified.dtb",
       "sha256": "0205a94aeed15bba06c2ad0a8fea0a310fe40d87a9c26ee054b6c37074339e01",
       "bytes": 2049
     },
     "boot_image": {
-      "path": "/Users/Shared/wt-track705-virtio-blk-kernel-rebuild/guest-inputs/t705-systemserver-fb0-fix.cpio.gz",
+      "path": "/Users/Shared/wt-track706-clean-gsi-hwc-hotplug/guest-inputs/t705-systemserver-fb0-fix.cpio.gz",
       "sha256": "583147fd4e8d0fd6fb6baee11eff41b95fd551a4477c825ac56d9c9450beb965",
       "bytes": 53169644
     },
     "system_img": {
-      "path": "/Users/Shared/wt-track705-virtio-blk-kernel-rebuild/guest-inputs/system.img",
-      "sha256": "afc0add0a3585b54831836ed051a5e98e59ba9317f6e5b570be4bb2b4d720fe7",
+      "path": "/Users/Shared/wt-track706-clean-gsi-hwc-hotplug/guest-inputs/system.img",
+      "sha256": "2de0533e93a90298e043ee71ca19a2c4545df601ceafc9e14fb507ef56506601",
       "bytes": 2059816960
     }
   }

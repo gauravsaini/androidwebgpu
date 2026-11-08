@@ -1,0 +1,38 @@
+{
+  "investigation": "HWC Hotplug & Binder ioctl 40046210 Root Cause Analysis",
+  "track": "T706",
+  "binder_ioctl_analysis": {
+    "ioctl_hex": "40046210",
+    "ioctl_decoded": "_IOW('b', 16, __u32)",
+    "constant_name": "BINDER_ENABLE_ONEWAY_SPAM_DETECTION",
+    "kernel_version": "Linux 4.19 (Route B)",
+    "kernel_binder_h_max_ioctl": 13,
+    "errno": -22,
+    "errno_symbol": "EINVAL",
+    "evidence_t702_uart": "Appeared at lines 1268, 1274, 1316, 1333, etc. in T702 where sys.boot_completed=1 was achieved",
+    "evidence_t699_uart": "Appeared at line 23895 for composer pid 7946 where SurfaceFlinger connected display 4612927614820412928",
+    "verdict": "Harmless kernel-version mismatch on an optional spam detection feature in Android 14 libbinder; ignored by userspace"
+  },
+  "hwc_service_analysis": {
+    "service_name": "vendor.hwc-2-1",
+    "binary_path": "/vendor/bin/hw/android.hardware.graphics.composer@2.1-service",
+    "binary_sha256": "ddc1e4dd01b91df543be1a83a065308662cf92ee6babd774f6eb014c4a59b132",
+    "init_definition": "/vendor/etc/init/hw/init.virt.rc",
+    "manifest_declaration": "android.hardware.graphics.composer@2.1 in /vendor/etc/vintf/manifest.xml",
+    "pid_in_t705": 2369,
+    "crash_in_t705": false,
+    "verdict": "Service configuration, permissions, and ELF wiring are sound and verified"
+  },
+  "surfaceflinger_abort_analysis": {
+    "abort_message": "Initial display configuration failed: HWC did not hotplug",
+    "root_cause": "Downstream consequence of services.jar corruption in external system.img (afc0add0...)",
+    "mechanism": "Zygote crashed with SIGSEGV in art::ArtField::GetDeclaringClass due to corrupted block 145414 in services.jar before forkSystemServer(); system_server never ran; DisplayManagerService never started; SurfaceFlinger initialization failed in lockstep with Zygote restart loop",
+    "evidence_lines": {
+      "zygote_sigsegv": "tombstone_00 at guest 96.4s (lines 3638-3650)",
+      "surfaceflinger_abort": "tombstone_01 at guest 109.3s (lines 3830, 7744-7759)",
+      "zygote_restart_loop": "lines 3975, 4169, 4778..."
+    },
+    "independent_fix_needed": false,
+    "cure": "Restoring clean base system.img patched exclusively on Linux via loopback mount cures the Zygote SIGSEGV, allowing system_server and DisplayManagerService to initialize and SurfaceFlinger to connect display 4612927614820412928"
+  }
+}

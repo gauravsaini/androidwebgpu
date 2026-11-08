@@ -1,15 +1,15 @@
 {
-  "timestamp_utc": "2026-11-08T15:30:00Z",
+  "timestamp_utc": "2026-11-08T19:42:00Z",
   "status": "CLOSED",
-  "track": "T705",
-  "flight": "flight-01",
-  "current_step": "CLOSED",
+  "track": "T706",
+  "flight": null,
+  "current_step": "Step 4 Adjudication Complete",
   "verdict": "FAIL",
-  "host_elapsed_seconds": 2402.76,
-  "guest_log_max_seconds": 2402.067,
+  "host_elapsed_seconds": 2407.74,
+  "guest_log_max_seconds": 2406.817,
   "target_host_seconds": 2500,
   "target_guest_seconds": 2400,
   "supervisor_pid": null,
   "qemu_pid": null,
-  "note": "Track T705 complete. Rebuilt Route B kernel with CONFIG_VIRTIO_BLK=y and mounted /dev/vda as /system. Flight-01 (2402.1s) and Flight-ab (17.9s) completed. Inherited shared_blocks corruption and HWC hotplug abort isolated. Verdict: FAIL."
+  "note": "Track T706 closed with honest Verdict: FAIL. Clean GSI system.img cured services.jar corruption (0 ArtField SIGSEGV). First failing link: SurfaceFlinger HWC hotplug abort loop killing Zygote before forkSystemServer(). Exact next fix named for T707."
 }

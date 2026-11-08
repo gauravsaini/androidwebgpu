@@ -1,0 +1,34 @@
+{
+  "total_lines": 53664,
+  "vda_mount_lines": [
+    "523: [    6.810042] init: [libfs_mgr] __mount(source=/dev/block/vda,target=/system,type=ext4)=0: Success"
+  ],
+  "freeing_kernel_memory_lines": [
+    "188: [    3.083585] Freeing unused kernel memory: 960K"
+  ],
+  "init_first_stage_lines": [
+    "514: [    6.426337] init: init first stage started!"
+  ],
+  "fb0_simplefb_lines": [
+    "97: [    0.294041] simple-framebuffer 5f000000.framebuffer: fb0: simplefb registered!"
+  ],
+  "kernel_panic_lines": [],
+  "zygote_sigsegv_artfield_count": 0,
+  "zygote_sigsegv_lines": [],
+  "surfaceflinger_hwc_abort_count": 1,
+  "surfaceflinger_hwc_abort_lines": [
+    "3683: Abort message: 'Initial display configuration failed: HWC did not hotplug'"
+  ],
+  "hwc_binder_ioctl_neg22_count": 2929,
+  "system_server_fork_lines": [],
+  "system_server_entered_lines": [],
+  "boot_completed_lines": [],
+  "queue_buffer_count": 0,
+  "queue_buffer_lines": [],
+  "present_display_count": 0,
+  "present_display_lines": [],
+  "validate_display_count": 0,
+  "dexopt_launcher3_lines": [],
+  "launcher3_fatal_exception_count": 0,
+  "launcher3_fatal_lines": []
+}
