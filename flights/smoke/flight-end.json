@@ -1,0 +1,40 @@
+{
+  "track": "T707",
+  "flight": "smoke",
+  "stop_reason": "Guest target reached (124.5s >= 120s)",
+  "started_utc": "2026-11-08T21:03:12Z",
+  "ended_utc": "2026-11-08T21:05:17Z",
+  "host_elapsed_seconds": 125.25,
+  "guest_log_max_seconds": 124.544,
+  "qemu_exit_code": 0,
+  "log_bytes": 313027,
+  "log_lines": 3992,
+  "log_sha256": "b0ab15073b9622e1e0fe6b4fd15011e90715e1893c686e084d2260ae584220b5",
+  "inputs": {
+    "kernel": {
+      "path": "/Users/Shared/wt-track707-composer-hotplug-dispatch/guest-inputs/t705-Image",
+      "sha256": "53d9563e1c1bae4be4cab2f62ab1bf6331445bf0e629c66b3fa43114988e2859",
+      "bytes": 20126208
+    },
+    "qemu": {
+      "path": "/opt/homebrew/bin/qemu-system-aarch64",
+      "sha256": "8e5c46dc6752c36afbb706f933e72fef835e35f48881a63cadb06c6d29bac869",
+      "bytes": 31498864
+    },
+    "dtb": {
+      "path": "/Users/Shared/wt-track707-composer-hotplug-dispatch/guest-inputs/t707-modified.dtb",
+      "sha256": "3d8341f4ea6c49f4f4d4eeb8593c3270eedbcc27ae948b21d6e521e200994ba9",
+      "bytes": 2049
+    },
+    "boot_image": {
+      "path": "/Users/Shared/wt-track707-composer-hotplug-dispatch/guest-inputs/t707-systemserver-fb0-fix.cpio.gz",
+      "sha256": "201bcd058b65533ec7ad904bc79ee5b062c51855046b0e787cc81835508f0f94",
+      "bytes": 53172105
+    },
+    "system_img": {
+      "path": "/Users/Shared/wt-track707-composer-hotplug-dispatch/guest-inputs/system.img",
+      "sha256": "2de0533e93a90298e043ee71ca19a2c4545df601ceafc9e14fb507ef56506601",
+      "bytes": 2059816960
+    }
+  }
+}

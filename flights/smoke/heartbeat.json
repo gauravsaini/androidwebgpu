@@ -1,0 +1,15 @@
+{
+  "timestamp_utc": "2026-11-08T21:05:17Z",
+  "status": "Flight complete (Guest target reached (124.5s >= 120s))",
+  "track": "T707",
+  "flight": "smoke",
+  "current_step": "Flight smoke (120s guest target)",
+  "verdict": null,
+  "host_elapsed_seconds": 125.25,
+  "guest_log_max_seconds": 124.544,
+  "target_host_seconds": 200,
+  "target_guest_seconds": 120,
+  "supervisor_pid": 92953,
+  "qemu_pid": null,
+  "note": "Flight in progress: Flight complete (Guest target reached (124.5s >= 120s)) host=125s guest=124.5s"
+}
