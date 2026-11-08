@@ -1,14 +1,14 @@
 {
-  "timestamp_utc": "2026-11-03T03:43:42Z",
-  "status": "Flight complete (Guest target reached (1207.3s >= 1200s))",
-  "track": "T673",
-  "flight": "flight-01",
-  "current_step": 3,
-  "host_elapsed_seconds": 1209.8,
-  "guest_log_max_seconds": 1207.275,
-  "target_host_seconds": 1500,
-  "target_guest_seconds": 1200,
-  "supervisor_pid": 60542,
+  "timestamp_utc": "2026-11-08T01:15:00Z",
+  "status": "Step 4 PASS: adjudication complete, diagnosis closed, findings written",
+  "track": "T698",
+  "flight": null,
+  "current_step": 4,
+  "host_elapsed_seconds": null,
+  "guest_log_max_seconds": null,
+  "target_host_seconds": null,
+  "target_guest_seconds": null,
+  "supervisor_pid": null,
   "qemu_pid": null,
-  "note": "Flight in progress: Flight complete (Guest target reached (1207.3s >= 1200s)) host=1210s guest=1207.3s"
+  "note": "Track T698: Step 4 PASS — both questions resolved from preserved evidence"
 }
