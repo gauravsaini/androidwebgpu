@@ -1,14 +1,15 @@
 {
-  "timestamp_utc": "2026-11-08T11:48:25Z",
-  "status": "Flight complete (Guest target reached (242.3s >= 240s))",
-  "track": "T704",
+  "timestamp_utc": "2026-11-08T15:08:52Z",
+  "status": "Flight complete (QEMU process exited with returncode 0)",
+  "track": "T705",
   "flight": "flight-ab",
   "current_step": 3,
-  "host_elapsed_seconds": 245.6,
-  "guest_log_max_seconds": 242.301,
-  "target_host_seconds": 260,
+  "verdict": null,
+  "host_elapsed_seconds": 20.03,
+  "guest_log_max_seconds": 17.864,
+  "target_host_seconds": 300,
   "target_guest_seconds": 240,
-  "supervisor_pid": 73664,
+  "supervisor_pid": 80760,
   "qemu_pid": null,
-  "note": "Flight in progress: Flight complete (Guest target reached (242.3s >= 240s)) host=246s guest=242.3s"
+  "note": "Flight in progress: Flight complete (QEMU process exited with returncode 0) host=20s guest=17.9s"
 }
