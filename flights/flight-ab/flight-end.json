@@ -1,15 +1,15 @@
 {
-  "track": "T702",
+  "track": "T703",
   "flight": "flight-ab",
-  "stop_reason": "Guest target reached (243.3s >= 240s)",
-  "started_utc": "2026-11-08T07:24:11Z",
-  "ended_utc": "2026-11-08T07:28:16Z",
-  "host_elapsed_seconds": 245.59,
-  "guest_log_max_seconds": 243.283,
+  "stop_reason": "Guest target reached (243.9s >= 240s)",
+  "started_utc": "2026-11-08T09:00:46Z",
+  "ended_utc": "2026-11-08T09:04:52Z",
+  "host_elapsed_seconds": 245.64,
+  "guest_log_max_seconds": 243.913,
   "qemu_exit_code": 0,
-  "log_bytes": 2242296,
-  "log_lines": 13294,
-  "log_sha256": "75feb0116f4e4be366d4120fada697a7792de187e8fc8c9a3cc0bc3044f8f7a7",
+  "log_bytes": 2241896,
+  "log_lines": 13332,
+  "log_sha256": "411867e5aaf3c72e7c170bc1685857204ce0ececc95d55cf9fe06beef193b15d",
   "inputs": {
     "kernel": {
       "path": "guest-inputs/canonical-Image",
@@ -22,18 +22,18 @@
       "bytes": 31498864
     },
     "dtb": {
-      "path": "/Users/Shared/wt-track702-launcher3-crashloop-cure/guest-inputs/modified.dtb",
+      "path": "/Users/Shared/wt-track703-delete-aot-shadow/guest-inputs/modified.dtb",
       "sha256": "e83a6437908bead89bf8a062050639aa702d11c554397d2200bcf4104f6a7389",
       "bytes": 1920
     },
     "boot_image": {
-      "path": "/Users/Shared/wt-track702-launcher3-crashloop-cure/guest-inputs/t699-systemserver-fb0-fix.cpio.gz",
+      "path": "/Users/Shared/wt-track703-delete-aot-shadow/guest-inputs/t699-systemserver-fb0-fix.cpio.gz",
       "sha256": "c9fe657decd3f636131a7dfa1b2816d69ebdf15aea61b2b53265b8953760d23b",
       "bytes": 958780579
     },
     "system_img": {
-      "path": "/Users/Shared/wt-track702-launcher3-crashloop-cure/guest-inputs/system.img",
-      "sha256": "8cab6e8987615ad2b51fc659418de0fa34c0d1706b16022175aefb5960e7ee39",
+      "path": "/Users/Shared/wt-track703-delete-aot-shadow/guest-inputs/system.img",
+      "sha256": "afc0add0a3585b54831836ed051a5e98e59ba9317f6e5b570be4bb2b4d720fe7",
       "bytes": 2059816960
     }
   }
