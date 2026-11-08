@@ -1,0 +1,17 @@
+{
+  "track": "T699",
+  "timestamp_utc": "2026-11-08T02:18:58Z",
+  "target_file": "/vendor/etc/init/hw/init.virt.rc",
+  "changes": {
+    "removed": "exec - root root -- /system/bin/toybox truncate -s 16M /dev/fb0",
+    "added": [
+      "exec - root root -- /system/bin/toybox rm -f /dev/fb0",
+      "exec - root root -- /system/bin/toybox mknod -m 0666 /dev/fb0 c 29 0"
+    ]
+  },
+  "early_ramdisk_changes": "Pre-created /dev/fb0 and /dev/graphics/fb0 character device nodes (mknod c 29 0)",
+  "install_mechanism": "CPIO vendor.img member replacement per T679/T683 route",
+  "new_vendor_img_sha256": "b7afe90f3cb9058d0dd9a9ba0d23f2f9547cb607f66ded06fbb5b4c5e2a57801",
+  "new_initramfs_sha256": "c9fe657decd3f636131a7dfa1b2816d69ebdf15aea61b2b53265b8953760d23b",
+  "new_initramfs_size": 958780579
+}
