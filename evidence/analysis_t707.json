@@ -1,0 +1,470 @@
+{
+  "flight_01": {
+    "total_lines": 51999,
+    "freeing_mem": [
+      [
+        188,
+        "[    3.087491] Freeing unused kernel memory: 960K"
+      ]
+    ],
+    "init_first_stage": [
+      [
+        515,
+        "[    6.394083] init: init first stage started!"
+      ]
+    ],
+    "simplefb": [
+      [
+        97,
+        "[    0.303880] simple-framebuffer 5f000000.framebuffer: fb0: simplefb registered!"
+      ]
+    ],
+    "vda_mount": [
+      [
+        524,
+        "[    6.770087] init: [libfs_mgr] __mount(source=/dev/block/vda,target=/system,type=ext4)=0: Success"
+      ]
+    ],
+    "hotplug_abort": [],
+    "output_buffer_abort": [
+      [
+        3695,
+        "Abort message: 'output buffer not gpu writeable'"
+      ]
+    ],
+    "failed_composer_client": [
+      [
+        5701,
+        "Abort message: 'failed to create composer client'"
+      ],
+      [
+        7322,
+        "Abort message: 'failed to create composer client'"
+      ],
+      [
+        8938,
+        "Abort message: 'failed to create composer client'"
+      ],
+      [
+        10582,
+        "Abort message: 'failed to create composer client'"
+      ],
+      [
+        12206,
+        "Abort message: 'failed to create composer client'"
+      ],
+      [
+        13868,
+        "Abort message: 'failed to create composer client'"
+      ],
+      [
+        15516,
+        "Abort message: 'failed to create composer client'"
+      ],
+      [
+        17201,
+        "Abort message: 'failed to create composer client'"
+      ],
+      [
+        18836,
+        "Abort message: 'failed to create composer client'"
+      ],
+      [
+        20469,
+        "Abort message: 'failed to create composer client'"
+      ],
+      [
+        22109,
+        "Abort message: 'failed to create composer client'"
+      ],
+      [
+        23742,
+        "Abort message: 'failed to create composer client'"
+      ],
+      [
+        25426,
+        "Abort message: 'failed to create composer client'"
+      ],
+      [
+        27068,
+        "Abort message: 'failed to create composer client'"
+      ],
+      [
+        28714,
+        "Abort message: 'failed to create composer client'"
+      ],
+      [
+        30355,
+        "Abort message: 'failed to create composer client'"
+      ],
+      [
+        31973,
+        "Abort message: 'failed to create composer client'"
+      ],
+      [
+        33585,
+        "Abort message: 'failed to create composer client'"
+      ],
+      [
+        35230,
+        "Abort message: 'failed to create composer client'"
+      ],
+      [
+        36868,
+        "Abort message: 'failed to create composer client'"
+      ],
+      [
+        38509,
+        "Abort message: 'failed to create composer client'"
+      ],
+      [
+        40129,
+        "Abort message: 'failed to create composer client'"
+      ],
+      [
+        41858,
+        "Abort message: 'failed to create composer client'"
+      ],
+      [
+        43480,
+        "Abort message: 'failed to create composer client'"
+      ],
+      [
+        45108,
+        "Abort message: 'failed to create composer client'"
+      ],
+      [
+        46746,
+        "Abort message: 'failed to create composer client'"
+      ],
+      [
+        48412,
+        "Abort message: 'failed to create composer client'"
+      ],
+      [
+        50033,
+        "Abort message: 'failed to create composer client'"
+      ],
+      [
+        51645,
+        "Abort message: 'failed to create composer client'"
+      ]
+    ],
+    "all_aborts": [
+      [
+        3695,
+        "Abort message: 'output buffer not gpu writeable'"
+      ],
+      [
+        5701,
+        "Abort message: 'failed to create composer client'"
+      ],
+      [
+        7322,
+        "Abort message: 'failed to create composer client'"
+      ],
+      [
+        8938,
+        "Abort message: 'failed to create composer client'"
+      ],
+      [
+        10582,
+        "Abort message: 'failed to create composer client'"
+      ],
+      [
+        12206,
+        "Abort message: 'failed to create composer client'"
+      ],
+      [
+        13868,
+        "Abort message: 'failed to create composer client'"
+      ],
+      [
+        15516,
+        "Abort message: 'failed to create composer client'"
+      ],
+      [
+        17201,
+        "Abort message: 'failed to create composer client'"
+      ],
+      [
+        18836,
+        "Abort message: 'failed to create composer client'"
+      ],
+      [
+        20469,
+        "Abort message: 'failed to create composer client'"
+      ],
+      [
+        22109,
+        "Abort message: 'failed to create composer client'"
+      ],
+      [
+        23742,
+        "Abort message: 'failed to create composer client'"
+      ],
+      [
+        25426,
+        "Abort message: 'failed to create composer client'"
+      ],
+      [
+        27068,
+        "Abort message: 'failed to create composer client'"
+      ],
+      [
+        28714,
+        "Abort message: 'failed to create composer client'"
+      ],
+      [
+        30355,
+        "Abort message: 'failed to create composer client'"
+      ],
+      [
+        31973,
+        "Abort message: 'failed to create composer client'"
+      ],
+      [
+        33585,
+        "Abort message: 'failed to create composer client'"
+      ],
+      [
+        35230,
+        "Abort message: 'failed to create composer client'"
+      ],
+      [
+        36868,
+        "Abort message: 'failed to create composer client'"
+      ],
+      [
+        38509,
+        "Abort message: 'failed to create composer client'"
+      ],
+      [
+        40129,
+        "Abort message: 'failed to create composer client'"
+      ],
+      [
+        41858,
+        "Abort message: 'failed to create composer client'"
+      ],
+      [
+        43480,
+        "Abort message: 'failed to create composer client'"
+      ],
+      [
+        45108,
+        "Abort message: 'failed to create composer client'"
+      ],
+      [
+        46746,
+        "Abort message: 'failed to create composer client'"
+      ],
+      [
+        48412,
+        "Abort message: 'failed to create composer client'"
+      ],
+      [
+        50033,
+        "Abort message: 'failed to create composer client'"
+      ],
+      [
+        51645,
+        "Abort message: 'failed to create composer client'"
+      ]
+    ],
+    "tombstones": [
+      [
+        3680,
+        "tombstone_00",
+        "[  105.351107] T637_TOMBSTONE_DETECTED name=tombstone_00 size=137538 pid: 2441, tid: 2441, name: surfaceflinger  >>> /system/bin/surfaceflinger <<< Cmdline: /system/bin/surfaceflinger"
+      ],
+      [
+        5688,
+        "tombstone_01",
+        "[  199.655907] T637_TOMBSTONE_DETECTED name=tombstone_01 size=108896 pid: 2505, tid: 2505, name: surfaceflinger  >>> /system/bin/surfaceflinger <<< Cmdline: /system/bin/surfaceflinger"
+      ],
+      [
+        7298,
+        "tombstone_02",
+        "[  271.617100] T637_TOMBSTONE_DETECTED name=tombstone_02 size=108685 pid: 2565, tid: 2565, name: surfaceflinger  >>> /system/bin/surfaceflinger <<< Cmdline: /system/bin/surfaceflinger"
+      ],
+      [
+        8925,
+        "tombstone_03",
+        "[  345.373869] T637_TOMBSTONE_DETECTED name=tombstone_03 size=108832 pid: 2610, tid: 2610, name: surfaceflinger  >>> /system/bin/surfaceflinger <<< Cmdline: /system/bin/surfaceflinger"
+      ],
+      [
+        10569,
+        "tombstone_04",
+        "[  423.276362] T637_TOMBSTONE_DETECTED name=tombstone_04 size=108960 pid: 2642, tid: 2642, name: surfaceflinger  >>> /system/bin/surfaceflinger <<< Cmdline: /system/bin/surfaceflinger"
+      ],
+      [
+        12193,
+        "tombstone_05",
+        "[  502.336625] T637_TOMBSTONE_DETECTED name=tombstone_05 size=109024 pid: 2692, tid: 2692, name: surfaceflinger  >>> /system/bin/surfaceflinger <<< Cmdline: /system/bin/surfaceflinger"
+      ],
+      [
+        13855,
+        "tombstone_06",
+        "[  581.016623] T637_TOMBSTONE_DETECTED name=tombstone_06 size=108813 pid: 4859, tid: 4859, name: surfaceflinger  >>> /system/bin/surfaceflinger <<< Cmdline: /system/bin/surfaceflinger"
+      ],
+      [
+        15503,
+        "tombstone_07",
+        "[  661.040635] T637_TOMBSTONE_DETECTED name=tombstone_07 size=108576 pid: 4906, tid: 4906, name: surfaceflinger  >>> /system/bin/surfaceflinger <<< Cmdline: /system/bin/surfaceflinger"
+      ],
+      [
+        17186,
+        "tombstone_08",
+        "[  757.695131] T637_TOMBSTONE_DETECTED name=tombstone_08 size=108685 pid: 4935, tid: 4935, name: surfaceflinger  >>> /system/bin/surfaceflinger <<< Cmdline: /system/bin/surfaceflinger"
+      ],
+      [
+        18823,
+        "tombstone_09",
+        "[  834.589438] T637_TOMBSTONE_DETECTED name=tombstone_09 size=108768 pid: 4998, tid: 4998, name: surfaceflinger  >>> /system/bin/surfaceflinger <<< Cmdline: /system/bin/surfaceflinger"
+      ],
+      [
+        20456,
+        "tombstone_10",
+        "[  914.493399] T637_TOMBSTONE_DETECTED name=tombstone_10 size=108896 pid: 5063, tid: 5063, name: surfaceflinger  >>> /system/bin/surfaceflinger <<< Cmdline: /system/bin/surfaceflinger"
+      ],
+      [
+        22095,
+        "tombstone_11",
+        "[  991.120574] T637_TOMBSTONE_DETECTED name=tombstone_11 size=108768 pid: 5127, tid: 5127, name: surfaceflinger  >>> /system/bin/surfaceflinger <<< Cmdline: /system/bin/surfaceflinger"
+      ],
+      [
+        23729,
+        "tombstone_12",
+        "[ 1067.849288] T637_TOMBSTONE_DETECTED name=tombstone_12 size=108686 pid: 7454, tid: 7454, name: surfaceflinger  >>> /system/bin/surfaceflinger <<< Cmdline: /system/bin/surfaceflinger"
+      ],
+      [
+        25413,
+        "tombstone_13",
+        "[ 1154.296210] T637_TOMBSTONE_DETECTED name=tombstone_13 size=108833 pid: 7486, tid: 7486, name: surfaceflinger  >>> /system/bin/surfaceflinger <<< Cmdline: /system/bin/surfaceflinger"
+      ],
+      [
+        27045,
+        "tombstone_14",
+        "[ 1234.176501] T637_TOMBSTONE_DETECTED name=tombstone_14 size=108558 pid: 7530, tid: 7530, name: surfaceflinger  >>> /system/bin/surfaceflinger <<< Cmdline: /system/bin/surfaceflinger"
+      ],
+      [
+        28690,
+        "tombstone_15",
+        "[ 1314.684410] T637_TOMBSTONE_DETECTED name=tombstone_15 size=109089 pid: 7564, tid: 7564, name: surfaceflinger  >>> /system/bin/surfaceflinger <<< Cmdline: /system/bin/surfaceflinger"
+      ],
+      [
+        30342,
+        "tombstone_16",
+        "[ 1390.203447] T637_TOMBSTONE_DETECTED name=tombstone_16 size=108769 pid: 7613, tid: 7613, name: surfaceflinger  >>> /system/bin/surfaceflinger <<< Cmdline: /system/bin/surfaceflinger"
+      ],
+      [
+        31960,
+        "tombstone_17",
+        "[ 1466.366652] T637_TOMBSTONE_DETECTED name=tombstone_17 size=108833 pid: 7641, tid: 7641, name: surfaceflinger  >>> /system/bin/surfaceflinger <<< Cmdline: /system/bin/surfaceflinger"
+      ],
+      [
+        33572,
+        "tombstone_18",
+        "[ 1540.462346] T637_TOMBSTONE_DETECTED name=tombstone_18 size=108558 pid: 9989, tid: 9989, name: surfaceflinger  >>> /system/bin/surfaceflinger <<< Cmdline: /system/bin/surfaceflinger"
+      ],
+      [
+        35217,
+        "tombstone_19",
+        "[ 1618.305317] T637_TOMBSTONE_DETECTED name=tombstone_19 size=108843 pid: 10020, tid: 10020, name: surfaceflinger  >>> /system/bin/surfaceflinger <<< Cmdline: /system/bin/surfaceflinger"
+      ],
+      [
+        36855,
+        "tombstone_20",
+        "[ 1696.392378] T637_TOMBSTONE_DETECTED name=tombstone_20 size=108651 pid: 10065, tid: 10065, name: surfaceflinger  >>> /system/bin/surfaceflinger <<< Cmdline: /system/bin/surfaceflinger"
+      ],
+      [
+        38494,
+        "tombstone_21",
+        "[ 1776.184324] T637_TOMBSTONE_DETECTED name=tombstone_21 size=108760 pid: 10098, tid: 10098, name: surfaceflinger  >>> /system/bin/surfaceflinger <<< Cmdline: /system/bin/surfaceflinger"
+      ],
+      [
+        40116,
+        "tombstone_22",
+        "[ 1851.268867] T637_TOMBSTONE_DETECTED name=tombstone_22 size=109154 pid: 10146, tid: 10146, name: surfaceflinger  >>> /system/bin/surfaceflinger <<< Cmdline: /system/bin/surfaceflinger"
+      ],
+      [
+        41845,
+        "tombstone_23",
+        "[ 1940.784434] T637_TOMBSTONE_DETECTED name=tombstone_23 size=108715 pid: 12437, tid: 12437, name: surfaceflinger  >>> /system/bin/surfaceflinger <<< Cmdline: /system/bin/surfaceflinger"
+      ],
+      [
+        43467,
+        "tombstone_24",
+        "[ 2016.320452] T637_TOMBSTONE_DETECTED name=tombstone_24 size=108824 pid: 12488, tid: 12488, name: surfaceflinger  >>> /system/bin/surfaceflinger <<< Cmdline: /system/bin/surfaceflinger"
+      ],
+      [
+        45085,
+        "tombstone_25",
+        "[ 2095.291596] T637_TOMBSTONE_DETECTED name=tombstone_25 size=108907 pid: 12534, tid: 12534, name: surfaceflinger  >>> /system/bin/surfaceflinger <<< Cmdline: /system/bin/surfaceflinger"
+      ],
+      [
+        46731,
+        "tombstone_26",
+        "[ 2169.613179] T637_TOMBSTONE_DETECTED name=tombstone_26 size=108568 pid: 12564, tid: 12564, name: surfaceflinger  >>> /system/bin/surfaceflinger <<< Cmdline: /system/bin/surfaceflinger"
+      ],
+      [
+        48397,
+        "tombstone_27",
+        "[ 2248.440965] T637_TOMBSTONE_DETECTED name=tombstone_27 size=108760 pid: 12629, tid: 12629, name: surfaceflinger  >>> /system/bin/surfaceflinger <<< Cmdline: /system/bin/surfaceflinger"
+      ],
+      [
+        50016,
+        "tombstone_28",
+        "[ 2320.306883] T637_TOMBSTONE_DETECTED name=tombstone_28 size=109016 pid: 12693, tid: 12693, name: surfaceflinger  >>> /system/bin/surfaceflinger <<< Cmdline: /system/bin/surfaceflinger"
+      ],
+      [
+        51631,
+        "tombstone_29",
+        "[ 2393.873545] T637_TOMBSTONE_DETECTED name=tombstone_29 size=108824 pid: 14949, tid: 14949, name: surfaceflinger  >>> /system/bin/surfaceflinger <<< Cmdline: /system/bin/surfaceflinger"
+      ]
+    ],
+    "zygote_sigsegv": [],
+    "fork_system_server": [],
+    "system_server_entered": [],
+    "boot_completed": [],
+    "queue_buffer": [],
+    "present_display": [],
+    "validate_display": [],
+    "launcher3_fatal": [],
+    "binder_22": 2895
+  },
+  "flight_ab": {
+    "total_lines": 560,
+    "freeing_mem": [
+      [
+        186,
+        "[    3.554858] Freeing unused kernel memory: 1024K"
+      ]
+    ],
+    "init_first_stage": [
+      [
+        516,
+        "[    7.209692] init: init first stage started!"
+      ]
+    ],
+    "partition_not_found": [
+      [
+        550,
+        "[   17.735486] init: bool android::init::BlockDevInitializer::InitDevices(std::set<std::string>): partition(s) not found after polling timeout: vda"
+      ]
+    ],
+    "fatal_reboot": [
+      [
+        552,
+        "[   17.760178] init: InitFatalReboot: signal 6"
+      ]
+    ],
+    "reboot_command": [
+      [
+        560,
+        "[   17.848104] reboot: Restarting system with command 'bootloader'"
+      ]
+    ]
+  }
+}

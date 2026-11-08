@@ -1,7 +1,7 @@
 {
-  "track": "T706",
+  "track": "T707",
   "flight": "flight-01",
-  "created_utc": "2026-11-08T18:49:45Z",
+  "created_utc": "2026-11-08T21:10:42Z",
   "qemu_version": "QEMU emulator version 11.1.2",
   "command": [
     "/opt/homebrew/bin/qemu-system-aarch64",
@@ -14,30 +14,30 @@
     "-smp",
     "4",
     "-kernel",
-    "/Users/Shared/wt-track706-clean-gsi-hwc-hotplug/guest-inputs/t705-Image",
+    "/Users/Shared/wt-track707-composer-hotplug-dispatch/guest-inputs/t705-Image",
     "-dtb",
-    "/Users/Shared/wt-track706-clean-gsi-hwc-hotplug/guest-inputs/t705-modified.dtb",
+    "/Users/Shared/wt-track707-composer-hotplug-dispatch/guest-inputs/t707-modified.dtb",
     "-device",
-    "loader,file=/Users/Shared/wt-track706-clean-gsi-hwc-hotplug/guest-inputs/t705-systemserver-fb0-fix.cpio.gz,addr=0x110000000,force-raw=on",
+    "loader,file=/Users/Shared/wt-track707-composer-hotplug-dispatch/guest-inputs/t707-systemserver-fb0-fix.cpio.gz,addr=0x110000000,force-raw=on",
     "-drive",
-    "if=none,id=t706system,file=/Users/Shared/wt-track706-clean-gsi-hwc-hotplug/guest-inputs/system.img,format=raw,readonly=on",
+    "if=none,id=t707system,file=/Users/Shared/wt-track707-composer-hotplug-dispatch/guest-inputs/system.img,format=raw,readonly=on",
     "-device",
-    "virtio-blk-device,drive=t706system",
+    "virtio-blk-device,drive=t707system",
     "-append",
-    "console=ttyAMA0,115200 earlycon loglevel=8 debug rdinit=/early-ramdisk androidboot.hardware=virt androidboot.selinux=permissive androidboot.veritymode=disabled enforcing=0 printk.ratelimit=0 brd.rd_nr=1 brd.rd_size=524288 androidboot.t706_fix_initramfs_sha256=583147fd4e8d0fd6fb6baee11eff41b95fd551a4477c825ac56d9c9450beb965 androidboot.t706_flight_target=2400 androidboot.t706_dtb_sha256=0205a94aeed15bba06c2ad0a8fea0a310fe40d87a9c26ee054b6c37074339e01 androidboot.t706_system_sha256=2de0533e93a90298e043ee71ca19a2c4545df601ceafc9e14fb507ef56506601 androidboot.t706_kernel_sha256=53d9563e1c1bae4be4cab2f62ab1bf6331445bf0e629c66b3fa43114988e2859",
+    "console=ttyAMA0,115200 earlycon loglevel=8 debug rdinit=/early-ramdisk androidboot.hardware=virt androidboot.selinux=permissive androidboot.veritymode=disabled enforcing=0 printk.ratelimit=0 brd.rd_nr=1 brd.rd_size=524288 androidboot.t707_fix_initramfs_sha256=201bcd058b65533ec7ad904bc79ee5b062c51855046b0e787cc81835508f0f94 androidboot.t707_flight_target=2400 androidboot.t707_dtb_sha256=3d8341f4ea6c49f4f4d4eeb8593c3270eedbcc27ae948b21d6e521e200994ba9 androidboot.t707_system_sha256=2de0533e93a90298e043ee71ca19a2c4545df601ceafc9e14fb507ef56506601 androidboot.t707_kernel_sha256=53d9563e1c1bae4be4cab2f62ab1bf6331445bf0e629c66b3fa43114988e2859",
     "-gdb",
-    "tcp:127.0.0.1:1250",
+    "tcp:127.0.0.1:1252",
     "-display",
     "none",
     "-serial",
-    "file:/Users/Shared/wt-track706-clean-gsi-hwc-hotplug/flights/flight-01/uart.log",
+    "file:/Users/Shared/wt-track707-composer-hotplug-dispatch/flights/flight-01/uart.log",
     "-monitor",
     "none",
     "-no-reboot"
   ],
   "inputs": {
     "kernel": {
-      "path": "/Users/Shared/wt-track706-clean-gsi-hwc-hotplug/guest-inputs/t705-Image",
+      "path": "/Users/Shared/wt-track707-composer-hotplug-dispatch/guest-inputs/t705-Image",
       "sha256": "53d9563e1c1bae4be4cab2f62ab1bf6331445bf0e629c66b3fa43114988e2859",
       "bytes": 20126208
     },
@@ -47,17 +47,17 @@
       "bytes": 31498864
     },
     "dtb": {
-      "path": "/Users/Shared/wt-track706-clean-gsi-hwc-hotplug/guest-inputs/t705-modified.dtb",
-      "sha256": "0205a94aeed15bba06c2ad0a8fea0a310fe40d87a9c26ee054b6c37074339e01",
+      "path": "/Users/Shared/wt-track707-composer-hotplug-dispatch/guest-inputs/t707-modified.dtb",
+      "sha256": "3d8341f4ea6c49f4f4d4eeb8593c3270eedbcc27ae948b21d6e521e200994ba9",
       "bytes": 2049
     },
     "boot_image": {
-      "path": "/Users/Shared/wt-track706-clean-gsi-hwc-hotplug/guest-inputs/t705-systemserver-fb0-fix.cpio.gz",
-      "sha256": "583147fd4e8d0fd6fb6baee11eff41b95fd551a4477c825ac56d9c9450beb965",
-      "bytes": 53169644
+      "path": "/Users/Shared/wt-track707-composer-hotplug-dispatch/guest-inputs/t707-systemserver-fb0-fix.cpio.gz",
+      "sha256": "201bcd058b65533ec7ad904bc79ee5b062c51855046b0e787cc81835508f0f94",
+      "bytes": 53172105
     },
     "system_img": {
-      "path": "/Users/Shared/wt-track706-clean-gsi-hwc-hotplug/guest-inputs/system.img",
+      "path": "/Users/Shared/wt-track707-composer-hotplug-dispatch/guest-inputs/system.img",
       "sha256": "2de0533e93a90298e043ee71ca19a2c4545df601ceafc9e14fb507ef56506601",
       "bytes": 2059816960
     }
