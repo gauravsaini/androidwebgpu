@@ -1,15 +1,15 @@
 {
-  "timestamp_utc": "2026-11-08T22:01:00Z",
+  "timestamp_utc": "2026-11-09T00:25:00Z",
   "status": "CLOSED",
-  "track": "T707",
-  "flight": null,
+  "track": "T708",
+  "flight": "flight-01",
   "current_step": "Step 4 Adjudication Complete",
   "verdict": "FAIL",
-  "host_elapsed_seconds": 2407.74,
-  "guest_log_max_seconds": 2406.15,
+  "host_elapsed_seconds": 2407.8,
+  "guest_log_max_seconds": 2407.143,
   "target_host_seconds": 2500,
   "target_guest_seconds": 2400,
   "supervisor_pid": null,
   "qemu_pid": null,
-  "note": "Track T707 closed with honest Verdict: FAIL. Composer 2.1 onHotplug dispatch cured the HWC hotplug wall (0 occurrences of 'HWC did not hotplug', down from 31). SurfaceFlinger progressed to line 3764 in SurfaceFlinger::init() (SkiaRenderEngine::primeCache()) where it aborted with 'output buffer not gpu writeable'. First failing link isolated and exact next fix named for T708."
+  "note": "Track T708 closed with honest FAIL. SurfaceFlinger primeCache abort wall 100% CURED (output buffer not gpu writeable: 0, composer client errors: 0). system_server forking unlocked (47 instances across 2400s flight). Blocked by system_server early bootstrap termination."
 }

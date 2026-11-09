@@ -1,18 +1,18 @@
 {
-  "track": "T707",
+  "track": "T708",
   "flight": "flight-01",
-  "stop_reason": "Guest target reached (2406.2s >= 2400s)",
-  "started_utc": "2026-11-08T21:10:42Z",
-  "ended_utc": "2026-11-08T21:50:50Z",
-  "host_elapsed_seconds": 2407.74,
-  "guest_log_max_seconds": 2406.15,
+  "stop_reason": "Guest target reached (2407.1s >= 2400s)",
+  "started_utc": "2026-11-08T23:39:25Z",
+  "ended_utc": "2026-11-09T00:19:33Z",
+  "host_elapsed_seconds": 2407.8,
+  "guest_log_max_seconds": 2407.143,
   "qemu_exit_code": 0,
-  "log_bytes": 5571703,
-  "log_lines": 51999,
-  "log_sha256": "13699cbebe1149b246409a4bd56e6228ebf4eb59983bc25ea9e0b06cfc72f9c9",
+  "log_bytes": 544137,
+  "log_lines": 5562,
+  "log_sha256": "689f4f84df291cbccf0d1d78c1a3ebe1ba53b2a0c717d95ea31e455cbe1ab2d2",
   "inputs": {
     "kernel": {
-      "path": "/Users/Shared/wt-track707-composer-hotplug-dispatch/guest-inputs/t705-Image",
+      "path": "/Users/Shared/wt-track708-primecache-disable/guest-inputs/t705-Image",
       "sha256": "53d9563e1c1bae4be4cab2f62ab1bf6331445bf0e629c66b3fa43114988e2859",
       "bytes": 20126208
     },
@@ -22,17 +22,17 @@
       "bytes": 31498864
     },
     "dtb": {
-      "path": "/Users/Shared/wt-track707-composer-hotplug-dispatch/guest-inputs/t707-modified.dtb",
-      "sha256": "3d8341f4ea6c49f4f4d4eeb8593c3270eedbcc27ae948b21d6e521e200994ba9",
+      "path": "/Users/Shared/wt-track708-primecache-disable/guest-inputs/t708-modified.dtb",
+      "sha256": "9a85c074df4a6c0a84fec65f793cb1b63a73c94ba135d247ea5bf936539fb85c",
       "bytes": 2049
     },
     "boot_image": {
-      "path": "/Users/Shared/wt-track707-composer-hotplug-dispatch/guest-inputs/t707-systemserver-fb0-fix.cpio.gz",
-      "sha256": "201bcd058b65533ec7ad904bc79ee5b062c51855046b0e787cc81835508f0f94",
-      "bytes": 53172105
+      "path": "/Users/Shared/wt-track708-primecache-disable/guest-inputs/t708-systemserver-fb0-fix.cpio.gz",
+      "sha256": "49d395d3e195cdbe2686c61a3b53b32a48ed16e81b592a67e71f1b8236fe1ad9",
+      "bytes": 53172530
     },
     "system_img": {
-      "path": "/Users/Shared/wt-track707-composer-hotplug-dispatch/guest-inputs/system.img",
+      "path": "/Users/Shared/wt-track708-primecache-disable/guest-inputs/system.img",
       "sha256": "2de0533e93a90298e043ee71ca19a2c4545df601ceafc9e14fb507ef56506601",
       "bytes": 2059816960
     }

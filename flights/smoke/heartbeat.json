@@ -1,15 +1,15 @@
 {
-  "timestamp_utc": "2026-11-08T21:05:17Z",
-  "status": "Flight complete (Guest target reached (124.5s >= 120s))",
-  "track": "T707",
+  "timestamp_utc": "2026-11-08T23:35:04Z",
+  "status": "Flight complete (Guest target reached (141.2s >= 120s))",
+  "track": "T708",
   "flight": "smoke",
   "current_step": "Flight smoke (120s guest target)",
   "verdict": null,
-  "host_elapsed_seconds": 125.25,
-  "guest_log_max_seconds": 124.544,
+  "host_elapsed_seconds": 145.27,
+  "guest_log_max_seconds": 141.162,
   "target_host_seconds": 200,
   "target_guest_seconds": 120,
-  "supervisor_pid": 92953,
+  "supervisor_pid": 98635,
   "qemu_pid": null,
-  "note": "Flight in progress: Flight complete (Guest target reached (124.5s >= 120s)) host=125s guest=124.5s"
+  "note": "Flight in progress: Flight complete (Guest target reached (141.2s >= 120s)) host=145s guest=141.2s"
 }
