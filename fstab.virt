@@ -1,0 +1,4 @@
+# Diskless Android boot: early-ramdisk attaches loop0/loop1 before /init.
+# First-stage init recreates block nodes under /dev/block from sysfs.
+/dev/block/vda /system ext4 ro,barrier=1 wait,first_stage_mount
+/dev/block/loop1 /vendor ext4 ro,barrier=1 wait,first_stage_mount

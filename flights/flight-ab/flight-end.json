@@ -1,18 +1,18 @@
 {
-  "track": "T709",
+  "track": "T710",
   "flight": "flight-ab",
   "stop_reason": "QEMU process exited with returncode 0",
-  "started_utc": "2026-11-09T02:12:38Z",
-  "ended_utc": "2026-11-09T02:13:03Z",
+  "started_utc": "2026-11-09T06:21:43Z",
+  "ended_utc": "2026-11-09T06:22:08Z",
   "host_elapsed_seconds": 25.03,
-  "guest_log_max_seconds": 19.788,
+  "guest_log_max_seconds": 19.949,
   "qemu_exit_code": 0,
-  "log_bytes": 47667,
-  "log_lines": 571,
-  "log_sha256": "7da313bcbc5c3b491af1e29768cca7e22361c8f3b2d53d0061573d1999cde08f",
+  "log_bytes": 47791,
+  "log_lines": 573,
+  "log_sha256": "923025b8e180ac74bf12c298501f31cb109e6918bc83b1db6f1b203652a137c5",
   "inputs": {
     "kernel": {
-      "path": "/Users/Shared/wt-track709-logcat-systemserver-cure/guest-inputs/canonical-Image",
+      "path": "/Users/Shared/wt-track710-sensorservice-wall-cure/guest-inputs/canonical-Image",
       "sha256": "05c4391767a6ff44f5124796b92d7b98027c37fbf58e81b342ca2adb7d99fa04",
       "bytes": 23073280
     },
@@ -22,17 +22,17 @@
       "bytes": 31498864
     },
     "dtb": {
-      "path": "/Users/Shared/wt-track709-logcat-systemserver-cure/guest-inputs/t709-modified.dtb",
-      "sha256": "718691ecb661046785bae0b26a2d5cbd2ae90518ef591a810f7484ac03b9263e",
+      "path": "/Users/Shared/wt-track710-sensorservice-wall-cure/guest-inputs/t710-modified.dtb",
+      "sha256": "1ef7939b7058305b857da4bd1f449493552bfb12c0a8e8d8d0cb808dfb9c2627",
       "bytes": 2049
     },
     "boot_image": {
-      "path": "/Users/Shared/wt-track709-logcat-systemserver-cure/guest-inputs/t709-systemserver-fb0-fix.cpio.gz",
-      "sha256": "f164d33b8b48a8541de4c6e163be654647fca39a1a8a70b421b05a7114f562db",
-      "bytes": 53465900
+      "path": "/Users/Shared/wt-track710-sensorservice-wall-cure/guest-inputs/t710-fix.cpio.gz",
+      "sha256": "e839cb18cd60068d804bb0a93fc69b6c31ebe5ebbcd93cdd0bf30bb088066665",
+      "bytes": 53501694
     },
     "system_img": {
-      "path": "/Users/Shared/wt-track709-logcat-systemserver-cure/guest-inputs/system.img",
+      "path": "/Users/Shared/wt-track710-sensorservice-wall-cure/guest-inputs/system.img",
       "sha256": "2de0533e93a90298e043ee71ca19a2c4545df601ceafc9e14fb507ef56506601",
       "bytes": 2059816960
     }
