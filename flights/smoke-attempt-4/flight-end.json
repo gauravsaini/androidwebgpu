@@ -1,0 +1,40 @@
+{
+  "track": "T709",
+  "flight": "smoke",
+  "stop_reason": "Guest target reached (129.4s >= 120s)",
+  "started_utc": "2026-11-09T01:35:49Z",
+  "ended_utc": "2026-11-09T01:38:00Z",
+  "host_elapsed_seconds": 130.27,
+  "guest_log_max_seconds": 129.41,
+  "qemu_exit_code": 0,
+  "log_bytes": 286024,
+  "log_lines": 3666,
+  "log_sha256": "89a4a9d02fe427494689e2873d1b1192f0ca3edecfcbc2ae913040358c5bda4d",
+  "inputs": {
+    "kernel": {
+      "path": "/Users/Shared/wt-track709-logcat-systemserver-cure/guest-inputs/t705-Image",
+      "sha256": "53d9563e1c1bae4be4cab2f62ab1bf6331445bf0e629c66b3fa43114988e2859",
+      "bytes": 20126208
+    },
+    "qemu": {
+      "path": "/opt/homebrew/bin/qemu-system-aarch64",
+      "sha256": "8e5c46dc6752c36afbb706f933e72fef835e35f48881a63cadb06c6d29bac869",
+      "bytes": 31498864
+    },
+    "dtb": {
+      "path": "/Users/Shared/wt-track709-logcat-systemserver-cure/guest-inputs/t709-modified.dtb",
+      "sha256": "775b69088b9b75d5e672ab5ccc838cbe307bd494ad2974f4067019b4b92541e1",
+      "bytes": 2049
+    },
+    "boot_image": {
+      "path": "/Users/Shared/wt-track709-logcat-systemserver-cure/guest-inputs/t709-systemserver-fb0-fix.cpio.gz",
+      "sha256": "3031429160c1cf622b905516b674e34c4061ed82374e960d902bdb82287404dc",
+      "bytes": 53465083
+    },
+    "system_img": {
+      "path": "/Users/Shared/wt-track709-logcat-systemserver-cure/guest-inputs/system.img",
+      "sha256": "2de0533e93a90298e043ee71ca19a2c4545df601ceafc9e14fb507ef56506601",
+      "bytes": 2059816960
+    }
+  }
+}

@@ -1,0 +1,15 @@
+{
+  "timestamp_utc": "2026-11-09T01:30:26Z",
+  "status": "Flight complete (QEMU process exited with returncode 0)",
+  "track": "T709",
+  "flight": "smoke",
+  "current_step": "Flight smoke (120s guest target)",
+  "verdict": null,
+  "host_elapsed_seconds": 10.01,
+  "guest_log_max_seconds": 7.066,
+  "target_host_seconds": 240,
+  "target_guest_seconds": 120,
+  "supervisor_pid": 3666,
+  "qemu_pid": null,
+  "note": "Flight in progress: Flight complete (QEMU process exited with returncode 0) host=10s guest=7.1s"
+}

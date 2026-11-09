@@ -1,0 +1,40 @@
+{
+  "track": "T709",
+  "flight": "smoke",
+  "stop_reason": "QEMU process exited with returncode 0",
+  "started_utc": "2026-11-09T01:41:16Z",
+  "ended_utc": "2026-11-09T01:41:26Z",
+  "host_elapsed_seconds": 10.01,
+  "guest_log_max_seconds": 6.844,
+  "qemu_exit_code": 0,
+  "log_bytes": 43753,
+  "log_lines": 534,
+  "log_sha256": "50447f60cc8d368da5f8dc34cc8fb93356ba6bf5b617160910a1a29c1da28658",
+  "inputs": {
+    "kernel": {
+      "path": "/Users/Shared/wt-track709-logcat-systemserver-cure/guest-inputs/t705-Image",
+      "sha256": "53d9563e1c1bae4be4cab2f62ab1bf6331445bf0e629c66b3fa43114988e2859",
+      "bytes": 20126208
+    },
+    "qemu": {
+      "path": "/opt/homebrew/bin/qemu-system-aarch64",
+      "sha256": "8e5c46dc6752c36afbb706f933e72fef835e35f48881a63cadb06c6d29bac869",
+      "bytes": 31498864
+    },
+    "dtb": {
+      "path": "/Users/Shared/wt-track709-logcat-systemserver-cure/guest-inputs/t709-modified.dtb",
+      "sha256": "4e42d669452d0add489db40c0f35ea1dfa0738c7868ff8e67470dad57962cfb5",
+      "bytes": 2049
+    },
+    "boot_image": {
+      "path": "/Users/Shared/wt-track709-logcat-systemserver-cure/guest-inputs/t709-systemserver-fb0-fix.cpio.gz",
+      "sha256": "4f147acd44de92b17fce9bd84ee5a9c5ce9535d68e78da5dd3805209bd177c37",
+      "bytes": 53465290
+    },
+    "system_img": {
+      "path": "/Users/Shared/wt-track709-logcat-systemserver-cure/guest-inputs/system.img",
+      "sha256": "2de0533e93a90298e043ee71ca19a2c4545df601ceafc9e14fb507ef56506601",
+      "bytes": 2059816960
+    }
+  }
+}
