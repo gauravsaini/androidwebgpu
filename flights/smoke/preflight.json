@@ -1,7 +1,7 @@
 {
-  "track": "T708",
+  "track": "T709",
   "flight": "smoke",
-  "created_utc": "2026-11-08T23:32:39Z",
+  "created_utc": "2026-11-09T02:05:27Z",
   "qemu_version": "QEMU emulator version 11.1.2",
   "command": [
     "/opt/homebrew/bin/qemu-system-aarch64",
@@ -14,30 +14,30 @@
     "-smp",
     "4",
     "-kernel",
-    "/Users/Shared/wt-track708-primecache-disable/guest-inputs/t705-Image",
+    "/Users/Shared/wt-track709-logcat-systemserver-cure/guest-inputs/t705-Image",
     "-dtb",
-    "/Users/Shared/wt-track708-primecache-disable/guest-inputs/t708-modified.dtb",
+    "/Users/Shared/wt-track709-logcat-systemserver-cure/guest-inputs/t709-modified.dtb",
     "-device",
-    "loader,file=/Users/Shared/wt-track708-primecache-disable/guest-inputs/t708-systemserver-fb0-fix.cpio.gz,addr=0x110000000,force-raw=on",
+    "loader,file=/Users/Shared/wt-track709-logcat-systemserver-cure/guest-inputs/t709-systemserver-fb0-fix.cpio.gz,addr=0x110000000,force-raw=on",
     "-drive",
-    "if=none,id=t708system,file=/Users/Shared/wt-track708-primecache-disable/guest-inputs/system.img,format=raw,readonly=on",
+    "if=none,id=t709system,file=/Users/Shared/wt-track709-logcat-systemserver-cure/guest-inputs/system.img,format=raw,readonly=on",
     "-device",
-    "virtio-blk-device,drive=t708system",
+    "virtio-blk-device,drive=t709system",
     "-append",
-    "console=ttyAMA0,115200 earlycon loglevel=8 debug rdinit=/early-ramdisk androidboot.hardware=virt androidboot.selinux=permissive androidboot.veritymode=disabled enforcing=0 printk.ratelimit=0 brd.rd_nr=1 brd.rd_size=524288 androidboot.t708_fix_initramfs_sha256=49d395d3e195cdbe2686c61a3b53b32a48ed16e81b592a67e71f1b8236fe1ad9 androidboot.t708_flight_target=120 androidboot.t708_dtb_sha256=9a85c074df4a6c0a84fec65f793cb1b63a73c94ba135d247ea5bf936539fb85c androidboot.t708_system_sha256=2de0533e93a90298e043ee71ca19a2c4545df601ceafc9e14fb507ef56506601 androidboot.t708_kernel_sha256=53d9563e1c1bae4be4cab2f62ab1bf6331445bf0e629c66b3fa43114988e2859",
+    "console=ttyAMA0,115200 earlycon loglevel=8 debug rdinit=/early-ramdisk androidboot.hardware=virt androidboot.selinux=permissive androidboot.veritymode=disabled enforcing=0 printk.ratelimit=0 brd.rd_nr=1 brd.rd_size=524288 androidboot.t709_fix_initramfs_sha256=f164d33b8b48a8541de4c6e163be654647fca39a1a8a70b421b05a7114f562db androidboot.t709_flight_target=240 androidboot.t709_dtb_sha256=718691ecb661046785bae0b26a2d5cbd2ae90518ef591a810f7484ac03b9263e androidboot.t709_system_sha256=2de0533e93a90298e043ee71ca19a2c4545df601ceafc9e14fb507ef56506601 androidboot.t709_kernel_sha256=53d9563e1c1bae4be4cab2f62ab1bf6331445bf0e629c66b3fa43114988e2859",
     "-gdb",
     "tcp:127.0.0.1:1251",
     "-display",
     "none",
     "-serial",
-    "file:/Users/Shared/wt-track708-primecache-disable/flights/smoke/uart.log",
+    "file:/Users/Shared/wt-track709-logcat-systemserver-cure/flights/smoke/uart.log",
     "-monitor",
     "none",
     "-no-reboot"
   ],
   "inputs": {
     "kernel": {
-      "path": "/Users/Shared/wt-track708-primecache-disable/guest-inputs/t705-Image",
+      "path": "/Users/Shared/wt-track709-logcat-systemserver-cure/guest-inputs/t705-Image",
       "sha256": "53d9563e1c1bae4be4cab2f62ab1bf6331445bf0e629c66b3fa43114988e2859",
       "bytes": 20126208
     },
@@ -47,17 +47,17 @@
       "bytes": 31498864
     },
     "dtb": {
-      "path": "/Users/Shared/wt-track708-primecache-disable/guest-inputs/t708-modified.dtb",
-      "sha256": "9a85c074df4a6c0a84fec65f793cb1b63a73c94ba135d247ea5bf936539fb85c",
+      "path": "/Users/Shared/wt-track709-logcat-systemserver-cure/guest-inputs/t709-modified.dtb",
+      "sha256": "718691ecb661046785bae0b26a2d5cbd2ae90518ef591a810f7484ac03b9263e",
       "bytes": 2049
     },
     "boot_image": {
-      "path": "/Users/Shared/wt-track708-primecache-disable/guest-inputs/t708-systemserver-fb0-fix.cpio.gz",
-      "sha256": "49d395d3e195cdbe2686c61a3b53b32a48ed16e81b592a67e71f1b8236fe1ad9",
-      "bytes": 53172530
+      "path": "/Users/Shared/wt-track709-logcat-systemserver-cure/guest-inputs/t709-systemserver-fb0-fix.cpio.gz",
+      "sha256": "f164d33b8b48a8541de4c6e163be654647fca39a1a8a70b421b05a7114f562db",
+      "bytes": 53465900
     },
     "system_img": {
-      "path": "/Users/Shared/wt-track708-primecache-disable/guest-inputs/system.img",
+      "path": "/Users/Shared/wt-track709-logcat-systemserver-cure/guest-inputs/system.img",
       "sha256": "2de0533e93a90298e043ee71ca19a2c4545df601ceafc9e14fb507ef56506601",
       "bytes": 2059816960
     }
