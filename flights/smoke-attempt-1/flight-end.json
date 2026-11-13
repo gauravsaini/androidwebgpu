@@ -1,18 +1,18 @@
 {
-  "track": "T708",
+  "track": "T714",
   "flight": "smoke",
-  "stop_reason": "Guest target reached (122.7s >= 120s)",
-  "started_utc": "2026-11-08T23:24:38Z",
-  "ended_utc": "2026-11-08T23:26:43Z",
-  "host_elapsed_seconds": 125.24,
-  "guest_log_max_seconds": 122.737,
+  "stop_reason": "Guest target reached (132.6s >= 120s)",
+  "started_utc": "2026-11-13T10:19:15Z",
+  "ended_utc": "2026-11-13T10:21:30Z",
+  "host_elapsed_seconds": 135.28,
+  "guest_log_max_seconds": 132.63,
   "qemu_exit_code": 0,
-  "log_bytes": 308109,
-  "log_lines": 3921,
-  "log_sha256": "2b8ac9be575c70cde55bd304cfb28f6c2db4ebc92a1726ec91cf8561a602a33f",
+  "log_bytes": 1073855,
+  "log_lines": 10998,
+  "log_sha256": "d7a7d14bcf2a0fadc7db52a53549711f6d11c059ead5904f676897580fda29c1",
   "inputs": {
     "kernel": {
-      "path": "/Users/Shared/wt-track708-primecache-disable/guest-inputs/t705-Image",
+      "path": "/Users/Shared/wt-track714-binary-patch/guest-inputs/t705-Image",
       "sha256": "53d9563e1c1bae4be4cab2f62ab1bf6331445bf0e629c66b3fa43114988e2859",
       "bytes": 20126208
     },
@@ -22,19 +22,24 @@
       "bytes": 31498864
     },
     "dtb": {
-      "path": "/Users/Shared/wt-track708-primecache-disable/guest-inputs/t708-modified.dtb",
-      "sha256": "760662f13ffedd3fff3b6e70beefcb558ecc112d7c459f20131a62e09484f5e1",
+      "path": "/Users/Shared/wt-track714-binary-patch/guest-inputs/t713-modified.dtb",
+      "sha256": "d60bc98a67c8b8c014b65412d9af869a432a744f7f1eab24b78a290fdf396161",
       "bytes": 2049
     },
     "boot_image": {
-      "path": "/Users/Shared/wt-track708-primecache-disable/guest-inputs/t708-systemserver-fb0-fix.cpio.gz",
-      "sha256": "b8cfc1ef41772d8e9de9f50fe2b99c1b832c78d6dab39fe24dbbcbe64fa91b07",
-      "bytes": 53172487
+      "path": "/Users/Shared/wt-track714-binary-patch/guest-inputs/t713-fix.cpio.gz",
+      "sha256": "edba515eac53a2544ba33aa17cb3749c37a2f336207a3efcdfffb94e56ac3177",
+      "bytes": 53502851
     },
     "system_img": {
-      "path": "/Users/Shared/wt-track708-primecache-disable/guest-inputs/system.img",
-      "sha256": "2de0533e93a90298e043ee71ca19a2c4545df601ceafc9e14fb507ef56506601",
+      "path": "/Users/Shared/wt-track714-binary-patch/guest-inputs/system.img",
+      "sha256": "ea5af412552668682f185a59dd4af39d600325c4ad1aaa62e0413602fae143ef",
       "bytes": 2059816960
+    },
+    "vendor_img": {
+      "path": "/Users/Shared/wt-track714-binary-patch/guest-inputs/t712-vendor.img",
+      "sha256": "095386ab640836f01859edc1ff955dab8644dce88e1c7597969c51c8d55578bf",
+      "bytes": 134217728
     }
   }
 }

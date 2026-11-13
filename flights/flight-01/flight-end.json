@@ -1,18 +1,18 @@
 {
-  "track": "T713",
+  "track": "T714",
   "flight": "flight-01",
-  "stop_reason": "Guest target reached (2411.1s >= 2400s)",
-  "started_utc": "2026-11-13T08:02:37Z",
-  "ended_utc": "2026-11-13T08:42:50Z",
-  "host_elapsed_seconds": 2412.73,
-  "guest_log_max_seconds": 2411.079,
+  "stop_reason": "Guest target reached (2431.7s >= 2400s)",
+  "started_utc": "2026-11-13T10:56:15Z",
+  "ended_utc": "2026-11-13T11:36:48Z",
+  "host_elapsed_seconds": 2432.92,
+  "guest_log_max_seconds": 2431.696,
   "qemu_exit_code": 0,
-  "log_bytes": 6861207,
-  "log_lines": 55823,
-  "log_sha256": "dbd2108d4cda477a6d1c67ad80d4fd58f1fecd4e23a6c6be34204fc4cdac49cf",
+  "log_bytes": 6950481,
+  "log_lines": 56604,
+  "log_sha256": "129942be454964593fad4eba72d33f504a2f35defabd36b8bc48cc23c979ef78",
   "inputs": {
     "kernel": {
-      "path": "/Users/Shared/wt-track713-sensorstart-bypass/guest-inputs/t705-Image",
+      "path": "/Users/Shared/wt-track714-binary-patch/guest-inputs/t705-Image",
       "sha256": "53d9563e1c1bae4be4cab2f62ab1bf6331445bf0e629c66b3fa43114988e2859",
       "bytes": 20126208
     },
@@ -22,22 +22,22 @@
       "bytes": 31498864
     },
     "dtb": {
-      "path": "/Users/Shared/wt-track713-sensorstart-bypass/guest-inputs/t713-modified.dtb",
+      "path": "/Users/Shared/wt-track714-binary-patch/guest-inputs/t713-modified.dtb",
       "sha256": "d60bc98a67c8b8c014b65412d9af869a432a744f7f1eab24b78a290fdf396161",
       "bytes": 2049
     },
     "boot_image": {
-      "path": "/Users/Shared/wt-track713-sensorstart-bypass/guest-inputs/t713-fix.cpio.gz",
+      "path": "/Users/Shared/wt-track714-binary-patch/guest-inputs/t713-fix.cpio.gz",
       "sha256": "edba515eac53a2544ba33aa17cb3749c37a2f336207a3efcdfffb94e56ac3177",
       "bytes": 53502851
     },
     "system_img": {
-      "path": "/Users/Shared/wt-track713-sensorstart-bypass/guest-inputs/system.img",
-      "sha256": "2de0533e93a90298e043ee71ca19a2c4545df601ceafc9e14fb507ef56506601",
+      "path": "/Users/Shared/wt-track714-binary-patch/guest-inputs/system.img",
+      "sha256": "ea5af412552668682f185a59dd4af39d600325c4ad1aaa62e0413602fae143ef",
       "bytes": 2059816960
     },
     "vendor_img": {
-      "path": "/Users/Shared/wt-track713-sensorstart-bypass/guest-inputs/t712-vendor.img",
+      "path": "/Users/Shared/wt-track714-binary-patch/guest-inputs/t712-vendor.img",
       "sha256": "095386ab640836f01859edc1ff955dab8644dce88e1c7597969c51c8d55578bf",
       "bytes": 134217728
     }

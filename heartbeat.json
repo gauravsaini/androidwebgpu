@@ -1,15 +1,15 @@
 {
-  "timestamp_utc": "2026-11-13T08:58:00Z",
+  "timestamp_utc": "2026-11-13T11:46:00Z",
   "status": "CLOSED",
-  "track": "T713",
+  "track": "T714",
   "flight": "flight-01",
-  "current_step": "Step 4 Complete",
+  "current_step": "Step 4 complete: Adjudication and deliverables generated",
   "verdict": "FAIL",
-  "host_elapsed_seconds": 2412.73,
-  "guest_log_max_seconds": 2411.079,
-  "target_host_seconds": 2520,
+  "host_elapsed_seconds": 2432.92,
+  "guest_log_max_seconds": 2431.696,
+  "target_host_seconds": 2550,
   "target_guest_seconds": 2400,
   "supervisor_pid": null,
   "qemu_pid": null,
-  "note": "Track T713 closed with Verdict: FAIL. In-process startSensorServiceNative hang caused 10 Watchdog kills on FutureTask.get() in SensorService.onBootPhase(89). Shadowing of CPIO property files by system.img ext4 mount diagnosed as root cause. All deliverables recorded."
+  "note": "Track T714 complete: direct binary patch verified; SystemServerInitThreadPool starvation & installd dependency diagnosed; 10 Watchdog kills reproduced; Verdict FAIL"
 }

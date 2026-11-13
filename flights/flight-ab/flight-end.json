@@ -1,15 +1,15 @@
 {
-  "track": "T713",
+  "track": "T714",
   "flight": "flight-ab",
   "stop_reason": "QEMU process exited with returncode 0",
-  "started_utc": "2026-11-13T08:50:47Z",
-  "ended_utc": "2026-11-13T08:51:12Z",
-  "host_elapsed_seconds": 25.04,
-  "guest_log_max_seconds": 19.699,
+  "started_utc": "2026-11-13T11:38:07Z",
+  "ended_utc": "2026-11-13T11:38:27Z",
+  "host_elapsed_seconds": 20.02,
+  "guest_log_max_seconds": 19.475,
   "qemu_exit_code": 0,
-  "log_bytes": 47846,
-  "log_lines": 574,
-  "log_sha256": "243f07249f1b1c730137d558befb20296336453d34b9e1922ba30bfd9cbf323e",
+  "log_bytes": 47928,
+  "log_lines": 575,
+  "log_sha256": "6a2a008cd4a4044f6ef61285055a65812771b186af274e9f813d0c742ff487ff",
   "inputs": {
     "kernel": {
       "path": "guest-inputs/canonical-Image",
@@ -22,22 +22,22 @@
       "bytes": 31498864
     },
     "dtb": {
-      "path": "/Users/Shared/wt-track713-sensorstart-bypass/guest-inputs/t713-modified.dtb",
+      "path": "/Users/Shared/wt-track714-binary-patch/guest-inputs/t713-modified.dtb",
       "sha256": "d60bc98a67c8b8c014b65412d9af869a432a744f7f1eab24b78a290fdf396161",
       "bytes": 2049
     },
     "boot_image": {
-      "path": "/Users/Shared/wt-track713-sensorstart-bypass/guest-inputs/t713-fix.cpio.gz",
+      "path": "/Users/Shared/wt-track714-binary-patch/guest-inputs/t713-fix.cpio.gz",
       "sha256": "edba515eac53a2544ba33aa17cb3749c37a2f336207a3efcdfffb94e56ac3177",
       "bytes": 53502851
     },
     "system_img": {
-      "path": "/Users/Shared/wt-track713-sensorstart-bypass/guest-inputs/system.img",
-      "sha256": "2de0533e93a90298e043ee71ca19a2c4545df601ceafc9e14fb507ef56506601",
+      "path": "/Users/Shared/wt-track714-binary-patch/guest-inputs/system.img",
+      "sha256": "ea5af412552668682f185a59dd4af39d600325c4ad1aaa62e0413602fae143ef",
       "bytes": 2059816960
     },
     "vendor_img": {
-      "path": "/Users/Shared/wt-track713-sensorstart-bypass/guest-inputs/t712-vendor.img",
+      "path": "/Users/Shared/wt-track714-binary-patch/guest-inputs/t712-vendor.img",
       "sha256": "095386ab640836f01859edc1ff955dab8644dce88e1c7597969c51c8d55578bf",
       "bytes": 134217728
     }
