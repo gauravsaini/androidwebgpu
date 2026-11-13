@@ -1,15 +1,15 @@
 {
-  "timestamp_utc": "2026-11-09T08:28:47Z",
+  "timestamp_utc": "2026-11-13T07:22:27Z",
   "status": "Flight complete (QEMU process exited with returncode 0)",
-  "track": "T711",
+  "track": "T712",
   "flight": "flight-ab",
   "current_step": "Flight flight-ab (240s guest target)",
   "verdict": null,
-  "host_elapsed_seconds": 20.03,
-  "guest_log_max_seconds": 19.189,
-  "target_host_seconds": 300,
+  "host_elapsed_seconds": 25.04,
+  "guest_log_max_seconds": 19.959,
+  "target_host_seconds": 360,
   "target_guest_seconds": 240,
-  "supervisor_pid": 18430,
+  "supervisor_pid": 35179,
   "qemu_pid": null,
-  "note": "Flight in progress: Flight complete (QEMU process exited with returncode 0) host=20s guest=19.2s"
+  "note": "Flight in progress: Flight complete (QEMU process exited with returncode 0) host=25s guest=20.0s"
 }

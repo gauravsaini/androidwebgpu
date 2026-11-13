@@ -1,15 +1,15 @@
 {
-  "timestamp_utc": "2026-11-09T09:11:54Z",
-  "status": "Flight complete (Guest target reached (2401.4s >= 2400s))",
-  "track": "T711",
+  "timestamp_utc": "2026-11-13T07:28:30Z",
+  "status": "CLOSED",
+  "track": "T712",
   "flight": "flight-01",
-  "current_step": "Flight flight-01 (2400s guest target)",
-  "verdict": null,
-  "host_elapsed_seconds": 2402.91,
-  "guest_log_max_seconds": 2401.406,
-  "target_host_seconds": 2500,
+  "current_step": "Step 4 complete: Adjudication and deliverables complete",
+  "verdict": "FAIL",
+  "host_elapsed_seconds": 2402.81,
+  "guest_log_max_seconds": 2401.978,
+  "target_host_seconds": 2520,
   "target_guest_seconds": 2400,
-  "supervisor_pid": 18477,
+  "supervisor_pid": null,
   "qemu_pid": null,
-  "note": "Flight in progress: Flight complete (Guest target reached (2401.4s >= 2400s)) host=2403s guest=2401.4s"
+  "note": "Track T712 CLOSED — FAIL (hals.conf loaded, ISensors published; in-process startSensorServiceNative hang caused Watchdog SIGKILL of system_server across 10 instances; queueBuffer 0, presentDisplay 0)"
 }
