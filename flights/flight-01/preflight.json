@@ -1,7 +1,7 @@
 {
-  "track": "T712",
+  "track": "T713",
   "flight": "flight-01",
-  "created_utc": "2026-11-13T06:30:17Z",
+  "created_utc": "2026-11-13T08:02:37Z",
   "qemu_version": "QEMU emulator version 11.1.2",
   "command": [
     "/opt/homebrew/bin/qemu-system-aarch64",
@@ -14,30 +14,30 @@
     "-smp",
     "4",
     "-kernel",
-    "/Users/Shared/wt-track712-hals-conf-fix/guest-inputs/t705-Image",
+    "/Users/Shared/wt-track713-sensorstart-bypass/guest-inputs/t705-Image",
     "-dtb",
-    "/Users/Shared/wt-track712-hals-conf-fix/guest-inputs/t712-modified.dtb",
+    "/Users/Shared/wt-track713-sensorstart-bypass/guest-inputs/t713-modified.dtb",
     "-device",
-    "loader,file=/Users/Shared/wt-track712-hals-conf-fix/guest-inputs/t712-fix.cpio.gz,addr=0x110000000,force-raw=on",
+    "loader,file=/Users/Shared/wt-track713-sensorstart-bypass/guest-inputs/t713-fix.cpio.gz,addr=0x110000000,force-raw=on",
     "-drive",
-    "if=none,id=t712system,file=/Users/Shared/wt-track712-hals-conf-fix/guest-inputs/system.img,format=raw,readonly=on",
+    "if=none,id=t713system,file=/Users/Shared/wt-track713-sensorstart-bypass/guest-inputs/system.img,format=raw,readonly=on",
     "-device",
-    "virtio-blk-device,drive=t712system",
+    "virtio-blk-device,drive=t713system",
     "-append",
-    "console=ttyAMA0,115200 earlycon loglevel=8 debug rdinit=/early-ramdisk androidboot.hardware=virt androidboot.selinux=permissive androidboot.veritymode=disabled enforcing=0 printk.ratelimit=0 brd.rd_nr=1 brd.rd_size=524288 androidboot.t712_fix_initramfs_sha256=297d0a447cd56cbc8b985b11956e95563d5965640abae32985ae1ee26f559155 androidboot.t712_flight_target=2400 androidboot.t712_dtb_sha256=58f5acb3b250f64fb7426cb090cce1728a153281dfdb40d8a9b6863a949e41d8 androidboot.t712_system_sha256=2de0533e93a90298e043ee71ca19a2c4545df601ceafc9e14fb507ef56506601 androidboot.t712_kernel_sha256=53d9563e1c1bae4be4cab2f62ab1bf6331445bf0e629c66b3fa43114988e2859",
+    "console=ttyAMA0,115200 earlycon loglevel=8 debug rdinit=/early-ramdisk androidboot.hardware=virt androidboot.selinux=permissive androidboot.veritymode=disabled enforcing=0 printk.ratelimit=0 brd.rd_nr=1 brd.rd_size=524288 androidboot.t713_fix_initramfs_sha256=edba515eac53a2544ba33aa17cb3749c37a2f336207a3efcdfffb94e56ac3177 androidboot.t713_flight_target=2400 androidboot.t713_dtb_sha256=d60bc98a67c8b8c014b65412d9af869a432a744f7f1eab24b78a290fdf396161 androidboot.t713_system_sha256=2de0533e93a90298e043ee71ca19a2c4545df601ceafc9e14fb507ef56506601 androidboot.t713_kernel_sha256=53d9563e1c1bae4be4cab2f62ab1bf6331445bf0e629c66b3fa43114988e2859",
     "-gdb",
-    "tcp:127.0.0.1:1252",
+    "tcp:127.0.0.1:1253",
     "-display",
     "none",
     "-serial",
-    "file:/Users/Shared/wt-track712-hals-conf-fix/flights/flight-01/uart.log",
+    "file:/Users/Shared/wt-track713-sensorstart-bypass/flights/flight-01/uart.log",
     "-monitor",
     "none",
     "-no-reboot"
   ],
   "inputs": {
     "kernel": {
-      "path": "/Users/Shared/wt-track712-hals-conf-fix/guest-inputs/t705-Image",
+      "path": "/Users/Shared/wt-track713-sensorstart-bypass/guest-inputs/t705-Image",
       "sha256": "53d9563e1c1bae4be4cab2f62ab1bf6331445bf0e629c66b3fa43114988e2859",
       "bytes": 20126208
     },
@@ -47,19 +47,24 @@
       "bytes": 31498864
     },
     "dtb": {
-      "path": "/Users/Shared/wt-track712-hals-conf-fix/guest-inputs/t712-modified.dtb",
-      "sha256": "58f5acb3b250f64fb7426cb090cce1728a153281dfdb40d8a9b6863a949e41d8",
+      "path": "/Users/Shared/wt-track713-sensorstart-bypass/guest-inputs/t713-modified.dtb",
+      "sha256": "d60bc98a67c8b8c014b65412d9af869a432a744f7f1eab24b78a290fdf396161",
       "bytes": 2049
     },
     "boot_image": {
-      "path": "/Users/Shared/wt-track712-hals-conf-fix/guest-inputs/t712-fix.cpio.gz",
-      "sha256": "297d0a447cd56cbc8b985b11956e95563d5965640abae32985ae1ee26f559155",
-      "bytes": 53502698
+      "path": "/Users/Shared/wt-track713-sensorstart-bypass/guest-inputs/t713-fix.cpio.gz",
+      "sha256": "edba515eac53a2544ba33aa17cb3749c37a2f336207a3efcdfffb94e56ac3177",
+      "bytes": 53502851
     },
     "system_img": {
-      "path": "/Users/Shared/wt-track712-hals-conf-fix/guest-inputs/system.img",
+      "path": "/Users/Shared/wt-track713-sensorstart-bypass/guest-inputs/system.img",
       "sha256": "2de0533e93a90298e043ee71ca19a2c4545df601ceafc9e14fb507ef56506601",
       "bytes": 2059816960
+    },
+    "vendor_img": {
+      "path": "/Users/Shared/wt-track713-sensorstart-bypass/guest-inputs/t712-vendor.img",
+      "sha256": "095386ab640836f01859edc1ff955dab8644dce88e1c7597969c51c8d55578bf",
+      "bytes": 134217728
     }
   }
 }
