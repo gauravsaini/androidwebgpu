@@ -1,18 +1,18 @@
 {
-  "track": "T710",
+  "track": "T711",
   "flight": "flight-ab",
   "stop_reason": "QEMU process exited with returncode 0",
-  "started_utc": "2026-11-09T06:21:43Z",
-  "ended_utc": "2026-11-09T06:22:08Z",
-  "host_elapsed_seconds": 25.03,
-  "guest_log_max_seconds": 19.949,
+  "started_utc": "2026-11-09T08:28:27Z",
+  "ended_utc": "2026-11-09T08:28:47Z",
+  "host_elapsed_seconds": 20.03,
+  "guest_log_max_seconds": 19.189,
   "qemu_exit_code": 0,
-  "log_bytes": 47791,
-  "log_lines": 573,
-  "log_sha256": "923025b8e180ac74bf12c298501f31cb109e6918bc83b1db6f1b203652a137c5",
+  "log_bytes": 47889,
+  "log_lines": 574,
+  "log_sha256": "29154ab0e1c0bc0ee270e4d387eb10b7918dfb0b8298f16d6625b0ae590440be",
   "inputs": {
     "kernel": {
-      "path": "/Users/Shared/wt-track710-sensorservice-wall-cure/guest-inputs/canonical-Image",
+      "path": "/Users/Shared/wt-track711-selinux-domain-fix/guest-inputs/canonical-Image",
       "sha256": "05c4391767a6ff44f5124796b92d7b98027c37fbf58e81b342ca2adb7d99fa04",
       "bytes": 23073280
     },
@@ -22,17 +22,17 @@
       "bytes": 31498864
     },
     "dtb": {
-      "path": "/Users/Shared/wt-track710-sensorservice-wall-cure/guest-inputs/t710-modified.dtb",
-      "sha256": "1ef7939b7058305b857da4bd1f449493552bfb12c0a8e8d8d0cb808dfb9c2627",
+      "path": "/Users/Shared/wt-track711-selinux-domain-fix/guest-inputs/t711-modified.dtb",
+      "sha256": "2d6d0c11ef22cace73e0f95b5eb8552727c57c614cc07d0fc16ece4613eeb77b",
       "bytes": 2049
     },
     "boot_image": {
-      "path": "/Users/Shared/wt-track710-sensorservice-wall-cure/guest-inputs/t710-fix.cpio.gz",
-      "sha256": "e839cb18cd60068d804bb0a93fc69b6c31ebe5ebbcd93cdd0bf30bb088066665",
-      "bytes": 53501694
+      "path": "/Users/Shared/wt-track711-selinux-domain-fix/guest-inputs/t711-fix.cpio.gz",
+      "sha256": "025cac1c987aaf57bfc3356062e3245de49c550b549a24cc73ff2754f040321d",
+      "bytes": 53502663
     },
     "system_img": {
-      "path": "/Users/Shared/wt-track710-sensorservice-wall-cure/guest-inputs/system.img",
+      "path": "/Users/Shared/wt-track711-selinux-domain-fix/guest-inputs/system.img",
       "sha256": "2de0533e93a90298e043ee71ca19a2c4545df601ceafc9e14fb507ef56506601",
       "bytes": 2059816960
     }
