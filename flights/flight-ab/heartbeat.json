@@ -1,13 +1,1 @@
-{
-  "timestamp_utc": "2026-11-15T13:35:39Z",
-  "status": "Flight complete",
-  "track": "T715",
-  "flight": "flight-ab",
-  "current_step": "Flight complete: QEMU process exited with returncode 0",
-  "verdict": null,
-  "host_elapsed_seconds": 20.03,
-  "guest_log_max_seconds": 19.276,
-  "qemu_exit_code": 0,
-  "log_lines": 575,
-  "log_sha256": "abaf26bc86af698d6e392c7a8b0064bb596ab3e0ae2c5a9c82de17bb12088ada"
-}
+{"current_step":"Flight complete: QEMU process exited with returncode 0","flight":"flight-ab","guest_log_max_seconds":20.359,"host_elapsed_seconds":25.03,"log_lines":576,"log_sha256":"ee9f6284e1ded3f46488674ee69f7a1b1cead659e9aefee7decf3a7c9226a74a","qemu_exit_code":0,"status":"Flight complete","timestamp_utc":"2026-11-15T15:10:32Z","track":"T716","verdict":null}

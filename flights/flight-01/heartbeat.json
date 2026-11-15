@@ -1,13 +1,1 @@
-{
-  "timestamp_utc": "2026-11-15T13:32:14Z",
-  "status": "Flight complete",
-  "track": "T715",
-  "flight": "flight-01",
-  "current_step": "Flight complete: Guest target reached (2402.4s >= 2400s)",
-  "verdict": null,
-  "host_elapsed_seconds": 2403.24,
-  "guest_log_max_seconds": 2402.412,
-  "qemu_exit_code": 0,
-  "log_lines": 244911,
-  "log_sha256": "8d69ee3b540b292b4bbc0089eb892ece6d1b0bc33123e372100b7f1ff395937c"
-}
+{"current_step":"Flight complete: Guest target reached (2403.0s >= 2400s)","flight":"flight-01","guest_log_max_seconds":2402.998,"host_elapsed_seconds":2403.52,"log_lines":219931,"log_sha256":"b178e4c67ebeb335ae902363a97895366abd024cbc439660dcf60265a8a9c0c9","qemu_exit_code":0,"status":"Flight complete","timestamp_utc":"2026-11-15T15:08:59Z","track":"T716","verdict":null}

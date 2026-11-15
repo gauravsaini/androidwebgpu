@@ -1,20 +1,18 @@
-# TIMELINE — Track T715 (all times AEDT, 15-16 Nov 2026)
+# TIMELINE — Track T716 (all times AEDT, 16 Nov 2026; UTC = AEDT − 11h)
 
-- 22:29:54, 15 Nov — User taps "Run T715 via a sandbox subagent driving the Mac".
-- 22:31:59, 15 Nov — Lane agent spawned (sandbox subagent driving the Mac via macssh; no agyx/agent launch on the Mac, per the route constraint).
-- 22:33, 15 Nov — Step 0 PASS (disk 12 Gi avail, 95%) + Step 1 PASS (all 13 brief inputs SHA-verified, no network fetch). guest-inputs/ hardlinked from the T714 worktree.
-- 22:34-22:40, 15 Nov — Step 2 re-derivation: class_start main lives only in `on nonencrypted`, which never fires; switch_root proven; /system/bin/installd exists; early-boot trigger point proven. Decision: append `start installd` in `on early-boot` to installd.rc in a box-side system.img copy.
-- 22:47, 15 Nov — Box-side repack starts (Linux debugfs, T706 procedure; no sudo, no loopback mount).
-- 22:52, 15 Nov — Repack COMPLETE + verified (e2fsck clean, block 145414 + services.jar unchanged). New image SHA 1283cbf2… recorded in progress-t715.txt.
-- 22:55-23:14, 15 Nov — Transfer hop 1: box → sandbox (25.7 min), SHA re-verified on arrival.
-- 23:14-23:43, 15 Nov — Transfer hop 2: sandbox → Mac guest-inputs/t715-system.img (29.4 min).
-- 23:44, 15 Nov — Image SHA-verified on the Mac; verify_inputs_t715.py 16/16 PASS. First smoke launch dies on a doubled-backslash regex (transcription error); fixed + runtime import-tested.
-- 23:45:36, 15 Nov — Smoke flight launched (supervisor 87529, QEMU 87535; 240 s guest target — brief variance, recorded).
-- 23:50, 15 Nov — Smoke PASS: installd started guest 94.2 s, "installd not found" 0, SensorService onBootPhase returned in 7231 ms. UART SHA 0e5221ab… (13,687 lines).
-- 23:52:10, 15 Nov — Flight-01 launched (supervisor 87705, QEMU 87710; 2400 s guest / 2500 s host cap).
-- 00:12, 16 Nov — Mid-flight peek (read-only): guest 1245 s, 0 kills, boot_completed=1 actions seen, Launcher3 FATALs + queueBuffer 0 noted; no verdict yet.
-- 00:32:14, 16 Nov — Flight-01 COMPLETE: guest target reached (2402.4 s), exit 0, 244,911 lines, UART SHA 8d69ee3b….
-- 00:35:19, 16 Nov — Flight-ab launched (canonical kernel control).
-- 00:35:39, 16 Nov — Flight-ab COMPLETE: QEMU exited on its own at guest 19.28 s, 575 lines, UART SHA abaf26bc… (control pattern matches T714).
-- 00:35-00:50, 16 Nov — Step 4 adjudication from the preserved UARTs (analysis scripts fixed for byte-exact grep-consistent line numbering; all counts cross-checked with grep -n/-c). Verdict: FAIL — composer /dev/mem EPERM is the first failing link; GateKeeper NPE is the parallel stability wall.
-- 00:40, 16 Nov — Deliverables written (findings, outcome, death note, progress, TIMELINE, CLOSED heartbeat). No commit. Lane closed; driver owns certification, commit, push, vault.
+- 00:49:56 — Lane agent spawned (sandbox subagent driving the Mac via macssh; no agyx/agent launch on the Mac, per the route constraint). Worktree /Users/Shared/wt-track716-composer-devmem, branch t716, base da6452d.
+- ~00:57 — Step 0 PASS (disk 10 Gi avail, 95%) + Step 1 PASS (all brief inputs SHA-verified, no network fetch). Times as-recorded in progress-t716.txt.
+- ~00:58–01:00 — Step 2 diagnosis COMPLETE: EPERM root cause proven (composer capabilities SYS_NICE only, missing CAP_SYS_RAWIO; effective definition vendor init.virt.rc, UART-proven). SELinux/STRICT_DEVMEM/DAC/ueventd ruled out with evidence; success line identified from ELF strings. (Approximate; see the clock-correction note in progress-t716.txt — early AEDT labels were estimates, flight UTC stamps are authoritative.)
+- ~00:59–01:01 — Box-side fix built + verified: vendor.img patched (rm-first-then-write, Linux debugfs; e2fsck clean; inodes 305/727 reused), new SHA 9a2519b1…; CPIO member replacement + gzip -9, new SHA 08eb665b…; DTB initrd-end re-aligned byte-exact, new SHA cbb25094…. All SHAs recorded in progress-t716.txt the moment built. (Anchored by box file mtimes.)
+- 01:03–01:05 — Transfers box → sandbox → Mac guest-inputs/ (new names; T715 inputs never overwritten); SHAs re-verified at every hop. (Anchored by Mac file mtimes.)
+- 01:05–01:11 — Flight scripts written + tested: supervisor import-tested, launchers py_compile + diff-review, analysis scripts behaviour-tested against T715 UART copies with known counts (copies deleted before launch). verify_inputs_t716.py PASS (DTB delta == CPIO size, embedded vendor member SHA == 9a2519b1…, 238 members). SELinux correction + reflection recorded (single-space grep miss; denials exist, permissive=1, non-blocking).
+- 01:11:26 — Smoke launched (supervisor 92000, QEMU 92003; 240 s guest / 300 s host cap).
+- 01:16:27 — Smoke INCONCLUSIVE: host-cap stop, guest 217.0 s, 13,664 lines, SHA d224de95…; no composer open attempt in the window (as predicted — first T715 attempt at guest ~522 s). Holds intact.
+- 01:17:48 — Extended smoke launched (600 s guest / 660 s host cap; evidence to flights/smoke-ext/ so the 240 s evidence is preserved).
+- 01:27:53 — Extended smoke PASS: EPERM 0 + L22814 simplefb: mapped 0x5f000000 1280x720 stride=1280 bpp=4 (guest ~573 s); 24,291 lines, SHA 2246dca5…. avc /dev/mem denials persist (permissive logging) exactly as re-derived.
+- 01:28:56 — Flight-01 launched (supervisor 92824, QEMU 92834; 2400 s guest / 2500 s host cap). installd.rc verified unchanged from the staged image (4,958 B, SHA 3ea3466b…, start installd line 109).
+- 02:08:59 — Flight-01 COMPLETE: guest target reached (2403.0 s), exit 0, 219,931 lines, SHA b178e4c6…. Interim polls showed the mapping holding (7 maps) with queueBuffer 0 throughout.
+- 02:10:07 — Flight-ab launched (canonical kernel control).
+- 02:10:32 — Flight-ab COMPLETE: QEMU exited on its own at guest 20.36 s, 576 lines, SHA ee9f6284… (control pattern matches T715).
+- 02:10–02:14 — Step 4 adjudication from the preserved UARTs (analysis scripts + targeted greps, all counts cross-checked). Verdict: FAIL — the 0x0 buffer-allocation wall (getDisplayAttribute Unsupported L10878 → allocateBuffers 0x0 L10891) is the first failing link; the EPERM wall is broken (0 EPERM, 7 maps); 1 genuine removeRegionSamplingListener FATAL (L81124); 9 system_server lifetimes (GateKeeper NPE, parallel wall).
+- 02:14 — Deliverables written (findings, outcome, death note, progress, TIMELINE, CLOSED heartbeat + per-flight heartbeats). No commit. Lane closed; driver owns certification, commit, push, vault.

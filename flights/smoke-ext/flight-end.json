@@ -1,0 +1,45 @@
+{
+  "track": "T716",
+  "flight": "smoke-ext",
+  "stop_reason": "Guest target reached (605.3s >= 600s)",
+  "started_utc": "2026-11-15T14:17:48Z",
+  "ended_utc": "2026-11-15T14:27:53Z",
+  "host_elapsed_seconds": 605.92,
+  "guest_log_max_seconds": 605.341,
+  "qemu_exit_code": 0,
+  "log_bytes": 2853885,
+  "log_lines": 24291,
+  "log_sha256": "2246dca50f41c7d995b0ac04b86947336626adb1d15becd87a6a22e0c2264725",
+  "inputs": {
+    "kernel": {
+      "path": "/Users/Shared/wt-track716-composer-devmem/guest-inputs/t705-Image",
+      "sha256": "53d9563e1c1bae4be4cab2f62ab1bf6331445bf0e629c66b3fa43114988e2859",
+      "bytes": 20126208
+    },
+    "qemu": {
+      "path": "/opt/homebrew/bin/qemu-system-aarch64",
+      "sha256": "8e5c46dc6752c36afbb706f933e72fef835e35f48881a63cadb06c6d29bac869",
+      "bytes": 31498864
+    },
+    "dtb": {
+      "path": "/Users/Shared/wt-track716-composer-devmem/guest-inputs/t716-modified.dtb",
+      "sha256": "cbb25094fffbb9f1bd010fde21868a8e2938a10d214a60051181ab123fa10e97",
+      "bytes": 2049
+    },
+    "boot_image": {
+      "path": "/Users/Shared/wt-track716-composer-devmem/guest-inputs/t716-fix.cpio.gz",
+      "sha256": "08eb665bb5860a5cd56ca92e0cfdddb0d4ee351f4265e6dcf755eb0bfb4414e3",
+      "bytes": 53380254
+    },
+    "system_img": {
+      "path": "/Users/Shared/wt-track716-composer-devmem/guest-inputs/t715-system.img",
+      "sha256": "1283cbf279038f692ae42adc7bab571e89ef4ffd97efb0d982ee46e8050bfe3c",
+      "bytes": 2059816960
+    },
+    "vendor_img": {
+      "path": "/Users/Shared/wt-track716-composer-devmem/guest-inputs/t716-vendor.img",
+      "sha256": "9a2519b17ff8145f835ec6320e3c1b8f11e711b0c3ac70c868fef0c91e22a6af",
+      "bytes": 134217728
+    }
+  }
+}

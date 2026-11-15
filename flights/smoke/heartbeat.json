@@ -1,13 +1,1 @@
-{
-  "timestamp_utc": "2026-11-15T12:50:36Z",
-  "status": "Flight complete",
-  "track": "T715",
-  "flight": "smoke",
-  "current_step": "Smoke complete: Host timeout reached (300.3s >= 300s)",
-  "verdict": null,
-  "host_elapsed_seconds": 300.49,
-  "guest_log_max_seconds": 225.527,
-  "qemu_exit_code": 0,
-  "log_lines": 13687,
-  "log_sha256": "0e5221ab9c5832af36ca6e3f10aa4df1c39a2afbe0976425b1d2d6d9cea8c4a0"
-}
+{"current_step":"Smoke complete (INCONCLUSIVE - no composer open attempt in window): Host timeout reached (300.6s >= 300s)","flight":"smoke","guest_log_max_seconds":216.997,"host_elapsed_seconds":300.83,"log_lines":13664,"log_sha256":"d224de9526f82c811fb624b19388aae150ca4d35ffc7b3d80f8b8720cd5ff161","qemu_exit_code":0,"status":"Flight complete","timestamp_utc":"2026-11-15T14:16:27Z","track":"T716","verdict":null}
