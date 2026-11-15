@@ -1,18 +1,18 @@
 {
-  "track": "T714",
+  "track": "T715",
   "flight": "flight-ab",
   "stop_reason": "QEMU process exited with returncode 0",
-  "started_utc": "2026-11-13T11:38:07Z",
-  "ended_utc": "2026-11-13T11:38:27Z",
-  "host_elapsed_seconds": 20.02,
-  "guest_log_max_seconds": 19.475,
+  "started_utc": "2026-11-15T13:35:19Z",
+  "ended_utc": "2026-11-15T13:35:39Z",
+  "host_elapsed_seconds": 20.03,
+  "guest_log_max_seconds": 19.276,
   "qemu_exit_code": 0,
   "log_bytes": 47928,
   "log_lines": 575,
-  "log_sha256": "6a2a008cd4a4044f6ef61285055a65812771b186af274e9f813d0c742ff487ff",
+  "log_sha256": "abaf26bc86af698d6e392c7a8b0064bb596ab3e0ae2c5a9c82de17bb12088ada",
   "inputs": {
     "kernel": {
-      "path": "guest-inputs/canonical-Image",
+      "path": "/Users/Shared/wt-track715-installd-trigger/guest-inputs/canonical-Image",
       "sha256": "05c4391767a6ff44f5124796b92d7b98027c37fbf58e81b342ca2adb7d99fa04",
       "bytes": 23073280
     },
@@ -22,22 +22,22 @@
       "bytes": 31498864
     },
     "dtb": {
-      "path": "/Users/Shared/wt-track714-binary-patch/guest-inputs/t713-modified.dtb",
+      "path": "/Users/Shared/wt-track715-installd-trigger/guest-inputs/t713-modified.dtb",
       "sha256": "d60bc98a67c8b8c014b65412d9af869a432a744f7f1eab24b78a290fdf396161",
       "bytes": 2049
     },
     "boot_image": {
-      "path": "/Users/Shared/wt-track714-binary-patch/guest-inputs/t713-fix.cpio.gz",
+      "path": "/Users/Shared/wt-track715-installd-trigger/guest-inputs/t713-fix.cpio.gz",
       "sha256": "edba515eac53a2544ba33aa17cb3749c37a2f336207a3efcdfffb94e56ac3177",
       "bytes": 53502851
     },
     "system_img": {
-      "path": "/Users/Shared/wt-track714-binary-patch/guest-inputs/system.img",
-      "sha256": "ea5af412552668682f185a59dd4af39d600325c4ad1aaa62e0413602fae143ef",
+      "path": "/Users/Shared/wt-track715-installd-trigger/guest-inputs/t715-system.img",
+      "sha256": "1283cbf279038f692ae42adc7bab571e89ef4ffd97efb0d982ee46e8050bfe3c",
       "bytes": 2059816960
     },
     "vendor_img": {
-      "path": "/Users/Shared/wt-track714-binary-patch/guest-inputs/t712-vendor.img",
+      "path": "/Users/Shared/wt-track715-installd-trigger/guest-inputs/t712-vendor.img",
       "sha256": "095386ab640836f01859edc1ff955dab8644dce88e1c7597969c51c8d55578bf",
       "bytes": 134217728
     }

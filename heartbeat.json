@@ -1,15 +1,28 @@
 {
-  "timestamp_utc": "2026-11-13T11:46:00Z",
+  "timestamp_utc": "2026-11-15T13:39:23Z",
   "status": "CLOSED",
-  "track": "T714",
-  "flight": "flight-01",
-  "current_step": "Step 4 complete: Adjudication and deliverables generated",
+  "track": "T715",
+  "flight": null,
+  "current_step": "Step 4 complete \u2014 lane closed",
   "verdict": "FAIL",
-  "host_elapsed_seconds": 2432.92,
-  "guest_log_max_seconds": 2431.696,
-  "target_host_seconds": 2550,
-  "target_guest_seconds": 2400,
-  "supervisor_pid": null,
-  "qemu_pid": null,
-  "note": "Track T714 complete: direct binary patch verified; SystemServerInitThreadPool starvation & installd dependency diagnosed; 10 Watchdog kills reproduced; Verdict FAIL"
+  "smoke": {
+    "log_sha256": "0e5221ab9c5832af36ca6e3f10aa4df1c39a2afbe0976425b1d2d6d9cea8c4a0",
+    "log_lines": 13687,
+    "result": "PASS"
+  },
+  "flight_01": {
+    "log_sha256": "8d69ee3b540b292b4bbc0089eb892ece6d1b0bc33123e372100b7f1ff395937c",
+    "log_lines": 244911,
+    "guest_log_max_seconds": 2402.412,
+    "queueBuffer": 0,
+    "present": 0,
+    "watchdog_kills": 0,
+    "launcher3_fatal": 3
+  },
+  "flight_ab": {
+    "log_sha256": "abaf26bc86af698d6e392c7a8b0064bb596ab3e0ae2c5a9c82de17bb12088ada",
+    "log_lines": 575
+  },
+  "first_failing_link": "composer simplefb open /dev/mem EPERM (flight-01 L23338)",
+  "note": "Trigger worked; display wall stands. No commit by lane agent."
 }
