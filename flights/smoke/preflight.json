@@ -1,7 +1,7 @@
 {
-  "track": "T718",
+  "track": "T719",
   "flight": "smoke",
-  "created_utc": "2026-11-15T18:00:49Z",
+  "created_utc": "2026-11-15T20:28:21Z",
   "qemu_version": "QEMU emulator version 11.1.2",
   "command": [
     "/opt/homebrew/bin/qemu-system-aarch64",
@@ -14,30 +14,30 @@
     "-smp",
     "4",
     "-kernel",
-    "/Users/Shared/wt-track718-write-result-reply/guest-inputs/t705-Image",
+    "/Users/Shared/wt-track719-invalid-present-fence/guest-inputs/t705-Image",
     "-dtb",
-    "/Users/Shared/wt-track718-write-result-reply/guest-inputs/t718-modified.dtb",
+    "/Users/Shared/wt-track719-invalid-present-fence/guest-inputs/t718-modified.dtb",
     "-device",
-    "loader,file=/Users/Shared/wt-track718-write-result-reply/guest-inputs/t718-fix.cpio.gz,addr=0x110000000,force-raw=on",
+    "loader,file=/Users/Shared/wt-track719-invalid-present-fence/guest-inputs/t718-fix.cpio.gz,addr=0x110000000,force-raw=on",
     "-drive",
-    "if=none,id=t718system,file=/Users/Shared/wt-track718-write-result-reply/guest-inputs/t715-system.img,format=raw,readonly=on",
+    "if=none,id=t719system,file=/Users/Shared/wt-track719-invalid-present-fence/guest-inputs/t719-system.img,format=raw,readonly=on",
     "-device",
-    "virtio-blk-device,drive=t718system",
+    "virtio-blk-device,drive=t719system",
     "-append",
-    "console=ttyAMA0,115200 earlycon loglevel=8 debug rdinit=/early-ramdisk androidboot.hardware=virt androidboot.selinux=permissive androidboot.veritymode=disabled enforcing=0 printk.ratelimit=0 brd.rd_nr=1 brd.rd_size=524288 androidboot.t718_fix_initramfs_sha256=1150c8410657fe40c99bc96c0f5e61af2dd0938087011076dc7015a85f127d9e androidboot.t718_flight_target=240 androidboot.t718_dtb_sha256=d298f5adc8caa8426eb4cfdc72f88bdeb070f90210db6bc1a10622303a2f53d9 androidboot.t718_system_sha256=1283cbf279038f692ae42adc7bab571e89ef4ffd97efb0d982ee46e8050bfe3c androidboot.t718_kernel_sha256=53d9563e1c1bae4be4cab2f62ab1bf6331445bf0e629c66b3fa43114988e2859",
+    "console=ttyAMA0,115200 earlycon loglevel=8 debug rdinit=/early-ramdisk androidboot.hardware=virt androidboot.selinux=permissive androidboot.veritymode=disabled enforcing=0 printk.ratelimit=0 brd.rd_nr=1 brd.rd_size=524288 androidboot.t719_fix_initramfs_sha256=1150c8410657fe40c99bc96c0f5e61af2dd0938087011076dc7015a85f127d9e androidboot.t719_flight_target=240 androidboot.t719_dtb_sha256=d298f5adc8caa8426eb4cfdc72f88bdeb070f90210db6bc1a10622303a2f53d9 androidboot.t719_system_sha256=ac15a68ac1fb95c51eb3476f76692dfdda7e413e3d9e52f8cf8312b02a2ad5dd androidboot.t719_kernel_sha256=53d9563e1c1bae4be4cab2f62ab1bf6331445bf0e629c66b3fa43114988e2859",
     "-gdb",
     "tcp:127.0.0.1:1257",
     "-display",
     "none",
     "-serial",
-    "file:/Users/Shared/wt-track718-write-result-reply/flights/smoke/uart.log",
+    "file:/Users/Shared/wt-track719-invalid-present-fence/flights/smoke/uart.log",
     "-monitor",
     "none",
     "-no-reboot"
   ],
   "inputs": {
     "kernel": {
-      "path": "/Users/Shared/wt-track718-write-result-reply/guest-inputs/t705-Image",
+      "path": "/Users/Shared/wt-track719-invalid-present-fence/guest-inputs/t705-Image",
       "sha256": "53d9563e1c1bae4be4cab2f62ab1bf6331445bf0e629c66b3fa43114988e2859",
       "bytes": 20126208
     },
@@ -47,22 +47,22 @@
       "bytes": 31498864
     },
     "dtb": {
-      "path": "/Users/Shared/wt-track718-write-result-reply/guest-inputs/t718-modified.dtb",
+      "path": "/Users/Shared/wt-track719-invalid-present-fence/guest-inputs/t718-modified.dtb",
       "sha256": "d298f5adc8caa8426eb4cfdc72f88bdeb070f90210db6bc1a10622303a2f53d9",
       "bytes": 2049
     },
     "boot_image": {
-      "path": "/Users/Shared/wt-track718-write-result-reply/guest-inputs/t718-fix.cpio.gz",
+      "path": "/Users/Shared/wt-track719-invalid-present-fence/guest-inputs/t718-fix.cpio.gz",
       "sha256": "1150c8410657fe40c99bc96c0f5e61af2dd0938087011076dc7015a85f127d9e",
       "bytes": 53379397
     },
     "system_img": {
-      "path": "/Users/Shared/wt-track718-write-result-reply/guest-inputs/t715-system.img",
-      "sha256": "1283cbf279038f692ae42adc7bab571e89ef4ffd97efb0d982ee46e8050bfe3c",
+      "path": "/Users/Shared/wt-track719-invalid-present-fence/guest-inputs/t719-system.img",
+      "sha256": "ac15a68ac1fb95c51eb3476f76692dfdda7e413e3d9e52f8cf8312b02a2ad5dd",
       "bytes": 2059816960
     },
     "vendor_img": {
-      "path": "/Users/Shared/wt-track718-write-result-reply/guest-inputs/t718-vendor.img",
+      "path": "/Users/Shared/wt-track719-invalid-present-fence/guest-inputs/t718-vendor.img",
       "sha256": "bac3cdc112dc6c3257c016fb4f600c46f43b9372f3d2f2ebb9b7d79fd05daeca",
       "bytes": 134217728
     }
