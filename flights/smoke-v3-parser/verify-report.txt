@@ -1,0 +1,203 @@
+=== T717 SMOKE FLIGHT VERIFICATION REPORT (smoke) ===
+Total lines: 14938
+PASS: Freeing unused kernel memory: 960K at guest 3.498272s
+PASS: Init first stage started at guest 9.211212s
+PASS: fb0 simplefb registered at guest 0.338442s
+PASS: /dev/block/vda mounted as /system Success at guest 9.613362s
+Failed to load subHal config file errors: 0
+dummy_sensorservice lines: 2
+sensorservice avc denials: 0
+avc:  denied (two spaces) total: 1233
+avc: denied (one space) total: 0 (expected 0: format check)
+avc:  denied for /dev/mem: 0 (permissive logging; expected to persist)
+Watchdog kills: 0
+Prime cache errors: 0
+system_server starts: 1
+
+--- ALL T628_ALLOCATOR lines: 2 line(s) ---
+L10196: [  111.497962] T628_ALLOCATOR
+L10203: [  111.508668] T628_ALLOCATOR
+
+--- T628 REJECT allocate2 lines (brief requires 0): 0 line(s) ---
+
+--- GraphicBufferAllocator failures (brief requires 0): 1 line(s) ---
+L10815: 01-01 00:01:52.294 E/GraphicBufferAllocator( 2489): Failed to allocate (1280 x 720) layerCount 1 format 1 usage 1b00: -129
+
+--- allocateBuffers failures (brief requires 0): 1 line(s) ---
+L10816: 01-01 00:01:52.295 E/BufferQueueProducer( 2489): [FramebufferSurface](id:9b900000000,api:1,p:2489,c:2489) allocateBuffers: failed to allocate buffer (0 x 0, format 1, usage 0x300)
+
+--- getDisplayAttribute failed lines (TOLERATED, report only): 1 line(s) ---
+L10770: 01-01 00:01:50.736 E/HWComposer( 2489): getAttribute: getDisplayAttribute failed for display 0: Unsupported (8)
+
+--- DisplayDeviceInfo lines (display formed): 1 line(s) ---
+L13188: 01-01 00:02:55.154 I/DisplayDeviceRepository( 2620): Display device added: DisplayDeviceInfo{"Built-in Screen": uniqueId="local:0", 1280 x 720, modeId 1, renderFrameRate 60.0, defaultModeId 1, supportedModes [{id=1, width=1280, height=720, fps=60.0, alternativeRefreshRates=[], supportedHdrTypes=[]}], colorMode 0, supportedColorModes [0], hdrCapabilities HdrCapabilities{mSupportedHdrTypes=[], mMaxLuminance=500.0, mMaxAverageLuminance=500.0, mMinLuminance=0.0}, allmSupported false, gameContentTypeSupported false, density 160, 160.0 x 160.0 dpi, appVsyncOff 1000000, presDeadline 16666667, touch INTERNAL, rotation 0, type INTERNAL, address {port=0}, deviceProductInfo null, state UNKNOWN, committedState UNKNOWN, frameRateOverride , brightnessMinimum 0.0, brightnessMaximum 1.0, brightnessDefault 0.39763778, hdrSdrRatio NaN, FLAG_ALLOWED_TO_BE_DEFAULT_DISPLAY, FLAG_ROTATES_WITH_CONTENT, FLAG_SECURE, FLAG_SUPPORTS_PROTECTED_BUFFERS, FLAG_TRUSTED, installOrientation 0, displayShape DisplayShape{ spec=-1507169495 displayWidth=1280 displayHeight=720 physicalPixelDisplaySizeRatio=1.0 rotation=0 offsetX=0 offsetY=0 scale=1.0}}
+
+--- EPERM lines (T716 hold requires 0): 0 line(s) ---
+
+--- simplefb: mapped lines (adjudicated from flight-01, not this smoke): 0 line(s) ---
+
+--- ALL /dev/mem lines: 0 line(s) ---
+
+--- ALL composer service lines: 351 line(s) ---
+L9385: 01-01 00:01:32.819 I/android.hardware.graphics.composer@2.1-service( 2416): BC_TRANSACTION thr 0x7865c904f8 / hand 0 / code 0x0000000c: Parcel(
+L9386: 01-01 00:01:32.826 I/android.hardware.graphics.composer@2.1-service( 2416):     0x00000000: 72646e61 2e64696f 6c646968 6e616d2e 'android.hidl.man'
+L9387: 01-01 00:01:32.827 I/android.hardware.graphics.composer@2.1-service( 2416):     0x00000010: 72656761 322e3140 53493a3a 69767265 'ager@1.2::IServi'
+L9388: 01-01 00:01:32.827 I/android.hardware.graphics.composer@2.1-service( 2416):     0x00000020: 614d6563 6567616e 00000072 70742a85 'ceManager....*tp'
+L9389: 01-01 00:01:32.827 I/android.hardware.graphics.composer@2.1-service( 2416):     0x00000030: 00000000 ff72d7e8 0000007f 00000010 '......r.........'
+L9390: 01-01 00:01:32.827 I/android.hardware.graphics.composer@2.1-service( 2416):     0x00000040: 00000000 00000000 00000000 00000000 '................'
+L9391: 01-01 00:01:32.827 I/android.hardware.graphics.composer@2.1-service( 2416):     0x00000050: 00000000 70742a85 00000001 20441590 '.....*tp......D '
+L9392: 01-01 00:01:32.827 I/android.hardware.graphics.composer@2.1-service( 2416):     0x00000060: 00000077 00000008 00000000 00000000 'w...............'
+L9393: 01-01 00:01:32.827 I/android.hardware.graphics.composer@2.1-service( 2416):     0x00000070: 00000000 00000000 00000000 73622a85 '.............*bs'
+L9394: 01-01 00:01:32.828 I/android.hardware.graphics.composer@2.1-service( 2416):     0x00000080: 00000900 204391f0 00000078 904461f0 '......C x....aD.'
+L9395: 01-01 00:01:32.828 I/android.hardware.graphics.composer@2.1-service( 2416):     0x00000090: 00000077 70742a85 00000000 ff72d870 'w....*tp....p.r.'
+L9396: 01-01 00:01:32.828 I/android.hardware.graphics.composer@2.1-service( 2416):     0x000000a0: 0000007f 00000010 00000000 00000000 '................'
+L9397: 01-01 00:01:32.828 I/android.hardware.graphics.composer@2.1-service( 2416):     0x000000b0: 00000000 00000000 00000000 70742a85 '.............*tp'
+L9398: 01-01 00:01:32.828 I/android.hardware.graphics.composer@2.1-service( 2416):     0x000000c0: 00000001 60441958 00000077 00000020 '....X.D`w... ...'
+L9399: 01-01 00:01:32.828 I/android.hardware.graphics.composer@2.1-service( 2416):     0x000000d0: 00000000 00000003 00000000 00000000 '................'
+L9400: 01-01 00:01:32.828 I/android.hardware.graphics.composer@2.1-service( 2416):     0x000000e0: 00000000 70742a85 00000001 c043b6a0 '.....*tp......C.'
+L9401: 01-01 00:01:32.829 I/android.hardware.graphics.composer@2.1-service( 2416):     0x000000f0: 00000076 00000032 00000000 00000004 'v...2...........'
+L9402: 01-01 00:01:32.829 I/android.hardware.graphics.composer@2.1-service( 2416):     0x00000100: 00000000 00000000 00000000 70742a85 '.............*tp'
+L9403: 01-01 00:01:32.829 I/android.hardware.graphics.composer@2.1-service( 2416):     0x00000110: 00000001 204397f0 00000078 0000001d '......C x.......'
+L9404: 01-01 00:01:32.829 I/android.hardware.graphics.composer@2.1-service( 2416):     0x00000120: 00000000 00000004 00000000 00000010 '................'
+L9405: 01-01 00:01:32.829 I/android.hardware.graphics.composer@2.1-service( 2416):     0x00000130: 00000000                            '....            '
+L9406: 01-01 00:01:32.830 I/android.hardware.graphics.composer@2.1-service( 2416):   Object #0 @ 0x2c (buffer size 16):
+L9408: [   93.657094] init: service 'vendor.hwc-2-1' requested start, but it is already running (flags: 4)
+L9410: 01-01 00:01:32.830 I/android.hardware.graphics.composer@2.1-service( 2416):     0x00000000: 20441590 00000077 00000007 00000001 '..D w...........'
+L9411: 01-01 00:01:32.830 I/android.hardware.graphics.composer@2.1-service( 2416):   Object #1 @ 0x54 (buffer size 8):
+L9412: 01-01 00:01:32.830 I/android.hardware.graphics.composer@2.1-service( 2416):     0x00000000: 61666564 00746c75                   'default.        '
+L9413: 01-01 00:01:32.831 I/android.hardware.graphics.composer@2.1-service( 2416):   Object #2 @ 0x7c: 'sb*' = 515937374704
+L9414: 01-01 00:01:32.831 I/android.hardware.graphics.composer@2.1-service( 2416):   Object #3 @ 0x94 (buffer size 16):
+L9415: 01-01 00:01:32.831 I/android.hardware.graphics.composer@2.1-service( 2416):     0x00000000: 60441958 00000077 00000002 00000001 'X.D`w...........'
+L9416: 01-01 00:01:32.831 I/android.hardware.graphics.composer@2.1-service( 2416):   Object #4 @ 0xbc (buffer size 32):
+L10751: 01-01 00:01:50.392 I/android.hardware.graphics.composer@2.1-service( 2416):   0x00000030: 00000000 8043aa30 00000076 c043b380 '....0.C.v.....C.'
+L10752: 01-01 00:01:50.392 I/android.hardware.graphics.composer@2.1-service( 2416):   0x00000040: 00000076 00000088 00000000          'v...........    '
+L10753: 01-01 00:01:50.392 I/android.hardware.graphics.composer@2.1-service( 2416):   Unknown command: 1078485778
+L10754: 01-01 00:01:50.392 I/android.hardware.graphics.composer@2.1-service( 2416):   Unknown command: 4294967295
+L10755: 01-01 00:01:50.392 I/android.hardware.graphics.composer@2.1-service( 2416):   BC_TRANSACTION
+L10756: 01-01 00:01:50.392 I/android.hardware.graphics.composer@2.1-service( 2416):   BC_TRANSACTION
+L10757: 01-01 00:01:50.393 I/android.hardware.graphics.composer@2.1-service( 2416):   BC_TRANSACTION
+L10758: 01-01 00:01:50.393 I/android.hardware.graphics.composer@2.1-service( 2416):   BC_TRANSACTION
+L10759: 01-01 00:01:50.393 I/android.hardware.graphics.composer@2.1-service( 2416):   BC_TRANSACTION
+L10760: 01-01 00:01:50.393 I/android.hardware.graphics.composer@2.1-service( 2416):   BC_TRANSACTION
+L10761: 01-01 00:01:50.393 I/android.hardware.graphics.composer@2.1-service( 2416):   BC_TRANSACTION
+L10762: 01-01 00:01:50.393 I/android.hardware.graphics.composer@2.1-service( 2416):   Unknown command: 164
+L10763: 01-01 00:01:50.394 I/android.hardware.graphics.composer@2.1-service( 2416):   BC_TRANSACTION
+L10828: 01-01 00:01:52.351 I/android.hardware.graphics.composer@2.1-service( 2416): Finished read/write, write size = 12
+L10829: 01-01 00:01:52.352 I/android.hardware.graphics.composer@2.1-service( 2416): Our err: 0x0, write consumed: 12 (of 12), read consumed: 72
+L10834: 01-01 00:01:52.352 I/android.hardware.graphics.composer@2.1-service( 2416): Remaining data size: 0
+L10835: 01-01 00:01:52.353 I/android.hardware.graphics.composer@2.1-service( 2416): Received commands from driver:
+L10836: 01-01 00:01:52.353 I/android.hardware.graphics.composer@2.1-service( 2416):   0x00000000: 0000720c 80407202 20439520 00000078 '.r...r@. .C x...'
+L10837: 01-01 00:01:52.353 I/android.hardware.graphics.composer@2.1-service( 2416):   0x00000010: 904456f0 00000077 00000013 00000010 '.VD.w...........'
+L10838: 01-01 00:01:52.353 I/android.hardware.graphics.composer@2.1-service( 2416):   0x00000020: 000009b9 000003e8 00000044 00000000 '........D.......'
+L10839: 01-01 00:01:52.353 I/android.hardware.graphics.composer@2.1-service( 2416):   0x00000030: 00000000 00000000 d0192000 00000075 '......... ..u...'
+L10840: 01-01 00:01:52.353 I/android.hardware.graphics.composer@2.1-service( 2416):   0x00000040: d0192048 00000075                   'H ..u...        '
+L10841: 01-01 00:01:52.353 I/android.hardware.graphics.composer@2.1-service( 2416):   BR_NOOP
+L10842: 01-01 00:01:52.354 I/android.hardware.graphics.composer@2.1-service( 2416):   BR_TRANSACTION: target.ptr=515937375520 (cookie 513521506032)
+L10843: 01-01 00:01:52.354 I/android.hardware.graphics.composer@2.1-service( 2416):     code=0x00000013, flags=0x10
+L10844: 01-01 00:01:52.354 I/android.hardware.graphics.composer@2.1-service( 2416):     data=506002481152 (0x44 bytes)
+L10845: 01-01 00:01:52.354 I/android.hardware.graphics.composer@2.1-service( 2416):     offsets=506002481224 (0x0 bytes)
+L10846: 01-01 00:01:52.354 I/android.hardware.graphics.composer@2.1-service( 2416): Processing top-level Command: BR_NOOP
+L10847: 01-01 00:01:52.355 I/android.hardware.graphics.composer@2.1-service( 2416): Size of receive buffer: 0, needRead: false, doReceive: true
+L10848: 01-01 00:01:52.355 I/android.hardware.graphics.composer@2.1-service( 2416): Processing top-level Command: BR_TRANSACTION
+... (291 middle lines omitted; count is exact)
+
+--- installd not found: 0 line(s) ---
+
+--- installd STARTED lines: 1 line(s) ---
+L9680: 01-01 00:01:33.902 I/installd( 2424): installd firing up
+
+--- SensorService onBootPhase RETURN lines: 1 line(s) ---
+L14508: 11-10 23:19:39.414 W/SystemServiceManager( 2620): Service com.android.server.sensors.SensorService took 7019 ms in onBootPhase
+
+--- ALL installd lines: 90 line(s) ---
+L9680: 01-01 00:01:33.902 I/installd( 2424): installd firing up
+L9689: 01-01 00:01:33.934 E/cutils  ( 2424): Failed to read /data/misc/installd/layout_version: No such file or directory
+L9691: 01-01 00:01:33.934 D/installd( 2424): Assuming that device has multi-user storage layout; upgrade no longer supported
+L9692: 01-01 00:01:33.936 D/installd( 2424): Upgrading to /data/misc/user directories
+L13792: [  202.307140] type=1400 audit(202.212:569): avc:  denied  { rename } for  comm="binder:2424_3" name="com.android.media.swcodec" dev="loop2" ino=16385 scontext=u:r:installd:s0 tcontext=u:object_r:unlabeled:s0 tclass=dir permissive=1
+L13795: 01-01 00:03:22.212 I/auditd  ( 2424): type=1400 audit(0.0:569): avc:  denied  { rename } for  comm="binder:2424_3" name="com.android.media.swcodec" dev="loop2" ino=16385 scontext=u:r:installd:s0 tcontext=u:object_r:unlabeled:s0 tclass=dir permissive=1
+L13796: 01-01 00:03:22.212 I/binder:2424_3( 2424): type=1400 audit(0.0:569): avc:  denied  { rename } for  name="com.android.media.swcodec" dev="loop2" ino=16385 scontext=u:r:installd:s0 tcontext=u:object_r:unlabeled:s0 tclass=dir permissive=1
+L13800: [  202.911686] type=1400 audit(202.820:570): avc:  denied  { create } for  comm="binder:2424_2" name="cache" scontext=u:r:installd:s0 tcontext=u:object_r:unlabeled:s0 tclass=dir permissive=1
+L13802: 01-01 00:03:22.820 I/auditd  ( 2424): type=1400 audit(0.0:570): avc:  denied  { create } for  comm="binder:2424_2" name="cache" scontext=u:r:installd:s0 tcontext=u:object_r:unlabeled:s0 tclass=dir permissive=1
+L13803: 01-01 00:03:22.820 I/binder:2424_2( 2424): type=1400 audit(0.0:570): avc:  denied  { create } for  name="cache" scontext=u:r:installd:s0 tcontext=u:object_r:unlabeled:s0 tclass=dir permissive=1
+L13804: 01-01 00:03:22.831 D/installd( 2424): Detected label change from u:object_r:unlabeled:s0 to u:object_r:system_app_data_file:s0 at /data/data/com.android.providers.settings; running recursive restorecon
+L13805: [  202.950326] type=1400 audit(202.824:571): avc:  denied  { setattr } for  comm="binder:2424_2" name="cache" dev="loop2" ino=16467 scontext=u:r:installd:s0 tcontext=u:object_r:unlabeled:s0 tclass=dir permissive=1
+L13806: 01-01 00:03:22.824 I/auditd  ( 2424): type=1400 audit(0.0:571): avc:  denied  { setattr } for  comm="binder:2424_2" name="cache" dev="loop2" ino=16467 scontext=u:r:installd:s0 tcontext=u:object_r:unlabeled:s0 tclass=dir permissive=1
+L13807: 01-01 00:03:22.824 I/binder:2424_2( 2424): type=1400 audit(0.0:571): avc:  denied  { setattr } for  name="cache" dev="loop2" ino=16467 scontext=u:r:installd:s0 tcontext=u:object_r:unlabeled:s0 tclass=dir permissive=1
+L13809: 01-01 00:03:22.907 D/installd( 2424): Detected label change from u:object_r:unlabeled:s0 to u:object_r:system_app_data_file:s0 at /data/user_de/0/com.android.providers.settings; running recursive restorecon
+L13811: 01-01 00:03:23.798 E/installd( 2424): Failed to prepare /data/data/com.android.shell: No such file or directory
+L13812: 01-01 00:03:23.799 E/installd( 2424): Failed to prepare /data/data/com.android.shell: No such file or directory
+L13814: 01-01 00:03:23.869 E/installd( 2424): Failed to prepare /data/data/com.android.systemui: No such file or directory
+L13815: 01-01 00:03:23.869 E/installd( 2424): Failed to prepare /data/data/com.android.systemui: No such file or directory
+L13816: 01-01 00:03:23.937 W/installd( 2424): Requested default storage /data/user_de/0/com.android.uwb.resources is not active; migrating from /data/data/com.android.uwb.resources
+L13817: 01-01 00:03:23.981 W/installd( 2424): Requested default storage /data/user_de/0/com.android.providers.telephony is not active; migrating from /data/data/com.android.providers.telephony
+L13818: 01-01 00:03:24.022 W/installd( 2424): Requested default storage /data/user_de/0/com.android.safetycenter.resources is not active; migrating from /data/data/com.android.safetycenter.resources
+L13819: 01-01 00:03:24.062 W/installd( 2424): Requested default storage /data/user_de/0/com.android.networkstack is not active; migrating from /data/data/com.android.networkstack
+L13820: 01-01 00:03:24.101 W/installd( 2424): Requested default storage /data/user_de/0/com.android.connectivity.resources is not active; migrating from /data/data/com.android.connectivity.resources
+L13821: 01-01 00:03:24.141 W/installd( 2424): Requested default storage /data/user_de/0/android is not active; migrating from /data/data/android
+L13822: 01-01 00:03:24.176 W/installd( 2424): Requested default storage /data/user_de/0/com.android.providers.settings is not active; migrating from /data/data/com.android.providers.settings
+L13824: 01-01 00:03:24.219 W/installd( 2424): Requested default storage /data/user_de/0/com.android.inputdevices is not active; migrating from /data/data/com.android.inputdevices
+L13825: 01-01 00:03:24.261 W/installd( 2424): Requested default storage /data/user_de/0/android.ext.shared is not active; migrating from /data/data/android.ext.shared
+L13826: 01-01 00:03:24.291 W/installd( 2424): Requested default storage /data/user_de/0/com.android.server.telecom is not active; migrating from /data/data/com.android.server.telecom
+L13827: 01-01 00:03:24.352 W/installd( 2424): Requested default storage /data/user_de/0/com.android.wifi.resources is not active; migrating from /data/data/com.android.wifi.resources
+L14102: 01-01 00:03:27.797 E/installd( 2424): Failed to mark default storage /data/data/com.android.sdkext: No such file or directory
+L14107: 01-01 00:03:27.825 E/installd( 2424): Failed to mark default storage /data/data/com.android.tzdata: No such file or directory
+L14112: 01-01 00:03:27.834 E/installd( 2424): Failed to mark default storage /data/data/com.android.vndk.v29: No such file or directory
+L14117: 01-01 00:03:27.855 E/installd( 2424): Failed to mark default storage /data/data/com.android.vndk.v30: No such file or directory
+L14123: 01-01 00:03:27.872 E/installd( 2424): Failed to mark default storage /data/data/com.android.vndk.v31: No such file or directory
+L14128: 01-01 00:03:27.881 E/installd( 2424): Failed to mark default storage /data/data/com.android.vndk.v32: No such file or directory
+L14133: 01-01 00:03:27.900 E/installd( 2424): Failed to mark default storage /data/data/com.android.vndk.v33: No such file or directory
+L14138: 01-01 00:03:27.906 E/installd( 2424): Failed to mark default storage /data/data/com.android.vndk.v34: No such file or directory
+L14143: 01-01 00:03:27.935 E/installd( 2424): Failed to mark default storage /data/data/com.android.os.statsd: No such file or directory
+L14148: 01-01 00:03:27.942 E/installd( 2424): Failed to mark default storage /data/data/com.android.extservices: No such file or directory
+L14153: 01-01 00:03:27.963 E/installd( 2424): Failed to mark default storage /data/data/com.android.cellbroadcast: No such file or directory
+L14158: 01-01 00:03:27.991 E/installd( 2424): Failed to mark default storage /data/data/com.android.ipsec: No such file or directory
+L14163: 01-01 00:03:28.001 E/installd( 2424): Failed to mark default storage /data/data/com.android.media: No such file or directory
+L14168: 01-01 00:03:28.019 E/installd( 2424): Failed to mark default storage /data/data/com.android.sdksandbox: No such file or directory
+L14173: 01-01 00:03:28.063 E/installd( 2424): Failed to mark default storage /data/data/com.android.mediaprovider: No such file or directory
+L14178: 01-01 00:03:28.089 E/installd( 2424): Failed to mark default storage /data/data/com.android.ondevicepersonalization: No such file or directory
+L14288: 01-01 00:03:30.378 I/service_manager_slow( 2620): [14,installd]
+L14384: 01-01 00:03:33.005 E/installd( 2424): Failed to prepare /data/data/com.android.launcher3: No such file or directory
+L14385: 01-01 00:03:33.006 E/installd( 2424): Failed to prepare /data/data/com.android.launcher3: No such file or directory
+L14485: 11-10 23:19:37.580 W/installd( 2424): Requested default storage /data/user_de/0/com.android.pacprocessor is not active; migrating from /data/data/com.android.pacprocessor
+L14486: 11-10 23:19:37.864 W/installd( 2424): Requested default storage /data/user_de/0/com.android.stk is not active; migrating from /data/data/com.android.stk
+L14496: 11-10 23:19:38.345 W/installd( 2424): Requested default storage /data/user_de/0/com.android.cellbroadcastreceiver is not active; migrating from /data/data/com.android.cellbroadcastreceiver
+L14497: 11-10 23:19:38.382 W/installd( 2424): Requested default storage /data/user_de/0/com.android.cellbroadcastservice is not active; migrating from /data/data/com.android.cellbroadcastservice
+L14498: 11-10 23:19:38.460 W/installd( 2424): Requested default storage /data/user_de/0/com.android.cameraextensions is not active; migrating from /data/data/com.android.cameraextensions
+L14499: 11-10 23:19:38.503 W/installd( 2424): Requested default storage /data/user_de/0/com.android.packageinstaller is not active; migrating from /data/data/com.android.packageinstaller
+L14500: 11-10 23:19:38.669 W/installd( 2424): Requested default storage /data/user_de/0/com.android.networkstack.tethering is not active; migrating from /data/data/com.android.networkstack.tethering
+L14501: 11-10 23:19:38.800 W/installd( 2424): Requested default storage /data/user_de/0/com.android.cellbroadcastreceiver.module is not active; migrating from /data/data/com.android.cellbroadcastreceiver.module
+L14502: 11-10 23:19:38.980 W/installd( 2424): Requested default storage /data/user_de/0/com.android.providers.blockednumber is not active; migrating from /data/data/com.android.providers.blockednumber
+L14503: 11-10 23:19:39.079 W/installd( 2424): Requested default storage /data/user_de/0/com.android.emergency is not active; migrating from /data/data/com.android.emergency
+L14504: 11-10 23:19:39.212 W/installd( 2424): Requested default storage /data/user_de/0/com.android.bluetooth is not active; migrating from /data/data/com.android.bluetooth
+... (30 middle lines omitted; count is exact)
+
+--- ALL fixAppsData lines (0 is healthy per T715 findings): 0 line(s) ---
+
+--- ALL /dev/socket/installd lines: 0 line(s) ---
+
+--- onBootPhase / FutureTask.get lines: 2 line(s) ---
+L13194: 01-01 00:02:55.353 W/SystemServiceManager( 2620): Service com.android.server.display.DisplayManagerService took 267 ms in onBootPhase
+L14508: 11-10 23:19:39.414 W/SystemServiceManager( 2620): Service com.android.server.sensors.SensorService took 7019 ms in onBootPhase
+
+--- boot_completed lines: 0 line(s) ---
+
+--- queueBuffer / presentDisplay lines: 0 line(s) ---
+
+--- T637_MAPPER / AIMapper lines: 1 line(s) ---
+L10206: [  111.517842] T637_MAPPER AIMapper_loadIMapper called; returning AIMapper v5 (T637 fix active)
+
+Guest kernel time: first=0.0s last=231.79037s max=231.79037s
+
+=== REPORT COMPLETE — adjudicate manually ===
+T628 lines: 2 (shim exercised: True)
+REJECT count: 0 (brief requires 0)
+GraphicBufferAllocator failure count: 1 (brief requires 0)
+allocateBuffers failure count: 1 (brief requires 0)
+getDisplayAttribute failed count: 1 (tolerated, not a criterion)
+EPERM count: 0 (T716 hold requires 0)
+simplefb: mapped count: 0 (adjudicated from flight-01)
+installd-not-found count: 0 (brief requires 0)
+Hard smoke criterion (allocator): REJECT == 0 AND GBA-fail == 0 AND T716 holds intact,
+with the shim exercised (T628 lines present, system_server started, guest past ~150 s).
+If the shim was NOT exercised, the smoke is INCONCLUSIVE — NOT a pass, NOT a fail.

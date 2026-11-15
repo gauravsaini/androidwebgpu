@@ -1,18 +1,29 @@
-# TIMELINE — Track T716 (all times AEDT, 16 Nov 2026; UTC = AEDT − 11h)
+# T717 timeline (all times UTC unless marked AEDT; clock/mtime-sourced)
 
-- 00:49:56 — Lane agent spawned (sandbox subagent driving the Mac via macssh; no agyx/agent launch on the Mac, per the route constraint). Worktree /Users/Shared/wt-track716-composer-devmem, branch t716, base da6452d.
-- ~00:57 — Step 0 PASS (disk 10 Gi avail, 95%) + Step 1 PASS (all brief inputs SHA-verified, no network fetch). Times as-recorded in progress-t716.txt.
-- ~00:58–01:00 — Step 2 diagnosis COMPLETE: EPERM root cause proven (composer capabilities SYS_NICE only, missing CAP_SYS_RAWIO; effective definition vendor init.virt.rc, UART-proven). SELinux/STRICT_DEVMEM/DAC/ueventd ruled out with evidence; success line identified from ELF strings. (Approximate; see the clock-correction note in progress-t716.txt — early AEDT labels were estimates, flight UTC stamps are authoritative.)
-- ~00:59–01:01 — Box-side fix built + verified: vendor.img patched (rm-first-then-write, Linux debugfs; e2fsck clean; inodes 305/727 reused), new SHA 9a2519b1…; CPIO member replacement + gzip -9, new SHA 08eb665b…; DTB initrd-end re-aligned byte-exact, new SHA cbb25094…. All SHAs recorded in progress-t716.txt the moment built. (Anchored by box file mtimes.)
-- 01:03–01:05 — Transfers box → sandbox → Mac guest-inputs/ (new names; T715 inputs never overwritten); SHAs re-verified at every hop. (Anchored by Mac file mtimes.)
-- 01:05–01:11 — Flight scripts written + tested: supervisor import-tested, launchers py_compile + diff-review, analysis scripts behaviour-tested against T715 UART copies with known counts (copies deleted before launch). verify_inputs_t716.py PASS (DTB delta == CPIO size, embedded vendor member SHA == 9a2519b1…, 238 members). SELinux correction + reflection recorded (single-space grep miss; denials exist, permissive=1, non-blocking).
-- 01:11:26 — Smoke launched (supervisor 92000, QEMU 92003; 240 s guest / 300 s host cap).
-- 01:16:27 — Smoke INCONCLUSIVE: host-cap stop, guest 217.0 s, 13,664 lines, SHA d224de95…; no composer open attempt in the window (as predicted — first T715 attempt at guest ~522 s). Holds intact.
-- 01:17:48 — Extended smoke launched (600 s guest / 660 s host cap; evidence to flights/smoke-ext/ so the 240 s evidence is preserved).
-- 01:27:53 — Extended smoke PASS: EPERM 0 + L22814 simplefb: mapped 0x5f000000 1280x720 stride=1280 bpp=4 (guest ~573 s); 24,291 lines, SHA 2246dca5…. avc /dev/mem denials persist (permissive logging) exactly as re-derived.
-- 01:28:56 — Flight-01 launched (supervisor 92824, QEMU 92834; 2400 s guest / 2500 s host cap). installd.rc verified unchanged from the staged image (4,958 B, SHA 3ea3466b…, start installd line 109).
-- 02:08:59 — Flight-01 COMPLETE: guest target reached (2403.0 s), exit 0, 219,931 lines, SHA b178e4c6…. Interim polls showed the mapping holding (7 maps) with queueBuffer 0 throughout.
-- 02:10:07 — Flight-ab launched (canonical kernel control).
-- 02:10:32 — Flight-ab COMPLETE: QEMU exited on its own at guest 20.36 s, 576 lines, SHA ee9f6284… (control pattern matches T715).
-- 02:10–02:14 — Step 4 adjudication from the preserved UARTs (analysis scripts + targeted greps, all counts cross-checked). Verdict: FAIL — the 0x0 buffer-allocation wall (getDisplayAttribute Unsupported L10878 → allocateBuffers 0x0 L10891) is the first failing link; the EPERM wall is broken (0 EPERM, 7 maps); 1 genuine removeRegionSamplingListener FATAL (L81124); 9 system_server lifetimes (GateKeeper NPE, parallel wall).
-- 02:14 — Deliverables written (findings, outcome, death note, progress, TIMELINE, CLOSED heartbeat + per-flight heartbeats). No commit. Lane closed; driver owns certification, commit, push, vault.
+- 2026-11-15T15:25:43Z (02:25:43 AEDT): lane launched (spawn receipt). Wedge trigger 18:25:43Z.
+- 2026-11-15T15:26Z: Step 0 PASS — Mac disk 95%, 10 Gi avail, >= 8 GiB gate.
+- 2026-11-15T15:27Z: Step 1 PASS — all input SHAs verified, no network fetch.
+- 2026-11-15T15:35Z: Step 2 allocator probe — HIDL allocator svc healthy/idle, 0 allocate() logs vs 71 GBA EINVAL.
+- 2026-11-15T15:44Z: Step 2 wall identified — T628 shim REJECT allocate2 71x == 71 GBA EINVAL 1:1.
+- Before 2026-11-15T15:48Z: Step 2 diagnosis complete (parser bug root-caused); fixed parser assembled (336 B) and spliced (fixed binary 697fde01). NOTE: progress-file labels 15:59Z/16:20Z for these steps were estimates running fast; filesystem mtimes bound them before 15:48Z (vendor patch start).
+- 2026-11-15T15:48Z: vendor patch run on box — t717-vendor.img 932b478a (inode 731, e2fsck 0/0, SYS_RAWIO intact).
+- 2026-11-15T15:49Z: CPIO rebuild (f313b042, 238 members) + DTB patch (dc3ec387, initrd-end 0x1132e7f38).
+- 2026-11-15T15:50-15:54Z: artifacts transferred box -> sandbox -> Mac; SHAs verified at all three hops.
+- 2026-11-15T15:56-16:00Z: 8 T717 scripts written, transferred, py_compile + import OK, runtime-verified vs T716 fixtures (all oracle counts exact).
+- 2026-11-15T16:00:22Z: smoke launched (supervisor PID 97172, QEMU PID 97175).
+- 2026-11-15T16:04:47Z: smoke #1 ended (guest 264.8 s, 13,485 lines, c0d63737). REJECT 1 — v1 FAIL, signature identical to T716 smoke. Archived to flights/smoke-v1-parser/.
+- 2026-11-15T16:17:31Z: smoke #2 launched (v2 parser; supervisor PID 98383, QEMU PID 98393).
+- 2026-11-15T16:22:31Z: smoke #2 ended on the host cap (guest 196.8 s, 13,847 lines, 0e048c1c). REJECT 1 — v2 FAIL, identical to smoke #1.
+- Between 16:22:31Z and 16:31Z (bounded by smoke #2 end + build mtime): ground-truth disassembly of allocator-V2-ndk.so — BufferDescriptorInfo layout proven, interface-token lead refuted.
+- 2026-11-15T16:31Z (box mtime): parser v3 built (412/436 B, disassembly review PASS). Splice followed in the next call (fixed binary cb37e02e, 382 bytes differ, footprint-only).
+- ~2026-11-15T16:33-16:36Z (bounded): v3 images rebuilt (vendor 6990e87f, CPIO c26bd649, DTB 46e563d5); v2 preserved as *-v2.*; bases untouched.
+- CLOCK CORRECTION: the progress-file/heartbeat label "16:47Z" for the v3 splice was an ESTIMATE running ~12 min fast (third occurrence of the clock-estimation defect: T716, pre-compaction T717, now). Clock read 2026-11-15T16:41:06Z after the box -> sandbox v3 transfer completed. The v3 splice completed BEFORE 16:41Z (build mtime 16:31Z). All timestamps after this line are clock-sourced (date read in the same command that writes them).
+- 2026-11-15T16:48:50Z: smoke #3 launched (v3 parser; supervisor PID 267).
+- 2026-11-15T16:53:51Z: smoke #3 ended on the host cap (guest 231.8 s, 14,938 lines, 6af2f8b9). REJECT 0 (parser wall BROKEN), GBA fail 1 with error -129, shim SIGSEGV at PC 0x120b4 (stack-slot overlap — lane-agent bug).
+- 2026-11-15T16:57:02Z: smoke #3 adjudicated (clock-sourced progress entry); v4 designed (80B frame, end at [sp,#16]).
+- 2026-11-15T16:57Z (box mtime): parser v4 built (412/436 B, disassembly review PASS incl. slot-disjointness). Splice + v4 images followed (fixed binary bf8661d0; vendor 5d2d82b0, CPIO fceef5df, DTB 1a961795); v3 preserved as *-v3.*. Delta transfers (speedup 3.88x both hops).
+- 2026-11-15T17:00:30Z: smoke #4 launched (v4 parser; supervisor PID 973).
+- 2026-11-15T17:00:33Z: smoke #4 supervisor start (flight-end.json).
+- 2026-11-15T17:05:33Z: smoke #4 ended on the host cap (guest 220.4 s, 13,600 lines, 4c877ebd). REJECT 0, NO CRASH, CALL allocate2 count=1 width=1280 height=720 logged (parse CORRECT), GBA fail 1 with -129 (write_result reply path). Parser wall BROKEN and PROVEN.
+- 2026-11-15T17:09:15Z: smoke #4 adjudicated (clock-sourced progress entry). Smoke criterion NOT met -> NO flight-01, NO control (deterministic shim-code failure; T716 control baseline stands). Lane closing FAIL.
+- 2026-11-15T17:10:36Z: lane CLOSED (verdict FAIL). Findings + outcome + death note + timeline transferred to the worktree root; report delivered to the driver. No commits; no flight-01; no control.

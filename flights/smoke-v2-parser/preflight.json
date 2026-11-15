@@ -1,0 +1,70 @@
+{
+  "track": "T717",
+  "flight": "smoke",
+  "created_utc": "2026-11-15T16:17:31Z",
+  "qemu_version": "QEMU emulator version 11.1.2",
+  "command": [
+    "/opt/homebrew/bin/qemu-system-aarch64",
+    "-machine",
+    "virt,gic-version=2,virtio-mmio-transports=1",
+    "-cpu",
+    "cortex-a57",
+    "-m",
+    "8192",
+    "-smp",
+    "4",
+    "-kernel",
+    "/Users/Shared/wt-track717-alloc-zero/guest-inputs/t705-Image",
+    "-dtb",
+    "/Users/Shared/wt-track717-alloc-zero/guest-inputs/t717-modified.dtb",
+    "-device",
+    "loader,file=/Users/Shared/wt-track717-alloc-zero/guest-inputs/t717-fix.cpio.gz,addr=0x110000000,force-raw=on",
+    "-drive",
+    "if=none,id=t717system,file=/Users/Shared/wt-track717-alloc-zero/guest-inputs/t715-system.img,format=raw,readonly=on",
+    "-device",
+    "virtio-blk-device,drive=t717system",
+    "-append",
+    "console=ttyAMA0,115200 earlycon loglevel=8 debug rdinit=/early-ramdisk androidboot.hardware=virt androidboot.selinux=permissive androidboot.veritymode=disabled enforcing=0 printk.ratelimit=0 brd.rd_nr=1 brd.rd_size=524288 androidboot.t717_fix_initramfs_sha256=1ed6b2f5ff38529f6a874e7bb914ada0e9db1001cd2142f13d6a304e8b327633 androidboot.t717_flight_target=240 androidboot.t717_dtb_sha256=6d32a12cb1c35fe3954465252af4b8ffc6cd3b9cefdbdd38d85fe30af68305ca androidboot.t717_system_sha256=1283cbf279038f692ae42adc7bab571e89ef4ffd97efb0d982ee46e8050bfe3c androidboot.t717_kernel_sha256=53d9563e1c1bae4be4cab2f62ab1bf6331445bf0e629c66b3fa43114988e2859",
+    "-gdb",
+    "tcp:127.0.0.1:1257",
+    "-display",
+    "none",
+    "-serial",
+    "file:/Users/Shared/wt-track717-alloc-zero/flights/smoke/uart.log",
+    "-monitor",
+    "none",
+    "-no-reboot"
+  ],
+  "inputs": {
+    "kernel": {
+      "path": "/Users/Shared/wt-track717-alloc-zero/guest-inputs/t705-Image",
+      "sha256": "53d9563e1c1bae4be4cab2f62ab1bf6331445bf0e629c66b3fa43114988e2859",
+      "bytes": 20126208
+    },
+    "qemu": {
+      "path": "/opt/homebrew/bin/qemu-system-aarch64",
+      "sha256": "8e5c46dc6752c36afbb706f933e72fef835e35f48881a63cadb06c6d29bac869",
+      "bytes": 31498864
+    },
+    "dtb": {
+      "path": "/Users/Shared/wt-track717-alloc-zero/guest-inputs/t717-modified.dtb",
+      "sha256": "6d32a12cb1c35fe3954465252af4b8ffc6cd3b9cefdbdd38d85fe30af68305ca",
+      "bytes": 2049
+    },
+    "boot_image": {
+      "path": "/Users/Shared/wt-track717-alloc-zero/guest-inputs/t717-fix.cpio.gz",
+      "sha256": "1ed6b2f5ff38529f6a874e7bb914ada0e9db1001cd2142f13d6a304e8b327633",
+      "bytes": 53377927
+    },
+    "system_img": {
+      "path": "/Users/Shared/wt-track717-alloc-zero/guest-inputs/t715-system.img",
+      "sha256": "1283cbf279038f692ae42adc7bab571e89ef4ffd97efb0d982ee46e8050bfe3c",
+      "bytes": 2059816960
+    },
+    "vendor_img": {
+      "path": "/Users/Shared/wt-track717-alloc-zero/guest-inputs/t717-vendor.img",
+      "sha256": "dc0a7628a9f4c53b3a49027b95e5c3fdbd2c114be9cefba2bcbe0fdb2c8fe922",
+      "bytes": 134217728
+    }
+  }
+}
