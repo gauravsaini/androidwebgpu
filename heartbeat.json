@@ -1,8 +1,7 @@
 {
-  "track": "T719",
+  "track": "T720",
   "status": "CLOSED",
-  "ts": "2026-11-15T21:21:39Z",
-  "stage": "closed",
-  "verdict": "FAIL",
-  "note": "Lane closed. Scaffold confirmed (fence errors 0); FAIL as written; real fix named."
+  "verdict": "PASS",
+  "ts": "2026-11-16T10:10:39+1100",
+  "note": "All supervisors exited; findings + outcome + TIMELINE on disk."
 }

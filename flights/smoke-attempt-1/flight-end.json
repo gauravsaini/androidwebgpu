@@ -1,20 +1,20 @@
 {
-  "track": "T714",
+  "track": "T720",
   "flight": "smoke",
-  "stop_reason": "Guest target reached (132.6s >= 120s)",
-  "started_utc": "2026-11-13T10:19:15Z",
-  "ended_utc": "2026-11-13T10:21:30Z",
-  "host_elapsed_seconds": 135.28,
-  "guest_log_max_seconds": 132.63,
+  "stop_reason": "QEMU process exited with returncode 0",
+  "started_utc": "2026-11-15T21:55:44Z",
+  "ended_utc": "2026-11-15T21:55:54Z",
+  "host_elapsed_seconds": 10.02,
+  "guest_log_max_seconds": 9.608,
   "qemu_exit_code": 0,
-  "log_bytes": 1073855,
-  "log_lines": 10998,
-  "log_sha256": "d7a7d14bcf2a0fadc7db52a53549711f6d11c059ead5904f676897580fda29c1",
+  "log_bytes": 47247,
+  "log_lines": 599,
+  "log_sha256": "585346655e1ced1a15269b2f74b3346d1013394c702e103ebf04eef7748e7385",
   "inputs": {
     "kernel": {
-      "path": "/Users/Shared/wt-track714-binary-patch/guest-inputs/t705-Image",
-      "sha256": "53d9563e1c1bae4be4cab2f62ab1bf6331445bf0e629c66b3fa43114988e2859",
-      "bytes": 20126208
+      "path": "/Users/Shared/wt-track720-kernel-fence-source/guest-inputs/t720-Image",
+      "sha256": "70d3859d6aed1906d27217aa3fdfd9bb953a57f4490c89c51efa4f6490441e04",
+      "bytes": 20396544
     },
     "qemu": {
       "path": "/opt/homebrew/bin/qemu-system-aarch64",
@@ -22,23 +22,23 @@
       "bytes": 31498864
     },
     "dtb": {
-      "path": "/Users/Shared/wt-track714-binary-patch/guest-inputs/t713-modified.dtb",
-      "sha256": "d60bc98a67c8b8c014b65412d9af869a432a744f7f1eab24b78a290fdf396161",
+      "path": "/Users/Shared/wt-track720-kernel-fence-source/guest-inputs/t720-modified.dtb",
+      "sha256": "92c6fab8cb182c7433a24718213eee90b8b6ebc51a19d320ef86bb36990b6869",
       "bytes": 2049
     },
     "boot_image": {
-      "path": "/Users/Shared/wt-track714-binary-patch/guest-inputs/t713-fix.cpio.gz",
-      "sha256": "edba515eac53a2544ba33aa17cb3749c37a2f336207a3efcdfffb94e56ac3177",
-      "bytes": 53502851
+      "path": "/Users/Shared/wt-track720-kernel-fence-source/guest-inputs/t720-fix.cpio.gz",
+      "sha256": "d623d48c846775641eb7876c7c9c7b87f9a52d01e7cb22c041b72f8dcaba57ab",
+      "bytes": 53384270
     },
     "system_img": {
-      "path": "/Users/Shared/wt-track714-binary-patch/guest-inputs/system.img",
-      "sha256": "ea5af412552668682f185a59dd4af39d600325c4ad1aaa62e0413602fae143ef",
+      "path": "/Users/Shared/wt-track720-kernel-fence-source/guest-inputs/t719-system.img",
+      "sha256": "ac15a68ac1fb95c51eb3476f76692dfdda7e413e3d9e52f8cf8312b02a2ad5dd",
       "bytes": 2059816960
     },
     "vendor_img": {
-      "path": "/Users/Shared/wt-track714-binary-patch/guest-inputs/t712-vendor.img",
-      "sha256": "095386ab640836f01859edc1ff955dab8644dce88e1c7597969c51c8d55578bf",
+      "path": "/Users/Shared/wt-track720-kernel-fence-source/guest-inputs/t718-vendor.img",
+      "sha256": "bac3cdc112dc6c3257c016fb4f600c46f43b9372f3d2f2ebb9b7d79fd05daeca",
       "bytes": 134217728
     }
   }
