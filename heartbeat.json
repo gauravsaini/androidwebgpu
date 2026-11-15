@@ -1,1 +1,7 @@
-{"ts": "2026-11-15T17:11:05Z", "stage": "closed", "note": "verdict FAIL; parser proven, -129 reply wall; no flight-01"}
+{
+  "track": "T718",
+  "status": "CLOSED",
+  "ts": "2026-11-15T18:56:34Z",
+  "stage": "step4-done",
+  "note": "Findings + outcome + death note + timeline written. Verdict FAIL: -129 wall broken, present path wall (Invalid present fence x2241). Driver certifies."
+}

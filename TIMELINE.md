@@ -1,29 +1,19 @@
-# T717 timeline (all times UTC unless marked AEDT; clock/mtime-sourced)
+# T718 timeline (all times UTC unless marked AEDT; clock/mtime-sourced)
 
-- 2026-11-15T15:25:43Z (02:25:43 AEDT): lane launched (spawn receipt). Wedge trigger 18:25:43Z.
-- 2026-11-15T15:26Z: Step 0 PASS — Mac disk 95%, 10 Gi avail, >= 8 GiB gate.
-- 2026-11-15T15:27Z: Step 1 PASS — all input SHAs verified, no network fetch.
-- 2026-11-15T15:35Z: Step 2 allocator probe — HIDL allocator svc healthy/idle, 0 allocate() logs vs 71 GBA EINVAL.
-- 2026-11-15T15:44Z: Step 2 wall identified — T628 shim REJECT allocate2 71x == 71 GBA EINVAL 1:1.
-- Before 2026-11-15T15:48Z: Step 2 diagnosis complete (parser bug root-caused); fixed parser assembled (336 B) and spliced (fixed binary 697fde01). NOTE: progress-file labels 15:59Z/16:20Z for these steps were estimates running fast; filesystem mtimes bound them before 15:48Z (vendor patch start).
-- 2026-11-15T15:48Z: vendor patch run on box — t717-vendor.img 932b478a (inode 731, e2fsck 0/0, SYS_RAWIO intact).
-- 2026-11-15T15:49Z: CPIO rebuild (f313b042, 238 members) + DTB patch (dc3ec387, initrd-end 0x1132e7f38).
-- 2026-11-15T15:50-15:54Z: artifacts transferred box -> sandbox -> Mac; SHAs verified at all three hops.
-- 2026-11-15T15:56-16:00Z: 8 T717 scripts written, transferred, py_compile + import OK, runtime-verified vs T716 fixtures (all oracle counts exact).
-- 2026-11-15T16:00:22Z: smoke launched (supervisor PID 97172, QEMU PID 97175).
-- 2026-11-15T16:04:47Z: smoke #1 ended (guest 264.8 s, 13,485 lines, c0d63737). REJECT 1 — v1 FAIL, signature identical to T716 smoke. Archived to flights/smoke-v1-parser/.
-- 2026-11-15T16:17:31Z: smoke #2 launched (v2 parser; supervisor PID 98383, QEMU PID 98393).
-- 2026-11-15T16:22:31Z: smoke #2 ended on the host cap (guest 196.8 s, 13,847 lines, 0e048c1c). REJECT 1 — v2 FAIL, identical to smoke #1.
-- Between 16:22:31Z and 16:31Z (bounded by smoke #2 end + build mtime): ground-truth disassembly of allocator-V2-ndk.so — BufferDescriptorInfo layout proven, interface-token lead refuted.
-- 2026-11-15T16:31Z (box mtime): parser v3 built (412/436 B, disassembly review PASS). Splice followed in the next call (fixed binary cb37e02e, 382 bytes differ, footprint-only).
-- ~2026-11-15T16:33-16:36Z (bounded): v3 images rebuilt (vendor 6990e87f, CPIO c26bd649, DTB 46e563d5); v2 preserved as *-v2.*; bases untouched.
-- CLOCK CORRECTION: the progress-file/heartbeat label "16:47Z" for the v3 splice was an ESTIMATE running ~12 min fast (third occurrence of the clock-estimation defect: T716, pre-compaction T717, now). Clock read 2026-11-15T16:41:06Z after the box -> sandbox v3 transfer completed. The v3 splice completed BEFORE 16:41Z (build mtime 16:31Z). All timestamps after this line are clock-sourced (date read in the same command that writes them).
-- 2026-11-15T16:48:50Z: smoke #3 launched (v3 parser; supervisor PID 267).
-- 2026-11-15T16:53:51Z: smoke #3 ended on the host cap (guest 231.8 s, 14,938 lines, 6af2f8b9). REJECT 0 (parser wall BROKEN), GBA fail 1 with error -129, shim SIGSEGV at PC 0x120b4 (stack-slot overlap — lane-agent bug).
-- 2026-11-15T16:57:02Z: smoke #3 adjudicated (clock-sourced progress entry); v4 designed (80B frame, end at [sp,#16]).
-- 2026-11-15T16:57Z (box mtime): parser v4 built (412/436 B, disassembly review PASS incl. slot-disjointness). Splice + v4 images followed (fixed binary bf8661d0; vendor 5d2d82b0, CPIO fceef5df, DTB 1a961795); v3 preserved as *-v3.*. Delta transfers (speedup 3.88x both hops).
-- 2026-11-15T17:00:30Z: smoke #4 launched (v4 parser; supervisor PID 973).
-- 2026-11-15T17:00:33Z: smoke #4 supervisor start (flight-end.json).
-- 2026-11-15T17:05:33Z: smoke #4 ended on the host cap (guest 220.4 s, 13,600 lines, 4c877ebd). REJECT 0, NO CRASH, CALL allocate2 count=1 width=1280 height=720 logged (parse CORRECT), GBA fail 1 with -129 (write_result reply path). Parser wall BROKEN and PROVEN.
-- 2026-11-15T17:09:15Z: smoke #4 adjudicated (clock-sourced progress entry). Smoke criterion NOT met -> NO flight-01, NO control (deterministic shim-code failure; T716 control baseline stands). Lane closing FAIL.
-- 2026-11-15T17:10:36Z: lane CLOSED (verdict FAIL). Findings + outcome + death note + timeline transferred to the worktree root; report delivered to the driver. No commits; no flight-01; no control.
+- 2026-11-15T17:30:55Z (04:30:55 AEDT): lane launched (spawn receipt). Wedge trigger 20:30:55Z.
+- 2026-11-15T17:31:19Z: Step 0 PASS — Mac disk 95%, 12 Gi avail, >= 8 GiB gate.
+- 2026-11-15T17:33-17:37Z (bounded): Step 1 PASS — all input SHAs verified, no network fetch; framework .so files extracted fresh from the vault system image via read-only debugfs.
+- 2026-11-15T17:35-17:50Z (bounded): Step 2 framework-first disassembly — flag omission proven from allocator-V2-ndk.so; AllocationResult/NativeHandle layouts and status header verified; 11f24 dead-code hypothesis refuted; PLT probe finds the dead AParcel_readInt64 stub (0x34ab0).
+- 2026-11-15T17:51:00Z: STEP2 DONE + PATCH BUILT — fixed binary 3daa5a49 (73 diff bytes, parser footprint identical), disassembly review PASS (all bl/cb targets exact).
+- 2026-11-15T17:51:43Z: vendor patched on box (bac3cdc1, inode 731 reused, e2fsck 0/0, SYS_RAWIO + neighbours intact).
+- 2026-11-15T17:52:53Z: CPIO (1150c841, 53,379,397 B, only vendor.img member differs) + DTB (d298f5ad, initrd-end 0x1132e8145) built.
+- 2026-11-15T17:53-17:57Z (bounded): artifacts transferred box -> sandbox (SHAs verified); 8 T718 scripts adapted, diff-reviewed, py_compile OK, runtime-verified against T716/T717 fixtures (all oracle counts exact).
+- 2026-11-15T18:00:34Z: inputs verified on Mac (all 3 artifact SHAs match box + sandbox); scripts verified on Mac.
+- 2026-11-15T18:00:49Z: smoke launched (supervisor PID 4268, QEMU PID 4272).
+- 2026-11-15T18:05:49Z: smoke ended on the host cap (guest 191.7 s, 13,816 lines, UART 137fb562). REJECT 0, CALL 2, GBA-fail 0, importBuffer x2 — SMOKE PASS, -129 wall broken.
+- 2026-11-15T18:08:30Z: flight-01 launched (supervisor PID 4668, QEMU PID 4672).
+- 2026-11-15T18:28:47Z: flight-01 mid-check (guest 1216.7 s, UART 19.3 MB, realtime pace).
+- 2026-11-15T18:48:34Z: flight-01 ended on the guest target (2403.8 s, 323,607 lines, UART 081a9381). Allocation at scale (604 calls, 695 imports, 0 failures); queueBuffer 0, present 0, Invalid present fence x2241.
+- 2026-11-15T18:49:56Z: flight-ab launched (supervisor PID 6353, QEMU PID 6356).
+- 2026-11-15T18:50:21Z: flight-ab ended (QEMU self-exit 0, 576 lines, guest 20.19 s, UART 1a9a58fa). Control pattern matches T716 exactly.
+- 2026-11-15T18:56:34Z (05:56:34 AEDT 16 Nov 2026): Step 4 complete - findings, outcome, death note, timeline written and SHA-verified; heartbeat CLOSED; lane ends FAIL (present path). Report to driver.

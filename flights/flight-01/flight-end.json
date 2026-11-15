@@ -1,18 +1,18 @@
 {
-  "track": "T716",
+  "track": "T718",
   "flight": "flight-01",
-  "stop_reason": "Guest target reached (2403.0s >= 2400s)",
-  "started_utc": "2026-11-15T14:28:56Z",
-  "ended_utc": "2026-11-15T15:08:59Z",
-  "host_elapsed_seconds": 2403.52,
-  "guest_log_max_seconds": 2402.998,
+  "stop_reason": "Guest target reached (2403.8s >= 2400s)",
+  "started_utc": "2026-11-15T18:08:30Z",
+  "ended_utc": "2026-11-15T18:48:34Z",
+  "host_elapsed_seconds": 2404.42,
+  "guest_log_max_seconds": 2403.843,
   "qemu_exit_code": 0,
-  "log_bytes": 28842665,
-  "log_lines": 219931,
-  "log_sha256": "b178e4c67ebeb335ae902363a97895366abd024cbc439660dcf60265a8a9c0c9",
+  "log_bytes": 42885318,
+  "log_lines": 323607,
+  "log_sha256": "081a9381aba9de5d6e946fd7df11e231585acf1e098a97673dcef5be0aed03db",
   "inputs": {
     "kernel": {
-      "path": "/Users/Shared/wt-track716-composer-devmem/guest-inputs/t705-Image",
+      "path": "/Users/Shared/wt-track718-write-result-reply/guest-inputs/t705-Image",
       "sha256": "53d9563e1c1bae4be4cab2f62ab1bf6331445bf0e629c66b3fa43114988e2859",
       "bytes": 20126208
     },
@@ -22,23 +22,23 @@
       "bytes": 31498864
     },
     "dtb": {
-      "path": "/Users/Shared/wt-track716-composer-devmem/guest-inputs/t716-modified.dtb",
-      "sha256": "cbb25094fffbb9f1bd010fde21868a8e2938a10d214a60051181ab123fa10e97",
+      "path": "/Users/Shared/wt-track718-write-result-reply/guest-inputs/t718-modified.dtb",
+      "sha256": "d298f5adc8caa8426eb4cfdc72f88bdeb070f90210db6bc1a10622303a2f53d9",
       "bytes": 2049
     },
     "boot_image": {
-      "path": "/Users/Shared/wt-track716-composer-devmem/guest-inputs/t716-fix.cpio.gz",
-      "sha256": "08eb665bb5860a5cd56ca92e0cfdddb0d4ee351f4265e6dcf755eb0bfb4414e3",
-      "bytes": 53380254
+      "path": "/Users/Shared/wt-track718-write-result-reply/guest-inputs/t718-fix.cpio.gz",
+      "sha256": "1150c8410657fe40c99bc96c0f5e61af2dd0938087011076dc7015a85f127d9e",
+      "bytes": 53379397
     },
     "system_img": {
-      "path": "/Users/Shared/wt-track716-composer-devmem/guest-inputs/t715-system.img",
+      "path": "/Users/Shared/wt-track718-write-result-reply/guest-inputs/t715-system.img",
       "sha256": "1283cbf279038f692ae42adc7bab571e89ef4ffd97efb0d982ee46e8050bfe3c",
       "bytes": 2059816960
     },
     "vendor_img": {
-      "path": "/Users/Shared/wt-track716-composer-devmem/guest-inputs/t716-vendor.img",
-      "sha256": "9a2519b17ff8145f835ec6320e3c1b8f11e711b0c3ac70c868fef0c91e22a6af",
+      "path": "/Users/Shared/wt-track718-write-result-reply/guest-inputs/t718-vendor.img",
+      "sha256": "bac3cdc112dc6c3257c016fb4f600c46f43b9372f3d2f2ebb9b7d79fd05daeca",
       "bytes": 134217728
     }
   }

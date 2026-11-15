@@ -1,0 +1,28 @@
+T718 progress log - lane start: 2026-11-16 04:31:19 AEDT
+Wedge trigger (start + 3h): 2026-11-16 07:31:19 AEDT
+Worktree: /Users/Shared/wt-track718-write-result-reply, branch t718, HEAD d5fdb8a
+Step 0 PASS - 2026-11-16 04:33:03 AEDT: Mac data volume 228Gi, avail 12Gi, 95pct, above 8 GiB gate.
+Step 1 (Mac T717/T716 worktrees + T718 guest-inputs, 2026-11-16 04:33:03 AEDT): findings-t717.md 2e2381cd 42724B MATCH; DEATH_NOTE-T717.md b126e186 4158B MATCH; smoke-v1 c0d63737 MATCH; smoke-v2 0e048c1c MATCH; smoke-v3 6af2f8b9 MATCH; smoke-v4 4c877ebd MATCH; T716 flight-01 b178e4c6 MATCH; t717-vendor.img 5d2d82b0 MATCH; t717-fix.cpio.gz fceef5df MATCH; t717-modified.dtb 1a961795 MATCH; t715-system.img 1283cbf2 MATCH; t705-Image 53d9563e MATCH; extracted_kernel.config d840310a MATCH; staged composer ELF 8d62a642 MATCH.
+Step 1 (box t717-work, 2026-11-16 04:33:03 AEDT): orig binary 745d19d0 x2 MATCH; v4 binary bf8661d0 x2 MATCH. Pending: allocator-V2-ndk.so extraction + SHA (system.img layout probe running).
+Step 1 DONE - 2026-11-16 04:36:55 AEDT: allocator-V2-ndk.so extracted from vault system.img (SHA a941d842, 136432 B, BuildID 3b4a319f, identical to T716 staged copy); vault system.img re-verified 1283cbf2. All Step 1 inputs MATCH, no network fetch.
+Step 2 framework-first (R1) - 2026-11-16 04:36:55 AEDT: BpAllocator::allocate2 disassembled (0x11834). transact code 2; nonzero transact status (except -74) goes to AStatus_fromStatus -> -129 is a transact-level failure, reply reads (readStatusHeader 0x11a34, nullable-parcelable read 0x117b4: int32 flag + AllocationResult::readFromParcel) only run when transact returns 0. Shim on_transact code-2 returns write_result return value. write_result DOES call AParcel_writeStatusHeader(AStatus_newOk) on success path (0x11eac) then AllocationResult::writeToParcel (0x11ee0), returns writeToParcel status. Prime suspect: AllocationResult struct layout mismatch (shim builds [int32 width][vector] at sp+0x30). Disassembling AllocationResult read/write + NativeHandle next.
+[2026-11-15T17:51:00Z] STEP2 DONE: flag omission PROVEN (framework Bn writes int32 flag=1 before writeToParcel; shim omits it; Bp requires it). Layouts match exactly; status header present. -129 mechanism is transact-level; exact internal cause to be confirmed by the smoke (flag fix is necessary regardless).
+[2026-11-15T17:51:00Z] PATCH BUILT: epilogue rewrite 17/17 slots + flag trampoline in dead AParcel_readInt64 PLT stub (0x34ab0, zero callers in v4 binary). Fixed binary 3daa5a491e9d04ff56bbb7998be1eb91a1b3ed625d66b48f264a04b04ca70932 (1711816 B, 73 diff bytes, parser footprint byte-identical). Disassembly review PASS (all bl/cb targets exact).
+[2026-11-15T17:51:00Z] NEXT: vendor patch (box debugfs, base 5d2d82b0, inode 731) + CPIO member replacement + DTB re-align, then smoke.
+[2026-11-15T17:51:43Z] VENDOR PATCHED: t718-vendor.img bac3cdc112dc6c3257c016fb4f600c46f43b9372f3d2f2ebb9b7d79fd05daeca (134217728 B, inode 731 reused, e2fsck 0/0, neighbours + SYS_RAWIO + composer ELF + HIDL allocator intact, base 5d2d82b0 untouched).
+[2026-11-15T17:52:53Z] SHIP ARTIFACTS BUILT: CPIO t718-fix.cpio.gz 1150c8410657fe40c99bc96c0f5e61af2dd0938087011076dc7015a85f127d9e (53379397 B, 237 members + trailer, only vendor.img differs, member offset 2972756 as T716); DTB t718-modified.dtb d298f5adc8caa8426eb4cfdc72f88bdeb070f90210db6bc1a10622303a2f53d9 (2049 B, initrd-end 0x1132e8145 = start + 53379397, 2 bytes differ). Vendor bac3cdc1 (see prior line). Transferring to guest-inputs next.
+[2026-11-15T18:00:34Z] INPUTS VERIFIED ON MAC: t718-vendor.img bac3cdc1, t718-fix.cpio.gz 1150c841, t718-modified.dtb d298f5ad (all SHAs match box + sandbox).
+[2026-11-15T18:00:34Z] SCRIPTS VERIFIED: 8 T718 scripts py_compile OK + supervisor import OK (EXPECTED SHAs correct); verify_smoke exact T717 smoke-4 signature (REJECT 0 CALL 1 GBA 1 allocbuf 1); verify_flight_ab exact T716 control (576 lines, 20.36s); analyzer exact T716 flight-01 counts (REJECT 71 GBA 71 allocbuf 42 EPERM 0 mapped 7 kills 0 boot_completed 29). Fixture UARTs removed.
+[2026-11-15T18:00:47Z] SMOKE LAUNCHED: Launched smoke supervisor in background, PID 4267
+[2026-11-15T18:08:28Z] SMOKE PASS: 13816 lines, UART 137fb562, REJECT 0, CALL 2 (L10444 L10451), GBA-fail 0, allocbuf-fail 0, kills 0, EPERM 0, installd-not-found 0, importBuffer x2 (Bp received valid buffers). -129 wall BROKEN. Proceeding to flight-01.
+[2026-11-15T18:08:43Z] FLIGHT-01 LAUNCHED: Launched flight-01 supervisor in background, PID 4667
+Flight in progress (flight-01): host=300s guest=188.6s pid=4672. 2026-11-15T18:13:30Z
+Flight in progress (flight-01): host=601s guest=600.4s pid=4672. 2026-11-15T18:18:31Z
+Flight in progress (flight-01): host=902s guest=900.2s pid=4672. 2026-11-15T18:23:31Z
+Flight in progress (flight-01): host=1202s guest=1199.5s pid=4672. 2026-11-15T18:28:32Z
+Flight in progress (flight-01): host=1503s guest=1501.5s pid=4672. 2026-11-15T18:33:33Z
+Flight in progress (flight-01): host=1803s guest=1801.6s pid=4672. 2026-11-15T18:38:33Z
+Flight in progress (flight-01): host=2104s guest=2102.6s pid=4672. 2026-11-15T18:43:34Z
+[2026-11-15T18:50:04Z] FLIGHT-01 DONE: 323607 lines, UART 081a9381, guest 2403.8s, QEMU exit 0. FLIGHT-AB LAUNCHED: Launched flight-ab supervisor in background, PID 6352
+2026-11-15T18:56:34Z Step 4 DONE: findings-t718.md (da5fc919, 26667 B), outcome-t718.txt (FAIL, 5 B, 4f8e9e45), DEATH_NOTE-T718.md (62d00876), TIMELINE.md written and SHA-verified on Mac. Gate strings present. Verdict FAIL.
+2026-11-15T18:56:34Z LANE CLOSED: -129 wall broken (smoke PASS, flight-01 604 calls/695 imports/0 failures); display criteria NOT met (queueBuffer 0, present 0, Invalid present fence x2241). Heartbeat CLOSED. Report to driver.
