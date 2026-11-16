@@ -1,64 +1,24 @@
-# TIMELINE — T724 (EGL dispatch probe via init .rc service trigger)
+# T725 timeline (all times AEDT 16 Nov 2026, from clock reads in the same commands)
 
-All times AEDT 16 Nov 2026 unless noted. Guest times are guest kernel seconds.
-
-- 17:27 — Lane launched (driver clock read at spawn; wedge 20:27).
-  Worktree `/Users/Shared/wt-track724-egl-rc-trigger`, branch `t724`, base
-  `63a0e15`. Brief 46,353 B, SHA `608c39e5`.
-- 17:32 — Step 0 disk gate: df 10,988,536 KiB free, 95% used, gate
-  8,388,608 KiB — OPEN by ~2.5 GiB.
-- ~17:40 — Step 1 COMPLETE: all 13 guest-input SHAs re-hashed on the Mac,
-  every one matches the brief. Embedded-vendor rule PASS (CPIO member
-  `ramdisk-images/vendor.img` = `5e0607ad`).
-- ~17:45 — Step 2 design DECIDED: SYSTEM ROUTE. New file
-  `/system/etc/init/t723probe.rc` in the revert system image (original
-  `0ba6d6d3` preserved). Ramdisk route REJECTED. Probe path proven:
-  `/first_stage_ramdisk/t723-probe` (init binary strings); `/t723-probe`
-  does not exist post-switch_root. The T723 hook's `/t723probe` path was
-  doubly wrong (wrong name + wrong namespace).
-- 17:54 — Step 2 build COMPLETE (box Linux debugfs only). New image SHA
-  `6b66cabecbd1219366c00c1eead087ec9abc6dbc19eddd4cf7eaf6d2b513acb9`.
-  Neighbours byte-identical; `e2fsck -f -n` clean; file count 7342 → 7343.
-  Block-delta patch (4 chunks, 4,194,379 B, SHA `bc29e135`) applied on the
-  Mac; final SHA `6b66cabe` — MATCH.
-- 17:55:54 — Smoke flight `smoke-t724` launched (supervisor PID 41861,
-  QEMU 41868). df at launch 8,390,516 KiB (gate open by only 1,908 KiB).
-- 17:57:11 — Smoke flight ENDED at guest 72.707 s / host 75.15 s: supervisor
-  disk gate fired (8.00 GiB < 8 GiB). Clean exit, QEMU exit 0. UART
-  `2f523454` (9,124 lines, 768,431 B). INCONCLUSIVE (ended before any
-  trigger phase). Lane scratch cleaned (134 MB + ~4 MB); df 8,530,960 KiB.
-- 17:59:46 — Probe flight `probe-flight` launched (supervisor PID 42164,
-  QEMU 42168). df 8,530,820 KiB (gate open ~139 MB).
-- ~18:02 — Mid-flight check (guest ~165 s): 0 `t723probe` mentions.
-  Guest at 165 s, past the installd early-boot point (99.58 s in T723).
-- ~18:03 — Diagnostics: early-boot actions processed (89.30 s, 90.61 s);
-  installd started (90.62 s); `on boot` processing line absent; surfaceflinger
-  started 100.13 s; T720_PROBE DONE PASS present (L228).
-- ~18:04 — Root-cause narrowing: T723 boot action processed at 99.63 s;
-  stock `on late-init` queues `trigger early-boot` + `trigger boot`
-  (hw/init.rc:562–563); `on boot` is at hw/init.rc:1104.
-- ~18:05 — Guest clock reading stalls at 205.8 s (supervisor guest_max);
-  UART still growing on logcat lines. df 8,524,800 KiB.
-- ~18:06–18:11 — Guest progresses through system_server startup; system_server
-  pid 2892 self-dumps (wall 23:23:57, 23:24:28); new system_server pid 4298
-  appears (wall 23:25:48).
-- 18:09:54 — Probe flight ENDED: guest 604.976 s, host 605.9 s, QEMU exit 0.
-  UART `e1bfd466` (28,381 lines, 3,294,964 B). flight-end.json written.
-- 18:12 — Adjudication greps: `sys.boot_completed` 5; first stock action
-  (hw/init.rc:1224) at guest 498.413 s (L21486); `T723_PROBE` 0;
-  `t723probe` 0; `processing action (boot)` 0.
-- 18:14 — Analyzer run: holds all intact (T720 PASS 1, T721 fence 1,
-  Invalid present fence 0, REJECT 0, EPERM 0, mapped 1, kills 0, panic 0);
-  dup-fail 4, rate 6.612/1000 s. df 8,057,612 KiB (below gate).
-- ~18:15–18:22 — Root-cause proof: (1) flown image contains t723probe.rc
-  SHA `9c6b3e12` (box debugfs); file is regular, mode 0664, LF, no CR.
-  (2) `class_start hal`/`core` exist ONLY in `on boot` (hw/init.rc:1210/1212)
-  across all system .rc files; no vendor .rc file has any `class_start` —
-  so the HAL/core starts at 94–100 s prove the boot action RAN.
-  (3) Init logs `Parsing file` only for /apex/... files; no per-file parse
-  log for /system/etc/init/*.rc; no parse error logged.
-  (4) `processing action (nonencrypted)` / `(charger)` also absent although
-  their services demonstrably started — the missing processing lines are a
-  kmsg flood loss, not non-execution.
-- 18:24 — Deliverables written; df 8,504,064 KiB. Lane CLOSED FAIL.
-  Wedge 20:27 NOT hit.
+- 18:49:10 — Lane launched (driver spawn; agent 808beb88). Wedge 21:49:10.
+- 18:52 — Step 0: df 8,960,936 KiB free (gate open ~572 MiB).
+- 18:54 — Step 0: df 8,964,720 KiB free. Step 1 inputs verified PASS (7/7 SHAs).
+- 18:54–19:06 — Step 2a: offline parser check on t723probe.rc — ACCEPT, 0 errors (parse-rejection ruled out). Step 2b: minimal-file design recorded (t725probe.rc, marker T725_REG_OK via write to /dev/kmsg, dual trigger).
+- 19:06:39 — progress-t725.txt + OPEN heartbeat.json written into the Mac worktree.
+- 19:07 — Box work copy made (vault revert → /home/muse/t725-work/t725-system.img, SHA 0ba6d6d3 verified). Neighbour baselines recorded (surfaceflinger 259d39f5, installd.rc 3ea3466b, hw/init.rc 60cb3d15).
+- 19:08 — t725probe.rc built byte-exact (613 B, SHA ebc8cc15); od verified the backslash-n bytes; parser ACCEPT on the exact bytes.
+- 19:09:07 — debugfs -w write (inode 705, mode 0644); dump-back SHA ebc8cc15 identical; neighbours byte-identical; e2fsck -f -n clean (7343/7424 files). New image SHA 1571a10f.
+- 19:09 — Block-delta patch computed (4 chunks, 4,194,379 B, SHA bea8777e).
+- 19:11:46 — Patch applied on the Mac (APFS clone route); final SHA 1571a10f MATCH; revert re-verified 0ba6d6d3.
+- 19:24:27 — Flight scripts re-pinned + import-tested (supervisor a07e9ec0, launcher 00e1d794, analyzer f8c57069).
+- 19:25:24 — CPIO embedded vendor re-hashed: 5e0607ad MATCH. Step 3 COMPLETE.
+- 19:26:16 — progress + heartbeat updated (Step 3 complete; df 8,828,812 KiB).
+- 19:26:28 — Step 4: registration-smoke launched (df 8,824,616 KiB; supervisor PID 47786, QEMU PID 47800).
+- 19:26:31 — QEMU started (guest flight begins).
+- 19:29:28 — Early check (guest ~167 s): T725_REG_OK ×1 already in the UART.
+- 19:29:46 — Marker located: L10659, guest 123.392938 s (on-boot action fired).
+- 19:35:48 — Flight ENDED: supervisor disk gate fired (7.31 GiB < 8 GiB). Host 556.49 s, guest max 554.169 s, QEMU exit 0, clean end, flight-end.json written.
+- 19:38:48 — Flight-end verified; analyzer run (analysis-t725.txt, 94 lines).
+- 19:39:51 — Boot-timing comparison vs T724 done (sys.boot_completed 0 lines; system_server still starting services at guest 554 s; first CALL allocate2 at 131.845 s vs 107.898 s in T724). df 7,667,192 KiB (97%).
+- 19:40:52 — No orphans (supervisor 47786, QEMU 47800 both gone). Flood-loss cross-check: T724 lost ALL boot processing lines (0), T725 kept 4.
+- 19:44 — Step 5 adjudication: Verdict: PASS. Findings, outcome, TIMELINE, progress closed, heartbeat CLOSED.

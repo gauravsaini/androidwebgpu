@@ -1,0 +1,185 @@
+# T725 progress — minimal-.rc registration experiment
+# Lane agent: sandbox subagent 808beb88-cb40-4afd-9143-397452a3e930
+# Launched 18:49:10 AEDT 16 Nov 2026 (wedge 21:49:10). Base 00d40d2.
+
+## Step 0 — Disk gate: STATIC-FIRST honoured
+- 18:52 AEDT 16 Nov: df /Users/Shared 8,960,936 KiB free (96%), gate open ~572 MiB.
+- 18:54 AEDT 16 Nov: df 8,964,720 KiB free, gate open ~576 MiB.
+- 19:03 AEDT 16 Nov (driver MEMORY.md update): 8,935,200 KiB free, gate open ~546 MiB.
+- No flights launched yet. Steps 1-3 proceed below the gate; flight gated at
+  Step 4 (recheck df immediately before launch; gate must be comfortably open
+  for a 600 s flight; own scratch cleaned before the flight).
+
+## Step 1 — Verify inputs: PASS (all re-hashed on the Mac, 18:54 AEDT)
+- t720-Image 20,396,544 B 70d3859d MATCH
+- t723-fix.cpio.gz 53,391,088 B a9d6040a MATCH
+- t723-modified.dtb 2,049 B 73d1904b MATCH
+- t721-system-revert.img 2,059,816,960 B 0ba6d6d3 MATCH
+- t722-vendor.img 134,217,728 B 5e0607ad MATCH
+- t723-probe 68,792 B 4b275e48 MATCH
+- t724-system.img 2,059,816,960 B 6b66cabe MATCH
+- t723probe.rc (box vault evidence) 976 B 9c6b3e12 MATCH (also /tmp/t725 copy)
+- installd.rc (from vault image) 4,958 B 3ea3466b MATCH (T715 trigger intact)
+- QEMU command line read (T724 probe-flight qemu-command.txt): kernel
+  t720-Image + DTB t723-modified.dtb + CPIO t723-fix.cpio.gz as loader +
+  virtio-blk system ONLY (readonly), NO vendor drive, rdinit=/early-ramdisk,
+  GDB 1258, serial file UART. Confirms EMBEDDED-VENDOR rule.
+- Guest is Android 14, SDK 34, build UQ1A.231205.015 (build.prop from vault
+  image). Guest /system/bin/init extracted (2,770,616 B, aarch64, BuildID
+  e8c6256f7891d23e5b3f52ae2518b851); strings contain "Parsing file ",
+  "processing action (", "Could not parse...".
+- T725_REG_OK: 0 occurrences in the T724 probe-flight UART (marker is unique).
+- No network fetch.
+
+## Step 2a — Offline parser check: ACCEPT (parse-rejection RULED OUT)
+- Tool: minimal AOSP init parser scripts/parse_init_rc.py (sandbox SHA
+  d42b5b6eef98cf4508f2a95c3d366c5d7ec139ce2202a179df73daf8254e2238),
+  implementing parser.cpp ParseData loop + tokenizer.cpp token rules +
+  README.md language tables + builtins.cpp arg-count ranges. Grounded in:
+  AOSP README.md (current, android-16.0.0_r4 init/), parser.cpp ParseData
+  quoted in the mo4tech Android 11 analysis, and the flown stock files.
+- Target t723probe.rc (976 B, SHA 9c6b3e12): VERDICT ACCEPT, 0 errors.
+  Registered: service 't723probe' /first_stage_ramdisk/t723-probe (line 8,
+  class main, user root, group root, oneshot, disabled);
+  on property:sys.boot_completed=1 (line 15) -> start t723probe;
+  on boot (line 18) -> 2x exec - root root -- /system/bin/toybox test -x ...
+- Positive controls (all ACCEPT, 0 errors): stock flown hw/init.rc
+  (58,376 B; 6 services, 49 actions, 6 imports), installd.rc, dmesgd.rc,
+  bootstat.rc. First positive run found 6 gaps in MY table (installkey,
+  enter_default_mount_ns, init_user0, remount_userdata, empty property
+  value); fixed from the flown stock file and re-ran clean.
+- Negative control: unknown command/option reported at exact lines while
+  surrounding sections still register (proves the C++ continue-on-error
+  semantics: a bad line logs filename:line:error and parsing continues).
+- Parser semantics that matter (parser.cpp): ParseConfigFile returns true
+  after ParseData regardless of per-line errors; a bad line CANNOT void a
+  whole file -- sections before it stay registered. The t723probe.rc service
+  + property action precede the on-boot exec lines, so even a bad exec line
+  could not explain their silence.
+- Grammar cross-checks (all from the flown stock hw/init.rc): the exec form
+  `exec - <user> <group> -- <cmd>` is used by stock line 1227
+  (`exec - system system -- /bin/rm -rf /data/per_boot`, executed 498.66 s
+  in the T724 flight, UART L21503); `on property:sys.boot_completed=1` is
+  stock line 1224 (processed 498.413 s, L21486); `on boot` is stock 1104.
+- UART check (T724 probe flight): 0 "Parsing file /system/etc/init/..."
+  lines -- but ALSO 0 for every stock file (only /apex files log that line,
+  9 lines at guest 66 s; 3 ueventd lines). Absence of the line is therefore
+  NOT evidence of non-parse for any file, including t723probe.rc. And 0
+  parse-error lines of any kind (grep: could not parse / parse error /
+  error parsing / Unable to parse / ignored duplicate / Invalid trigger /
+  Unknown keyword) -- no "t723probe.rc:<line>:" error exists in the UART.
+- VERDICT: the file parses. Parse-rejection is RULED OUT as the mechanism.
+  The non-registration is a registration failure or a trigger-matching
+  failure (or the file is never read) -- the flight must discriminate.
+
+## Step 2b — Minimal-file design (recorded before build)
+- RULINGS from evidence (each with its proof):
+  (1) toybox sh is NOT proven available: strings on the guest toybox binary
+      show applets echo/test but no standalone "sh"; ZERO stock .rc files
+      use "toybox sh"; hw/init.rc contains 0 "toybox" mentions. Per
+      PATTERN-PROOF the marker does NOT depend on sh.
+  (2) Persistent-file marker (shape b) is IMPOSSIBLE in this setup: the QEMU
+      command line has NO userdata drive; /data lives on the brd ramdisk
+      (brd.rd_nr=1 brd.rd_size=524288) and does not persist; system is
+      mounted readonly. So the marker MUST be a kmsg line (shape a).
+  (3) Marker mechanism: init builtin `write /dev/kmsg T725_REG_OK\n` where
+      `\n` is the tokenizer backslash escape (README: "c-style backslash
+      escapes may be used to insert whitespace into a token") -- the token
+      carries a real newline, so write(2) delivers a complete kmsg line.
+      No shell, no toybox, no /data. Even if the escape were literal, the
+      marker text still lands in the UART (partial line flushes later) and
+      the Command line still logs -- the design is robust to that question.
+  (4) The service needs no binary behaviour: init logs
+      `starting service 't725probe'` when it starts, and
+      `Command 'start t725probe' ...` when the action runs. The service runs
+      /system/bin/toybox echo T725_SERVICE (toybox + echo both proven
+      present; output to /dev/null is fine -- the start lines are the
+      markers).
+  (5) T724 queue-stall confounder: in T724 only the FIRST boot_completed
+      action (1224) processed; dmesgd/wifi boot_completed actions did not
+      (T723: bootstat:67 at 518.2 s + dmesgd:4 at 518.6 s DID process). So a
+      single boot_completed action could be starved even if registered.
+      MITIGATION: the file carries the SAME marker on TWO triggers --
+      `on boot` (~95 s, flood window, may survive) and
+      `on property:sys.boot_completed=1` (~498 s, post-flood). A marker at
+      ~95 s proves registration via the boot path; at ~498 s via the
+      boot_completed path; either is a PASS. Built-in control: check in the
+      flight whether stock dmesgd/wifi boot_completed actions processed --
+      if they did and mine did not, the failure is file-specific (strong
+      FAIL); if neither did, the stall is the likelier mechanism (FAIL per
+      contract, stall named, successor discriminates).
+- FILE: /system/etc/init/t725probe.rc (NEW; base image revert 0ba6d6d3, so
+  the minimal file is the ONLY addition):
+    # T725: minimal .rc registration probe. One service + two actions, one marker.
+    # The service starts on sys.boot_completed=1 (~498 s, post-flood); the on boot
+    # action writes the same marker early (~95 s, flood window) as a second chance
+    # if the boot_completed multi-action dispatch stalls (T724 precedent: only
+    # the first boot_completed action processed).
+    service t725probe /system/bin/toybox echo T725_SERVICE
+        class main
+        user root
+        group root
+        oneshot
+        disabled
+    <blank>
+    on property:sys.boot_completed=1
+        start t725probe
+        write /dev/kmsg T725_REG_OK\n
+    <blank>
+    on boot
+        write /dev/kmsg T725_REG_OK\n
+  (NOTE: the `\n` in the write lines is backslash + n, two characters, to be
+  verified byte-exact with od before the build.)
+- TRIGGER: sys.boot_completed=1 (~498 s, post-flood; stock 1224 processed at
+  498.413 s in T724) + on boot (~95 s, second chance).
+- MARKER: T725_REG_OK (kmsg line, unique tag) + `starting service
+  't725probe'` + `Command 'start t725probe'` + `processing action
+  (sys.boot_completed=1) from (/system/etc/init/t725probe.rc:NN)`.
+- CHECK (positive greps, post-flight): `grep -a "T725_REG_OK" uart.log`
+  (with guest timestamps); `grep -a "t725probe" uart.log` (all mentions).
+- WINDOW: full 600 s guest / 700 s host (same as T723/T724 probe flights),
+  because the primary trigger fires at ~498 s.
+- SUCCESSOR: if registration proves, T726 re-flies the T723 probe with the
+  proven file shape (service + on property:sys.boot_completed=1 + start);
+  if the route is dead, the successor uses a different trigger.
+
+## Step 3 — Build: PENDING
+## Step 4 — Registration smoke: PENDING
+## Step 5 — Adjudication: PENDING
+
+## Step 3 — Build (COMPLETE 19:25 AEDT 16 Nov 2026)
+
+- File built byte-exact on the box (/tmp/t725/t725probe.rc, 613 B, SHA ebc8cc15918f53d4fddb312b2f68d9b4298d8ba2fccf1cafb0e8fe2cd329349e, 18 lines, mode 0644 source): od -c verified both `write` lines end with backslash+n as two characters, then a real newline. Parser run on the exact bytes: ACCEPT, 1 service + 2 actions, 0 errors (the write arg carries the embedded newline after escape processing).
+- Box edit (Linux debugfs ONLY): work copy /home/muse/t725-work/t725-system.img, cp of the vault revert, SHA 0ba6d6d3 verified after copy. FS stats before: 17,303 free blocks, 82 free inodes (addition, no rm-first needed). Neighbour baselines BEFORE: surfaceflinger 259d39f5 (8,336,320 B), installd.rc 3ea3466b (4,958 B), hw/init.rc 60cb3d15 (58,376 B) — all identical to the T724 baselines. debugfs -w write allocated inode 705, mode 0644 (stock .rc mode; source file was chmod 644 so the created inode matches stock). Dump-back SHA ebc8cc15, cmp IDENTICAL. Neighbours byte-identical AFTER (259d39f5 / 3ea3466b / 60cb3d15). e2fsck -f -n clean (Pass 1-5, 7343/7424 files, no errors); file count 7342 -> 7343.
+- NEW image SHA: 1571a10fecb8f5ef20c08e8f5e837b9c16798b6ea11e19417c58bd2a41f961df (2,059,816,960 B, same size).
+- Transfer box -> Mac (block delta, T724 procedure): 1 MiB-chunk comparison found the same 4 differing chunks (offsets 0, 134217728, 268435456, 398458880); patch t725.patch 4,194,379 B, SHA bea8777e9d1eec74bc8c8abf6289d0ac85bd2c3e367dc37d2b7a47a5b8768749 (verified identical box + sandbox + Mac). Mac-side: APFS clone (cp -c) of the revert to guest-inputs/t725-system.img — clone SHA 0ba6d6d3 before patching, df cost ~208 KiB (not 2 GiB); applied the patch, final SHA 1571a10f — SHA MATCH; revert re-verified 0ba6d6d3 after (clone independence proven). Patch application cost ~7 MiB total. /tmp/t725.patch deleted after use (sandbox + box copies preserved).
+- Scripts (from the T724 scripts via scripts/transform_t725_scripts.py, all replacements asserted): supervisor_t725.py 12,691 B SHA a07e9ec0; launch_probe_t725.py 1,741 B SHA 00e1d794; analyze_t725_probe.py 6,868 B SHA f8c57069; transform_t725_scripts.py 9,175 B SHA d32f17a8. py_compile OK; import test OK (supervisor TRACK == T725, FLIGHT_NAME == registration-smoke, TARGET_GUEST_SECONDS == 600, HOST_CAP_SECONDS == 700, system SHA pin 1571a10f). Zero T724/t724/6b66cabe/T723_PROBE/t723probe leftovers (grep count 0 in all three flight scripts). Transform lessons: (1) the docstring regex must be re.search, not re.match (shebang line); (2) the splice must add a newline after the replacement docstring (the regex consumes the newline after the closing quotes); (3) my own new docstrings must not contain the literal "T724" (the leftover assert trips on it).
+- CPIO embedded-vendor re-hash (EMBEDDED-VENDOR rule): extracted ramdisk-images/vendor.img from guest-inputs/t723-fix.cpio.gz (BSD cpio needs -d to create the leading directory — the first attempt without -d extracted nothing); SHA 5e0607ad — MATCHES the expected vendor SHA. Scratch removed immediately after.
+- Disk at build close: 8,828,812 KiB free (19:25:24 AEDT), gate open ~440 MiB. The disk slid ~145 MiB in the 13 min before the CPIO check, then recovered ~24 MiB. Step 4 rechecks df immediately before launch.
+
+## Step 4 — Registration smoke (NEXT)
+
+- Flight registration-smoke, 600 s guest / 700 s host, GDB 1258, same stack as T724 except t725-system.img (1571a10f). Launch via scripts/launch_probe_t725.py (detached). Primary trigger sys.boot_completed=1 ~498 s; on boot action ~95 s as second chance. PASS criterion: T725_REG_OK marker post-flood, or starting service 't725probe' / Command 'start t725probe' lines. If the disk gate blocks: WAIT-DISK cleanly, state preserved (Steps 1-3 done, nothing to redo).
+Flight in progress (registration-smoke): host=301s guest=283.8s pid=47800. 2026-11-16T08:31:32Z
+
+## Step 4 — Registration smoke (COMPLETE 19:35:48 AEDT 16 Nov 2026)
+
+- Flight registration-smoke, 600 s guest / 700 s host, GDB 1258, same stack as T724 except t725-system.img (1571a10f). Launched via scripts/launch_probe_t725.py (detached).
+- Launch 19:26:28 AEDT (supervisor PID 47786, QEMU PID 47800, QEMU started 19:26:31). df at launch 8,824,616 KiB free (gate open ~436 MiB).
+- Early check 19:29:28 (guest ~167 s): T725_REG_OK x1 already in the UART; t725probe x0. Marker located 19:29:46: L10659, guest 123.392938 s — the on-boot action fired.
+- End 19:35:48 AEDT: "Disk gate fired mid-flight (7.31 GiB < 8 GiB)". Host 556.49 s, guest max 554.169 s, QEMU exit 0, clean supervisor exit, flight-end.json written, NO orphans (verified 19:40:52). UART 15,204 lines, 1,624,522 B, SHA f089d89f.
+- Disk slid ~1.13 GiB during/after the flight (8,824,616 KiB at launch -> 7,667,192 KiB at 19:39:51, 97%); cause unknown, same unidentified-slide class as earlier recoveries.
+- The flight ended 46 s short of the 600 s target but covered the on-boot trigger and ran 56 s past the nominal boot_completed time (~498 s). The evidence window was sufficient for the registration verdict.
+
+## Step 5 — Adjudication (CLOSED PASS 19:44 AEDT 16 Nov 2026)
+
+- Analyzer: scripts/analyze_t725_probe.py -> analysis-t725.txt (94 lines).
+- Marker: T725_REG_OK x1, L10659, guest 123.392938 s (on-boot action executed; guest-origin, unique tag, no other producer in the guest).
+- t725probe mentions 0; no service start, no start command, no t725probe.rc citations. Service-start leg untested: the service starts only on sys.boot_completed=1, which never fired.
+- sys.boot_completed: 0 lines in 554 s. system_server (pid 2950) still starting services at guest 554 s (AudioService etc.). Boot ran slower than T724 (first CALL allocate2 131.845 s vs 107.898 s; 2 CALLs vs 12). The boot_completed trigger was never tested, not failed.
+- [T723] hook line L2026 ("boot_completed never detected in 600s") is the known-blind early-ramdisk hook (RAMDISK-MOUNT-BLIND), not evidence about the real property.
+- Holds: T720_PROBE DONE PASS 1 (L223); REJECT 0; EPERM 0; Invalid present fence 0; Watchdog KILLING 0; FATAL 0; panic/Oops/BUG 0; avc denied (two spaces) 1290, /dev/mem 0. Unobservable (post-boot_completed phase never reached): T721 fence log 0, simplefb mapped 0, dup-fail 0 — in T724 all three first appeared at guest ~515-516 s, AFTER boot_completed (498.4 s); absence explained by the slow boot, not a regression.
+- Flood-loss cross-check: T724 lost ALL boot processing lines (0 of 20 processing-action lines) although stock on-boot actions demonstrably ran; T725 kept 4. The missing t725probe.rc processing line proves nothing; the marker is the evidence.
+- Verdict: PASS. The minimal added .rc file registers; the T724 wall ADDED-RC-SILENTLY-IGNORED is REFUTED for this file shape. The boot_completed multi-action dispatch stall remains a live confounder for the property trigger specifically.
+- Successor: T726 re-flies the T723 probe with the proven file shape (service + on property:sys.boot_completed=1 + start), with the disk gate comfortably open and a boot-timing allowance. Disk is BELOW the gate now (7,667,192 KiB at 19:39:51) — T726 is blocked until it recovers >8 GiB.
+- Deliverables: findings-t725.md, outcome-t725.txt (PASS), TIMELINE.md, progress-t725.txt (this file), heartbeat.json (CLOSED PASS), analysis-t725.txt. No DEATH_NOTE (PASS lane).
