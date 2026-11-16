@@ -1,57 +1,54 @@
-# TIMELINE — Track T720: kernel fence source
+# TIMELINE — Track T721: composer sw_sync retire fence
 
-All times AEDT (Australia/Sydney), Monday 16 November 2026,
-from `date` reads in the same commands.
+All times AEDT (Australia/Sydney), from clock reads in the same command
+unless marked derived.
 
-- 08:34:30 — Lane launch. Brief re-hashed (bf2f1782, 36,666 B)
-  and read in full. Worktree
-  `/Users/Shared/wt-track720-kernel-fence-source`, branch
-  `t720`, base `de8a953`.
-- 08:34:54 — Step 0 disk gate PASS: 10 Gi free, 95% used.
-- 08:35:14/08:35:50 — Step 1 inputs verified PASS (Mac + box).
-- 08:35–08:39 — Provenance ESTABLISHED: box tree HEAD
-  `4da740c10dc0` + Route B lds patch; tree Image byte-identical
-  to flown `53d9563e`. Baseline config delta recorded (99
-  lines). Config change applied with the full build environment
-  (first attempt without LD=ld.lld caught and redone).
-- 08:39:46–08:42:47 — Kernel build, exit 0. New Image
-  `70d3859d` (20,396,544 B). Pre-flight gates PASS.
-- 08:46 — Probe v1 built (`015dc39b`, 7,568 B), not
-  host-executed.
-- 08:47 — CPIO v1 (`d623d48c`) + DTB v1 (`92c6fab8`) built.
-- 08:49:45–08:51:19 — Transfers box → sandbox → Mac, SHA-verified.
-- 08:55:22 — Scripts import-tested on the Mac; fixture-verified
-  against the T719 UARTs (exact reproduction).
-- 08:55:44 — Smoke attempt 1 (v1) launched. QEMU exit 0 at
-  guest 9.6 s: probe PASSED, but the v1 sysfs mount aborted
-  init (EBUSY). Archived `flights/smoke-attempt-1/`.
-- 09:00:22 — Attempt-1 archive verified (UART `58534665`,
-  flight-end `d4a5e264`).
-- 09:01 — Probe v2 (`d25aee60`) + CPIO v2 (`e37ec1c7`) + DTB
-  v2 (`b1594857`) built; supervisor pins updated.
-- 09:02:24 — v2 stack verified on the Mac.
-- 09:02:37 — Smoke attempt 2 (v2) launched. QEMU exit 0 at
-  guest 10.0 s: probe PASSED, silent reboot after switch_root.
-  Archived `flights/smoke-attempt-2/` (UART `fc5731e7`).
-- 09:06:09–09:11:35 — Bisection A (new kernel + old CPIO/DTB):
-  HEALTHY, guest 192.7 s, UART `ee250495`.
-- 09:11:53–09:17:16 — Bisection B (old kernel + new CPIO/DTB):
-  HEALTHY, guest 188.1 s, UART `43d659ee`, probe FAIL expected.
-- 09:14 — Probe v3 (`61140fc7`) built: unmount + rmdir on all
-  paths, zero persistent state.
-- 09:18 — CPIO v3 (`848a470f`) + DTB v3 (`3ff2bb8e`) built;
-  supervisor pins updated; verified on the Mac 09:18:52.
-- 09:19:06 — Smoke attempt 3 (v3) launched. Guest target
-  reached (260.1 s), QEMU exit 0, 13,683 lines, UART
-  `67f92b81`. Smoke PASS (verified 09:24:32).
-- 09:25:00 — Flight-01 launched.
-- 10:05:57 — Flight-01 complete: guest 2,403.3 s, QEMU exit 0,
-  320,917 lines, UART `f1ee6d02`. Analysis PASS (§7 findings).
-- 10:07:53 — Flight-ab control launched. QEMU self-exit 0 at
-  guest 20.1 s, 595 lines, UART `ff06cba6`. Differential
-  PROVEN (probe FAILs on the canonical kernel).
-- 10:08–10:15 — Adjudication: findings + outcome + TIMELINE
-  written, heartbeat CLOSED. Verdict: PASS. No commit (driver
-  owns certification, registry, vault, delivery).
+- 2026-11-16 10:22:53 — Lane launched (sandbox subagent, parent spawn).
+  Worktree `/Users/Shared/wt-track721-composer-retire-fence`, branch
+  `t721`, HEAD `fecf5e2`. Wedge deadline 13:22:53.
+- 10:23:20 — Step 0 PASS: Mac data volume 9.7 GiB available (96% used),
+  above the 8 GiB gate.
+- 10:26 — Step 1 PASS: every brief input SHA re-hashed and matched; no
+  network fetch.
+- 10:26–10:35 — Step 2 characterisation: present path re-verified,
+  writeFence contract, sw_sync helpers dead-but-usable, debugfs mount
+  question resolved, binary-patch route justified, trampoline host
+  `sync_file_info` (0xb7670) + `.bss` extension chosen.
+- 10:47 — Step 2 implementation recorded: trampoline (241 B), splice,
+  vendor patch, revert image, supervisor + launchers + analysis scripts.
+- 10:49:05 — Smoke #1 launched (QEMU pid 19591). WRONG CPIO (embedded
+  original vendor). Host 300.5 s, guest 206.8 s, 13,733 lines. Allocator
+  / holds PASS, T721 log 0. Archived to
+  `flights/smoke-cpio-vendor-mismatch/`.
+- 10:55:12 — Flight-01 #1 launched (QEMU pid 19837). WRONG CPIO.
+- 11:06:24 — Flight-01 #1 killed (guest 669.26 s, 27,880 lines) after
+  the embedded-vendor discovery (UART L339 + CPIO member hash
+  `bac3cdc1...`). Archived to `flights/flight-01-cpio-vendor-mismatch/`.
+- 11:06–11:15 — CPIO rebuild (`t721-fix.cpio.gz`, `6a302597...`) + DTB
+  re-align (`t721-modified.dtb`, `91b45a10...`); supervisor + launchers
+  updated, re-verified on the Mac.
+- 11:15:37 — Smoke redo launched (QEMU pid 20476). PASS: host 300.6 s,
+  guest 186.3 s, 13,829 lines; holds PASS; fence prong deferred.
+- 11:22:34 — Flight-01 redo launched (QEMU pid 20636).
+- 11:35:24 — MILESTONE: first `T721 fd=10 tl=9` log line (guest 765 s).
+- 11:45 — Revert image verified on the Mac (2,059,816,960 B, `0ba6d6d3...`).
+- ~11:46 — Supervisor disk-gate exit (7.96 GiB < 8 GiB) at host 1,382 s;
+  QEMU orphaned, kept running.
+- 12:03:31 — Manual QEMU SIGTERM at guest 2,464.46 s. Flight-01 UART
+  166,172 lines, SHA `8ecdf8e4...`. Manual flight-end record written.
+- 12:06:32 — Scaffold-revert flight launched (supervisor pid 22110,
+  QEMU pid 22116).
+- 12:16:33 (derived: launch + host 601.3 s) — Revert flight complete:
+  guest 600.6 s, QEMU exit 0, UART 24,748 lines, SHA `76d47743...`.
+  T721 log 1, fence errors 0 WITHOUT the scaffold — DECISIVE.
+- 12:19:13 — A/B control (240 s) launched (QEMU pid 22545).
+- 12:19:54 — A/B 240 s ABORTED: design flaw (ends before first present
+  ~565 s, vacuous). Partial UART (2,112 lines) archived to
+  `flights/flight-ab-240s-aborted/`.
+- 12:20:27 — A/B control LONG (700 s guest / 800 s host) launched
+  (supervisor pid 22614, QEMU pid 22618).
+- 12:31:50 — A/B control completes (ended_utc 01:31:50Z): guest 700.2 s,
+  QEMU exit 0, UART 29,393 lines, SHA `99246fba...`. T721 log 0, fence
+  errors 72 — the differential is proven. Step 4 adjudication: PASS.
 
-Wedge trigger was 11:34:30 AEDT; the lane closed well inside it.
+- Lane closed (clock read below) — Step 4 adjudication PASS; findings + outcome + TIMELINE delivered; heartbeat CLOSED.

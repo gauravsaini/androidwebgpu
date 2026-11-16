@@ -1,7 +1,7 @@
 {
-  "track": "T720",
+  "track": "T721",
   "status": "CLOSED",
   "verdict": "PASS",
-  "ts": "2026-11-16T10:10:39+1100",
-  "note": "All supervisors exited; findings + outcome + TIMELINE on disk."
+  "ts": 1794793099,
+  "note": "Step 4 adjudicated PASS; all supervisors exited; findings + outcome + TIMELINE delivered."
 }
