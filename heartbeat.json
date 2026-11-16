@@ -1,7 +1,1 @@
-{
-  "track": "T721",
-  "status": "CLOSED",
-  "verdict": "PASS",
-  "ts": 1794793099,
-  "note": "Step 4 adjudicated PASS; all supervisors exited; findings + outcome + TIMELINE delivered."
-}
+{"agent":"0106e8ed","note":"Flight-01 FAIL: rate 8.126 per 1000s, 20 dup-fails, all holds intact. A/B control not flown (disk gate). Findings + death note + outcome + timeline on disk. No commits; driver certifies.","stage":"done","status":"CLOSED","track":"T722","ts":"2026-11-16 14:37:10 AEDT","ts_utc":"2026-11-16T03:37:10Z","verdict":"FAIL"}

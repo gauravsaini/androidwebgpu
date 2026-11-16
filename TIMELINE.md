@@ -1,54 +1,56 @@
-# TIMELINE — Track T721: composer sw_sync retire fence
+# T722 timeline — EGL native-fence support
 
-All times AEDT (Australia/Sydney), from clock reads in the same command
-unless marked derived.
+All times AEDT, 16 Nov 2026. Worktree /Users/Shared/wt-track722-egl-native-fence,
+branch t722, base d8e90b0. Gates G722-1/2 registered unchecked (driver adjudicates).
 
-- 2026-11-16 10:22:53 — Lane launched (sandbox subagent, parent spawn).
-  Worktree `/Users/Shared/wt-track721-composer-retire-fence`, branch
-  `t721`, HEAD `fecf5e2`. Wedge deadline 13:22:53.
-- 10:23:20 — Step 0 PASS: Mac data volume 9.7 GiB available (96% used),
-  above the 8 GiB gate.
-- 10:26 — Step 1 PASS: every brief input SHA re-hashed and matched; no
-  network fetch.
-- 10:26–10:35 — Step 2 characterisation: present path re-verified,
-  writeFence contract, sw_sync helpers dead-but-usable, debugfs mount
-  question resolved, binary-patch route justified, trampoline host
-  `sync_file_info` (0xb7670) + `.bss` extension chosen.
-- 10:47 — Step 2 implementation recorded: trampoline (241 B), splice,
-  vendor patch, revert image, supervisor + launchers + analysis scripts.
-- 10:49:05 — Smoke #1 launched (QEMU pid 19591). WRONG CPIO (embedded
-  original vendor). Host 300.5 s, guest 206.8 s, 13,733 lines. Allocator
-  / holds PASS, T721 log 0. Archived to
-  `flights/smoke-cpio-vendor-mismatch/`.
-- 10:55:12 — Flight-01 #1 launched (QEMU pid 19837). WRONG CPIO.
-- 11:06:24 — Flight-01 #1 killed (guest 669.26 s, 27,880 lines) after
-  the embedded-vendor discovery (UART L339 + CPIO member hash
-  `bac3cdc1...`). Archived to `flights/flight-01-cpio-vendor-mismatch/`.
-- 11:06–11:15 — CPIO rebuild (`t721-fix.cpio.gz`, `6a302597...`) + DTB
-  re-align (`t721-modified.dtb`, `91b45a10...`); supervisor + launchers
-  updated, re-verified on the Mac.
-- 11:15:37 — Smoke redo launched (QEMU pid 20476). PASS: host 300.6 s,
-  guest 186.3 s, 13,829 lines; holds PASS; fence prong deferred.
-- 11:22:34 — Flight-01 redo launched (QEMU pid 20636).
-- 11:35:24 — MILESTONE: first `T721 fd=10 tl=9` log line (guest 765 s).
-- 11:45 — Revert image verified on the Mac (2,059,816,960 B, `0ba6d6d3...`).
-- ~11:46 — Supervisor disk-gate exit (7.96 GiB < 8 GiB) at host 1,382 s;
-  QEMU orphaned, kept running.
-- 12:03:31 — Manual QEMU SIGTERM at guest 2,464.46 s. Flight-01 UART
-  166,172 lines, SHA `8ecdf8e4...`. Manual flight-end record written.
-- 12:06:32 — Scaffold-revert flight launched (supervisor pid 22110,
-  QEMU pid 22116).
-- 12:16:33 (derived: launch + host 601.3 s) — Revert flight complete:
-  guest 600.6 s, QEMU exit 0, UART 24,748 lines, SHA `76d47743...`.
-  T721 log 1, fence errors 0 WITHOUT the scaffold — DECISIVE.
-- 12:19:13 — A/B control (240 s) launched (QEMU pid 22545).
-- 12:19:54 — A/B 240 s ABORTED: design flaw (ends before first present
-  ~565 s, vacuous). Partial UART (2,112 lines) archived to
-  `flights/flight-ab-240s-aborted/`.
-- 12:20:27 — A/B control LONG (700 s guest / 800 s host) launched
-  (supervisor pid 22614, QEMU pid 22618).
-- 12:31:50 — A/B control completes (ended_utc 01:31:50Z): guest 700.2 s,
-  QEMU exit 0, UART 29,393 lines, SHA `99246fba...`. T721 log 0, fence
-  errors 72 — the differential is proven. Step 4 adjudication: PASS.
-
-- Lane closed (clock read below) — Step 4 adjudication PASS; findings + outcome + TIMELINE delivered; heartbeat CLOSED.
+- 12:49:38 — First agent 0f3c3c2c launched.
+- 12:50:13 / 12:50:53 — Step 0 df readings 8,380,272 / 8,380,108 KiB (7.99 GiB),
+  both below the 8,388,608 KiB (8 GiB) gate.
+- 12:51:52 — WAIT-DISK exit recorded (Step 0). Nothing built, no verdict.
+- ~12:52 — Driver pruned certified+vaulted+pushed worktrees T714-T718
+  (~476 MiB freed, disk 8.46 GiB) under standing authority.
+- 12:54:14 — First recovery agent 81586262 launched (wedge 15:54:14).
+- 12:54:44 — Step 0 re-check: 8,866,804 KiB, above gate.
+- 12:58:04 — Step 1 PASS: all input SHAs matched; embedded-vendor check PASS.
+- 13:12:59 — Step 2 characterization + fix build complete (stub returns -1;
+  binary patch, T721 pattern; vendor/CPIO/DTB built + verified).
+- 13:26:01 / 13:26:16 / 13:26:47 — Disk re-tripped the gate: 8,372,200 /
+  8,370,880 / 8,369,596 KiB, sliding.
+- 13:27:23 — WAIT-DISK exit recorded (Step 3). No flights, no supervisor/QEMU,
+  no verdict. Steps 0-2 preserved.
+- 13:33:32 — First recovery agent completed (follow-up: sandbox-wide stub-source
+  grep found no buildable source).
+- 13:33:54 — Driver verified the worktree state from heartbeat.json +
+  progress-t722.txt.
+- ~13:34 — Driver pruned certified T719/T720 worktrees (~260 MiB freed, disk
+  8,882,532 KiB / 8.47 GiB; QEMU count verified 0 first).
+- 13:35:29 — Second recovery agent 0106e8ed launched (wedge 16:35:29).
+  Flights + adjudication only; no re-characterization, no rebuild.
+- 13:36:00 / 13:36:30 — Step 0 re-check PASS: 8,894,796 / 8,870,236 KiB.
+  Artifacts re-hashed (all matched); embedded-vendor checks PASS; QEMU
+  command line read (no vendor drive).
+- 13:38:18 — Smoke launched (supervisor PID 28771, QEMU PID 28776).
+- 13:43:19 — Smoke stopped: host timeout 300 s (host 300.53 s, guest 196.41 s,
+  QEMU exit 0).
+- 13:44:20 — Smoke PASS recorded (holds intact; fence/boot prongs deferred as
+  expected; dup-fail 0 vacuous).
+- 13:44:22 — Flight-01 launched (supervisor PID 29101, QEMU PID 29106;
+  2400 s guest target, 2500 s host cap).
+- ~13:54 — Supervisor hit the disk gate mid-flight (FATAL after the 585.6 s
+  tick, 7.49 GiB) and exited(10); QEMU orphaned, still running.
+- 13:55:47 — Orphan event recorded (disk 7,857,404 KiB at 13:55:17). Orphaned
+  QEMU left running to the guest target per the T721 V1 precedent.
+- 13:56:47 / 14:07:10 / 14:17:20 — Orphan checks: guest 743.9 s / 1366.9 s /
+  1974.3 s; QEMU alive, UART growing.
+- 14:25:25 — Manual SIGTERM at guest_max 2461.281 s; QEMU gone 1 s later.
+  Manual flight-end record written (UART SHA ae28c6a6, 256,896 lines).
+- 14:25:26 — Disk 7,837,208 KiB (7.47 GiB). A/B control cannot launch
+  (supervisor gate); control gap recorded honestly.
+- After the stop — Analyzer: 20 dup-fails in 2461.3 s, rate 8.126 per 1000 s.
+  PRIMARY CRITERION FAILED (baselines 4.057 and 6.661). All holds intact.
+- Post-flight — Investigation: every implementation-level cause ruled out
+  with evidence; surviving explanation is dispatch non-forwarding
+  (EGL-DISPATCH-UNREACHABLE). See findings-t722.md S5.
+- Close — Deliverables written (findings, death note, outcome FAIL, this
+  timeline, progress appended, heartbeat CLOSED). No commits; driver
+  certifies and launches the successor. Verdict: FAIL.
