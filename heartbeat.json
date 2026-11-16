@@ -1,1 +1,15 @@
-{"agent":"0106e8ed","note":"Flight-01 FAIL: rate 8.126 per 1000s, 20 dup-fails, all holds intact. A/B control not flown (disk gate). Findings + death note + outcome + timeline on disk. No commits; driver certifies.","stage":"done","status":"CLOSED","track":"T722","ts":"2026-11-16 14:37:10 AEDT","ts_utc":"2026-11-16T03:37:10Z","verdict":"FAIL"}
+{
+  "timestamp_utc": "2026-11-16T06:06:55Z",
+  "status": "CLOSED (FAIL)",
+  "track": "T723",
+  "flight": "probe-flight",
+  "current_step": "Adjudicated FAIL - probe never ran",
+  "verdict": "FAIL",
+  "host_elapsed_seconds": 620.93,
+  "guest_log_max_seconds": 620.205,
+  "target_host_seconds": 700,
+  "target_guest_seconds": 600,
+  "supervisor_pid": null,
+  "qemu_pid": null,
+  "note": "Probe flight complete 16:37:38 AEDT; wait-loop timeout at guest ~33.4s, probe never ran; findings + death note written; no agent commits"
+}
