@@ -1,0 +1,216 @@
+# T724 progress — EGL dispatch probe via init .rc service trigger
+
+- Lane: T724, worktree /Users/Shared/wt-track724-egl-rc-trigger, branch t724, base 63a0e15 (T723 certification commit).
+- Agent launched 17:27 AEDT 16 Nov 2026 (driver clock read at spawn; wedge 20:27 AEDT 16 Nov 2026).
+- Brief: hidden_files/briefs/track724-egl-rc-trigger.md, 46,353 B, SHA 608c39e5, brief-gate READY.
+- T723 findings read in full first (findings-t723.md, 17,326 B, SHA 2d1631fc, Verdict FAIL, wall RAMDISK-MOUNT-BLIND).
+
+## Step 0 — Disk gate (17:32 AEDT 16 Nov 2026, Mac clock read in the same command)
+
+- df /System/Volumes/Data: 10,988,536 KiB available, 95% used. Gate 8,388,608 KiB — OPEN by ~2,599,928 KiB (~2.48 GiB).
+- Static-first design honoured: Steps 1–2 proceed; flights gated at Step 3 (recheck df immediately before every flight launch; WAIT-DISK if below gate).
+
+## Step 1 — Verify inputs (COMPLETE 17:40 AEDT 16 Nov 2026)
+
+All SHAs re-hashed on the Mac, every one matches the brief (full SHA-256):
+
+- t723-probe 4b275e48cab6efa03e6878a25a7168f2ae1b08a6b9617a171985b82bbd1387ad (68,792 B) MATCH
+- t723-fix.cpio.gz a9d6040a3984e9d60837187d3b5d02211002966e4f051f23765d1f05390f3521 (53,391,088 B) MATCH
+- t723-modified.dtb 73d1904b3191edc3c36082f4cec744944ff56fe6b947dd6910d25d4b2a858eea (2,049 B) MATCH
+- t720-Image 70d3859d6aed1906d27217aa3fdfd9bb953a57f4490c89c51efa4f6490441e04 (20,396,544 B) MATCH
+- t721-system-revert.img 0ba6d6d353b406a7c0a3df340be60bde678ee215b5b8c3bee5ec7a7274d3e3d3 (2,059,816,960 B) MATCH
+- t722-vendor.img 5e0607ada51367fbe9f7e5dd7586afbeb9216f478f00a31baa5179eb73f476e0 (134,217,728 B) MATCH
+- t722-fix.cpio.gz 42f1b2ec0127d4242a844b226df4fdcd505c318b923804de1c327875a0aa24cf (53,382,554 B) MATCH
+- t722-modified.dtb 32eaab25c34fcce9e7c347ad600f215a9955e397c8ac63ef09f73b898ac1f7dc (2,049 B) MATCH
+- early-ramdisk-t723 43bd8565ff698f7e065133f1387ef1296ccd9bbb71a5668a97b3206f6629c9ea (13,430 B) MATCH
+- t723-probe.c 94bd7d0a0120277d8117d6968f1bca24ea6a77fafc2e921480353e16cef2b7ba (24,356 B, 631 lines) MATCH (full SHA; brief carries the 94bd7d0a prefix only)
+- t721-fix.cpio.gz 6a302597c19156b99b3b07a8c8a33ca2ef9d823af9aa1008a5da67e822a018f1 (53,383,972 B) MATCH
+- t721-modified.dtb 91b45a10ea3f33edc36b8a945230ea7873b7b9ffe91bbff7f23cb34628ee8bf4 (2,049 B) MATCH
+- t721-vendor.img 6bf3e2e0ebbc7dc06031ad64bfaae1acb7fe207e1453e297af6639bbb215148b (134,217,728 B) MATCH
+- findings-t723.md 2d1631fc21408abe478c597b54d5d344a2c44ba1b5f0d77d607147c0bdbd6624 (17,326 B) MATCH
+- outcome-t723.txt 4f8e9e45f8a9e1843b81eaf3bdf52a6b778d415d23bf985774a9d34a43f69bd5 (5 B) MATCH
+- Box copy of t721-system-revert.img re-hashed on the box: 0ba6d6d3... MATCH.
+
+EMBEDDED-VENDOR RULE: CPIO member ramdisk-images/vendor.img extracted on the Mac and hashed:
+5e0607ada51367fbe9f7e5dd7586afbeb9216f478f00a31baa5179eb73f476e0 — EQUALS the expected vendor SHA. PASS.
+CPIO member list (239 members): t723-probe present (-rwxr-xr-x root, 68,792 B), t720-probe present,
+init.rc is a SYMLINK -> system/etc/init/hw/init.rc; system/etc/init/hw/init.rc + system/etc/init/init.rc also members.
+QEMU command line read (T723 probe-flight qemu-command.txt): kernel t720-Image + DTB + CPIO loader
++ virtio-blk system only (readonly), NO vendor drive, rdinit=/early-ramdisk, GDB 1258, serial file UART.
+No network fetch. Step 1 PASS — no missing/mismatched input.
+
+## Step 2 — Trigger design (DECIDED 17:45 AEDT 16 Nov 2026, evidence below)
+
+DESIGN DECISION: SYSTEM ROUTE — new file /system/etc/init/t723probe.rc in the revert system image
+(edited copy gets a NEW SHA; original 0ba6d6d3 preserved untouched). Ramdisk route REJECTED (see below).
+Branch: PROBE-ONLY (no fix build — the dispatch point is not yet proven by probe evidence).
+
+Evidence for the system route (all from the T723 probe-flight UART 0b8d8841 + box debugfs read-only):
+
+1. Second-stage init parses /system/etc/init/*.rc and fires their property triggers. UART citations:
+   - L21534 [516.118458] `init: processing action (sys.boot_completed=1) from (/system/etc/init/hw/init.rc:1224)`
+   - `init: processing action (sys.boot_completed=1 && ...) from (/system/etc/init/bootstat.rc:67)`
+   - `init: processing action (sys.boot_completed=1) from (/system/etc/init/dmesgd.rc:4)`
+   - wifi.rc:30/46/51/53 boot_completed commands all fired.
+   - L10037 [99.584240] `init: Command 'start installd' action=early-boot (/system/etc/init/installd.rc:109) took 250ms and succeeded`
+     — the T715 trigger in the system image's installd.rc FIRED. A new .rc in the same directory is read by the same parser.
+2. System image's /system/etc/init/hw/init.rc (box debugfs): 1,366 lines, STOCK AOSP (no swiftshader /
+   zygote-t251 / custom-surfaceflinger markers). Line 1224 is `on property:sys.boot_completed=1` — exactly the
+   UART citation. Lines 7-12 import init.environ.rc + init.usb.rc + per-hardware rc files.
+   installd.rc lines 100-115 carry the T715 trigger comment ("early-boot fires (proven, guest ~89s)").
+3. /system/bin/init EXISTS in the image (2,770,616 B, inode 375). First-stage init mounts /system
+   (guest 9.98 s), `Switching root to '/system'` (guest 9.989 s, UART L589), second stage starts
+   (guest 15.73 s, `init second stage started!`). A ramdisk-registered trigger cannot survive the exec:
+   init's parsed config is process state, lost on exec to /system/bin/init.
+4. The ramdisk /init.rc (symlink -> CPIO hw/init.rc, the T190 custom file) contains NO
+   `on property:sys.boot_completed=1` action at all — even first-stage init has no such trigger registered.
+5. PATH — the probe binary post-switch_root: /first_stage_ramdisk/t723-probe (NOT /t723-probe).
+   init binary strings (box-extracted /system/bin/init, 2,770,616 B) prove the path is real:
+   `/first_stage_ramdisk/fstab.`, `Could not bind mount /first_stage_ramdisk to itself`,
+   `/first_stage_ramdisk/system/bin/snapuserd`, `/first_stage_ramdisk`, `/first_stage_ramdisk/system/etc/fstab.`
+   (control string /second_stage_resources also hits, as in UART L581). After switch_root the old
+   ramdisk root is preserved at /first_stage_ramdisk, so the CPIO member t723-probe is reachable there.
+   /t723-probe does NOT exist post-switch (it would resolve to /system/t723-probe).
+   NOTE: the T723 hook's `/t723probe` path was doubly wrong — wrong name (member is `t723-probe`,
+   no `t723probe` member exists in the 239-member CPIO) AND wrong namespace. This lane execs
+   /first_stage_ramdisk/t723-probe.
+6. Probe source verified (t723-probe.c, 631 lines, read in full): opens /dev/kmsg as root FIRST, then
+   setresgid/setresuid to 1000 (drop_ok check); emit() writes every line to fd 1 AND /dev/kmsg.
+   SP3 (control, runs FIRST): openat /sys/kernel/debug/sync/sw_sync + CREATE + INC + fence_check.
+   SP1: mini-loads /vendor/lib64/egl/libGLES_swiftshader.so, resolves eglCreateSyncKHR +
+   eglDupNativeFenceFDANDROID by name, calls create then dup. SP2: system libEGL.so,
+   eglGetDisplay + eglInitialize + eglCreateSyncKHR + eglGetProcAddress + maps_lookup (prints the
+   backing file of the resolved address) + call dup. Always exits 0. Service needs: root (kmsg open
+   before the drop — init service runs as root by default), /system mounted (linker64 + libEGL.so),
+   /vendor mounted (loop1 EXT4 mount at guest 10.05 s in the T723 flight), debugfs mounted
+   (proven by the T721 fence log at T723 UART L23888 — a post-switch uid-1000 process opened sw_sync).
+   No seclabel needed (SELinux permissive; service inherits init context, as with the T190 guest_logcat
+   precedent). No stdio_to_kmsg needed (probe writes to /dev/kmsg directly; fd-1 writes to /dev/null
+   are harmless). Timing: probe fires at boot_completed (~516 s) and runs in seconds — well inside
+   the window before the late system_server crash (~560 s in the T723 flight).
+
+Service file /system/etc/init/t723probe.rc (to be written into the edited system image on the box):
+```
+# T724: EGL-dispatch probe trigger. Second-stage init parses every /system/etc/init/*.rc
+# (proven: installd.rc:109, bootstat.rc:67, dmesgd.rc:4, hw/init.rc:1224 all fired in the
+# T723 probe-flight UART). The probe binary lives at /first_stage_ramdisk/t723-probe after
+# switch_root (init binary strings prove the path); /t723-probe does not exist post-switch.
+# The two `on boot` exec lines are diagnostics: the /first_stage_ramdisk test is EXPECTED to
+# succeed, the /t723-probe test is EXPECTED to fail (it probes the pre-switch path). They prove
+# .rc parsing + the probe path at guest ~30 s, long before the boot_completed trigger at ~516 s.
+service t723probe /first_stage_ramdisk/t723-probe
+    class main
+    user root
+    group root
+    oneshot
+    disabled
+
+on property:sys.boot_completed=1
+    start t723probe
+
+on boot
+    exec - root root -- /system/bin/toybox test -x /first_stage_ramdisk/t723-probe
+    exec - root root -- /system/bin/toybox test -x /t723-probe
+```
+
+Adjudication criteria (Step 3a): trigger PASS = init logs `starting service 't723probe'` (or the probe's
+first T723_PROBE line) within 1 min after sys.boot_completed; probe PASS = T723_PROBE DONE summary +
+SP1 DONE + SP2 DONE + SP3 DONE + holds intact; dispatch answer = SP1 vs SP2 fd values + SP2 maps_lookup
+backing file + resolved dup address. Branch: probe-only — Step 3b/3c NOT flown; T721/T722/T723 flights
+supply the baselines (recorded explicitly at Step 4). No fix build in this lane.
+
+## Step 2 — Build (COMPLETE 17:54 AEDT 16 Nov 2026)
+
+System-image edit (box Linux debugfs ONLY — no macOS debugfs anywhere in this lane):
+
+- Work copy on the box: /home/muse/t724-work/t724-system.img, cp of the revert image, SHA 0ba6d6d3
+  verified after copy. Original /home/muse/t721-work/t721-system-revert.img untouched.
+- FS stats before the edit: 17,303 free blocks (4,096 B), 82 free inodes — ample for a 976 B file;
+  no rm-first-then-write needed (addition, not replacement).
+- Neighbour baselines BEFORE (box debugfs dump + SHA):
+  surfaceflinger 259d39f54ef6bbac9cc90991f913ef0bd8cdcde5e9cbbd6a828b36fc6298061b (8,336,320 B);
+  installd.rc 3ea3466bae5a3ff0ecabf4de117d9cc21388e6a813d205da357b473145b1ac94 (4,958 B);
+  hw/init.rc 60cb3d155834275bddc46e5bdfeec734d2f56ef58599f996c2fe1a3f171f9cc0 (58,376 B, 1,366 lines).
+- debugfs -w write of t723probe.rc (976 B, SHA 9c6b3e12ef9fd5ef6b824c3fffdf5e076743623ec7c783008197637f408e89aa,
+  identical on sandbox + box) into the copy: allocated inode 705.
+- Verification AFTER: dumped-back .rc SHA 9c6b3e12... + diff identical; neighbours byte-identical
+  (surfaceflinger 259d39f5, installd.rc 3ea3466b, hw/init.rc 60cb3d15 — all match before-values);
+  e2fsck -f -n clean (Pass 1-5, 7343/7424 files, no errors); file count 7342 -> 7343.
+- NEW image SHA: 6b66cabecbd1219366c00c1eead087ec9abc6dbc19eddd4cf7eaf6d2b513acb9 (2,059,816,960 B, same size).
+- Transfer box -> Mac: full 2 GB rsync via the egress proxy ran at ~600 kB/s (ETA ~55 min — too slow,
+  killed at 18% after the delta route succeeded). Delta route instead: 1 MiB-chunk comparison on the
+  box found 4 differing chunks (offsets 0, 134217728, 268435456, 398458880); patch 4,194,379 B,
+  SHA bc29e13507dbb781ac54a30273ddda48f77f368dd702018b6e301fa455f78ce5 (verified identical on
+  box + sandbox + Mac). Mac-side: cp base image -> guest-inputs/t724-system.img, applied the patch,
+  final SHA 6b66cabecbd1219366c00c1eead087ec9abc6dbc19eddd4cf7eaf6d2b513acb9 — SHA MATCH.
+  Mac df after the copy: 10,403,656 KiB free (96%), gate open by ~2.0 GiB.
+- Scripts: supervisor_t724.py (12,570 B), launch_probe_t724.py (1,749 B), analyze_t724_probe.py
+  (6,886 B) built from the T723 scripts by /tmp/transform_t724_scripts.py (all checks OK except one
+  transform self-check whose expected string was wrong — the file line 73 is correct:
+  `numbered(r"starting service 't723probe'", ...)`); py_compile OK; import test OK
+  (supervisor_t724.TRACK == T724). Supervisor re-pinned: system image t724-system.img +
+  SHA 6b66cabe; CPIO a9d6040a / DTB 73d1904b / kernel 70d3859d / vendor 5e0607ad unchanged.
+- Branch: PROBE-ONLY (recorded at design time; no fix build in this lane).
+
+## Step 3a — Probe flight (IN PROGRESS)
+
+- Smoke first (validates .rc parsing + probe path at guest ~30 s before the 600 s flight):
+  flight smoke-t724, 120 s guest / 200 s host, GDB 1258, same stack.
+  Launched 17:55:54 AEDT (supervisor PID 41861, QEMU 41868). ENDED EARLY at guest 72.7 s / host
+  75.15 s: supervisor disk gate fired mid-flight (8.00 GiB < 8 GiB) — clean exit, QEMU exit 0,
+  flight-end.json written. UART 9,124 lines / 768,431 B, SHA 2f523454698714f780cc597a9783cfe7503f6ea726454fa5457f7d26bc3eccca.
+  Result INCONCLUSIVE on the .rc question: 0 t723probe mentions AND 0 installd mentions — the flight
+  ended before ANY trigger phase (installd early-boot fires ~99 s in the T723 flight). Control
+  proves it: the flight ended before triggers, not that the file was skipped. Sanity holds:
+  1 [T723] hook timeout line; T720_PROBE DONE PASS at L228 (same line as the T723 flight).
+  Disk cause: at launch free was 8,390,516 KiB (gate open by only 1,908 KiB — the 2 GiB t724-system.img
+  copy had just landed); the disk slid ~2 MB during the 75 s flight and tripped the gate.
+  Cleanup after the smoke (my own scratch only): deleted cpio-scratch vendor.img copy (134 MB) +
+  /tmp/t724.patch + transform/apply scripts (~4 MB) -> df 8,530,960 KiB (gate open by ~139 MB).
+  Neural dir (another thread's live work) is 13,639 MB and growing ~1.3 MB/min — NOT touched.
+- Then the probe flight: flight probe-flight, 600 s guest / 700 s host, GDB 1258 (T723 window;
+  boot_completed ~516 s, probe runs in seconds, well before the late system_server crash ~560 s).
+  Launched 17:59:46 AEDT (supervisor PID 42164). df at launch 8,530,820 KiB (gate open ~139 MB).
+
+## Step 3a — Probe flight (COMPLETE) + adjudication — CLOSED FAIL 18:24 AEDT 16 Nov 2026
+
+- Probe flight ended 18:09:54 AEDT (supervisor clean exit). Guest 604.976 s, host 605.9 s,
+  QEMU exit 0. UART 28,381 lines, 3,294,964 B, SHA e1bfd466c34b4c2b5d85cd72275b2d671fedd86348eb9eb988d0585d0584ea35
+  (matches flight-end.json log_sha256). flight-end.json written.
+- Mid-flight checks: 18:02 (guest ~165 s) 0 t723probe mentions; 18:03 diagnostics showed
+  early-boot actions processed (89.30 s, 90.61 s), installd started (90.62 s), surfaceflinger
+  started 100.13 s, T720_PROBE DONE PASS present (L228); 18:05 guest clock reading stalled at
+  205.8 s (supervisor guest_max — UART still growing on logcat lines); df 8,524,800 KiB.
+- Adjudication (analyzer scripts/analyze_t724_probe.py, report saved as analysis-t724.txt):
+  T723_PROBE 0; t723probe 0 (no service start, no .rc citations, no exec diagnostics);
+  SP1/SP2/SP3 DONE 0; no DONE summary. sys.boot_completed 5 (L21486, L21503, L22083, L22110,
+  L22114); first stock action (hw/init.rc:1224) processed at guest 498.413 s (L21486).
+- Holds — ALL INTACT: T720_PROBE DONE PASS 1 (L228); T721 fence log 1 (L23587);
+  Invalid present fence 0; REJECT 0; EPERM 0; simplefb: mapped 1 (L23586); Watchdog KILLING 0;
+  panic/Oops/BUG 0; dup-fail 4, rate 6.612/1000 s (between T721 baselines 4.058/6.660).
+  [T723] hook re-fired (L2012) — re-confirms RAMDISK-MOUNT-BLIND, confirms the CPIO flew.
+- Root cause (evidence level): the boot trigger DID dispatch (stock on boot action ran ~94-100 s,
+  proven by HAL/core service starts — class_start hal/core exist ONLY in on boot, hw/init.rc:1210/1212,
+  across all system .rc files; no vendor .rc file has any class_start). The added file's actions never
+  executed although the file IS in the flown image (SHA 9c6b3e12, regular, mode 0664, LF, no CR),
+  the directory IS parsed by init, and no parse error was logged. Non-registration mechanism NOT
+  proven (no per-file parse log for /system/etc/init/*.rc). The missing "processing action (boot)"
+  line is a kmsg flood loss, not non-execution (same loss class proven in this flight: zygote-start
+  processing line + zygote/netd service-start lines absent although zygote demonstrably started;
+  and in T723: post-fs-data/early-boot processing lines absent although those actions ran).
+  Wall: ADDED-RC-SILENTLY-IGNORED. EGL dispatch question UNANSWERED. No fix built (probe-only branch).
+- Secondary: only the first boot_completed action (1224) processed; dmesgd/wifi boot_completed
+  actions never did (T723: 2-3 s later). Boot-stability regression vs T723: system_server self-dumped
+  BEFORE boot_completed (wall 23:23:57 ~ guest 461.8 s, 23:24:28 ~ guest 492.5 s; boot_completed
+  498.413 s; FATAL cascade 23:25:13-14 ~ guest 538-539 s; restart as pid 4298 23:25:48 ~ guest 573 s).
+  Disk slid below the gate after the flight (8,057,612 KiB at 18:14; 8,504,064 KiB at 18:24) —
+  successor needs the gate comfortably open.
+- Deliverables (worktree root): findings-t724.md, outcome-t724.txt (FAIL), DEATH_NOTE-T724.md,
+  TIMELINE.md, progress-t724.txt, heartbeat.json (CLOSED FAIL). Analysis: analysis-t724.txt.
+  Flight evidence: flights/smoke-t724/ + flights/probe-flight/ (never overwritten).
+- Successor (recommended T725): minimal-.rc registration experiment (single trivial action, smoke past
+  guest ~120 s) BEFORE another 600 s flight; plus an offline init-parser check on t723probe.rc
+  (SHA 9c6b3e12). If a minimal file registers, re-fly the probe; if even a minimal file is silently
+  ignored, the .rc route is dead — use a different trigger.
+- STATUS: CLOSED FAIL 18:24 AEDT 16 Nov 2026. All supervisors exited. No QEMU running.
+  Wedge 20:27 NOT hit. Do NOT commit (driver commits after verification).

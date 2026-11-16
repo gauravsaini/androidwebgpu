@@ -1,15 +1,1 @@
-{
-  "timestamp_utc": "2026-11-16T06:06:55Z",
-  "status": "CLOSED (FAIL)",
-  "track": "T723",
-  "flight": "probe-flight",
-  "current_step": "Adjudicated FAIL - probe never ran",
-  "verdict": "FAIL",
-  "host_elapsed_seconds": 620.93,
-  "guest_log_max_seconds": 620.205,
-  "target_host_seconds": 700,
-  "target_guest_seconds": 600,
-  "supervisor_pid": null,
-  "qemu_pid": null,
-  "note": "Probe flight complete 16:37:38 AEDT; wait-loop timeout at guest ~33.4s, probe never ran; findings + death note written; no agent commits"
-}
+{"flight":"probe-flight","guest_max_s":604.976,"host_elapsed_s":605.9,"last_tool_call_utc":"2026-11-16T07:24:00Z","note":"CLOSED FAIL 18:24 AEDT 16 Nov 2026. Probe flight complete (guest 604.976s, QEMU exit 0). Probe NEVER ran: T723_PROBE 0, t723probe 0, SP1/SP2/SP3 0. sys.boot_completed set (first stock action guest 498.413s). Wall ADDED-RC-SILENTLY-IGNORED. Holds all intact. All supervisors exited; no QEMU running.","stage":"CLOSED FAIL","status":"closed","track":"T724","ts":"2026-11-16T07:24:00Z","verdict":"FAIL"}

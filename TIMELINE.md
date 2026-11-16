@@ -1,18 +1,64 @@
-# TIMELINE — T723 recovery lane (EGL dispatch probe flight)
+# TIMELINE — T724 (EGL dispatch probe via init .rc service trigger)
 
-All times AEDT, 16 Nov 2026. Guest times are kernel seconds since QEMU start.
+All times AEDT 16 Nov 2026 unless noted. Guest times are guest kernel seconds.
 
-- **15:22:01** — First T723 agent exits cleanly on WAIT-DISK (df 7,765,764 KiB < 8,388,608 KiB gate). State preserved; no flight, no verdict. Hold recorded.
-- **16:13** — Mac disk gate opens: df 11,689,072 KiB (≈ 3.9 GiB freed by unknown cause).
-- **16:22** — Driver verifies df 11,143,296 KiB (gate open by ≈ 2.63 GiB) and launches the recovery agent.
-- **16:24:30** — Recovery agent launched (driver clock read; wedge 19:24:30 AEDT).
-- **16:24–16:25** — Step 1 re-verified: 8/8 input SHAs match (probe `4b275e48`, CPIO `a9d6040a`, DTB `73d1904b`, kernel `70d3859d`, revert system `0ba6d6d3`, vendor `5e0607ad`, T722 CPIO `42f1b2ec`, T722 DTB `32eaab25`); embedded CPIO vendor member PASS (exit 0); scripts re-verified (supervisor `4c0891c5`, launcher `cc335b01`, analyzer `b1526f5d`). Disk rechecked 11,147,184 → 11,145,880 KiB — gate open.
-- **16:27:17** — Probe flight launched (supervisor PID 35186, QEMU pid 35194; guest target 600 s, host cap 700 s, GDB 1258).
-- **≈16:27:50** — Guest ≈ 33.4 s: the wait-loop prints its timeout — `[T723] boot_completed never detected in 600s; probe not run` (UART L2018). The loop has burned all 300 iterations in ≈ 30 s; the probe will never run. (Recognised only in post-flight analysis — the line carries no guest timestamp and the flight was otherwise healthy.)
-- **16:32–16:33** — Mid-flight checks (host ≈ 300–375 s): supervisor + QEMU alive; UART 1.51 MB; `T723_PROBE` 0; `boot_completed` 0; guest_max frozen at 196.8 s (later understood: kernel timestamps stop during the logcat-only dexopt phase — not a guest hang). system_server pid 2848 stable, Dexopt PERFORMED, SensorService onBootPhase returned (6,839 ms), no Watchdog kills. QEMU cmdline + preflight re-verified: flown stack as briefed.
-- **16:35:53** — Guest 516.118 s: init processes `sys.boot_completed=1` (UART L21534) — 482.7 s after the wait-loop had already exited.
-- **≈16:36:37** — Guest ≈ 560 s: system_server (2848) crashes (zygote SIGKILL 560.16 s; dropbox crash file 23:25:43); 7 × DeadSystemException FATALs cluster 23:25:47. init restarts the stack; new system_server pid 4367 up by flight end.
-- **16:37:38** — Flight ends: guest target reached (620.2 s ≥ 600 s). Host 620.93 s. QEMU exit 0. Supervisor writes flight-end.json, uart.log.numbered.txt, uart.log.gz. No supervisor or QEMU processes remain.
-- **16:38–16:45** — Investigation: 1 `t723` line in the UART (the timeout); T552 control loop shows the same blindness (48/48 status polls empty, 0 milestones); 877 `inaccessible or not found` lines; hook source read (lines 252–268); T552 loop bound confirmed (240 steps).
-- **16:45–16:55** — Box debugfs (read-only) proves toybox / getprop / logcat all exist in the flown system image (`0ba6d6d3`) — context defect, not image defect. Analyzer run (exit 0): 0 `T723_PROBE`, DONE 0, SP1/SP2/SP3 0; holds all intact; dup-fail 4, rate 6.449/1000 s.
-- **17:06:55** — Adjudication complete: **FAIL** (probe never ran; question unanswered; decision reached ≈17:02 on the analyzer output). Findings, death note, TIMELINE written; progress appended; heartbeat CLOSED FAIL. No agent commits. Gates G723-1/2 remain UNCHECKED for driver adjudication.
+- 17:27 — Lane launched (driver clock read at spawn; wedge 20:27).
+  Worktree `/Users/Shared/wt-track724-egl-rc-trigger`, branch `t724`, base
+  `63a0e15`. Brief 46,353 B, SHA `608c39e5`.
+- 17:32 — Step 0 disk gate: df 10,988,536 KiB free, 95% used, gate
+  8,388,608 KiB — OPEN by ~2.5 GiB.
+- ~17:40 — Step 1 COMPLETE: all 13 guest-input SHAs re-hashed on the Mac,
+  every one matches the brief. Embedded-vendor rule PASS (CPIO member
+  `ramdisk-images/vendor.img` = `5e0607ad`).
+- ~17:45 — Step 2 design DECIDED: SYSTEM ROUTE. New file
+  `/system/etc/init/t723probe.rc` in the revert system image (original
+  `0ba6d6d3` preserved). Ramdisk route REJECTED. Probe path proven:
+  `/first_stage_ramdisk/t723-probe` (init binary strings); `/t723-probe`
+  does not exist post-switch_root. The T723 hook's `/t723probe` path was
+  doubly wrong (wrong name + wrong namespace).
+- 17:54 — Step 2 build COMPLETE (box Linux debugfs only). New image SHA
+  `6b66cabecbd1219366c00c1eead087ec9abc6dbc19eddd4cf7eaf6d2b513acb9`.
+  Neighbours byte-identical; `e2fsck -f -n` clean; file count 7342 → 7343.
+  Block-delta patch (4 chunks, 4,194,379 B, SHA `bc29e135`) applied on the
+  Mac; final SHA `6b66cabe` — MATCH.
+- 17:55:54 — Smoke flight `smoke-t724` launched (supervisor PID 41861,
+  QEMU 41868). df at launch 8,390,516 KiB (gate open by only 1,908 KiB).
+- 17:57:11 — Smoke flight ENDED at guest 72.707 s / host 75.15 s: supervisor
+  disk gate fired (8.00 GiB < 8 GiB). Clean exit, QEMU exit 0. UART
+  `2f523454` (9,124 lines, 768,431 B). INCONCLUSIVE (ended before any
+  trigger phase). Lane scratch cleaned (134 MB + ~4 MB); df 8,530,960 KiB.
+- 17:59:46 — Probe flight `probe-flight` launched (supervisor PID 42164,
+  QEMU 42168). df 8,530,820 KiB (gate open ~139 MB).
+- ~18:02 — Mid-flight check (guest ~165 s): 0 `t723probe` mentions.
+  Guest at 165 s, past the installd early-boot point (99.58 s in T723).
+- ~18:03 — Diagnostics: early-boot actions processed (89.30 s, 90.61 s);
+  installd started (90.62 s); `on boot` processing line absent; surfaceflinger
+  started 100.13 s; T720_PROBE DONE PASS present (L228).
+- ~18:04 — Root-cause narrowing: T723 boot action processed at 99.63 s;
+  stock `on late-init` queues `trigger early-boot` + `trigger boot`
+  (hw/init.rc:562–563); `on boot` is at hw/init.rc:1104.
+- ~18:05 — Guest clock reading stalls at 205.8 s (supervisor guest_max);
+  UART still growing on logcat lines. df 8,524,800 KiB.
+- ~18:06–18:11 — Guest progresses through system_server startup; system_server
+  pid 2892 self-dumps (wall 23:23:57, 23:24:28); new system_server pid 4298
+  appears (wall 23:25:48).
+- 18:09:54 — Probe flight ENDED: guest 604.976 s, host 605.9 s, QEMU exit 0.
+  UART `e1bfd466` (28,381 lines, 3,294,964 B). flight-end.json written.
+- 18:12 — Adjudication greps: `sys.boot_completed` 5; first stock action
+  (hw/init.rc:1224) at guest 498.413 s (L21486); `T723_PROBE` 0;
+  `t723probe` 0; `processing action (boot)` 0.
+- 18:14 — Analyzer run: holds all intact (T720 PASS 1, T721 fence 1,
+  Invalid present fence 0, REJECT 0, EPERM 0, mapped 1, kills 0, panic 0);
+  dup-fail 4, rate 6.612/1000 s. df 8,057,612 KiB (below gate).
+- ~18:15–18:22 — Root-cause proof: (1) flown image contains t723probe.rc
+  SHA `9c6b3e12` (box debugfs); file is regular, mode 0664, LF, no CR.
+  (2) `class_start hal`/`core` exist ONLY in `on boot` (hw/init.rc:1210/1212)
+  across all system .rc files; no vendor .rc file has any `class_start` —
+  so the HAL/core starts at 94–100 s prove the boot action RAN.
+  (3) Init logs `Parsing file` only for /apex/... files; no per-file parse
+  log for /system/etc/init/*.rc; no parse error logged.
+  (4) `processing action (nonencrypted)` / `(charger)` also absent although
+  their services demonstrably started — the missing processing lines are a
+  kmsg flood loss, not non-execution.
+- 18:24 — Deliverables written; df 8,504,064 KiB. Lane CLOSED FAIL.
+  Wedge 20:27 NOT hit.

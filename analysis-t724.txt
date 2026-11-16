@@ -1,0 +1,106 @@
+Total lines: 28381 (trailing partial line: 0)
+Total bytes: 3294964
+
+--- ALL T723_PROBE lines (full text): 0 line(s) ---
+
+--- ALL [T723] hook lines (full text): 1 line(s) ---
+L2012: [T723] boot_completed never detected in 600s; probe not run
+
+--- ALL t723probe lines (service + rc citations): 0 line(s) ---
+
+init starting service 't723probe' (trigger fired): 0
+lines: 
+
+t723probe.rc citations (init parsed the new file): 0
+lines: 
+
+exec diagnostic commands citing t723probe.rc: 0
+lines: 
+
+service exec/start failures (trigger requires 0): 0
+lines: 
+
+T723_PROBE DONE summary lines (brief requires >=1): 0
+lines: 
+
+SP1 DONE lines (direct driver call): 0
+lines: 
+
+SP2 DONE lines (META-EGL dispatch call): 0
+lines: 
+
+SP3 DONE lines (sw_sync control): 0
+lines: 
+
+DROP_FAIL lines (brief requires 0): 0
+lines: 
+
+SP1 RESOLVE_FAIL lines (brief requires 0): 0
+lines: 
+
+SP2 GETPROCADDRESS_NULL lines (brief requires 0): 0
+lines: 
+
+T720_PROBE DONE status=PASS lines (hold requires >=1): 1
+lines: 228
+
+T720_PROBE DONE status=FAIL lines (hold requires 0): 0
+lines: 
+
+T721 fence-log lines (hold requires >=1): 1
+lines: 23587
+
+Invalid present fence lines (hold requires 0): 0
+lines: 
+
+ALL sw_sync lines (context): 119
+lines: 195, 196, 198, 199, 210, 211, 226, 22958, 22994, 23014, 23015, 23016, 23017, 23057, 23058, 23059, 23060, 23119, 23125, 23126, 24469, 24470, 24471, 24472, 24473, 24475, 24476, 24477, 24722, 24723, 24759, 24760, 24761, 24762, 25462, 25463, 25478, 25479, 25480, 25481
+(79 middle lines omitted; count is exact)
+
+T628 REJECT allocate2 lines (hold requires 0): 0
+lines: 
+
+T628 CALL allocate2 lines: 12
+lines: 11113, 11117, 19069, 19073, 19077, 22840, 22963, 22967, 22971, 23000, 23141, 23211
+
+EPERM lines (hold requires 0): 0
+lines: 
+
+simplefb: mapped lines (hold requires >=1): 1
+lines: 23586
+
+Watchdog KILLING lines (hold requires 0): 0
+lines: 
+
+sys.boot_completed lines (hold requires >=1): 5
+lines: 21486, 21503, 22083, 22110, 22114
+
+boot_completed lines: 6
+lines: 2012, 21486, 21503, 22083, 22110, 22114
+
+FATAL EXCEPTION lines: 6
+lines: 25198, 25254, 25312, 25317, 25320, 25325
+
+Kernel panic/Oops/BUG lines (hold requires 0): 0
+lines: 
+
+RenderEngine EGL dup-fail lines: 4
+lines: 23852, 24057, 24357, 24449
+
+driver loaded lines: 5
+lines: 11160, 11533, 19667, 24916, 25964
+
+META-EGL banner lines: 1
+lines: 11164
+
+D/libEGL lines: 5
+lines: 11160, 11533, 19667, 24916, 25964
+
+avc:  denied (two spaces) total: 2083
+avc:  denied for /dev/mem: 3
+avc denied (sensorservice): 0
+
+Guest kernel time: first=0.0s last=604.976226s max=604.976226s
+Dup-fail rate: 4 / 605.0s * 1000 = 6.612 per 1000 s (baselines: T721 flight-01 4.058, T721 revert 6.660)
+
+=== REPORT COMPLETE ===
