@@ -1,0 +1,17 @@
+# T726: probe re-flight trigger file. Service runs the T723 probe on sys.boot_completed=1.
+# Shape proven by T725 (t725probe.rc, marker L10659 guest 123.393 s). Probe binary is
+# the CPIO member t723-probe (SHA 4b275e48), reachable post-switch_root at
+# /first_stage_ramdisk/t723-probe (guest init bind-mounts the first-stage ramdisk there).
+service t726probe /first_stage_ramdisk/t723-probe
+    class main
+    user root
+    group root
+    oneshot
+    disabled
+
+on property:sys.boot_completed=1
+    start t726probe
+    write /dev/kmsg T726_PROBE_OK\n
+
+on boot
+    write /dev/kmsg T726_PROBE_OK\n

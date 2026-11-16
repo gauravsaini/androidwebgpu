@@ -1,0 +1,119 @@
+Total lines: 27917 (trailing partial line: 0)
+Total bytes: 3258567
+
+--- ALL T723_PROBE lines (full text): 0 line(s) ---
+
+T723_PROBE DONE summary lines (brief requires >=1): 0
+lines: 
+
+SP1 DONE lines (direct driver call): 0
+lines: 
+
+SP2 DONE lines (META-EGL dispatch call): 0
+lines: 
+
+SP3 DONE lines (sw_sync control): 0
+lines: 
+
+DROP_FAIL lines (brief requires 0): 0
+lines: 
+
+SP1 RESOLVE_FAIL lines (brief requires 0): 0
+lines: 
+
+SP2 GETPROCADDRESS_NULL lines (brief requires 0): 0
+lines: 
+
+--- ALL [T723] early-ramdisk hook lines (context: hook timeout ~33 s): 1 line(s) ---
+L2014: [T723] boot_completed never detected in 600s; probe not run
+
+--- ALL T726_PROBE_OK marker lines (full text): 2 line(s) ---
+L10606: [  104.493266] T726_PROBE_OK
+L22116: [  506.508080] T726_PROBE_OK
+
+--- ALL t726probe lines (service + rc citations): 0 line(s) ---
+
+init starting service 't726probe' (trigger fired): 0
+lines: 
+
+t726probe.rc citations (init parsed the new file): 0
+lines: 
+
+start-command lines citing t726probe (trigger fired): 0
+lines: 
+
+ALL boot_completed action processing lines (stock control + mine): 2
+lines: 21634, 21765
+
+on boot action processing lines citing t726probe.rc: 0
+lines: 
+
+service exec/start failures (trigger requires 0): 0
+lines: 
+
+write-to-kmsg command lines (context): 0
+lines: 
+
+T720_PROBE DONE status=PASS lines (hold requires >=1): 1
+lines: 225
+
+T720_PROBE DONE status=FAIL lines (hold requires 0): 0
+lines: 
+
+T721 fence-log lines (hold requires >=1): 1
+lines: 23738
+
+Invalid present fence lines (hold requires 0): 0
+lines: 
+
+ALL sw_sync lines (context): 143
+lines: 195, 196, 198, 199, 207, 208, 223, 23043, 23072, 23106, 23109, 23158, 23159, 23160, 23161, 23163, 23257, 23258, 23259, 23260, 24786, 24787, 24788, 24789, 24790, 24791, 24792, 24793, 24986, 24987, 25007, 25009, 25050, 25052, 25721, 25722, 25746, 25747, 25748, 25749
+(103 middle lines omitted; count is exact)
+
+T628 REJECT allocate2 lines (hold requires 0): 0
+lines: 
+
+T628 CALL allocate2 lines: 12
+lines: 11064, 11068, 19362, 19373, 19377, 22983, 23088, 23092, 23096, 23103, 23339, 23516
+
+EPERM lines (hold requires 0): 0
+lines: 
+
+simplefb: mapped lines (hold requires >=1): 1
+lines: 23737
+
+Watchdog KILLING lines (hold requires 0): 0
+lines: 
+
+sys.boot_completed lines (hold requires >=1): 7
+lines: 21634, 21734, 21764, 21765, 22231, 22240, 22244
+
+boot_completed lines: 8
+lines: 2014, 21634, 21734, 21764, 21765, 22231, 22240, 22244
+
+FATAL EXCEPTION lines: 6
+lines: 25590, 25593, 25622, 25625, 25653, 25657
+
+Kernel panic/Oops/BUG lines (hold requires 0): 0
+lines: 
+
+RenderEngine EGL dup-fail lines: 4
+lines: 24118, 24272, 24750, 24920
+
+driver loaded lines: 5
+lines: 11265, 11596, 20062, 25345, 26290
+
+META-EGL banner lines: 1
+lines: 11269
+
+D/libEGL lines: 5
+lines: 11265, 11596, 20062, 25345, 26290
+
+avc:  denied (two spaces) total: 2044
+avc:  denied for /dev/mem: 6
+avc denied (sensorservice): 0
+
+Guest kernel time: first=0.0s last=600.168018s max=600.168018s
+Dup-fail rate: 4 / 600.2s * 1000 = 6.665 per 1000 s (baselines: T721 flight-01 4.058, T721 revert 6.660)
+
+=== REPORT COMPLETE ===

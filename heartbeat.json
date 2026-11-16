@@ -1,1 +1,6 @@
-{"flight":"registration-smoke","last_tool_call_utc":"2026-11-16T08:44:40Z","note":"CLOSED PASS. Marker T725_REG_OK fired guest 123.393 s (L10659) -- minimal .rc file REGISTERS; wall ADDED-RC-SILENTLY-IGNORED REFUTED. Parser ACCEPT. sys.boot_completed never fired in 554 s (slow boot); service-start leg untested. Holds intact in observed window. Flight ended guest 554.169 s on disk gate (7.31 GiB).","stage":"step5-adjudication-complete","status":"closed","track":"T725","ts":"2026-11-16T08:44:40Z","verdict":"PASS"}
+{
+  "ts": "2026-11-16T18:30:45Z",
+  "status": "CLOSED FAIL",
+  "stage": "recovery3-step5-done",
+  "note": "Recovery 3 Step 4 flight complete 05:15:44 AEDT, Step 5 adjudicated FAIL 05:30:45 AEDT; probe never ran, trigger fired, service-start leg failed silently. Wall SERVICE-START-SILENTLY-FAILED."
+}

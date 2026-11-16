@@ -1,24 +1,45 @@
-# T725 timeline (all times AEDT 16 Nov 2026, from clock reads in the same commands)
+# TIMELINE — Track T726 (recovery 3)
 
-- 18:49:10 — Lane launched (driver spawn; agent 808beb88). Wedge 21:49:10.
-- 18:52 — Step 0: df 8,960,936 KiB free (gate open ~572 MiB).
-- 18:54 — Step 0: df 8,964,720 KiB free. Step 1 inputs verified PASS (7/7 SHAs).
-- 18:54–19:06 — Step 2a: offline parser check on t723probe.rc — ACCEPT, 0 errors (parse-rejection ruled out). Step 2b: minimal-file design recorded (t725probe.rc, marker T725_REG_OK via write to /dev/kmsg, dual trigger).
-- 19:06:39 — progress-t725.txt + OPEN heartbeat.json written into the Mac worktree.
-- 19:07 — Box work copy made (vault revert → /home/muse/t725-work/t725-system.img, SHA 0ba6d6d3 verified). Neighbour baselines recorded (surfaceflinger 259d39f5, installd.rc 3ea3466b, hw/init.rc 60cb3d15).
-- 19:08 — t725probe.rc built byte-exact (613 B, SHA ebc8cc15); od verified the backslash-n bytes; parser ACCEPT on the exact bytes.
-- 19:09:07 — debugfs -w write (inode 705, mode 0644); dump-back SHA ebc8cc15 identical; neighbours byte-identical; e2fsck -f -n clean (7343/7424 files). New image SHA 1571a10f.
-- 19:09 — Block-delta patch computed (4 chunks, 4,194,379 B, SHA bea8777e).
-- 19:11:46 — Patch applied on the Mac (APFS clone route); final SHA 1571a10f MATCH; revert re-verified 0ba6d6d3.
-- 19:24:27 — Flight scripts re-pinned + import-tested (supervisor a07e9ec0, launcher 00e1d794, analyzer f8c57069).
-- 19:25:24 — CPIO embedded vendor re-hashed: 5e0607ad MATCH. Step 3 COMPLETE.
-- 19:26:16 — progress + heartbeat updated (Step 3 complete; df 8,828,812 KiB).
-- 19:26:28 — Step 4: registration-smoke launched (df 8,824,616 KiB; supervisor PID 47786, QEMU PID 47800).
-- 19:26:31 — QEMU started (guest flight begins).
-- 19:29:28 — Early check (guest ~167 s): T725_REG_OK ×1 already in the UART.
-- 19:29:46 — Marker located: L10659, guest 123.392938 s (on-boot action fired).
-- 19:35:48 — Flight ENDED: supervisor disk gate fired (7.31 GiB < 8 GiB). Host 556.49 s, guest max 554.169 s, QEMU exit 0, clean end, flight-end.json written.
-- 19:38:48 — Flight-end verified; analyzer run (analysis-t725.txt, 94 lines).
-- 19:39:51 — Boot-timing comparison vs T724 done (sys.boot_completed 0 lines; system_server still starting services at guest 554 s; first CALL allocate2 at 131.845 s vs 107.898 s in T724). df 7,667,192 KiB (97%).
-- 19:40:52 — No orphans (supervisor 47786, QEMU 47800 both gone). Flood-loss cross-check: T724 lost ALL boot processing lines (0), T725 kept 4.
-- 19:44 — Step 5 adjudication: Verdict: PASS. Findings, outcome, TIMELINE, progress closed, heartbeat CLOSED.
+All times AEDT 17 Nov 2026 unless noted. Clock-sourced from `date` reads.
+
+- 02:40:50 — Recovery 3 launched (wedge 05:40:50). Brief
+  track726-recovery3-waitdisk.md (52,374 B, SHA 46a59757).
+- 02:42:46 — Step 0 re-verification PASS: Mac image a7141b45, trigger 0372c10b,
+  parser d42b5b6e, scripts AST OK; box image a7141b45, patch 4f1728d1;
+  /mnt/sdb1 free 21,028,136 KiB. Mac df 5,730,464 KiB — gate CLOSED.
+- 02:48:29–04:57:15 — Polls 1–25: disk flat ~5.73 GiB (polls 1–17), then
+  ~7.14 GiB (polls 18–25) after a +1.35 GiB recovery at poll 18 (04:21:16,
+  re-read 04:21:29 confirmed 7,140,768 KiB). Shortfall ~3.94 GiB, then
+  ~2.57 GiB. Gate never opened.
+  - Poll 9: first two macssh attempts preflight-failed ~03:30 (egress proxy);
+    third attempt landed 03:33:45. Route blind ~3 min, below the 20-min
+    notify threshold — no user notice.
+  - Poll 23: first attempt killed by a runtime restart ~3 min into its sleep
+    (exec log empty, progress verified at poll 22); re-ran cleanly 04:46:43.
+- 05:02:33 — Poll 26: GATE OPENED. Mac free 10,044,940 KiB (threshold
+  9,769,216; margin +275,724 KiB). Re-read 05:02:55: 10,022,788 KiB — the
+  +2.84 GiB jump confirmed real. Margin above the 8 GiB supervisor gate
+  ~1.56 GiB (DISK-MARGIN satisfied).
+- 05:05:13 — Pre-flight df 9,958,148 KiB. Scripts import-tested (supervisor +
+  launcher + analyzer + parser). CPIO embedded vendor 5e0607ad MATCH. QEMU
+  cmdline: system image only as virtio-blk drive, NO vendor drive.
+  flights/probe-flight did not exist — fresh folder.
+- 05:05:43 — Step 4 flight LAUNCHED (supervisor PID 87893, QEMU pid 87904).
+- 05:08:07 — Host 135 s, guest_max 118.0 s. Disk 9,814,828 KiB.
+- 05:10:27 — Host 270 s, guest_max 203.3 s. Marker T726_PROBE_OK x1
+  (L10606, guest 104.493 s). T723_PROBE 0. Disk 9,352,896 KiB.
+- 05:12:54 — Host 420 s, guest_max 419.4 s. T723_PROBE 0.
+  sys.boot_completed 0. Disk 9,376,848 KiB.
+- 05:15:15 — Host 571 s, guest_max 566.9 s. T723_PROBE 0.
+  sys.boot_completed 7. Disk 9,566,552 KiB.
+- 05:15:44 — Flight ENDED: guest target reached (600.2 s >= 600 s). Host
+  600.93 s, guest 600.168 s, QEMU exit 0. UART 27,917 lines, SHA e9d3d30e.
+- 05:18:05 — Flight-end verified, no orphans (PID 88707 gone).
+- Step 5 adjudication: analyzer run, findings-t726.md written (SHA 3c2b4926),
+  outcome FAIL, death note written. Verdict: FAIL — probe never ran;
+  trigger fired; registration proven; service-start leg failed silently.
+  Wall: SERVICE-START-SILENTLY-FAILED (guest).
+
+Prior lanes (summary): first lane 19:59:38–20:29 16 Nov (Steps 1–3 done,
+WAIT-DISK exit); recovery 1 20:32:21–23:32:21 (34 polls, WAIT-DISK exit);
+recovery 2 23:35:27–02:35:27 (34 polls, WAIT-DISK exit).

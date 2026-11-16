@@ -1,0 +1,248 @@
+# T726 progress — re-fly the T723 probe with the proven file shape
+# Lane launched 19:59:38 AEDT 16 Nov 2026; wedge 22:59:38. Agent fa273bc9.
+# Worktree /Users/Shared/wt-track726-probe-reflight, branch t726, base b13a1d6.
+# Brief track726-probe-reflight-proven-shape.md, 48,643 B, SHA 4ab52a42, brief-gate READY.
+
+## Step 0 — Disk gate (STATIC-FIRST)
+- 19:59:54 AEDT 16 Nov: 8,338,060 KiB free (97%), gate BELOW 8 GiB (8,388,608 KiB) by 50,548 KiB.
+  Flight margin required: gate open by >=1.5 GiB (9,769,216 KiB). Shortfall ~1.43 GiB.
+  Static-first: Steps 2-3 proceed (no flights, no supervisor, no QEMU, no 2 GB copies);
+  flight gated at Step 4 with WAIT-DISK + preserved state if the margin is not met.
+
+## Step 1 — Verify inputs: PASS
+- Re-hashed on the Mac, 20:00-20:05 AEDT 16 Nov (8/8 SHAs match):
+  t720-Image 20,396,544 B 70d3859d MATCH; t723-fix.cpio.gz 53,391,088 B a9d6040a MATCH;
+  t723-modified.dtb 2,049 B 73d1904b MATCH; t721-system-revert.img 2,059,816,960 B 0ba6d6d3 MATCH;
+  t722-vendor.img 134,217,728 B 5e0607ad MATCH; t723-probe 68,792 B 4b275e48 MATCH;
+  t725-system.img 2,059,816,960 B 1571a10f MATCH; t724-system.img 2,059,816,960 B 6b66cabe MATCH.
+- T725 deliverables re-hashed on the Mac: findings-t725.md 29,606 B 07753db7 MATCH;
+  outcome-t725.txt 5 B c26de83a MATCH; analysis-t725.txt 2,042 B f5b39656 MATCH;
+  registration-smoke UART 1,624,522 B f089d89f MATCH; flight-end.json 1,768 B d60dde03 MATCH.
+  findings-t724.md 21,682 B f72381b4 MATCH; findings-t723.md 17,326 B 2d1631fc MATCH;
+  findings-t722.md 20,024 B ea98a1e4 MATCH; findings-t721.md 24,091 B 6317a2cf MATCH.
+- Box vault re-hashed: evidence/t725probe.rc 613 B ebc8cc15 MATCH; evidence/t723probe.rc 976 B 9c6b3e12 MATCH;
+  lane-images/t725.patch 4,194,379 B bea8777e MATCH; lane-images/t725-system.img 1571a10f MATCH;
+  lane-images/t723-probe 68,792 B 4b275e48 MATCH. Box kernel tree HEAD 4da740c10dc0 (matches brief).
+  T718 fixed binary 1,711,816 B 3daa5a49 MATCH; surfaceflinger_orig 8,336,320 B 259d39f5 MATCH;
+  t720-probe 7,440 B 61140fc7 MATCH.
+- QEMU command line read (T725 registration-smoke + T724 probe-flight qemu-command.txt):
+  kernel t720-Image + DTB t723-modified.dtb + CPIO loader + virtio-blk system ONLY (readonly),
+  NO vendor drive, rdinit=/early-ramdisk, GDB 1258, serial file UART. Confirms EMBEDDED-VENDOR rule.
+- CPIO embedded-vendor re-hash (EMBEDDED-VENDOR RULE): extracted ramdisk-images/vendor.img from
+  guest-inputs/t723-fix.cpio.gz (BSD cpio -d); SHA 5e0607ad MATCH. Scratch removed immediately after.
+- Probe binary in CPIO: member t723-probe present at CPIO root, SHA 4b275e48 MATCH, mode rwxr-xr-x.
+- Probe path PROVEN: /first_stage_ramdisk/t723-probe. Evidence: (1) CPIO member t723-probe at root,
+  SHA 4b275e48, executable; (2) guest /system/bin/init (extracted from flown image on box, 2,770,616 B)
+  strings contain /first_stage_ramdisk, first_stage_mount, "Could not bind mount /first_stage_ramdisk
+  to itself", /first_stage_ramdisk/system/bin/snapuserd — second-stage init bind-mounts the first-stage
+  ramdisk there (same strings in the CPIO first-stage init binary, BuildID e8c6256f...). The T724 .rc
+  file used this exact path (findings-t724.md L86-89); no flown UART ever mentions first_stage_ramdisk
+  (0 in T723/T724/T725 UARTs) — the path rests on the init-binary strings + CPIO member, recorded openly.
+- Probe behaviour (source /home/muse/t723-work/t723-probe.c on box): opens /dev/kmsg as root (line 526,
+  openat O_WRONLY), THEN drops to uid/gid 1000 (line 26); writes T723_PROBE lines to /dev/kmsg directly —
+  no stdout dependency, so an init service (user root) will have its lines reach the UART. Takes no args.
+- findings-t725.md read in full (558 lines). No network fetch.
+
+## Step 2 — Trigger-file design: COMPLETE 20:06 AEDT 16 Nov 2026
+- File t726probe.rc (sandbox ~/workspace/t726-scripts/t726probe.rc): 596 B, 17 lines,
+  SHA 0372c10b1c8dbb88f017360b828faf47996d082ab25ee5c087bdd6a8204023db.
+  od verified both write lines end with backslash+n as two characters, then a real newline.
+- Design (proven T725 shape, probe exec substituted):
+  service t726probe /first_stage_ramdisk/t723-probe (class main, user root, group root, oneshot, disabled)
+  on property:sys.boot_completed=1 -> start t726probe + write /dev/kmsg T726_PROBE_OK
+  on boot -> write /dev/kmsg T726_PROBE_OK
+- Marker T726_PROBE_OK: unique tag (0 occurrences in the T725 UART — checked below in Step 2 checks).
+- Parser: parse_init_rc.py (SHA d42b5b6e, identical to T725 box copy) on the exact bytes:
+  VERDICT ACCEPT (0 errors; 1 service, 2 actions, 0 imports). Service t726probe line 5;
+  on property:sys.boot_completed=1 line 12; on boot line 16. Build proceeds.
+- Checks: marker uniqueness + trigger leg design recorded; registration re-proof via on-boot marker
+  (~95-123 s, flood-window survival sufficient per T725 reflection); probe lines + DONE are the
+  dispatch evidence; trigger-fired-first adjudication at Step 5.
+
+## Step 3 — Build: COMPLETE 20:28 AEDT 16 Nov 2026
+- Box disk blocker at entry: /dev/sda3 100% (144K avail); /home/muse/t726-work copy failed
+  (No space left on device). Partial copy removed (828M freed on root). Work moved to
+  /mnt/sdb1/t726-work (26G avail on /mnt/sdb1). Copy of revert re-run there: SHA 0ba6d6d3 OK.
+- Neighbours BEFORE (box debugfs dumps): surfaceflinger 259d39f5 (8,336,320 B),
+  installd.rc 3ea3466b (4,958 B), hw/init.rc 60cb3d15 (58,376 B) — all identical to
+  T724/T725 baselines. Free blocks 17,303, free inodes 82 (same as T725: add, no rm-first).
+  /etc/init/t726probe.rc not present yet (expected).
+- debugfs -w write: allocated inode 705, mode 0644, size 596. Dump-back SHA 0372c10b,
+  cmp IDENTICAL to source.
+- Neighbours AFTER: surfaceflinger 259d39f5, installd.rc 3ea3466b, hw/init.rc 60cb3d15 —
+  byte-identical. e2fsck -f -n clean (Pass 1-5; 7343/7424 files, 7342 -> 7343).
+- NEW image SHA: a7141b4515ce5a1dc1e35e870aed54eae5c12727ef6b971027488fdbe1131391
+  (2,059,816,960 B). Box copy: /mnt/sdb1/t726-work/t726-system.img.
+- Patch: compute_patch_t726.py (box), magic T726PATCH1, 4 chunks (offsets 0, 134217728,
+  268435456, 398458880), 4,194,379 B,
+  SHA 4f1728d17561edac8244d93c9eb17c9ffe791fb008a891b07b3cc84efca3d376.
+  Sandbox copy ~/workspace/t726-scripts/t726.patch SHA-verified identical.
+- Mac APFS-clone apply: clone SHA 0ba6d6d3 before patch; apply_patch_t726.py applied
+  4 chunks, target SHA a7141b45...1391 SHA MATCH; revert re-verified 0ba6d6d3
+  (clone independence proven). Patch application cost ~1.7 MiB disk.
+  Mac image: worktree guest-inputs/t726-system.img SHA a7141b45.
+  /tmp/t726.patch removed after use.
+- Scripts: transform_t726_scripts.py run on Mac (fixed SCRIPTS path bug: script lives
+  in scripts/ itself). supervisor_t726.py 12,684 B, launch_probe_t726.py 1,824 B,
+  analyze_t726_probe.py 7,627 B. ast + py_compile OK on all three.
+  Analyzer carries T723_PROBE evidence section (DONE + SP1/SP2/SP3 + DROP_FAIL +
+  RESOLVE_FAIL + GETPROCADDRESS_NULL) and T726_PROBE_OK marker/trigger section.
+- CPIO embedded-vendor re-hash (post-build): 5e0607ad MATCH.
+- t726probe.rc + parse_init_rc.py copied into worktree scripts/ for the recovery agent.
+
+## Step 4 — Flight: WAIT-DISK (gate NOT met) 20:28 AEDT 16 Nov 2026
+- df readings (Mac /Users/Shared): Step 0 8,338,060 KiB (19:59:54); pre-apply
+  8,396,484 KiB; post-apply 8,394,752 KiB; Step 3 close 8,387,224 KiB (20:27:50).
+  Gate = 8 GiB (8,388,608 KiB). Gate open by only ~1,616 KiB at close.
+- Flight requires gate open by >=1.5 GiB (9,769,216 KiB). Shortfall ~1.35 GiB.
+- Own scratch cleaned: /tmp/t726.patch removed; /tmp/cpio-check-t726 removed.
+  No further lever available to this lane: T722/T723/T724/T725 + T622 worktrees are
+  KEPT per standing record (driver decision only); neural-dir growth is not this
+  lane's to touch. Gate not clearable by this lane.
+- EXIT: clean WAIT-DISK with Steps 2-3 done and state preserved (complete partial
+  result, NOT a lane failure, per brief). No findings / outcome / death note written
+  (nothing to adjudicate without a flight; recovery agent writes them after Step 4-5).
+- PRESERVED STATE for recovery agent:
+  * Mac image worktree guest-inputs/t726-system.img SHA a7141b45 (full above)
+  * Patch sandbox ~/workspace/t726-scripts/t726.patch SHA 4f1728d1; box /mnt/sdb1/t726-work/t726.patch
+  * Box image /mnt/sdb1/t726-work/t726-system.img SHA a7141b45
+  * Trigger file worktree scripts/t726probe.rc SHA 0372c10b; sandbox ~/workspace/t726-scripts/t726probe.rc
+  * Scripts worktree scripts/supervisor_t726.py, launch_probe_t726.py, analyze_t726_probe.py
+    (import-tested), transform_t726_scripts.py
+  * Parser worktree scripts/parse_init_rc.py (SHA d42b5b6e)
+  * Base inputs unchanged: kernel 70d3859d, CPIO a9d6040a (embedded vendor 5e0607ad),
+    DTB 73d1904b, revert 0ba6d6d3, vendor 5e0607ad, probe 4b275e48
+  * Recovery: re-verify df >= 9,769,216 KiB, then launch probe-flight (600 s guest /
+    700 s host) via scripts/launch_probe_t726.py, then Step 5 adjudication.
+
+## RECOVERY — launched 20:32:21 AEDT 16 Nov 2026 (wedge 23:32:21), agent 97c808a4
+- First lane exited clean WAIT-DISK 20:29 AEDT; Steps 1-3 DONE, driver-verified. This recovery: wait for df >= 9,769,216 KiB, then Step 4 flight + Step 5 adjudication. Same worktree/branch/gates (t726 / b13a1d6). Recovery brief track726-recovery-waitdisk.md SHA a4fe8d5e, brief-gate READY.
+- Step 0 re-verify 20:32:42 AEDT (clock-sourced): Mac image guest-inputs/t726-system.img SHA a7141b45 MATCH; trigger scripts/t726probe.rc SHA 0372c10b MATCH; parser scripts/parse_init_rc.py SHA d42b5b6e MATCH; scripts ast.parse OK + import spec OK (supervisor_t726.py, launch_probe_t726.py, analyze_t726_probe.py — first lane import-tested, bytes unchanged).
+- Box re-verify 20:33 AEDT: /mnt/sdb1/t726-work/t726-system.img SHA a7141b45 MATCH; t726.patch SHA 4f1728d1 MATCH. /mnt/sdb1 free 25,233,512 KiB (88%). /dev/sda3 100% (1,357,612 KiB free) — confirmed, NOT used.
+- df poll 1 — 20:32:42 AEDT: Mac /System/Volumes/Data free 8,388,792 KiB (97%). Threshold 9,769,216 KiB. Shortfall 1,380,424 KiB (~1.32 GiB). Gate CLOSED — waiting.
+- df poll 2 — 20:40:25 AEDT: Mac free 8,385,712 KiB (97%). Threshold 9,769,216 KiB. Shortfall 1,383,504 KiB (~1.32 GiB). Gate CLOSED — waiting. (Note: prior 5-min sleep ran df on the sandbox by mistake — no Mac reading lost; poll cadence resumes from here.)
+- df poll 3 — 20:44:59 AEDT: Mac free 8,395,720 KiB (97%). Threshold 9,769,216 KiB. Shortfall 1,373,496 KiB (~1.31 GiB). Gate CLOSED — waiting. (Poll-3 sleep SIGTERM-killed at ~209 s before its df ran; this reading is a direct re-poll.)
+- df poll 4 — 20:50:22 AEDT: Mac free 8,376,468 KiB (97%). Threshold 9,769,216 KiB. Shortfall 1,392,748 KiB (~1.33 GiB). Gate CLOSED — waiting.
+- df poll 5 — 20:55:47 AEDT: Mac free 8,410,664 KiB (97%). Threshold 9,769,216 KiB. Shortfall 1,358,552 KiB (~1.30 GiB). Gate CLOSED — waiting.
+- df poll 6 — 21:01:15 AEDT: Mac free 8,366,908 KiB (97%). Threshold 9,769,216 KiB. Shortfall 1,402,308 KiB (~1.34 GiB). Gate CLOSED — waiting.
+- df poll 7 — 21:06:40 AEDT: Mac free 8,603,524 KiB (96%). Threshold 9,769,216 KiB. Shortfall 1,165,692 KiB (~1.11 GiB). Gate CLOSED — waiting. (+236,616 KiB since poll 6 — disk recovering, cause unknown.)
+- df poll 8 — 21:12:06 AEDT: Mac free 8,595,784 KiB (96%). Threshold 9,769,216 KiB. Shortfall 1,173,432 KiB (~1.12 GiB). Gate CLOSED — waiting.
+- df poll 9 — 21:17:28 AEDT: Mac free 8,624,384 KiB (96%). Threshold 9,769,216 KiB. Shortfall 1,144,832 KiB (~1.09 GiB). Gate CLOSED — waiting.
+- df poll 10 — 21:22:54 AEDT: Mac free 8,620,144 KiB (96%). Threshold 9,769,216 KiB. Shortfall 1,149,072 KiB (~1.10 GiB). Gate CLOSED — waiting.
+- df poll 11 — 21:28:19 AEDT: Mac free 8,606,316 KiB (96%). Threshold 9,769,216 KiB. Shortfall 1,162,900 KiB (~1.11 GiB). Gate CLOSED — waiting.
+- df poll 12 — 21:34:01 AEDT: Mac free 8,632,376 KiB (96%). Threshold 9,769,216 KiB. Shortfall 1,136,840 KiB (~1.09 GiB). Gate CLOSED — waiting.
+- df poll 13 — 21:39:27 AEDT: Mac free 8,625,580 KiB (96%). Threshold 9,769,216 KiB. Shortfall 1,143,636 KiB (~1.09 GiB). Gate CLOSED — waiting.
+- df poll 14 — 21:45:00 AEDT: Mac free 8,601,552 KiB (96%). Threshold 9,769,216 KiB. Shortfall 1,167,664 KiB (~1.11 GiB). Gate CLOSED — waiting.
+- df poll 15 — 21:50:24 AEDT: Mac free 8,580,092 KiB (96%). Threshold 9,769,216 KiB. Shortfall 1,189,124 KiB (~1.13 GiB). Gate CLOSED — waiting.
+- df poll 16 — 21:55:56 AEDT: Mac free 8,533,172 KiB (96%). Threshold 9,769,216 KiB. Shortfall 1,236,044 KiB (~1.18 GiB). Gate CLOSED — waiting.
+- df poll 17 — 22:01:21 AEDT: Mac free 8,567,240 KiB (96%). Threshold 9,769,216 KiB. Shortfall 1,201,976 KiB (~1.15 GiB). Gate CLOSED — waiting.
+- df poll 18 — 22:06:54 AEDT: Mac free 8,553,984 KiB (96%). Threshold 9,769,216 KiB. Shortfall 1,215,232 KiB (~1.16 GiB). Gate CLOSED — waiting.
+- df poll 19 — 22:12:22 AEDT: Mac free 8,554,468 KiB (96%). Threshold 9,769,216 KiB. Shortfall 1,214,748 KiB (~1.16 GiB). Gate CLOSED — waiting.
+- df poll 20 — 22:17:47 AEDT: Mac free 8,510,180 KiB (96%). Threshold 9,769,216 KiB. Shortfall 1,259,036 KiB (~1.20 GiB). Gate CLOSED — waiting.
+- df poll 21 — 22:23:13 AEDT: Mac free 8,558,188 KiB (96%). Threshold 9,769,216 KiB. Shortfall 1,211,028 KiB (~1.15 GiB). Gate CLOSED — waiting.
+- df poll 22 — 22:28:37 AEDT: Mac free 8,563,048 KiB (96%). Threshold 9,769,216 KiB. Shortfall 1,206,168 KiB (~1.15 GiB). Gate CLOSED — waiting.
+- df poll 23 — 22:34:04 AEDT: Mac free 8,564,500 KiB (96%). Threshold 9,769,216 KiB. Shortfall 1,204,716 KiB (~1.15 GiB). Gate CLOSED — waiting. (First write attempt failed: macssh preflight could not reach the Mac; retried once, landed.)
+- df poll 24 — 22:39:51 AEDT: Mac free 9,530,636 KiB (96%). Threshold 9,769,216 KiB. Shortfall 238,580 KiB (~233 MiB). Gate CLOSED — waiting, but close. (+966,136 KiB since poll 23 — unidentified freeing, same class as 16:13.)
+- df poll 25 — 22:45:12 AEDT: Mac free 9,548,784 KiB (96%). Threshold 9,769,216 KiB. Shortfall 220,432 KiB (~215 MiB). Gate CLOSED — waiting.
+- df poll 26 — 22:50:35 AEDT: Mac free 9,577,988 KiB (96%). Threshold 9,769,216 KiB. Shortfall 191,228 KiB (~187 MiB). Gate CLOSED — waiting.
+- df poll 27 — 22:56:00 AEDT: Mac free 9,574,936 KiB (96%). Threshold 9,769,216 KiB. Shortfall 194,280 KiB (~190 MiB). Gate CLOSED — waiting.
+- df poll 28 — 23:01:22 AEDT: Mac free 7,796,856 KiB (97%). Threshold 9,769,216 KiB. Shortfall 1,972,360 KiB (~1.88 GiB). Gate CLOSED — waiting. (-1,778,080 KiB in 5 min — sharp slide, cause unknown, same unidentified-slide class; back below the 8 GiB gate itself.)
+- df poll 29 — 23:06:48 AEDT: Mac free 9,621,040 KiB (96%). Threshold 9,769,216 KiB. Shortfall 148,176 KiB (~145 MiB). Gate CLOSED — waiting, very close. (+1,824,184 KiB since poll 28 — sharp recovery, cause unknown, same unidentified-slide class.)
+- df poll 30 — 23:12:17 AEDT: Mac free 9,640,964 KiB (96%). Threshold 9,769,216 KiB. Shortfall 128,252 KiB (~125 MiB). Gate CLOSED — waiting.
+- df poll 31 — 23:17:41 AEDT: Mac free 9,649,928 KiB (96%). Threshold 9,769,216 KiB. Shortfall 119,288 KiB (~116 MiB). Gate CLOSED — waiting.
+- df poll 32 — 23:23:08 AEDT: Mac free 9,621,664 KiB (96%). Threshold 9,769,216 KiB. Shortfall 147,552 KiB (~144 MiB). Gate CLOSED — waiting. (Wedge 23:32:21, ~9 min left.)
+- df poll 33 — 23:28:34 AEDT: Mac free 9,598,108 KiB (96%). Threshold 9,769,216 KiB. Shortfall 171,108 KiB (~167 MiB). Gate CLOSED — waiting. (Wedge 23:32:21, <4 min left; final poll at the wedge, then clean exit if still gated.)
+
+## RECOVERY CLOSE-OUT — 23:32:23 AEDT 16 Nov 2026 (wedge 23:32:21)
+- df poll 34 (final) — 23:32:23 AEDT: Mac free 9,537,196 KiB (96%). Threshold 9,769,216 KiB. Shortfall 232,020 KiB (~227 MiB). Gate NEVER opened during this recovery window (33 polls, 20:32-23:32).
+- Exit: CLEAN WAIT-DISK. No flight, no findings, no outcome, no death note — nothing to adjudicate without a flight. State preserved for the next recovery: image a7141b45 (Mac guest-inputs + box /mnt/sdb1/t726-work), patch 4f1728d1, trigger 0372c10b, parser d42b5b6e, scripts import-tested.
+- df range during recovery: low 7,796,856 KiB (poll 28, 23:01) — high 9,649,928 KiB (poll 31, 23:17). Closest approach: poll 30, shortfall ~125 MiB. Swings of ~1.7-1.8 GiB in 5 min both directions (polls 27->28 slide, 28->29 recovery) — cause unknown, same unidentified-slide class as 16:13 / 19:41 / 19:48.
+- Heartbeat CLOSED WAIT-DISK. Next recovery: re-verify df >= 9,769,216 KiB, then Step 4 flight (600 s guest / 700 s host) via scripts/launch_probe_t726.py, then Step 5 adjudication (trigger-fired-first).
+
+## RECOVERY 2 — launched 23:35:27 AEDT 16 Nov 2026 (wedge 02:35:27 AEDT 17 Nov)
+- Step 0 re-verification PASS 23:36:03 AEDT: Mac image a7141b45 check, trigger 0372c10b check, parser d42b5b6e check; scripts AST+spec OK (all *.py); box image a7141b45 check, patch 4f1728d1 check; /mnt/sdb1 free 25,232,744 KiB (88%).
+- df poll 1 — 23:36:03 AEDT: Mac free 8,474,920 KiB (96%). Threshold 9,769,216 KiB. Shortfall 1,294,296 KiB (~1.23 GiB). Gate CLOSED — waiting. (Disk slid ~1.04 GiB since recovery 1 final poll 9,537,196 KiB at 23:32:23 — same unidentified-slide class.)
+- df poll 2 — 23:43:53 AEDT: Mac free 8433756 KiB (96%). Threshold 9,769,216 KiB. Shortfall 1335460 KiB (~1304 MiB). Gate CLOSED — waiting.
+- df poll 3 — 23:49:08 AEDT: Mac free 8469796 KiB (96%). Threshold 9,769,216 KiB. Shortfall 1299420 KiB (~1268 MiB). Gate CLOSED — waiting.
+- df poll 4 — 23:54:21 AEDT: Mac free 8448620 KiB (96%). Threshold 9,769,216 KiB. Shortfall 1320596 KiB (~1289 MiB). Gate CLOSED — waiting.
+- df poll 5 — 23:59:34 AEDT: Mac free 8442940 KiB (96%). Threshold 9,769,216 KiB. Shortfall 1326276 KiB (~1295 MiB). Gate CLOSED — waiting.
+- df poll 6 — 00:04:52 AEDT: Mac free 8416280 KiB (96%). Threshold 9,769,216 KiB. Shortfall 1352936 KiB (~1321 MiB). Gate CLOSED — waiting.
+- df poll 7 — 00:10:10 AEDT: Mac free 8394960 KiB (96%). Threshold 9,769,216 KiB. Shortfall 1374256 KiB (~1342 MiB). Gate CLOSED — waiting.
+- df poll 8 — 00:15:25 AEDT: Mac free 8399280 KiB (96%). Threshold 9,769,216 KiB. Shortfall 1369936 KiB (~1337 MiB). Gate CLOSED — waiting.
+- df poll 9 — 00:20:44 AEDT: Mac free 8431416 KiB (96%). Threshold 9,769,216 KiB. Shortfall 1337800 KiB (~1306 MiB). Gate CLOSED — waiting.
+- df poll 10 — 00:25:58 AEDT: Mac free 8440620 KiB (96%). Threshold 9,769,216 KiB. Shortfall 1328596 KiB (~1297 MiB). Gate CLOSED — waiting.
+- df poll 11 — 00:31:12 AEDT: Mac free 8436436 KiB (96%). Threshold 9,769,216 KiB. Shortfall 1332780 KiB (~1301 MiB). Gate CLOSED — waiting.
+- df poll 12 — 00:37:24 AEDT: Mac free 8436188 KiB (96%). Threshold 9,769,216 KiB. Shortfall 1333028 KiB (~1301 MiB). Gate CLOSED — waiting.
+- df poll 13 — 00:42:36 AEDT: Mac free 7919652 KiB (96%). Threshold 9,769,216 KiB. Shortfall 1849564 KiB (~1806 MiB). Gate CLOSED — waiting.
+- df re-read after poll 13 slide — 00:43:00 AEDT: Mac free 7918716 KiB. (Poll 13 was 7,919,652 KiB at 00:42:36; this re-read confirms or refutes the slide.)
+- df poll 14 — 00:47:15 AEDT: Mac free 7901364 KiB (97%). Threshold 9,769,216 KiB. Shortfall 1867852 KiB (~1824 MiB). Gate CLOSED — waiting. (Re-read at 00:43:00 confirmed the poll 13 slide: 7,918,716 KiB — real, not APFS lag. Disk below the 8 GiB gate itself.)
+- df poll 15 — 00:52:32 AEDT: Mac free 7894520 KiB (97%). Threshold 9,769,216 KiB. Shortfall 1874696 KiB (~1830 MiB). Gate CLOSED — waiting.
+- df poll 16 — 00:57:45 AEDT: Mac free 7897164 KiB (97%). Threshold 9,769,216 KiB. Shortfall 1872052 KiB (~1828 MiB). Gate CLOSED — waiting.
+- df poll 17 — 01:03:05 AEDT: Mac free 8940836 KiB (97%). Threshold 9,769,216 KiB. Shortfall 828380 KiB (~808 MiB). Gate CLOSED — waiting.
+- df poll 18 — 01:08:21 AEDT: Mac free 8941644 KiB (96%). Threshold 9,769,216 KiB. Shortfall 827572 KiB (~808 MiB). Gate CLOSED — waiting.
+- df poll 19 — 01:13:36 AEDT: Mac free 8941796 KiB (96%). Threshold 9,769,216 KiB. Shortfall 827420 KiB (~808 MiB). Gate CLOSED — waiting.
+- df poll 20 — 01:19:01 AEDT: Mac free 8939688 KiB (96%). Threshold 9,769,216 KiB. Shortfall 829528 KiB (~810 MiB). Gate CLOSED — waiting.
+- df poll 21 — 01:24:17 AEDT: Mac free 8902128 KiB (96%). Threshold 9,769,216 KiB. Shortfall 867088 KiB (~846 MiB). Gate CLOSED — waiting.
+- df poll 22 — 01:29:41 AEDT: Mac free 8904060 KiB (96%). Threshold 9,769,216 KiB. Shortfall 865156 KiB (~844 MiB). Gate CLOSED — waiting.
+- df poll 23 — 01:34:55 AEDT: Mac free 7854668 KiB (96%). Threshold 9,769,216 KiB. Shortfall 1914548 KiB (~1869 MiB). Gate CLOSED — waiting.
+- df re-read after poll 23 slide — 01:35:25 AEDT: Mac free 7853724 KiB. (Poll 23 was 7,854,668 KiB at 01:34:55; this re-read confirms or refutes the slide.)
+- df poll 24 — 01:40:48 AEDT: Mac free 7330664 KiB (97%). Threshold 9,769,216 KiB. Shortfall 2438552 KiB (~2381 MiB). Gate CLOSED — waiting. (Re-read at 01:35:25 confirmed the poll 23 slide: 7,853,724 KiB — real, not APFS lag. Disk below the 8 GiB gate itself.)
+- df poll 25 — 01:46:17 AEDT: Mac free 6822112 KiB (97%). Threshold 9,769,216 KiB. Shortfall 2947104 KiB (~2878 MiB). Gate CLOSED — waiting.
+- df poll 26 — 01:51:42 AEDT: Mac free 7873128 KiB (97%). Threshold 9,769,216 KiB. Shortfall 1896088 KiB (~1851 MiB). Gate CLOSED — waiting. (Sustained slide: polls 23-25 fell ~0.5 GiB per 5 min, 8.90 GiB at 01:29 to 6.82 GiB at 01:46 — cause unknown, same unidentified-slide class; not mine to investigate, driver monitors.)
+- df poll 27 — 01:56:55 AEDT: Mac free 7415304 KiB (97%). Threshold 9,769,216 KiB. Shortfall 2353912 KiB (~2298 MiB). Gate CLOSED — waiting.
+- df poll 28 — 02:02:19 AEDT: Mac free 7873572 KiB (97%). Threshold 9,769,216 KiB. Shortfall 1895644 KiB (~1851 MiB). Gate CLOSED — waiting.
+- df poll 29 — 02:07:38 AEDT: Mac free 7842308 KiB (97%). Threshold 9,769,216 KiB. Shortfall 1926908 KiB (~1881 MiB). Gate CLOSED — waiting.
+- df poll 30 — 02:12:53 AEDT: Mac free 7648056 KiB (97%). Threshold 9,769,216 KiB. Shortfall 2121160 KiB (~2071 MiB). Gate CLOSED — waiting.
+- df poll 31 — 02:18:12 AEDT: Mac free 7836912 KiB (97%). Threshold 9,769,216 KiB. Shortfall 1932304 KiB (~1887 MiB). Gate CLOSED — waiting.
+- df poll 32 — 02:23:44 AEDT: Mac free 6785612 KiB (97%). Threshold 9,769,216 KiB. Shortfall 2983604 KiB (~2913 MiB). Gate CLOSED — waiting.
+- df re-read after poll 32 slide — 02:24:14 AEDT: Mac free 6784944 KiB. (Poll 32 was 6,785,612 KiB at 02:23:44; this re-read confirms or refutes the slide.)
+- df poll 33 — 02:30:30 AEDT: Mac free 5732816 KiB (97%). Threshold 9,769,216 KiB. Shortfall 4036400 KiB (~3941 MiB). Gate CLOSED — waiting. (Re-read at 02:24:14 confirmed the poll 32 slide: 6,784,944 KiB — real, not APFS lag. Lowest yet in this recovery; wedge 02:35:27, ~6 min left after this poll.)
+- df poll 34 (final) — 02:35:53 AEDT: Mac free 5739180 KiB (97%). Threshold 9,769,216 KiB. Shortfall 4030036 KiB (~3935 MiB). Gate CLOSED — waiting. (Wedge 02:35:27 AEDT 17 Nov.)
+
+## RECOVERY 2 CLOSE-OUT — 02:36:58 AEDT 17 Nov 2026 (wedge 02:35:27)
+- df poll 34 (final) — 02:35:53 AEDT: Mac free 5,739,180 KiB (97%). Threshold 9,769,216 KiB. Shortfall 4,030,036 KiB (~3.84 GiB). Gate NEVER opened during this recovery window (34 polls, 23:35-02:35).
+- Exit: CLEAN WAIT-DISK. No flight, no findings, no outcome, no death note — nothing to adjudicate without a flight. State preserved for the next recovery: image a7141b45 (Mac guest-inputs + box /mnt/sdb1/t726-work), patch 4f1728d1, trigger 0372c10b, parser d42b5b6e, scripts import-tested.
+- df range during recovery: low 5,732,816 KiB (poll 33, 02:30:30) — high 8,940,836 KiB (poll 17, 01:03:05). Closest approach: poll 17, shortfall ~809 MiB. Swings of ~1.0-1.05 GiB in 5-6 min in both directions (poll 22->23 slide -1,049,392 KiB; poll 25->26 recovery +1,051,016 KiB; poll 31->32 slide -1,051,300 KiB; poll 32->33 slide -1,052,128 KiB) — cause unknown, same unidentified-slide class as 16:13 / 19:41 / 19:48. Sustained slide 01:29-01:46 (~0.5 GiB per 5 min, 8.90 GiB to 6.82 GiB), then whipsaw 7.4-7.9 GiB, then two consecutive ~1.05 GiB slides 02:23-02:30 taking the disk to 5.73 GiB — the lowest of any T726 window.
+- Incidents: poll-12 cycle killed by a runtime restart 22 s into its sleep (no reading lost — exec log empty, progress file verified, re-ran cleanly). Re-reads after the poll 13, poll 23 and poll 32 slides all confirmed the slides as real (within ~1 MiB), not APFS lag.
+- Heartbeat CLOSED WAIT-DISK. Next recovery: re-verify df >= 9,769,216 KiB, then Step 4 flight (600 s guest / 700 s host) via scripts/launch_probe_t726.py, then Step 5 adjudication (trigger-fired-first).
+
+## RECOVERY 3 — launched 02:40:50 AEDT 17 Nov 2026 (wedge 05:40:50)
+- Step 0 re-verification — PASS (02:42:46 AEDT, agent 90d5aba8): Mac image guest-inputs/t726-system.img SHA a7141b45 ✓; trigger scripts/t726probe.rc SHA 0372c10b ✓ (596 B); parser scripts/parse_init_rc.py SHA d42b5b6e ✓; scripts AST OK (all *.py). Box: /mnt/sdb1/t726-work/t726-system.img SHA a7141b45 ✓; t726.patch SHA 4f1728d1 ✓; /mnt/sdb1 free 21,028,136 KiB (90%). Mac df at Step 0: 5,730,464 KiB free, threshold 9,769,216 KiB, shortfall ~3.94 GiB — gate CLOSED, polling.
+- df poll 1 — 02:48:29 AEDT: Mac free 5730260 KiB. Threshold 9,769,216 KiB. Shortfall 4038956 KiB. Gate CLOSED — waiting.
+- df poll 2 — 02:53:45 AEDT: Mac free 5739216 KiB. Threshold 9,769,216 KiB. Shortfall 4030000 KiB. Gate CLOSED — waiting.
+- df poll 3 — 02:58:57 AEDT: Mac free 5736400 KiB. Threshold 9,769,216 KiB. Shortfall 4032816 KiB. Gate CLOSED — waiting.
+- df poll 4 — 03:04:15 AEDT: Mac free 5733848 KiB. Threshold 9,769,216 KiB. Shortfall 4035368 KiB. Gate CLOSED — waiting.
+- df poll 5 — 03:09:28 AEDT: Mac free 5735376 KiB. Threshold 9,769,216 KiB. Shortfall 4033840 KiB. Gate CLOSED — waiting.
+- df poll 6 — 03:14:44 AEDT: Mac free 5742168 KiB. Threshold 9,769,216 KiB. Shortfall 4027048 KiB. Gate CLOSED — waiting.
+- df poll 7 — 03:20:07 AEDT: Mac free 5733332 KiB. Threshold 9,769,216 KiB. Shortfall 4035884 KiB. Gate CLOSED — waiting.
+- df poll 8 — 03:25:22 AEDT: Mac free 5740004 KiB. Threshold 9,769,216 KiB. Shortfall 4029212 KiB. Gate CLOSED — waiting.
+- df poll 9 — 03:33:45 AEDT: Mac free 5741508 KiB. Threshold 9,769,216 KiB. Shortfall 4027708 KiB. Gate CLOSED — waiting. (Poll 9 first two attempts preflight-failed ~03:30, third attempt landed.)
+- df poll 10 — 03:39:00 AEDT: Mac free 5754320 KiB. Threshold 9,769,216 KiB. Shortfall 4014896 KiB. Gate CLOSED — waiting.
+- df poll 11 — 03:44:26 AEDT: Mac free 5746444 KiB. Threshold 9,769,216 KiB. Shortfall 4022772 KiB. Gate CLOSED — waiting.
+- df poll 12 — 03:49:43 AEDT: Mac free 5749308 KiB. Threshold 9,769,216 KiB. Shortfall 4019908 KiB. Gate CLOSED — waiting.
+- df poll 13 — 03:54:55 AEDT: Mac free 5745916 KiB. Threshold 9,769,216 KiB. Shortfall 4023300 KiB. Gate CLOSED — waiting.
+- df poll 14 — 04:00:12 AEDT: Mac free 5752304 KiB. Threshold 9,769,216 KiB. Shortfall 4016912 KiB. Gate CLOSED — waiting.
+- df poll 15 — 04:05:31 AEDT: Mac free 5748368 KiB. Threshold 9,769,216 KiB. Shortfall 4020848 KiB. Gate CLOSED — waiting.
+- df poll 16 — 04:10:43 AEDT: Mac free 5746620 KiB. Threshold 9,769,216 KiB. Shortfall 4022596 KiB. Gate CLOSED — waiting.
+- df poll 17 — 04:15:56 AEDT: Mac free 5747996 KiB. Threshold 9,769,216 KiB. Shortfall 4021220 KiB. Gate CLOSED — waiting.
+- df poll 18 — 04:21:16 AEDT: Mac free 7101636 KiB. Threshold 9,769,216 KiB. Shortfall 2667580 KiB. Gate CLOSED — waiting.
+- df re-read after poll 18 jump — 04:21:29 AEDT: Mac free 7140768 KiB. (Poll 18 was 7,101,636 KiB at 04:21:16; this re-read confirms or refutes the +1.35 GiB jump.)
+- df poll 19 — 04:26:41 AEDT: Mac free 7140036 KiB. Threshold 9,769,216 KiB. Shortfall 2629180 KiB. Gate CLOSED — waiting.
+- df poll 20 — 04:31:52 AEDT: Mac free 7147348 KiB. Threshold 9,769,216 KiB. Shortfall 2621868 KiB. Gate CLOSED — waiting.
+- df poll 21 — 04:37:11 AEDT: Mac free 7144564 KiB. Threshold 9,769,216 KiB. Shortfall 2624652 KiB. Gate CLOSED — waiting.
+- df poll 22 — 04:42:30 AEDT: Mac free 7142008 KiB. Threshold 9,769,216 KiB. Shortfall 2627208 KiB. Gate CLOSED — waiting.
+- df poll 23 — 04:46:43 AEDT: Mac free 7138756 KiB. Threshold 9,769,216 KiB. Shortfall 2630460 KiB. Gate CLOSED — waiting. (First attempt killed by a runtime restart ~3 min into its sleep, exec log empty, progress file verified showing poll 22 last — no reading lost, re-ran cleanly.)
+- df poll 24 — 04:52:00 AEDT: Mac free 7135760 KiB. Threshold 9,769,216 KiB. Shortfall 2633456 KiB. Gate CLOSED — waiting.
+- df poll 25 — 04:57:15 AEDT: Mac free 7136856 KiB. Threshold 9,769,216 KiB. Shortfall 2632360 KiB. Gate CLOSED — waiting.
+- df poll 26 — 05:02:33 AEDT: Mac free 10044940 KiB. Threshold 9,769,216 KiB. Shortfall -275724 KiB. Gate CLOSED — waiting.
+- df re-read after poll 26 jump — 05:02:55 AEDT: Mac free 10022788 KiB. (Poll 26 was 10,044,940 KiB at 05:02:33; this re-read confirms or refutes the +2.84 GiB jump before any flight.)
+- GATE OPENED — poll 26 (05:02:33 AEDT): Mac free 10,044,940 KiB, threshold 9,769,216 KiB, margin +275,724 KiB. Re-read 05:02:55 confirms: 10,022,788 KiB (within ~22 MiB — real, not APFS lag). Jump +2,908,084 KiB (~2.84 GiB) from poll 25 in 5 min, cause unknown (item-138 class). Margin above the 8 GiB supervisor gate: ~1.56 GiB — DISK-MARGIN rule satisfied. Proceeding to Step 4 probe flight.
+- Step 4 LAUNCH — 05:05 AEDT: pre-flight df 9,958,148 KiB (threshold 9,769,216; margin +188,932 KiB; ~1.50 GiB above the 8 GiB supervisor gate). Scripts import-tested (supervisor + launcher + analyzer + parser, py_compile OK). CPIO embedded vendor 5e0607ad MATCH. QEMU cmdline: system image only as virtio-blk drive, NO vendor drive. flights/probe-flight does not exist yet — fresh folder, no overwrite. Launching probe-flight (600 s guest / 700 s host) via scripts/launch_probe_t726.py.
+Flight in progress (probe-flight): host=300s guest=203.3s pid=87904. 2026-11-16T18:10:43Z
+
+## RECOVERY 3 CLOSE-OUT — 05:30:45 AEDT 17 Nov 2026 (wedge 05:40:50 NOT hit)
+- Step 4 probe flight FLOWN (probe-flight, 05:05:43-05:15:44 AEDT): guest target reached 600.2 s, host 600.93 s, QEMU exit 0, UART 27,917 lines SHA e9d3d30e. No orphans.
+- Step 5 adjudication DONE. Verdict: FAIL — probe never ran (0 T723_PROBE, no DONE). Trigger FIRED (sys.boot_completed=1 at guest 501.540 s; 7 lines; stock actions processed). Registration PROVEN again (T726_PROBE_OK x2: guest 104.493 s on-boot, guest 506.508 s property action, post-flood). Service never started (0 t726probe / t723-probe / first_stage citations). Wall: SERVICE-START-SILENTLY-FAILED (guest). T724 wall ADDED-RC-SILENTLY-IGNORED REFUTED for this shape.
+- Polls: 26 total (polls 1-25 gate closed; gate opened at poll 26, 05:02:33, 10,044,940 KiB, re-read confirmed 10,022,788 KiB). Disk range this window: low 5,730,260 KiB (poll 1) — high 10,044,940 KiB (poll 26). Incidents: poll 9 preflight-failed twice, landed third attempt; poll 23 first attempt killed by runtime restart, re-ran cleanly. No readings lost.
+- Deliverables: findings-t726.md 10,667 B SHA 3c2b4926; outcome-t726.txt 5 B SHA 4f8e9e45 (FAIL); DEATH_NOTE-T726.md 1,971 B SHA 4673c613; TIMELINE.md 2,779 B SHA a331db2c; analysis-t726.txt 119 lines SHA 93c18fd6; heartbeat CLOSED FAIL.
+- Successor: re-fly identical property-action shape with known-good toybox service binary to discriminate probe-path fault vs start-leg fault. EGL dispatch question still OPEN.
