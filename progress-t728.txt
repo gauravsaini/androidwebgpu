@@ -1,0 +1,176 @@
+# Progress — Track T728: observable-payload service (identify the exit-127 mechanism)
+
+## Step 0 — Disk gate (STATIC-FIRST) — 2026-11-18 01:25:47 AEDT
+- Lane launched 01:25:32 AEDT 18 Nov 2026 (wedge 04:25:32). Mac EktaAir.local verified.
+- df at launch: 9,452,928 KiB free — BELOW the 9,769,216 KiB flight threshold (shortfall ~309 MiB). Gate CLOSED.
+- Steps 1–3 proceed below the margin (static-first); the flight is gated at Step 4. Disk swings violently (Spotlight reindex after the 23:23 AEDT 17 Nov reboot); a single df read is never the gate decision; poll every 5 min.
+- No deletions by this lane. t724+t725 images (~3.8 GiB) are a DRIVER-decided lever, not a lane lever.
+
+## Step 1 — Inputs — PASS — 2026-11-18 01:28 AEDT
+- All input SHAs re-verified on the Mac, MATCH the driver-verified base state:
+  kernel t720-Image 70d3859d; DTB t723-modified.dtb 73d1904b; CPIO t723-fix.cpio.gz a9d6040a;
+  system_img t727-system.img 8e9914e3; vendor t722-vendor.img 5e0607ad; t723-probe binary 4b275e48;
+  t727.patch cfe7d1ee. t723-probe.c SHA 94bd7d0a (recorded, no prior value).
+- CPIO whole-file SHA a9d6040a re-verified (deterministically fixes the embedded vendor member at 5e0607ad, Step 1 T727 pattern).
+- Box side: /mnt/sdb1/t727-work/t727-system.img 8e9914e3 MATCH; vault revert 0ba6d6d3 MATCH (patch base).
+- Worktree: /Users/Shared/wt-track728-observable-payload, branch t728, base a395f88, clean.
+  Guest-inputs hardlinked from the T727 worktree (files only).
+
+## Step 2 — Payload + rc design — PASS — 2026-11-18 01:35 AEDT
+- Helper t728probe.c (4,895 B, SHA 546e060e) written from the T723 probe source: same raw syscall
+  wrappers + kmsg line builder; EGL sub-probes, ELF mini-loader and uid-drop omitted (not needed;
+  service runs as root). Dumps argc/argv to /dev/kmsg AND /data/t728-argv.txt, writes
+  T728_SERVICE_OK to /dev/kmsg, exits 0. _start reads argc/argv from the stack.
+- Built on the box: aarch64-linux-gnu-gcc -static -nostdlib -O2. Binary t728probe SHA 19db5d31,
+  67,168 B, ELF64 AArch64, statically linked, EXEC, entry 0x400310 (_start), NO dynamic section,
+  NO INTERP segment, 0 undefined symbols (the single UND entry is symbol 0, the null symbol).
+  Entry-path disassembly verified: argc read from [sp], openat #56 with AT_FDCWD (-100),
+  O_WRONLY (1), svc instructions present (14).
+- "Helper runs" leg: NO user-mode aarch64 emulator exists in the fleet — checked Mac
+  (no qemu-aarch64; Homebrew qemu is system-only), box (no qemu-aarch64, no docker/podman),
+  sandbox (no qemu-aarch64, no binfmt; apt has NO qemu-user-static candidate). Static
+  verification above is the host proof; RUNTIME proof is the flight itself (the experiment):
+  if the binary were broken, the flight shows no argv lines / a non-zero exit and the
+  findings say so. Recorded openly, not skipped silently.
+- rc t728probe.rc (691 B, SHA f61b9c0f): direct exec `service t728probe /system/bin/t728probe`,
+  class main, user root, group root, oneshot, disabled; two-legs trigger (property action start
+  + write T728_PROBE_OK; on boot write T728_PROBE_OK). NO sh -c anywhere.
+- parser: VERDICT ACCEPT, 0 errors — parse_init_rc.py on the exact t728probe.rc bytes
+  (1 service, 2 actions). Control t727probe.rc also ACCEPT.
+- Marker uniqueness: T728_PROBE_OK / T728_SERVICE_OK = 0 occurrences in the T724, T725, T726
+  and T727 UARTs (box vault greps + local T727 copy).
+- Step 2 PASS: helper built + statically verified, parser ACCEPT, markers unique.
+
+## Step 3 — Build — PASS — 2026-11-18 01:45 AEDT
+- Box build (Linux debugfs, extent-safe): work copy of t727-system.img 8e9914e3 SHA-verified
+  before edit; e2fsck pre-edit clean, 7343/7424 files (matches T727's pre count exactly).
+- Neighbours byte-identical pre/post: surfaceflinger 259d39f5, installd.rc 3ea3466b,
+  hw/init.rc 60cb3d15 (all match T727's recorded values).
+- Edits: rm /system/etc/init/t727probe.rc (inode 705, 648 B, mode 0644 — the T727 file, confirmed);
+  write t728probe.rc (inode 705 reused, 691 B, mode 0644, dump-back SHA f61b9c0f IDENTICAL);
+  write /system/bin/t728probe (inode 6981, 67,168 B, mode 0755, dump-back SHA 19db5d31 IDENTICAL).
+- Caught + fixed in-build: debugfs `write` leaves the inode file-type bits at 0 (stat showed
+  "Type: bad type"). T727's rc had the same provenance and worked, but a bad-type binary could
+  break execve, so both files got `sif mode 0100644` / `0100755`: stat now "Type: regular"
+  (rc 0644, bin 0755), dump-backs STILL byte-identical. e2fsck post-edit clean, 7344/7424 files
+  (+1 net: -1 rc +1 rc +1 bin).
+- New image SHA: 9b8ef7ff8b112ff7d2053b695958c353c673dbbb2146209f2c6b75c30b9d5219
+  (box /mnt/sdb1/t728-work/t728-system.img). Block-delta patch vs the revert: 8 chunks,
+  8,388,608 data bytes, t728.patch SHA 7ecbe959.
+- Transfer box -> sandbox -> Mac, SHA-verified at every hop (7ecbe959 x3). Mac APFS-clone apply:
+  cp -c revert -> t728-system.img (df moved ~9.4 MB — blocks shared), apply_patch_t728.py
+  chunks=8; Mac t728-system.img SHA 9b8ef7ff MATCHES the box-built image. Revert still 0ba6d6d3.
+- Scripts transformed (T727 -> T728) + import-tested; supervisor EXPECTED system_img SHA filled
+  with 9b8ef7ff; analyzer sanity on the T727 UART reproduces the driver counts EXACTLY
+  (27,482 lines, T727_PROBE_OK 2, T720 DONE PASS 1, Invalid 0, REJECT 0, CALL allocate2 12,
+  EPERM 0, mapped 1, Watchdog 0, boot_completed 9, FATAL EXCEPTION 6, panic 0, dup-fail 4 /
+  6.612 per 1000 s, avc 2090, /dev/mem 6, T723_PROBE 0, T728 markers 0).
+- Step 3 PASS. Step 4 (flight) gated on disk: df 9,433,472 KiB at apply time (shortfall ~336 MiB).
+- Step 4 poll 2026-11-18 02:15:38 AEDT: df avail 9390200 KiB (flight threshold 9,769,216 KiB).
+- Step 4 polls 1-6 backfilled from the poll-loop log (02:15 AEDT): the df_poll script carried a wrong worktree path (wt-track728-toybox-discriminator, nonexistent) so polls 1-6 read df correctly but their appends + heartbeat refreshes failed silently. Path fixed 02:15; the loop itself never stopped. Values, in order:
+- Step 4 poll 2026-11-18 01:45:40 AEDT: df avail 9431372 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 2026-11-18 01:50:48 AEDT: df avail 9409916 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 2026-11-18 01:55:57 AEDT: df avail 9411864 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 2026-11-18 02:01:05 AEDT: df avail 9383280 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 2026-11-18 02:06:13 AEDT: df avail 9409076 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 2026-11-18 02:11:21 AEDT: df avail 9377588 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 2026-11-18 02:16:30 AEDT: df avail 9383508 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 2026-11-18 02:21:38 AEDT: df avail 9358236 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 2026-11-18 02:26:46 AEDT: df avail 9340080 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 2026-11-18 02:31:55 AEDT: df avail 9362336 KiB (flight threshold 9,769,216 KiB).
+- Step 4 loop note 02:33 AEDT: first poll loop SIGTERM-killed by the runtime ~02:32 after poll 10 (02:31:55, 9362336 KiB). No state lost: polls 1-10 all in this file, heartbeat fresh. Resume loop launched, numbering continues from poll 11, same wedge 04:25:32 AEDT.
+- Step 4 poll 2026-11-18 02:42:06 AEDT: df avail 9354812 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 2026-11-18 02:47:12 AEDT: df avail 9339552 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 2026-11-18 02:52:18 AEDT: df avail 9346776 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 2026-11-18 02:57:24 AEDT: df avail 9325288 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 2026-11-18 03:02:29 AEDT: df avail 9319008 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 2026-11-18 03:07:36 AEDT: df avail 9326088 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 2026-11-18 03:12:41 AEDT: df avail 9295952 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 2026-11-18 03:17:48 AEDT: df avail 9272500 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 2026-11-18 03:22:54 AEDT: df avail 9289344 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 2026-11-18 03:28:00 AEDT: df avail 9297708 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 2026-11-18 03:33:07 AEDT: df avail 9305836 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 2026-11-18 03:38:13 AEDT: df avail 9300476 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 2026-11-18 03:43:20 AEDT: df avail 9285480 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 2026-11-18 03:48:27 AEDT: df avail 9284252 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 2026-11-18 03:53:33 AEDT: df avail 9299784 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 2026-11-18 03:58:40 AEDT: df avail 9278256 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 2026-11-18 04:03:46 AEDT: df avail 9290580 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 2026-11-18 04:08:53 AEDT: df avail 9285256 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 2026-11-18 04:13:59 AEDT: df avail 9219988 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 2026-11-18 04:19:05 AEDT: df avail 9258260 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 2026-11-18 04:24:11 AEDT: df avail 9282240 KiB (flight threshold 9,769,216 KiB).
+
+## Step 4 — WAIT-DISK exit (clean, designed gate-exit) — 2026-11-18 04:25:32 AEDT
+- Wedge reached with the disk gate CLOSED. No flight, no findings, no verdict, no outcome file.
+- 31 numbered loop polls + 1 manual verification poll = 32 df readings, 01:45:40–04:24:11 AEDT.
+  Range 9,219,988–9,431,372 KiB. Closest to threshold: poll 1, 9,431,372 KiB (01:45:40,
+  shortfall ~330 MiB). Final: poll 31, 9,282,240 KiB (04:24:10, shortfall ~487 MiB).
+  Gate NEVER opened; disk drifted down ~150 MiB across the poll window.
+- Loop history: first loop SIGTERM-killed by the runtime ~02:32 after poll 10 (no state lost;
+  resume loop ran polls 11–31 to the wedge). df_poll path bug (wrong worktree dir) caught
+  02:15, fixed, polls 1–6 backfilled from the loop log.
+- State preserved for recovery: image t728-system.img 9b8ef7ff (Mac guest-inputs + box
+  /mnt/sdb1/t728-work/), patch t728.patch 7ecbe959, supervisor EXPECTED system_img SHA filled
+  (9b8ef7ff), rc t728probe.rc f61b9c0f, binary t728probe 19db5d31, analyzer sanity reproduced
+  driver counts exactly on the T727 UART. Recovery relaunches for the same track / worktree /
+  branch / gates when the gate clears.
+- Step 4 RECOVERY 1 start 04:34 AEDT 18 Nov: first lane clean WAIT-DISK exit at wedge 04:25:32 (32 readings, gate never opened). Re-verified: image t728-system.img 9b8ef7ff MATCH, patch t728.patch 7ecbe959 MATCH, rc scripts/t728probe.rc f61b9c0f MATCH, supervisor pin 9b8ef7ff... MATCH. df_poll script path verified CORRECT (wt-track728-observable-payload). NOTE: supervisor_t728.py + launch_probe_t728.py docstrings still carry stale T727 toybox wording ("toybox sh -c echo") — cosmetic only; the flown image is 9b8ef7ff with direct-exec t728probe.rc, analyzer checks T728_SERVICE_OK/T728_PROBE_OK/T728_ARGV. Scripts left untouched. Polls continue from 32, wedge 07:32:51 AEDT.
+- Step 4 loop note 04:37 AEDT: recovery-1 poll loop killed by a runtime restart ~04:37 during poll 32 (no poll landed, no state lost). Resume loop relaunched, numbering continues from poll 32, same wedge 07:32:51 AEDT.
+- Step 4 poll 2026-11-18 04:38:13 AEDT: df avail 9263524 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 2026-11-18 04:43:25 AEDT: df avail 9282388 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 2026-11-18 04:48:38 AEDT: df avail 9256812 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 2026-11-18 04:53:51 AEDT: df avail 9278920 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 2026-11-18 04:59:03 AEDT: df avail 9330620 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 2026-11-18 05:04:15 AEDT: df avail 9314052 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 2026-11-18 05:09:27 AEDT: df avail 9314680 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 2026-11-18 05:14:39 AEDT: df avail 9307860 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 2026-11-18 05:19:51 AEDT: df avail 9324044 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 2026-11-18 05:25:03 AEDT: df avail 9318940 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 2026-11-18 05:30:16 AEDT: df avail 9291112 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 2026-11-18 05:35:29 AEDT: df avail 9260552 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 2026-11-18 05:40:47 AEDT: df avail 9277972 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 2026-11-18 05:45:58 AEDT: df avail 9277564 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 2026-11-18 05:51:10 AEDT: df avail 9262520 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 2026-11-18 05:56:21 AEDT: df avail 9249752 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 2026-11-18 06:01:33 AEDT: df avail 9222704 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 2026-11-18 06:06:45 AEDT: df avail 9238128 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 2026-11-18 06:11:56 AEDT: df avail 9213612 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 2026-11-18 06:17:08 AEDT: df avail 9226860 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 2026-11-18 06:22:19 AEDT: df avail 9220104 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 2026-11-18 06:27:31 AEDT: df avail 9101216 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 2026-11-18 06:32:43 AEDT: df avail 9090672 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 2026-11-18 06:37:54 AEDT: df avail 9009536 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 2026-11-18 06:43:06 AEDT: df avail 9055300 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 2026-11-18 06:48:18 AEDT: df avail 9043096 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 2026-11-18 06:53:30 AEDT: df avail 8995040 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 2026-11-18 06:58:42 AEDT: df avail 9005076 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 2026-11-18 07:03:55 AEDT: df avail 8939276 KiB (flight threshold 9,769,216 KiB).
+- Step 4 loop note 07:06 AEDT: recovery-1 poll loop killed by a runtime restart ~07:05 during the sleep before poll 61 (polls 32-60 all in this file, heartbeat fresh at 07:03:55). Resume loop relaunched, numbering continues from poll 61, same wedge 07:32:51 AEDT.
+- Step 4 poll 2026-11-18 07:06:59 AEDT: df avail 8959536 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 2026-11-18 07:12:11 AEDT: df avail 7807716 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 2026-11-18 07:17:23 AEDT: df avail 6774716 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 2026-11-18 07:22:35 AEDT: df avail 7746076 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 2026-11-18 07:27:47 AEDT: df avail 7738300 KiB (flight threshold 9,769,216 KiB).
+- Step 4 RECOVERY 1 WAIT-DISK exit at wedge 07:32:51 AEDT 18 Nov: 34 numbered polls (32-65), 04:38:12-07:27:46 AEDT, all append-verified. Range 6,774,716-9,330,620 KiB. Closest to threshold: poll 36, 9,330,620 KiB (04:59:02, shortfall ~439 MiB). Final: poll 65, 7,738,300 KiB (07:27:46, shortfall ~2,031 MiB). Gate NEVER opened.
+  Totals across both lanes: 66 df readings, gate never opened in either lane.
+  Disk slid ~1.5 GiB during recovery 1 (9,263,524 -> 7,738,300 KiB), with two ~1 GiB cliff drops in single 5-min intervals (poll 62: -1,151,820 KiB; poll 63: -1,033,000 KiB) and a +971,360 KiB recovery at poll 64. Consumer unattributed.
+  Loop history: first recovery-1 loop killed by a runtime restart ~04:37 during poll 32 (no poll landed); resumed from poll 32. Second loop killed by a runtime restart ~07:05 during the sleep before poll 61 (polls 32-60 all landed); resumed from poll 61. No state lost in either incident.
+  State preserved for recovery 2: image t728-system.img 9b8ef7ff, patch t728.patch 7ecbe959, supervisor EXPECTED system_img SHA filled (9b8ef7ff), rc t728probe.rc f61b9c0f, binary t728probe 19db5d31. No flight, no findings, no verdict.
+- Step 4 RECOVERY 2 launched 07:37:08 AEDT 18 Nov (wedge 10:37:08). SHAs re-verified MATCH: image 9b8ef7ff, patch 7ecbe959, rc f61b9c0f, supervisor pin 9b8ef7ff; df_poll path CORRECT. Poll numbering continues from 66 (66 readings so far). Poll loop runs DETACHED on the Mac (recovery-1 lost two loops to sandbox runtime restarts) with wedge stop at 10:37:08; loop log poll-loop-recovery2.log.
+- Step 4 poll 2026-11-18 07:41:39 AEDT: df avail 7730708 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 2026-11-18 07:46:39 AEDT: df avail 7728116 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 2026-11-18 07:51:39 AEDT: df avail 7726412 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 2026-11-18 07:56:39 AEDT: df avail 7807444 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 2026-11-18 08:01:39 AEDT: df avail 7822036 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 2026-11-18 08:06:39 AEDT: df avail 7820444 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 2026-11-18 08:11:39 AEDT: df avail 7821860 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 2026-11-18 08:16:39 AEDT: df avail 7830204 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 2026-11-18 08:21:40 AEDT: df avail 7828812 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 2026-11-18 08:26:40 AEDT: df avail 7844152 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 2026-11-18 08:31:40 AEDT: df avail 9871284 KiB (flight threshold 9,769,216 KiB).
+- Step 4 GATE OPEN at poll 77, 08:31:40 AEDT: df avail 9,871,284 KiB (threshold 9,769,216 KiB) — disk jumped +2,027,132 KiB in one 5-min interval (poll 76: 7,844,152). Poll loop stopped for flight launch (exit 0). Recovery-2 polls: 11 (67-77), 07:41:39-08:31:40 AEDT. Totals across all lanes: 77 df readings.
+- Step 4 FLIGHT LAUNCHED 08:34:20 AEDT: service-flight, supervisor PID 32874, QEMU pid 32884. Launch df 9,799,544 KiB (margin ~30 MiB, falling). Preflight verified all inputs (kernel 70d3859d, DTB 73d1904b, CPIO a9d6040a, system 9b8ef7ff, vendor 5e0607ad). Guest target 600 s, host cap 700 s (ends ~08:46 AEDT).
+Flight in progress (service-flight): host=300s guest=242.9s pid=32884. 2026-11-17T21:39:20Z
+- Step 4 FLIGHT ENDED 08:44:21 AEDT: guest 600.263 s, host 601.02 s, QEMU exit 0. UART 23,946 lines, 2,766,460 B, SHA 44fdd2ad.
+- Step 5 ADJUDICATION (analyzer 4e5df2a9): trigger FIRED (sys.boot_completed 7 lines, first guest 563.938 s); T728_PROBE_OK x2 (guest 109.049 s, 569.563 s); service NEVER STARTED (no exit line, no pid) — init start FAILED guest 569.484 s: /system/bin/t728probe labeled u:object_r:unlabeled:s0, no domain transition from u:r:init:s0. T728_ARGV 0, T728_SERVICE_OK 0. Verdict: FAIL. New wall SERVICE-SELINUX-LABEL-REFUSED (guest, Rust par bhi lagu: haan). Findings findings-t728.md cc1ba459, outcome FAIL (5 B), death note 800a1ae1. EGL dispatch R1/R3/R4 stays open; dup-fail 0/600.3 s.

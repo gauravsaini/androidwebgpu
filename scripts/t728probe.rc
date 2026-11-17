@@ -1,0 +1,18 @@
+# T728: observable-payload discriminator. Direct-exec helper dumps argv to kmsg + /data/t728-argv.txt, writes T728_SERVICE_OK.
+# Shape: T727 two-legs trigger (property action + on boot), service is a DIRECT EXEC with no shell and no quotes.
+# If this marks, the T727 exit-127 fault was the quoted sh -c argv handoff. If it also exits 127, the fault is
+# deeper than quoting (service-context exec itself) — proven by the argv dump, not guessed.
+service t728probe /system/bin/t728probe
+    class main
+    user root
+    group root
+    oneshot
+    disabled
+
+on property:sys.boot_completed=1
+    start t728probe
+    write /dev/kmsg T728_PROBE_OK\n
+
+
+on boot
+    write /dev/kmsg T728_PROBE_OK\n
