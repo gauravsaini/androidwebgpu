@@ -1,0 +1,123 @@
+Total lines: 27482 (trailing partial line: 0)
+Total bytes: 3208505
+
+--- ALL T723_PROBE lines (full text): 0 line(s) ---
+
+T723_PROBE DONE summary lines (brief requires >=1): 0
+lines: 
+
+SP1 DONE lines (direct driver call): 0
+lines: 
+
+SP2 DONE lines (META-EGL dispatch call): 0
+lines: 
+
+SP3 DONE lines (sw_sync control): 0
+lines: 
+
+DROP_FAIL lines (brief requires 0): 0
+lines: 
+
+SP1 RESOLVE_FAIL lines (brief requires 0): 0
+lines: 
+
+SP2 GETPROCADDRESS_NULL lines (brief requires 0): 0
+lines: 
+
+--- ALL [T723] early-ramdisk hook lines (context: hook timeout ~33 s): 1 line(s) ---
+L2013: [T723] boot_completed never detected in 600s; probe not run
+
+--- ALL T727_SERVICE_OK marker lines (full text) — service ran: 0 line(s) ---
+
+--- ALL T727_PROBE_OK marker lines (full text) — registration: 2 line(s) ---
+L10623: 01-01 00:01:37.546 W/System  ( 2716): No Compatibility callbacks set! Querying change 247079863[  101.885397] T727_PROBE_OK
+L21890: [  509.652069] T727_PROBE_OK
+
+--- ALL t727probe lines (service + rc citations): 2 line(s) ---
+L21969: [  511.560287] init: Service 't727probe' (pid 3992) exited with status 127 oneshot service took 2.466000 seconds in background
+L21970: [  511.560951] init: Sending signal 9 to service 't727probe' (pid 3992) process group...
+
+init starting service 't727probe' (trigger fired): 0
+lines: 
+
+t727probe.rc citations (init parsed the new file): 0
+lines: 
+
+start-command lines citing t727probe (trigger fired): 0
+lines: 
+
+ALL boot_completed action processing lines (stock control + mine): 2
+lines: 21574, 21717
+
+on boot action processing lines citing t727probe.rc: 0
+lines: 
+
+service exec/start failures (trigger requires 0): 0
+lines: 
+
+write-to-kmsg command lines (context): 0
+lines: 
+
+T720_PROBE DONE status=PASS lines (hold requires >=1): 1
+lines: 223
+
+T720_PROBE DONE status=FAIL lines (hold requires 0): 0
+lines: 
+
+T721 fence-log lines (hold requires >=1): 1
+lines: 23423
+
+Invalid present fence lines (hold requires 0): 0
+lines: 
+
+ALL sw_sync lines (context): 125
+lines: 195, 196, 198, 199, 207, 208, 221, 22834, 22835, 22911, 22934, 22935, 22936, 22937, 23029, 23030, 23061, 23062, 23096, 23097, 24360, 24366, 24396, 24397, 24398, 24401, 24402, 24403, 24623, 24624, 24647, 24650, 24651, 24652, 25251, 25298, 25375, 25376, 25378, 25379
+(85 middle lines omitted; count is exact)
+
+T628 REJECT allocate2 lines (hold requires 0): 0
+lines: 
+
+T628 CALL allocate2 lines: 12
+lines: 11086, 11090, 19238, 19242, 19246, 22701, 22856, 22860, 22864, 22869, 23000, 23076
+
+EPERM lines (hold requires 0): 0
+lines: 
+
+simplefb: mapped lines (hold requires >=1): 1
+lines: 23422
+
+Watchdog KILLING lines (hold requires 0): 0
+lines: 
+
+sys.boot_completed lines (hold requires >=1): 9
+lines: 21574, 21689, 21690, 21709, 21717, 21965, 21975, 21980, 22002
+
+boot_completed lines: 10
+lines: 2013, 21574, 21689, 21690, 21709, 21717, 21965, 21975, 21980, 22002
+
+FATAL EXCEPTION lines: 6
+lines: 25202, 25291, 25318, 25384, 25396, 25400
+
+Kernel panic/Oops/BUG lines (hold requires 0): 0
+lines: 
+
+RenderEngine EGL dup-fail lines: 4
+lines: 23755, 23998, 24352, 24438
+
+driver loaded lines: 5
+lines: 11203, 11538, 20044, 24879, 25996
+
+META-EGL banner lines: 1
+lines: 11206
+
+D/libEGL lines: 5
+lines: 11203, 11538, 20044, 24879, 25996
+
+avc:  denied (two spaces) total: 2090
+avc:  denied for /dev/mem: 6
+avc denied (sensorservice): 0
+
+Guest kernel time: first=0.0s last=604.944374s max=604.944374s
+Dup-fail rate: 4 / 604.9s * 1000 = 6.612 per 1000 s (baselines: T721 flight-01 4.058, T721 revert 6.660)
+
+=== REPORT COMPLETE ===

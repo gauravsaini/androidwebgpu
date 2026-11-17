@@ -1,45 +1,22 @@
-# TIMELINE — Track T726 (recovery 3)
+# Timeline — Track T727: toybox-service discriminator
 
-All times AEDT 17 Nov 2026 unless noted. Clock-sourced from `date` reads.
-
-- 02:40:50 — Recovery 3 launched (wedge 05:40:50). Brief
-  track726-recovery3-waitdisk.md (52,374 B, SHA 46a59757).
-- 02:42:46 — Step 0 re-verification PASS: Mac image a7141b45, trigger 0372c10b,
-  parser d42b5b6e, scripts AST OK; box image a7141b45, patch 4f1728d1;
-  /mnt/sdb1 free 21,028,136 KiB. Mac df 5,730,464 KiB — gate CLOSED.
-- 02:48:29–04:57:15 — Polls 1–25: disk flat ~5.73 GiB (polls 1–17), then
-  ~7.14 GiB (polls 18–25) after a +1.35 GiB recovery at poll 18 (04:21:16,
-  re-read 04:21:29 confirmed 7,140,768 KiB). Shortfall ~3.94 GiB, then
-  ~2.57 GiB. Gate never opened.
-  - Poll 9: first two macssh attempts preflight-failed ~03:30 (egress proxy);
-    third attempt landed 03:33:45. Route blind ~3 min, below the 20-min
-    notify threshold — no user notice.
-  - Poll 23: first attempt killed by a runtime restart ~3 min into its sleep
-    (exec log empty, progress verified at poll 22); re-ran cleanly 04:46:43.
-- 05:02:33 — Poll 26: GATE OPENED. Mac free 10,044,940 KiB (threshold
-  9,769,216; margin +275,724 KiB). Re-read 05:02:55: 10,022,788 KiB — the
-  +2.84 GiB jump confirmed real. Margin above the 8 GiB supervisor gate
-  ~1.56 GiB (DISK-MARGIN satisfied).
-- 05:05:13 — Pre-flight df 9,958,148 KiB. Scripts import-tested (supervisor +
-  launcher + analyzer + parser). CPIO embedded vendor 5e0607ad MATCH. QEMU
-  cmdline: system image only as virtio-blk drive, NO vendor drive.
-  flights/probe-flight did not exist — fresh folder.
-- 05:05:43 — Step 4 flight LAUNCHED (supervisor PID 87893, QEMU pid 87904).
-- 05:08:07 — Host 135 s, guest_max 118.0 s. Disk 9,814,828 KiB.
-- 05:10:27 — Host 270 s, guest_max 203.3 s. Marker T726_PROBE_OK x1
-  (L10606, guest 104.493 s). T723_PROBE 0. Disk 9,352,896 KiB.
-- 05:12:54 — Host 420 s, guest_max 419.4 s. T723_PROBE 0.
-  sys.boot_completed 0. Disk 9,376,848 KiB.
-- 05:15:15 — Host 571 s, guest_max 566.9 s. T723_PROBE 0.
-  sys.boot_completed 7. Disk 9,566,552 KiB.
-- 05:15:44 — Flight ENDED: guest target reached (600.2 s >= 600 s). Host
-  600.93 s, guest 600.168 s, QEMU exit 0. UART 27,917 lines, SHA e9d3d30e.
-- 05:18:05 — Flight-end verified, no orphans (PID 88707 gone).
-- Step 5 adjudication: analyzer run, findings-t726.md written (SHA 3c2b4926),
-  outcome FAIL, death note written. Verdict: FAIL — probe never ran;
-  trigger fired; registration proven; service-start leg failed silently.
-  Wall: SERVICE-START-SILENTLY-FAILED (guest).
-
-Prior lanes (summary): first lane 19:59:38–20:29 16 Nov (Steps 1–3 done,
-WAIT-DISK exit); recovery 1 20:32:21–23:32:21 (34 polls, WAIT-DISK exit);
-recovery 2 23:35:27–02:35:27 (34 polls, WAIT-DISK exit).
+- 05:59 AEDT 17 Nov 2026 — Lane launched (wedge 08:59:28). Brief bf9284a0 (50,912 B), brief-gate READY. Worktree /Users/Shared/wt-track727-toybox-discriminator, branch t727, base a62621e.
+- 06:00:47 AEDT — Step 0 complete: df 8,332,192 KiB free (7.95 GiB), below the 8 GiB supervisor gate; STATIC-FIRST design (Steps 2-3 proceed, flight gated at Step 4).
+- 06:06:51 AEDT — Step 1 complete: all input SHAs verified MATCH; CPIO embedded vendor member 5e0607ad MATCH; QEMU command line read (system image only as virtio-blk, no vendor drive); toybox proven in /system/bin of the flown image (debugfs inode 578) and running in the guest (T726 UART stack-depth line).
+- 06:06:51 AEDT — Step 2 complete: t727probe.rc 648 B, 17 lines, SHA eda66cfe; offline parser VERDICT ACCEPT, 0 errors (1 service, 2 actions); markers T727_PROBE_OK / T727_SERVICE_OK unique (0 in T724/T725/T726 UARTs).
+- 06:32:38 AEDT — Step 3 complete: trigger-file image built on box via Linux debugfs (8e9914e3; neighbours byte-identical, e2fsck clean, 7343/7424 files); block-delta patch cfe7d1ee transferred box -> sandbox -> Mac with SHA verified at every hop; APFS-clone apply on Mac (df moved 124 KiB), Mac image SHA 8e9914e3 MATCHES; scripts transformed (TRANSFORM OK) + import-tested; analyzer sanity on T726 UART matches driver counts.
+- 06:35:04-08:58:33 AEDT — Step 4: 28 df polls, gate NEVER opened. Range 7,790,280-8,436,092 KiB; closest 8,436,092 KiB at 07:59:04 (shortfall 1,333,124 KiB, ~1.27 GiB). Disk flat ~8.30M KiB, one -513 MB slide, one +646 MB jump, then flat ~8.42-8.43M KiB.
+- 2026-11-17 09:01:03 AEDT — Wedge 08:59:28 AEDT: clean WAIT-DISK exit. Steps 2-3 preserved; Step 4 flight + Step 5 adjudication remain for the recovery lane.
+- 09:08:40-12:06:48 AEDT - Recovery 1 Step 4: 35 df polls, gate NEVER opened. Range 8,381,644-8,420,664 KiB; closest 8,420,664 KiB (shortfall 1,348,552 KiB, about 1.29 GiB). Disk flat about 8.41-8.42M KiB, slow drift down; slid below the 8 GiB gate itself at 11:55:59.
+- 2026-11-17 12:08:34 AEDT - Wedge 12:07:00 AEDT: clean WAIT-DISK exit (recovery 1). Steps 2-3 preserved; Step 4 flight + Step 5 adjudication remain for recovery 2.
+- 12:15:19-15:12:44 AEDT - Recovery 2 Step 4: 33 df polls, gate NEVER opened. Range 8,323,260-8,401,848 KiB; closest 8,401,848 KiB (shortfall 1,367,368 KiB, about 1.30 GiB). Disk oscillated about 8.32-8.40M KiB, slow drift down; one +70 MiB jump at 15:02:18; below the 8 GiB gate itself from 13:02:26 except that jump.
+- 2026-11-17 15:16:17 AEDT - Wedge 15:13:44 AEDT: clean WAIT-DISK exit (recovery 2). Steps 2-3 preserved; Step 4 flight + Step 5 adjudication remain for recovery 3.
+- 2026-11-17 15:23:46 AEDT - Recovery 3 launched (wedge 18:21:01). Brief 14c6627a (58,198 B), brief-gate READY. Worktree /Users/Shared/wt-track727-toybox-discriminator, branch t727, base a62621e.
+- 15:23:46-18:19:49 AEDT - Recovery 3 Step 4: 35 df polls, gate NEVER opened. Range 8,343,136-8,373,160 KiB; closest 8,373,160 KiB (shortfall 1,396,056 KiB, about 1.33 GiB). Disk oscillated about 8.34-8.37M KiB, slow drift down; below the 8 GiB gate itself for the entire lane; one short poll-15 interruption (runtime restart killed the sleep, recovered, no state lost).
+- 2026-11-17 18:22:29 AEDT - Wedge 18:21:01 AEDT: clean WAIT-DISK exit (recovery 3). Steps 2-3 preserved; Step 4 flight + Step 5 adjudication remain for recovery 4.
+- 2026-11-17 18:24:17 AEDT - Recovery 4 launched (wedge 21:24:17). Brief adaae925 (59,073 B), brief-gate READY. Worktree /Users/Shared/wt-track727-toybox-discriminator, branch t727, base a62621e.
+- 18:25:21-21:20:46 AEDT - Recovery 4 Step 4: 35 df polls, gate NEVER opened. Range 5,242,932-8,340,992 KiB; closest 8,340,992 KiB (shortfall 1,428,224 KiB, about 1.36 GiB). Disk fell about 2.69 GiB across the lane (8,339,240 -> 5,521,596 KiB), with two ~1 GiB cliff drops at 20:09:34 and 20:20:15 and a ~0.62 GiB drop at 20:35:58; below the 8 GiB gate itself for the entire lane; two short poll interruptions (runtime restarts killed the sleeps at poll 3 and poll 30; both recovered, no state lost).
+- 2026-11-17 21:25:17 AEDT - Wedge 21:24:17 AEDT: clean WAIT-DISK exit (recovery 4). Steps 2-3 preserved; Step 4 flight + Step 5 adjudication remain for recovery 5.
+- 2026-11-17 21:30:24 AEDT - Recovery 5 launched (wedge 00:30:24 AEDT 18 Nov). Brief 9e95658a (60,408 B), brief-gate READY. Worktree /Users/Shared/wt-track727-toybox-discriminator, branch t727, base a62621e.
+- 2026-11-18 00:15:10 AEDT - Recovery 5 Step 4: GATE OPENED at poll 25 (23:54:17 AEDT, df 10,006,060 KiB). Service flight launched 23:55:16 AEDT (df 9,860,780 KiB), ended 00:05:24 AEDT 18 Nov: guest 604.944 s >= 600 s target, host 606.19 s, QEMU exit 0, UART 27,482 lines SHA 8b1dbb2e.
+- 2026-11-18 00:15:10 AEDT - Recovery 5 Step 5 adjudication: Verdict FAIL. Trigger fired (sys.boot_completed 9, first 503.881 s); action marker T727_PROBE_OK x2 (101.885 s, 509.652 s); service STARTED (pid 3992, 2.466 s) but payload exited 127, T727_SERVICE_OK 0, starting-service line 0 (logging gap). Wall SERVICE-START-SILENTLY-FAILED REFUTED as start-leg fault, RE-SCOPED; new wall SERVICE-PAYLOAD-EXIT-127 (guest). Findings findings-t727.md SHA edab179b; outcome FAIL; death note DEATH_NOTE-T727.md SHA cbabb799. Discrimination partially answered: start leg works, probe path still unanswered. Successor: observable-payload service (T728).

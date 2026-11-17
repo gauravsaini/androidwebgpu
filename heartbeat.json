@@ -1,6 +1,1 @@
-{
-  "ts": "2026-11-16T18:30:45Z",
-  "status": "CLOSED FAIL",
-  "stage": "recovery3-step5-done",
-  "note": "Recovery 3 Step 4 flight complete 05:15:44 AEDT, Step 5 adjudicated FAIL 05:30:45 AEDT; probe never ran, trigger fired, service-start leg failed silently. Wall SERVICE-START-SILENTLY-FAILED."
-}
+{"ts": "2026-11-17T13:15:10Z", "status": "CLOSED", "stage": "step5-adjudicated", "note": "T727 recovery 5 CLOSED with verdict FAIL; service flight complete (guest 604.9 s), service started pid 3992 but payload exited 127, T727_SERVICE_OK 0. Findings edab179b, outcome FAIL, death note cbabb799."}

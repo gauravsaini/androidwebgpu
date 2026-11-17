@@ -1,0 +1,18 @@
+# T727: toybox-service discriminator. Service runs toybox sh -c echo to kmsg on sys.boot_completed=1.
+# Shape proven by T726 (t726probe.rc, markers L10606/L22116 guest 104.493 s / 506.508 s).
+# Toybox is /system/bin/toybox in the flown image (debugfs stat inode 578, 560,720 B);
+# stock toybox processes run in the guest (T726 UART: toybox (105) stack-depth line).
+service t727probe /system/bin/toybox sh -c "echo T727_SERVICE_OK > /dev/kmsg"
+    class main
+    user root
+    group root
+    oneshot
+    disabled
+
+on property:sys.boot_completed=1
+    start t727probe
+    write /dev/kmsg T727_PROBE_OK\n
+
+
+on boot
+    write /dev/kmsg T727_PROBE_OK\n
