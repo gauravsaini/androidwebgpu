@@ -1,0 +1,385 @@
+T729 labeled-payload service — progress log
+Launched 2026-11-18 10:27:15 AEDT (sandbox subagent e96fb09a); wedge 13:27:15 AEDT.
+Brief track729-labeled-payload.md SHA 4eae1946, 12,045 B. Worktree /Users/Shared/wt-track729-labeled-payload, branch t729, base a0580a2. Gates G729-1/2 UNCHECKED (driver certifies). Box dir /mnt/sdb1/t729-work/.
+
+- Step 0 (disk gate, STATIC-FIRST) 10:27 AEDT: df avail 7,912,812 KiB (97%), flight threshold 9,769,216 KiB — GATE CLOSED, shortfall ~1,856,404 KiB (~1.81 GiB). Steps 1-3 proceed below the margin; flight gated at Step 4. No deletions (t724+t725 image pair is a driver-decided lever, not a lane lever).
+- Step 1 PASS 10:29 AEDT: all input SHAs MATCH on the Mac — kernel t720-Image 70d3859d, DTB t723-modified.dtb 73d1904b, CPIO t723-fix.cpio.gz a9d6040a, image t728-system.img 9b8ef7ff, patch t728.patch 7ecbe959, rc scripts/t728probe.rc f61b9c0f, parser parse_init_rc.py d42b5b6e, analyzer analyze_t728_probe.py 4e5df2a9. Box: binary /mnt/sdb1/t728-work/t728probe 19db5d31, rc f61b9c0f, image 9b8ef7ff, patch 7ecbe959. CPIO-embedded vendor member ramdisk-images/vendor.img 5e0607ad — EMBEDDED-VENDOR CHECK PASS. Box dir /mnt/sdb1/t729-work/ created (mkdir exit 1 is the benign NTFS permission quirk — dir landed, verified present).
+- Step 2 PASS 10:36 AEDT: label u:object_r:system_file:s0, from the flown image's own plat file_contexts (line 94: `/system(/.*)? u:object_r:system_file:s0`; no specific entry for /system/bin/t728probe). T711 precedent agrees (dummy sensorservice labeled system_file and ran). Method: box Linux debugfs ea_set — PROVEN on scratch copy t729-scratch.img (label reads back verbatim; stored 25 bytes without trailing NUL, same as the chain's T657/T658/T702/T706/T721 ea_set precedent; sudo denied on box, so loop-mount+setfattr is unavailable and ea_set is the method). Pre-label check on the flown image: /system/bin/t728probe has NO security.selinux xattr (ea_list empty) — the T728 root cause re-confirmed from the image itself; /system/bin/toybox carries toolbox_exec (27 bytes incl NUL), /system/bin/sh carries shell_exec. Parser: VERDICT ACCEPT, 0 errors on the exact rc bytes (1 service, 2 actions). Marker uniqueness: T728_PROBE_OK / T728_SERVICE_OK / T728_ARGV / T728_ARGC all 0 in T724/T725/T726/T727 UARTs (box vault evidence); T728 baseline T728_PROBE_OK 2, T728_SERVICE_OK 0.
+- Step 3 (build) 10:44 AEDT: build_t729_image.sh ran on the box, BUILD_DONE. Base copy SHA 9b8ef7ff verified OK; e2fsck clean pre (7344/7424 files); neighbours pre surfaceflinger 259d39f5, installd.rc 3ea3466b, init.rc 60cb3d15, binary 19db5d31, rc f61b9c0f; label pre NONE; ea_set applied; label post reads back `security.selinux (25) = "u:object_r:system_file:s0"`; dump-backs binary 19db5d31 IDENTICAL, rc f61b9c0f IDENTICAL; neighbours post identical (3/3); e2fsck clean post. New image SHA 568af6ac96393d961f2cf0df0f6f464a3f00fdf591f90bef380c57694fae7bf2. Patch t729.patch: 8 chunks, 8,388,608 bytes, SHA e421162f6fc4cfb0d8fc122fdc31b443dc439c7b172f1c065fd716110a949095 (vs T721 revert 0ba6d6d3, magic T729PATCH1).
+- Step 3 (scripts) 10:45 AEDT: supervisor_t729.py 55b7d3de, launch_probe_t729.py d59ddb1e, analyze_t729_probe.py eebe8e90, apply_patch_t729.py 59904c35, df_poll_t729.sh fadf504c — adapted from T728 (transform_t729_scripts.py), py_compile + AST OK, deployed to the Mac worktree scripts/. GDB port 1260. Markers stay the T728 strings (two docstring slips fixed and re-verified).
+- Step 3 (analyzer sanity) 10:46 AEDT: analyze_t729_probe.py on the T728 UART reproduces the driver counts EXACTLY — lines 23,946, bytes 2,766,460, T728_SERVICE_OK 0, T728_PROBE_OK 2, T728_ARGV 0, T728_ARGC 0, sys.boot_completed 7, T720 DONE PASS 1, simplefb mapped 0 (wording), panic/Oops/BUG 0, FATAL EXCEPTION 0, Watchdog KILLING 0, avc denied 1898, /dev/mem 6, CALL allocate2 12, REJECT 0, Invalid present fence 0, EPERM 0, sw_sync 57. New refusal sections work: "Could not start service" L22099 quoted in full.
+- Step 3 (transfer) DONE 11:41 AEDT: t729-system.img + t729.patch rsync box -> sandbox -> Mac, SHA-verified at every hop (box 568af6ac/e421162f, sandbox 568af6ac/e421162f, Mac 568af6ac/e421162f; sizes 2,059,816,960 B / 8,388,747 B). First sandbox->Mac attempt SIGTERM-killed by a runtime restart at 1,637,875,712 B (79.5%); resumed with --partial and completed — interrupted-write rule applied, no blind re-run.
+- Step 3 (patch-apply verify) PASS 11:42 AEDT: apply_patch_t729.py (SHA c6965d84 after a docstring fix) applied t729.patch (8 chunks) to a clone of the T721 revert on the Mac; result SHA 568af6ac — the patch is a faithful delta. Scratch copy removed.
+- Step 3 COMPLETE 11:42 AEDT. df at Step 3 close: 5,886,540 KiB free (98%) — gate needs 9,769,216 KiB; shortfall ~3,882,676 KiB (~3.70 GiB). disk polling starts now; wedge 13:27:15 AEDT.
+- Step 4 poll 1 2026-11-18 11:44:06 AEDT: df avail 5885864 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 2 2026-11-18 11:49:12 AEDT: df avail 5884192 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 3 2026-11-18 11:54:18 AEDT: df avail 5882420 KiB (flight threshold 9,769,216 KiB).
+- RECOVERY-1 2026-11-18 11:55 AEDT: recovery agent 34497195 launched (first lane agent died 11:46:06 AEDT infrastructure, no verdict). Steps 0-3 re-verified MATCH at 11:51: image 568af6ac, patch e421162f, rc f61b9c0f, binary 19db5d31 (all three hops); label u:object_r:system_file:s0 reads back from the box image (debugfs ea_list). Orphaned first-lane poll loop still polling (poll 3 at 11:54:18); recovery monitors it and takes over before its 13:27:15 wedge. Recovery wedge 14:49:37 AEDT.
+- Step 4 poll 4 2026-11-18 11:59:24 AEDT: df avail 5893428 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 5 2026-11-18 12:04:30 AEDT: df avail 5892612 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 6 2026-11-18 12:09:35 AEDT: df avail 5890812 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 7 2026-11-18 12:14:40 AEDT: df avail 5889248 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 8 2026-11-18 12:19:46 AEDT: df avail 5887684 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 9 2026-11-18 12:24:52 AEDT: df avail 5887944 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 10 2026-11-18 12:29:58 AEDT: df avail 5889032 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 11 2026-11-18 12:35:04 AEDT: df avail 5887356 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 12 2026-11-18 12:40:10 AEDT: df avail 5885528 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 13 2026-11-18 12:45:16 AEDT: df avail 5894384 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 14 2026-11-18 12:50:22 AEDT: df avail 5896028 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 15 2026-11-18 12:55:28 AEDT: df avail 5894036 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 16 2026-11-18 13:00:35 AEDT: df avail 5892464 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 17 2026-11-18 13:16:35 AEDT: df avail 5896228 KiB (flight threshold 9,769,216 KiB).
+- RECOVERY-1 13:18 AEDT: first-lane orphaned poll loop died in the 13:04 runtime restart (last poll 16 at 13:00:35). Recovery loop launched 13:16:34 (wedge 14:49:37); poll 17 appended 13:16:35, df 5,896,228 KiB, gate closed.
+- Step 4 poll 18 2026-11-18 13:21:41 AEDT: df avail 5894676 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 19 2026-11-18 13:26:47 AEDT: df avail 5890316 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 20 2026-11-18 13:31:53 AEDT: df avail 5899176 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 21 2026-11-18 13:36:59 AEDT: df avail 5896948 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 22 2026-11-18 13:42:05 AEDT: df avail 5895404 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 23 2026-11-18 13:47:11 AEDT: df avail 5893732 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 24 2026-11-18 13:52:18 AEDT: df avail 5892308 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 25 2026-11-18 13:57:24 AEDT: df avail 5891272 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 26 2026-11-18 14:02:30 AEDT: df avail 5890320 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 27 2026-11-18 14:07:37 AEDT: df avail 5888604 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 28 2026-11-18 14:12:43 AEDT: df avail 5886924 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 29 2026-11-18 14:17:49 AEDT: df avail 5895388 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 30 2026-11-18 14:22:56 AEDT: df avail 5894072 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 31 2026-11-18 14:28:02 AEDT: df avail 5890556 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 32 2026-11-18 14:33:09 AEDT: df avail 5888756 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 33 2026-11-18 14:38:15 AEDT: df avail 5889828 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 34 2026-11-18 14:43:21 AEDT: df avail 5889108 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 35 2026-11-18 14:48:28 AEDT: df avail 5887436 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 36 2026-11-18 14:53:34 AEDT: df avail 5885536 KiB (flight threshold 9,769,216 KiB).
+- Step 4 WAIT-DISK exit 14:54 AEDT: wedge 14:49:37 AEDT reached with the gate closed. 36 polls total (11:44:06-14:53:33 AEDT), range 5,882,420-5,899,176 KiB, gate never opened (threshold 9,769,216 KiB; final shortfall 3,883,680 KiB, ~3.79 GiB). Steps 0-3 preserved (image 568af6ac, patch e421162f, label system_file). No flight, no findings, no verdict. Heartbeat CLOSED step4-wait-disk.
+- RECOVERY-2 2026-11-18 15:05 AEDT: recovery agent db08c534 launched (recovery-1 exited clean WAIT-DISK at wedge 14:49:37; 36 polls, gate never opened). Steps 0-3 re-verified MATCH at 15:04: image 568af6ac, patch e421162f, rc f61b9c0f, binary 19db5d31 (Mac worktree, box, sandbox; binary via flown-image dump-back on box); label u:object_r:system_file:s0 reads back from the box image (read-only debugfs ea_list). Nothing rebuilt. Polling resumes from poll 37; wedge 18:01:58 AEDT.
+- Step 4 poll 37 2026-11-18 15:06:38 AEDT: df avail 5890912 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 38 2026-11-18 15:08:26 AEDT: df avail 5889580 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 39 2026-11-18 15:13:33 AEDT: df avail 5877920 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 40 2026-11-18 15:18:40 AEDT: df avail 5876424 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 41 2026-11-18 15:23:47 AEDT: df avail 5874100 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 42 2026-11-18 15:28:54 AEDT: df avail 5872404 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 43 2026-11-18 15:34:00 AEDT: df avail 5870940 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 44 2026-11-18 15:39:07 AEDT: df avail 5872884 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 45 2026-11-18 15:44:14 AEDT: df avail 5871696 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 46 2026-11-18 15:49:21 AEDT: df avail 5870176 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 47 2026-11-18 15:54:28 AEDT: df avail 5868604 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 48 2026-11-18 15:59:35 AEDT: df avail 5877472 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 49 2026-11-18 16:04:41 AEDT: df avail 5876104 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 50 2026-11-18 16:09:48 AEDT: df avail 5879400 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 51 2026-11-18 16:14:55 AEDT: df avail 5878028 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 52 2026-11-18 16:20:03 AEDT: df avail 5876584 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 53 2026-11-18 16:25:10 AEDT: df avail 5874276 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 54 2026-11-18 16:30:17 AEDT: df avail 5876516 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 55 2026-11-18 16:35:24 AEDT: df avail 5875060 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 56 2026-11-18 16:40:31 AEDT: df avail 5873280 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 57 2026-11-18 16:45:38 AEDT: df avail 5872100 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 58 2026-11-18 16:50:45 AEDT: df avail 5880768 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 59 2026-11-18 16:55:52 AEDT: df avail 5878984 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 60 2026-11-18 17:00:59 AEDT: df avail 5878092 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 61 2026-11-18 17:06:06 AEDT: df avail 5883756 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 62 2026-11-18 17:08:35 AEDT: df avail 5883040 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 63 2026-11-18 17:13:41 AEDT: df avail 5880392 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 64 2026-11-18 17:18:47 AEDT: df avail 5880124 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 65 2026-11-18 17:23:53 AEDT: df avail 5878028 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 66 2026-11-18 17:29:00 AEDT: df avail 5876060 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 67 2026-11-18 17:34:06 AEDT: df avail 5874476 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 68 2026-11-18 17:39:12 AEDT: df avail 5872844 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 69 2026-11-18 17:44:18 AEDT: df avail 5882432 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 70 2026-11-18 17:49:25 AEDT: df avail 5881144 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 71 2026-11-18 17:54:31 AEDT: df avail 5879180 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 72 2026-11-18 17:59:38 AEDT: df avail 5876316 KiB (flight threshold 9,769,216 KiB).
+- Step 4 WAIT-DISK exit 18:07 AEDT: wedge 18:01:58 AEDT reached with the gate closed. 72 polls total (11:44:06-17:59:37 AEDT), range 5,868,604-5,899,176 KiB, gate never opened (threshold 9,769,216 KiB; final poll 72 at 17:59:37 avail 5,876,316 KiB, shortfall 3,892,900 KiB, ~3.80 GiB). This lane: polls 37-72 (36 polls), range 5,868,604-5,890,912 KiB. The 18:04 poll attempt hit a transient Mac SSH preflight failure (route recovered ~18:07, df 5,874,772 KiB, still closed). Steps 0-3 preserved (image 568af6ac, patch e421162f, label system_file). No flight, no findings, no verdict. Heartbeat CLOSED step4-wait-disk.
+- RECOVERY-3 2026-11-18 18:14 AEDT: recovery agent 8a06696e launched (recovery-2 exited clean WAIT-DISK at wedge 18:01:58; 72 polls total, gate never opened). Steps 0-3 re-verified MATCH at 18:12: image 568af6ac, patch e421162f, rc f61b9c0f, binary 19db5d31 (Mac worktree, box, sandbox; binary via flown-image dump-back on box); label u:object_r:system_file:s0 reads back from the box image (read-only debugfs ea_list). Nothing rebuilt. Polling resumes from poll 73; wedge 21:11:04 AEDT.
+- Step 4 poll 73 2026-11-18 18:14:00 AEDT: df avail 5871860 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 74 2026-11-18 18:19:07 AEDT: df avail 5871024 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 75 2026-11-18 18:24:13 AEDT: df avail 5867456 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 76 2026-11-18 18:29:19 AEDT: df avail 5877436 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 77 2026-11-18 18:34:25 AEDT: df avail 5875812 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 78 2026-11-18 18:39:32 AEDT: df avail 5871592 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 79 2026-11-18 18:44:38 AEDT: df avail 5870432 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 80 2026-11-18 18:49:47 AEDT: df avail 5871088 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 81 2026-11-18 18:54:53 AEDT: df avail 5870740 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 82 2026-11-18 18:59:59 AEDT: df avail 5869260 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 83 2026-11-18 19:05:05 AEDT: df avail 5867120 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 84 2026-11-18 19:08:23 AEDT: df avail 5866528 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 85 2026-11-18 19:13:32 AEDT: df avail 5865100 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 86 2026-11-18 19:18:40 AEDT: df avail 5863660 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 87 2026-11-18 19:23:48 AEDT: df avail 5872220 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 88 2026-11-18 19:29:01 AEDT: df avail 5870032 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 89 2026-11-18 19:34:09 AEDT: df avail 5868568 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 90 2026-11-18 19:39:17 AEDT: df avail 5866444 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 91 2026-11-18 19:44:25 AEDT: df avail 5865776 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 92 2026-11-18 19:49:33 AEDT: df avail 5864068 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 93 2026-11-18 19:54:41 AEDT: df avail 5866624 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 94 2026-11-18 19:59:49 AEDT: df avail 5878504 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 95 2026-11-18 20:04:58 AEDT: df avail 5881160 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 96 2026-11-18 20:10:06 AEDT: df avail 5879776 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 97 2026-11-18 20:15:14 AEDT: df avail 5888108 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 98 2026-11-18 20:20:22 AEDT: df avail 5886932 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 99 2026-11-18 20:25:30 AEDT: df avail 5889004 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 100 2026-11-18 20:30:38 AEDT: df avail 5886312 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 101 2026-11-18 20:35:46 AEDT: df avail 5884592 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 102 2026-11-18 20:40:54 AEDT: df avail 5883220 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 103 2026-11-18 20:46:02 AEDT: df avail 5872704 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 104 2026-11-18 20:51:11 AEDT: df avail 5871368 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 105 2026-11-18 20:56:18 AEDT: df avail 5869976 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 106 2026-11-18 21:01:27 AEDT: df avail 5867552 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 107 2026-11-18 21:06:35 AEDT: df avail 5679760 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 108 2026-11-18 21:10:20 AEDT: df avail 5844720 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 109 2026-11-18 21:15:27 AEDT: df avail 5872264 KiB (flight threshold 9,769,216 KiB).
+- Step 4 WAIT-DISK exit 21:16 AEDT: wedge 21:11:04 AEDT reached with the gate closed. 109 polls total (11:44:06-21:15:27 AEDT), range 5,679,760-5,899,176 KiB, gate never opened (threshold 9,769,216 KiB; final poll 109 at 21:15:27 avail 5,872,264 KiB, shortfall 3,896,952 KiB, ~3.81 GiB). This lane: polls 73-109 (37 polls), range 5,679,760-5,889,004 KiB. The poll loop was SIGTERM-killed 3 times by runtime restarts (after polls 79, 83, 107); all resumed with continued numbering, no loss. Steps 0-3 preserved (image 568af6ac, patch e421162f, label system_file). No flight, no findings, no verdict. Heartbeat CLOSED step4-wait-disk.
+- RECOVERY-4 2026-11-18 21:21 AEDT: recovery agent 18395594 launched (recovery-3 exited clean WAIT-DISK at wedge 21:11:04; 109 polls total, gate never opened). Steps 0-3 re-verified MATCH at 21:19-21:26: image 568af6ac, patch e421162f, rc f61b9c0f, binary 19db5d31 (Mac worktree, box, sandbox; binary via flown-image dump-back on box); label u:object_r:system_file:s0 reads back from the box image (read-only debugfs ea_list). Nothing rebuilt. Polling resumes from poll 110; wedge 00:18:50 AEDT 19 Nov.
+- Step 4 poll 110 2026-11-18 21:23:09 AEDT: df avail 5580736 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 111 2026-11-18 21:28:16 AEDT: df avail 5732072 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 112 2026-11-18 21:33:22 AEDT: df avail 5731104 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 113 2026-11-18 21:38:29 AEDT: df avail 6238284 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 114 2026-11-18 21:43:35 AEDT: df avail 6213736 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 115 2026-11-18 21:48:42 AEDT: df avail 6209476 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 116 2026-11-18 21:53:48 AEDT: df avail 6180040 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 117 2026-11-18 21:58:53 AEDT: df avail 7199732 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 118 2026-11-18 22:03:59 AEDT: df avail 7203684 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 119 2026-11-18 22:09:05 AEDT: df avail 7202312 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 120 2026-11-18 22:14:11 AEDT: df avail 7172524 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 121 2026-11-18 22:19:16 AEDT: df avail 7101612 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 122 2026-11-18 22:24:22 AEDT: df avail 7105508 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 123 2026-11-18 22:29:28 AEDT: df avail 7075836 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 124 2026-11-18 22:34:34 AEDT: df avail 7089580 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 125 2026-11-18 22:39:39 AEDT: df avail 7005416 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 126 2026-11-18 22:44:45 AEDT: df avail 6992676 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 127 2026-11-18 22:49:51 AEDT: df avail 6856064 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 128 2026-11-18 22:54:56 AEDT: df avail 6750908 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 129 2026-11-18 23:00:02 AEDT: df avail 6626260 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 130 2026-11-18 23:05:07 AEDT: df avail 5428820 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 131 2026-11-18 23:10:15 AEDT: df avail 5333844 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 132 2026-11-18 23:15:21 AEDT: df avail 5170636 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 133 2026-11-18 23:20:28 AEDT: df avail 4941072 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 134 2026-11-18 23:25:53 AEDT: df avail 4947956 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 135 2026-11-18 23:31:01 AEDT: df avail 4958560 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 136 2026-11-18 23:36:09 AEDT: df avail 3034792 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 137 2026-11-18 23:41:16 AEDT: df avail 3026900 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 138 2026-11-18 23:46:24 AEDT: df avail 2880844 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 139 2026-11-18 23:51:31 AEDT: df avail 1754796 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 140 2026-11-18 23:56:39 AEDT: df avail 1556972 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 141 2026-11-19 00:01:46 AEDT: df avail 1101876 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 142 2026-11-19 00:06:54 AEDT: df avail 1119112 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 143 2026-11-19 00:12:01 AEDT: df avail 1119172 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 144 2026-11-19 00:17:09 AEDT: df avail 1090376 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 145 2026-11-19 00:22:16 AEDT: df avail 2074756 KiB (flight threshold 9,769,216 KiB).
+- Step 4 WAIT-DISK exit 00:22 AEDT: wedge 00:18:50 AEDT reached with the gate closed. 145 polls total (11:44:06-00:22:16 AEDT), range 1,090,376-7,203,684 KiB, gate never opened (threshold 9,769,216 KiB; final poll 145 at 00:22:16 avail 2,074,756 KiB, shortfall 7,694,460 KiB, ~7.51 GiB). This lane: polls 110-145 (36 polls), range 1,090,376-7,203,684 KiB. Disk collapsed ~3.86 GiB between polls 135-141 (23:31-00:01), bottomed at 1,090,376 KiB (poll 144, 00:17:09), recovered to 2,074,756 KiB by poll 145; disk 100% used at exit. The poll loop was SIGTERM-killed once by a runtime restart (after poll 133 ~23:22); resumed with continued numbering, no loss. Steps 0-3 preserved (image 568af6ac, patch e421162f, label system_file). No flight, no findings, no verdict. Heartbeat CLOSED step4-wait-disk.
+- Step 4 poll 146 2026-11-19 00:31:51 AEDT: df avail 2098132 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 147 2026-11-19 00:36:51 AEDT: df avail 2105456 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 148 2026-11-19 00:41:51 AEDT: df avail 2105308 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 149 2026-11-19 00:46:51 AEDT: df avail 2103788 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 150 2026-11-19 00:51:51 AEDT: df avail 2098832 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 151 2026-11-19 00:56:51 AEDT: df avail 2094096 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 152 2026-11-19 01:01:51 AEDT: df avail 2095984 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 153 2026-11-19 01:06:51 AEDT: df avail 2101980 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 154 2026-11-19 01:11:51 AEDT: df avail 2101260 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 155 2026-11-19 01:16:51 AEDT: df avail 2096056 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 156 2026-11-19 01:21:51 AEDT: df avail 2108500 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 157 2026-11-19 01:26:51 AEDT: df avail 2105412 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 158 2026-11-19 01:31:51 AEDT: df avail 2110104 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 159 2026-11-19 01:36:51 AEDT: df avail 2107140 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 160 2026-11-19 01:41:51 AEDT: df avail 2115992 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 161 2026-11-19 01:46:51 AEDT: df avail 2110848 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 162 2026-11-19 01:51:51 AEDT: df avail 2109404 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 163 2026-11-19 01:56:51 AEDT: df avail 2106420 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 164 2026-11-19 02:01:51 AEDT: df avail 2104212 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 165 2026-11-19 02:06:51 AEDT: df avail 2105120 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 166 2026-11-19 02:11:51 AEDT: df avail 2099784 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 167 2026-11-19 02:16:51 AEDT: df avail 2108744 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 168 2026-11-19 02:21:51 AEDT: df avail 2103668 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 169 2026-11-19 02:26:51 AEDT: df avail 1527784 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 170 2026-11-19 02:31:52 AEDT: df avail 2061048 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 171 2026-11-19 02:36:52 AEDT: df avail 2076600 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 172 2026-11-19 02:41:52 AEDT: df avail 2073188 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 173 2026-11-19 02:46:52 AEDT: df avail 2071160 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 174 2026-11-19 02:51:52 AEDT: df avail 2143348 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 175 2026-11-19 02:56:52 AEDT: df avail 2141504 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 176 2026-11-19 03:01:52 AEDT: df avail 2139408 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 177 2026-11-19 03:06:52 AEDT: df avail 2133628 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 178 2026-11-19 03:11:52 AEDT: df avail 2143924 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 179 2026-11-19 03:16:52 AEDT: df avail 2142048 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 180 2026-11-19 03:21:52 AEDT: df avail 2143480 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 181 2026-11-19 03:26:52 AEDT: df avail 2141496 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 182 2026-11-19 03:31:52 AEDT: df avail 2139564 KiB (flight threshold 9,769,216 KiB).
+- Step 4 WAIT-DISK exit 2026-11-19 03:31:52 AEDT: wedge 03:27:52 AEDT reached with the gate closed. 182 polls total (11:44:06-2026-11-19 03:31:52 AEDT AEDT), range 1090376-7203684 KiB, gate never opened (threshold 9,769,216 KiB; final poll 182 avail 2139564 KiB, shortfall 7629652 KiB). This lane: polls 146-182, range 1527784-2143924 KiB. Steps 0-3 preserved; no flight, no findings, no verdict. Heartbeat CLOSED step4-wait-disk.
+- Step 4 RECOVERY-6 launched 2026-11-19 03:38 AEDT: Steps 0-3 re-verified MATCH (image 568af6ac, patch e421162f, rc f61b9c0f, binary 19db5d31; label u:object_r:system_file:s0 reads back). Polling resumes from poll 183; wedge 06:35:30 AEDT.
+- Step 4 poll 183 2026-11-19 03:37:53 AEDT: df avail 2140684 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 184 2026-11-19 03:42:53 AEDT: df avail 2134496 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 185 2026-11-19 03:47:54 AEDT: df avail 2143524 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 186 2026-11-19 03:52:54 AEDT: df avail 2141016 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 187 2026-11-19 03:57:54 AEDT: df avail 2138992 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 188 2026-11-19 04:02:54 AEDT: df avail 2132300 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 189 2026-11-19 04:07:54 AEDT: df avail 2133424 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 190 2026-11-19 04:12:54 AEDT: df avail 2129624 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 191 2026-11-19 04:17:54 AEDT: df avail 2127312 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 192 2026-11-19 04:22:54 AEDT: df avail 2138876 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 193 2026-11-19 04:27:54 AEDT: df avail 2135684 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 194 2026-11-19 04:32:54 AEDT: df avail 2126708 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 195 2026-11-19 04:37:54 AEDT: df avail 2124636 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 196 2026-11-19 04:42:54 AEDT: df avail 2123512 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 197 2026-11-19 04:47:54 AEDT: df avail 2121436 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 198 2026-11-19 04:52:54 AEDT: df avail 2127000 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 199 2026-11-19 04:57:54 AEDT: df avail 2126700 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 200 2026-11-19 05:02:54 AEDT: df avail 2127744 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 201 2026-11-19 05:07:54 AEDT: df avail 2126032 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 202 2026-11-19 05:12:54 AEDT: df avail 2124528 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 203 2026-11-19 05:17:54 AEDT: df avail 2122548 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 204 2026-11-19 05:22:54 AEDT: df avail 2119652 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 205 2026-11-19 05:27:54 AEDT: df avail 1776920 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 206 2026-11-19 05:32:54 AEDT: df avail 1780812 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 207 2026-11-19 05:37:54 AEDT: df avail 1777416 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 208 2026-11-19 05:42:54 AEDT: df avail 1779472 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 209 2026-11-19 05:47:54 AEDT: df avail 1776512 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 210 2026-11-19 05:52:55 AEDT: df avail 1982668 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 211 2026-11-19 05:57:55 AEDT: df avail 2001916 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 212 2026-11-19 06:02:55 AEDT: df avail 1995028 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 213 2026-11-19 06:07:55 AEDT: df avail 1992868 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 214 2026-11-19 06:12:55 AEDT: df avail 1991620 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 215 2026-11-19 06:17:55 AEDT: df avail 1312692 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 216 2026-11-19 06:22:55 AEDT: df avail 1311044 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 217 2026-11-19 06:27:55 AEDT: df avail 1209904 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 218 2026-11-19 06:32:55 AEDT: df avail 1210360 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 219 2026-11-19 06:37:55 AEDT: df avail 1214444 KiB (flight threshold 9,769,216 KiB).
+- Step 4 WAIT-DISK exit 2026-11-19 06:37:55 AEDT: wedge 06:35:30 AEDT reached with the gate closed. 219 polls total (11:44:06-2026-11-19 06:37:55 AEDT), range 1090376-7203684 KiB, gate never opened (threshold 9,769,216 KiB; final poll 219 avail 1214444 KiB, shortfall 8554772 KiB). This lane: polls 183-219, range 1209904-2143524 KiB. Steps 0-3 preserved; no flight, no findings, no verdict. Heartbeat CLOSED step4-wait-disk.
+- Step 0-3 re-verify 2026-11-19 06:51:51 AEDT (RECOVERY-7 start): image 568af6ac, patch e421162f, rc f61b9c0f, binary 19db5d31, label u:object_r:system_file:s0 reads back (box debugfs ea_list, inode 6981, mode 0755). All MATCH; no rebuild. Polling resumes from poll 220; wedge 09:47:06 AEDT.
+- Step 4 poll 220 2026-11-19 06:51:51 AEDT: df avail 1224260 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 221 2026-11-19 06:56:51 AEDT: df avail 1221436 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 222 2026-11-19 07:01:51 AEDT: df avail 1224532 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 223 2026-11-19 07:06:51 AEDT: df avail 1221856 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 224 2026-11-19 07:11:51 AEDT: df avail 1258172 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 225 2026-11-19 07:16:51 AEDT: df avail 1228516 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 226 2026-11-19 07:21:51 AEDT: df avail 1223544 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 227 2026-11-19 07:26:51 AEDT: df avail 1221560 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 228 2026-11-19 07:31:51 AEDT: df avail 1218468 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 229 2026-11-19 07:36:51 AEDT: df avail 1214136 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 230 2026-11-19 07:41:51 AEDT: df avail 1219368 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 231 2026-11-19 07:46:52 AEDT: df avail 1217004 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 232 2026-11-19 07:51:52 AEDT: df avail 1220168 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 233 2026-11-19 07:56:52 AEDT: df avail 1489156 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 234 2026-11-19 08:01:52 AEDT: df avail 1482492 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 235 2026-11-19 08:06:52 AEDT: df avail 1480764 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 236 2026-11-19 08:11:52 AEDT: df avail 1468036 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 237 2026-11-19 08:16:52 AEDT: df avail 1470468 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 238 2026-11-19 08:21:52 AEDT: df avail 1499332 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 239 2026-11-19 08:26:52 AEDT: df avail 1496924 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 240 2026-11-19 08:31:52 AEDT: df avail 1490824 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 241 2026-11-19 08:36:52 AEDT: df avail 1488640 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 242 2026-11-19 08:41:52 AEDT: df avail 2629864 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 243 2026-11-19 08:46:52 AEDT: df avail 2640052 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 244 2026-11-19 08:51:52 AEDT: df avail 2637908 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 245 2026-11-19 08:56:52 AEDT: df avail 2636320 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 246 2026-11-19 09:01:52 AEDT: df avail 2633360 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 247 2026-11-19 09:06:52 AEDT: df avail 2632696 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 248 2026-11-19 09:11:52 AEDT: df avail 2630832 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 249 2026-11-19 09:16:52 AEDT: df avail 2614728 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 250 2026-11-19 09:21:52 AEDT: df avail 2612508 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 251 2026-11-19 09:26:52 AEDT: df avail 2622896 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 252 2026-11-19 09:31:53 AEDT: df avail 2588908 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 253 2026-11-19 09:36:53 AEDT: df avail 2611676 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 254 2026-11-19 09:41:53 AEDT: df avail 2745924 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 255 2026-11-19 09:46:53 AEDT: df avail 2742960 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 256 2026-11-19 09:51:53 AEDT: df avail 2741192 KiB (flight threshold 9,769,216 KiB).
+- Step 4 WAIT-DISK exit 2026-11-19 09:51:53 AEDT: wedge 09:47:06 AEDT reached with the gate closed. 256 polls total (11:44:06-2026-11-19 09:51:53 AEDT), range 1090376-7203684 KiB, gate never opened (threshold 9,769,216 KiB; final poll 256 avail 2741192 KiB, shortfall 7028024 KiB). This lane: polls 220-256, range 1214136-2745924 KiB. Steps 0-3 preserved; no flight, no findings, no verdict. Heartbeat CLOSED step4-wait-disk.
+- Step 0-3 re-verify 2026-11-19 10:02 AEDT (RECOVERY-8 start): image 568af6ac, patch e421162f, rc f61b9c0f, binary 19db5d31, label u:object_r:system_file:s0 reads back (box debugfs ea_list, inode 6981, mode 0755). All MATCH; no rebuild. Polling resumes from poll 257; wedge 12:57:05 AEDT.
+- Step 4 poll 257 2026-11-19 10:03:55 AEDT: df avail 2750000 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 258 2026-11-19 10:08:55 AEDT: df avail 2747144 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 259 2026-11-19 10:13:55 AEDT: df avail 2747112 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 260 2026-11-19 10:18:55 AEDT: df avail 2755464 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 261 2026-11-19 10:23:55 AEDT: df avail 2749104 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 262 2026-11-19 10:28:55 AEDT: df avail 2745300 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 263 2026-11-19 10:33:55 AEDT: df avail 2765508 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 264 2026-11-19 10:38:55 AEDT: df avail 2758064 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 265 2026-11-19 10:43:55 AEDT: df avail 2757192 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 266 2026-11-19 10:48:55 AEDT: df avail 2769280 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 267 2026-11-19 10:53:55 AEDT: df avail 2774028 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 268 2026-11-19 10:58:55 AEDT: df avail 2768436 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 269 2026-11-19 11:03:55 AEDT: df avail 2759496 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 270 2026-11-19 11:08:55 AEDT: df avail 2758016 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 271 2026-11-19 11:13:55 AEDT: df avail 2755644 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 272 2026-11-19 11:18:55 AEDT: df avail 2496096 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 273 2026-11-19 11:23:55 AEDT: df avail 2394584 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 274 2026-11-19 11:28:56 AEDT: df avail 2276268 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 275 2026-11-19 11:33:56 AEDT: df avail 2156928 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 276 2026-11-19 11:38:56 AEDT: df avail 2036896 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 277 2026-11-19 11:43:56 AEDT: df avail 1905472 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 278 2026-11-19 11:48:56 AEDT: df avail 1801452 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 279 2026-11-19 11:53:56 AEDT: df avail 1726736 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 280 2026-11-19 11:58:56 AEDT: df avail 1489852 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 281 2026-11-19 12:03:56 AEDT: df avail 1373076 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 282 2026-11-19 12:08:56 AEDT: df avail 1306144 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 283 2026-11-19 12:13:56 AEDT: df avail 1225300 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 284 2026-11-19 12:18:56 AEDT: df avail 1058160 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 285 2026-11-19 12:23:56 AEDT: df avail 948348 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 286 2026-11-19 12:28:56 AEDT: df avail 655020 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 287 2026-11-19 12:33:56 AEDT: df avail 816832 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 288 2026-11-19 12:38:56 AEDT: df avail 748252 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 289 2026-11-19 12:43:56 AEDT: df avail 638572 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 290 2026-11-19 12:48:56 AEDT: df avail 515648 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 291 2026-11-19 12:53:56 AEDT: df avail 385636 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 292 2026-11-19 12:58:57 AEDT: df avail 156080 KiB (flight threshold 9,769,216 KiB).
+- Step 4 WAIT-DISK exit 2026-11-19 12:58:57 AEDT: wedge 12:57:05 AEDT reached with the gate closed. 292 polls total (11:44:06-2026-11-19 12:58:57 AEDT), range 156080-7203684 KiB, gate never opened (threshold 9,769,216 KiB; final poll 292 avail 156080 KiB, shortfall 9613136 KiB). This lane: polls 257-292, range 156080-2774028 KiB. Steps 0-3 preserved; no flight, no findings, no verdict. Heartbeat CLOSED step4-wait-disk.
+- Step 0-3 re-verify 2026-11-19 13:13 AEDT (RECOVERY-9 start): image 568af6ac, patch e421162f, rc f61b9c0f, binary 19db5d31, label u:object_r:system_file:s0 reads back (box debugfs ea_list, inode 6981, mode 0755). All MATCH; no rebuild. Polling resumes from poll 293; wedge 16:08:37 AEDT.
+- Step 4 poll 293 2026-11-19 13:16:24 AEDT: df avail 315380 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 294 2026-11-19 13:21:24 AEDT: df avail 311192 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 295 2026-11-19 13:26:24 AEDT: df avail 314900 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 296 2026-11-19 13:31:24 AEDT: df avail 310920 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 297 2026-11-19 13:36:24 AEDT: df avail 318456 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 298 2026-11-19 13:41:24 AEDT: df avail 320640 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 299 2026-11-19 13:46:24 AEDT: df avail 318036 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 300 2026-11-19 13:51:24 AEDT: df avail 267024 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 301 2026-11-19 13:56:25 AEDT: df avail 119124 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 302 2026-11-19 14:01:25 AEDT: df avail 304204 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 303 2026-11-19 14:06:25 AEDT: df avail 301756 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 304 2026-11-19 14:11:25 AEDT: df avail 304944 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 305 2026-11-19 14:16:25 AEDT: df avail 303048 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 306 2026-11-19 14:21:25 AEDT: df avail 314728 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 307 2026-11-19 14:26:25 AEDT: df avail 174896 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 308 2026-11-19 14:31:25 AEDT: df avail 217676 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 309 2026-11-19 14:36:25 AEDT: df avail 284208 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 310 2026-11-19 14:41:25 AEDT: df avail 242120 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 311 2026-11-19 14:46:25 AEDT: df avail 278960 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 312 2026-11-19 14:51:25 AEDT: df avail 256996 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 313 2026-11-19 14:56:25 AEDT: df avail 291860 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 314 2026-11-19 15:01:25 AEDT: df avail 289600 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 315 2026-11-19 15:06:25 AEDT: df avail 287480 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 316 2026-11-19 15:11:25 AEDT: df avail 282952 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 317 2026-11-19 15:16:25 AEDT: df avail 285536 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 318 2026-11-19 15:21:25 AEDT: df avail 289536 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 319 2026-11-19 15:26:25 AEDT: df avail 300312 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 320 2026-11-19 15:31:25 AEDT: df avail 305512 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 321 2026-11-19 15:36:25 AEDT: df avail 303220 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 322 2026-11-19 15:41:25 AEDT: df avail 301428 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 323 2026-11-19 15:46:26 AEDT: df avail 299520 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 324 2026-11-19 15:51:26 AEDT: df avail 297572 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 325 2026-11-19 15:56:26 AEDT: df avail 295344 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 326 2026-11-19 16:01:26 AEDT: df avail 293256 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 327 2026-11-19 16:06:26 AEDT: df avail 291560 KiB (flight threshold 9,769,216 KiB).
+- Step 4 poll 328 2026-11-19 16:11:26 AEDT: df avail 299512 KiB (flight threshold 9,769,216 KiB).
+- Step 4 WAIT-DISK exit 2026-11-19 16:11:26 AEDT: wedge 16:08:37 AEDT reached with the gate closed. 328 polls total (11:44:06-2026-11-19 16:11:26 AEDT), range 119124-7203684 KiB, gate never opened (threshold 9,769,216 KiB; final poll 328 avail 299512 KiB, shortfall 9469704 KiB). This lane: polls 293-328, range 119124-320640 KiB. Steps 0-3 preserved; no flight, no findings, no verdict. Heartbeat CLOSED step4-wait-disk.
+- RECOVERY-10 2026-11-19 16:27 AEDT: recovery agent d14bf100 launched (recovery-9 exited clean WAIT-DISK at wedge 16:08:37; 328 polls, gate never opened, shortfall ~9.03 GiB). Steps 0-3 re-verified MATCH at 16:26: image 568af6ac, patch e421162f, rc f61b9c0f, binary 19db5d31 (Mac worktree, box dump-back); label u:object_r:system_file:s0 reads back from the box image (read-only debugfs ea_list). Kernel 70d3859d, DTB 73d1904b, CPIO a9d6040a MATCH. Nothing rebuilt. Polling resumes from poll 329; wedge 19:23:22 AEDT.
+- Step 4 poll 329 (R10, 2026-11-19): per-poll record lost in the 18:03 /Users/Shared wipe; avail UNKNOWN. Only R10 poll 347 evidenced by the driver (17:58:21 AEDT, avail 153,624 KiB).
+- Step 4 poll 330 (R10, 2026-11-19): per-poll record lost in the 18:03 /Users/Shared wipe; avail UNKNOWN. Only R10 poll 347 evidenced by the driver (17:58:21 AEDT, avail 153,624 KiB).
+- Step 4 poll 331 (R10, 2026-11-19): per-poll record lost in the 18:03 /Users/Shared wipe; avail UNKNOWN. Only R10 poll 347 evidenced by the driver (17:58:21 AEDT, avail 153,624 KiB).
+- Step 4 poll 332 (R10, 2026-11-19): per-poll record lost in the 18:03 /Users/Shared wipe; avail UNKNOWN. Only R10 poll 347 evidenced by the driver (17:58:21 AEDT, avail 153,624 KiB).
+- Step 4 poll 333 (R10, 2026-11-19): per-poll record lost in the 18:03 /Users/Shared wipe; avail UNKNOWN. Only R10 poll 347 evidenced by the driver (17:58:21 AEDT, avail 153,624 KiB).
+- Step 4 poll 334 (R10, 2026-11-19): per-poll record lost in the 18:03 /Users/Shared wipe; avail UNKNOWN. Only R10 poll 347 evidenced by the driver (17:58:21 AEDT, avail 153,624 KiB).
+- Step 4 poll 335 (R10, 2026-11-19): per-poll record lost in the 18:03 /Users/Shared wipe; avail UNKNOWN. Only R10 poll 347 evidenced by the driver (17:58:21 AEDT, avail 153,624 KiB).
+- Step 4 poll 336 (R10, 2026-11-19): per-poll record lost in the 18:03 /Users/Shared wipe; avail UNKNOWN. Only R10 poll 347 evidenced by the driver (17:58:21 AEDT, avail 153,624 KiB).
+- Step 4 poll 337 (R10, 2026-11-19): per-poll record lost in the 18:03 /Users/Shared wipe; avail UNKNOWN. Only R10 poll 347 evidenced by the driver (17:58:21 AEDT, avail 153,624 KiB).
+- Step 4 poll 338 (R10, 2026-11-19): per-poll record lost in the 18:03 /Users/Shared wipe; avail UNKNOWN. Only R10 poll 347 evidenced by the driver (17:58:21 AEDT, avail 153,624 KiB).
+- Step 4 poll 339 (R10, 2026-11-19): per-poll record lost in the 18:03 /Users/Shared wipe; avail UNKNOWN. Only R10 poll 347 evidenced by the driver (17:58:21 AEDT, avail 153,624 KiB).
+- Step 4 poll 340 (R10, 2026-11-19): per-poll record lost in the 18:03 /Users/Shared wipe; avail UNKNOWN. Only R10 poll 347 evidenced by the driver (17:58:21 AEDT, avail 153,624 KiB).
+- Step 4 poll 341 (R10, 2026-11-19): per-poll record lost in the 18:03 /Users/Shared wipe; avail UNKNOWN. Only R10 poll 347 evidenced by the driver (17:58:21 AEDT, avail 153,624 KiB).
+- Step 4 poll 342 (R10, 2026-11-19): per-poll record lost in the 18:03 /Users/Shared wipe; avail UNKNOWN. Only R10 poll 347 evidenced by the driver (17:58:21 AEDT, avail 153,624 KiB).
+- Step 4 poll 343 (R10, 2026-11-19): per-poll record lost in the 18:03 /Users/Shared wipe; avail UNKNOWN. Only R10 poll 347 evidenced by the driver (17:58:21 AEDT, avail 153,624 KiB).
+- Step 4 poll 344 (R10, 2026-11-19): per-poll record lost in the 18:03 /Users/Shared wipe; avail UNKNOWN. Only R10 poll 347 evidenced by the driver (17:58:21 AEDT, avail 153,624 KiB).
+- Step 4 poll 345 (R10, 2026-11-19): per-poll record lost in the 18:03 /Users/Shared wipe; avail UNKNOWN. Only R10 poll 347 evidenced by the driver (17:58:21 AEDT, avail 153,624 KiB).
+- Step 4 poll 346 (R10, 2026-11-19): per-poll record lost in the 18:03 /Users/Shared wipe; avail UNKNOWN. Only R10 poll 347 evidenced by the driver (17:58:21 AEDT, avail 153,624 KiB).
+- Step 4 poll 347 (R10, 2026-11-19): 17:58:21 AEDT, avail 153,624 KiB (driver-read from the Mac progress file ~18:00 AEDT, before the wipe; the per-poll record itself was lost in the wipe). R10 never flew; agent closed by the driver ~18:34 after the wipe destroyed its worktree.
+- RECOVERY-11 2026-11-19 19:40 AEDT: recovery agent launched (brief 1fe7a73c, wedge 22:40:50 AEDT 19 Nov). Recovery-10 closed by the driver after the 18:03 /Users/Shared wipe; R10 never flew, no exit. 347 polls total. Steps 0-3 re-verified MATCH by the driver at 19:37 (image 568af6ac, patch e421162f, rc f61b9c0f, binary 19db5d31 nb-t728probe.bin; label reads back u:object_r:system_file:s0). Primary store now on box /mnt/sdc3/muse/kernel-primary/; Mac holds only the one-time flight worktree. Polling resumes from poll 348; gate wide open (~75 GiB free).
+- Step 4 poll 348 2026-11-19 19:43:22 AEDT: df avail 78537756 KiB (flight threshold 9,769,216 KiB).
+- Step 4 FLIGHT LAUNCHED 2026-11-19 19:43:32 AEDT: gate open at poll 348 (avail 78,537,756 KiB, threshold 9,769,216 KiB). Supervisor PID 4411, QEMU pid 4418, flight service-flight, guest target 600 s / host cap 700 s. Supervisor input verification passed (kernel 70d3859d, dtb 73d1904b, system 568af6ac, boot a9d6040a, vendor 5e0607ad — no SHA errors).
+Flight in progress (service-flight): host=300s guest=231.1s pid=4418. 2026-11-19T08:48:33Z
+- Step 4 FLIGHT ENDED 2026-11-19 19:53:34 AEDT: guest target reached (600.6s >= 600s). Host 601.43s, guest 600.59s, QEMU exit 0. UART 18,375 lines / 2,034,071 B, SHA 2679eb70.
+- Step 5 ADJUDICATED 2026-11-19 19:57 AEDT: Verdict FAIL. T728_SERVICE_OK 0; trigger never fired (sys.boot_completed 0; [T723] hook: boot_completed never detected in 600s). Registration T728_PROBE_OK x1 (113.734s). No refusal, no argv. Wall BOOT-COMPLETED-NEVER-FIRED (guest). Findings findings-t729.md (43bd549c), outcome FAIL (4f8e9e45), death note DEATH_NOTE-T729.md (a2f33470).

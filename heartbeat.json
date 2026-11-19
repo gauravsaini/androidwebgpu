@@ -1,1 +1,6 @@
-{"note":"T728 Verdict: FAIL - service never started (SELinux label refusal, guest 569.484s); trigger fired, marker x2, T728_SERVICE_OK 0. Findings + outcome + death note written.","stage":"step5-adjudicated","status":"CLOSED","ts":"2026-11-17T21:50:38Z"}
+{
+  "ts": "2026-11-19T08:58:37Z",
+  "status": "CLOSED",
+  "stage": "flight-complete-verdict-fail",
+  "note": "T729 RECOVERY-11 service-flight complete: guest 600.6s, host 601.43s, QEMU exit 0. Verdict FAIL (T728_SERVICE_OK 0; trigger never fired). Wall BOOT-COMPLETED-NEVER-FIRED."
+}

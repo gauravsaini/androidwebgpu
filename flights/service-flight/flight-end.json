@@ -1,0 +1,45 @@
+{
+  "track": "T729",
+  "flight": "service-flight",
+  "stop_reason": "Guest target reached (600.6s >= 600s)",
+  "started_utc": "2026-11-19T08:43:32Z",
+  "ended_utc": "2026-11-19T08:53:34Z",
+  "host_elapsed_seconds": 601.43,
+  "guest_log_max_seconds": 600.59,
+  "qemu_exit_code": 0,
+  "log_bytes": 2034071,
+  "log_lines": 18375,
+  "log_sha256": "2679eb703de1abaed2c12c956b9a4e61b1e34ef764d2ed3a18eb6290517f4b7b",
+  "inputs": {
+    "kernel": {
+      "path": "/Users/Shared/wt-track729-labeled-payload/guest-inputs/t720-Image",
+      "sha256": "70d3859d6aed1906d27217aa3fdfd9bb953a57f4490c89c51efa4f6490441e04",
+      "bytes": 20396544
+    },
+    "qemu": {
+      "path": "/opt/homebrew/bin/qemu-system-aarch64",
+      "sha256": "8e5c46dc6752c36afbb706f933e72fef835e35f48881a63cadb06c6d29bac869",
+      "bytes": 31498864
+    },
+    "dtb": {
+      "path": "/Users/Shared/wt-track729-labeled-payload/guest-inputs/t723-modified.dtb",
+      "sha256": "73d1904b3191edc3c36082f4cec744944ff56fe6b947dd6910d25d4b2a858eea",
+      "bytes": 2049
+    },
+    "boot_image": {
+      "path": "/Users/Shared/wt-track729-labeled-payload/guest-inputs/t723-fix.cpio.gz",
+      "sha256": "a9d6040a3984e9d60837187d3b5d02211002966e4f051f23765d1f05390f3521",
+      "bytes": 53391088
+    },
+    "system_img": {
+      "path": "/Users/Shared/wt-track729-labeled-payload/guest-inputs/t729-system.img",
+      "sha256": "568af6ac96393d961f2cf0df0f6f464a3f00fdf591f90bef380c57694fae7bf2",
+      "bytes": 2059816960
+    },
+    "vendor_img": {
+      "path": "/Users/Shared/wt-track729-labeled-payload/guest-inputs/t722-vendor.img",
+      "sha256": "5e0607ada51367fbe9f7e5dd7586afbeb9216f478f00a31baa5179eb73f476e0",
+      "bytes": 134217728
+    }
+  }
+}
