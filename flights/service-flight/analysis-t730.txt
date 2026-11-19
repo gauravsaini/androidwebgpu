@@ -1,0 +1,144 @@
+Total lines: 33588 (trailing partial line: 0)
+Total bytes: 3970988
+
+--- ALL T723_PROBE lines (full text): 0 line(s) ---
+
+T723_PROBE DONE summary lines (context: expect 0): 0
+lines: 
+
+SP1 DONE lines (context: expect 0): 0
+lines: 
+
+SP2 DONE lines (context: expect 0): 0
+lines: 
+
+SP3 DONE lines (context: expect 0): 0
+lines: 
+
+DROP_FAIL lines (expect 0): 0
+lines: 
+
+SP1 RESOLVE_FAIL lines (expect 0): 0
+lines: 
+
+SP2 GETPROCADDRESS_NULL lines (expect 0): 0
+lines: 
+
+--- ALL [T723] early-ramdisk hook lines (context: hook timeout ~33 s): 1 line(s) ---
+L2004: [T723] boot_completed never detected in 600s; probe not run
+
+--- ALL T728_SERVICE_OK marker lines (full text) — payload ran: 0 line(s) ---
+
+--- ALL T728_PROBE_OK marker lines (full text) — registration: 2 line(s) ---
+L10671: [  104.700358] T728_PROBE_OK
+L21648: [  500.955064] T728_PROBE_OK
+
+--- ALL T728_PROBE helper lines (full text) — start + context: 2 line(s) ---
+L10671: [  104.700358] T728_PROBE_OK
+L21648: [  500.955064] T728_PROBE_OK
+
+--- ALL T728_ARGV lines (full text) — the argv handoff, verbatim: 0 line(s) ---
+
+--- ALL T728_ARGC lines (full text): 0 line(s) ---
+
+--- ALL t728probe lines (service + rc citations): 0 line(s) ---
+
+--- ALL init service-refusal lines (full text) — SELinux refusal if present: 0 line(s) ---
+
+--- ALL label/domain-transition lines (full text): 0 line(s) ---
+
+--- ALL t728probe service EXIT lines (full text) — authoritative start proof: 0 line(s) ---
+
+init starting service 't728probe' (context only — may be absent per T727 lesson): 0
+lines: 
+
+t728probe.rc citations (init parsed the new file): 0
+lines: 
+
+start-command lines citing t728probe (trigger fired): 0
+lines: 
+
+ALL boot_completed action processing lines (stock control + mine): 5
+lines: 21325, 21513, 33490, 33491, 33492
+
+on boot action processing lines citing t728probe.rc: 0
+lines: 
+
+service exec/start failures (expect 0): 0
+lines: 
+
+write-to-kmsg command lines (context): 0
+lines: 
+
+T727_SERVICE_OK lines (control: expect 0 — old rc replaced): 0
+lines: 
+
+T727_PROBE_OK lines (control: expect 0 — old rc replaced): 0
+lines: 
+
+t727probe lines (control: expect 0 — old rc replaced): 0
+lines: 
+
+T720_PROBE DONE status=PASS lines (hold requires >=1): 1
+lines: 226
+
+T720_PROBE DONE status=FAIL lines (hold requires 0): 0
+lines: 
+
+T721 fence-log lines (hold requires >=1): 1
+lines: 23598
+
+Invalid present fence lines (hold requires 0): 0
+lines: 
+
+ALL sw_sync lines (context): 242
+lines: 196, 197, 199, 200, 208, 209, 224, 22825, 22872, 22873, 22896, 22898, 22899, 22900, 22901, 22963, 22964, 22965, 23047, 23048, 32939, 32948, 32951, 32952, 32953, 32954, 32955, 32956, 32957, 32958, 32963, 32964, 32965, 32966, 32969, 32970, 33016, 33046, 33047, 33048
+(202 middle lines omitted; count is exact)
+
+T628 REJECT allocate2 lines (hold requires 0): 0
+lines: 
+
+T628 CALL allocate2 lines: 15
+lines: 11127, 11131, 19080, 19084, 19088, 22710, 22915, 22919, 22923, 22933, 23120, 23262, 32664, 32668, 32672
+
+EPERM lines (hold requires 0): 0
+lines: 
+
+simplefb: mapped lines (hold requires >=1): 1
+lines: 23596
+
+Watchdog KILLING lines (hold requires 0): 0
+lines: 
+
+sys.boot_completed lines (hold requires >=1): 8
+lines: 21325, 21500, 21511, 21513, 21832, 33490, 33491, 33492
+
+boot_completed lines: 9
+lines: 2004, 21325, 21500, 21511, 21513, 21832, 33490, 33491, 33492
+
+FATAL EXCEPTION lines: 5
+lines: 25324, 25334, 25363, 25373, 25382
+
+Kernel panic/Oops/BUG lines (hold requires 0): 0
+lines: 
+
+RenderEngine EGL dup-fail lines: 4
+lines: 23898, 24068, 24373, 24500
+
+driver loaded lines: 5
+lines: 11230, 11575, 19706, 24930, 26305
+
+META-EGL banner lines: 1
+lines: 11234
+
+D/libEGL lines: 5
+lines: 11230, 11575, 19706, 24930, 26305
+
+avc:  denied (two spaces) total: 2570
+avc:  denied for /dev/mem: 6
+avc denied (sensorservice): 0
+
+Guest kernel time: first=0.0s last=705.058726s max=705.058726s
+Dup-fail rate: 4 / 705.1s * 1000 = 5.673 per 1000 s (baselines: T721 flight-01 4.058, T721 revert 6.660)
+
+=== REPORT COMPLETE ===
