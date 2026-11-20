@@ -1,0 +1,361 @@
+Total lines: 133388 (trailing partial line: 0)
+Total bytes: 18497574
+
+--- ALL T723_PROBE lines (full text) — DECISIVE: 27 line(s) ---
+L357: T723_PROBE: start (EGL dispatch probe, uid 1000)
+L358: [    4.682532] T723_PROBE: start (EGL dispatch probe, uid 1000)
+L360: T723_PROBE: uid=0 euid=0 gid=0 egid=0
+L361: [    4.683447] T723_PROBE: uid=0 euid=0 gid=0 egid=0
+L363: T723_PROBE: setresgid rc=0
+L364: [    4.684195] T723_PROBE: setresgid rc=0
+L366: T723_PROBE: setresuid rc=0
+L367: [    4.685080] T723_PROBE: setresuid rc=0
+L369: T723_PROBE: after uid=1000 euid=1000 gid=1000 egid=1000
+L370: [    4.685897] T723_PROBE: after uid=1000 euid=1000 gid=1000 egid=1000
+L372: T723_PROBE SP3: open timeline fd=-13
+L373: T723_PROBE SP3 DONE control_fd=-999
+L374: T723_PROBE SP1: load_stub rc=0 base=0x7cf916c000 size=52416
+L375: T723_PROBE SP1: create=0x7cf9171c84 dup=0x7cf9171cb0
+L376: T723_PROBE SP1: create sync=0x5001
+L377: T723_PROBE SP1: dup rc=-1
+L378: T723_PROBE SP1: fence_check skip fd=-1
+L379: T723_PROBE SP1 DONE direct_fd=-1
+L380: T723_PROBE SP2: eglGetDisplay=0x3141
+L381: T723_PROBE SP2: eglInitialize ok=1 major=1 minor=4 error=0x3000
+L382: T723_PROBE SP2: create sync=0x5001 error=0x3000
+L383: T723_PROBE SP2: getprocaddress dup=0x7f953be7a8
+L384: T723_PROBE SP2: map addr=0x7f953be7a8 start=0x7f953b5000 path=/sysimg/system/lib64/libEGL.so
+L385: T723_PROBE SP2: dup rc=-1 error=0x3000
+L386: T723_PROBE SP2: fence_check skip fd=-1
+L387: T723_PROBE SP2 DONE meta_fd=-1
+L388: T723_PROBE DONE drop_ok=1 control_fd=-999 direct_fd=-1 meta_fd=-1
+
+T723_PROBE start lines (probe executed: expect >=1): 2
+lines: 357, 358
+
+T723_PROBE DONE summary lines (expect >=1): 1
+lines: 388
+
+SP1 DONE lines (direct driver call: expect >=1): 1
+lines: 379
+
+SP2 DONE lines (META-EGL dispatch call: expect >=1): 1
+lines: 387
+
+SP3 DONE lines (sw_sync control: expect >=1): 1
+lines: 373
+
+DROP_FAIL lines (expect 0 — results must be uid-1000 context): 0
+lines: 
+
+SP1 RESOLVE_FAIL lines (expect 0): 0
+lines: 
+
+SP2 GETPROCADDRESS_NULL lines (expect 0): 0
+lines: 
+
+--- SP1 dup rc lines (direct-call result): 1 line(s) ---
+L377: T723_PROBE SP1: dup rc=-1
+
+--- SP2 dup rc lines (META-EGL-call result): 1 line(s) ---
+L385: T723_PROBE SP2: dup rc=-1 error=0x3000
+
+--- SP2 resolved-address lines (what META-EGL resolves): 1 line(s) ---
+L383: T723_PROBE SP2: getprocaddress dup=0x7f953be7a8
+
+--- SP1 create-sync lines (direct-call sync handle): 1 line(s) ---
+L376: T723_PROBE SP1: create sync=0x5001
+
+--- SP2 create-sync lines (META-EGL create-sync handle): 1 line(s) ---
+L382: T723_PROBE SP2: create sync=0x5001 error=0x3000
+
+--- SP2 maps_lookup lines (backing file of resolved address): 1 line(s) ---
+L393: [T737] proc unmounted: /proc/self/maps unreadable
+
+maps lines showing the IMAGE libEGL loaded (expect >=1 — LD_LIBRARY_PATH fix proof): 1
+lines: 384
+
+maps lines showing the RAMDISK libEGL loaded (expect 0 — the T736 fallback): 0
+lines: 
+
+--- ALL [T737] early-ramdisk hook lines (full text) — carried forward from T737: 9 line(s) ---
+L346: [T737] mount /sysimg (vda) rc=0
+L348: [T737] INTERP tripwire: toybox alive after /sysimg mount
+L349: [T737] INTERP tripwire rc=0
+L351: [T737] mount /vendor (loop1) rc=0
+L353: [T737] mount debugfs (/sys/kernel/debug) rc=0
+L354: [T737] mount proc (/proc) rc=0
+L390: [T737] t723-probe finished rc=0
+L392: [T737] unmount proc (/proc) rc=0
+L393: [T737] proc unmounted: /proc/self/maps unreadable
+
+mount /sysimg rc=0 lines (expect >=1): 1
+lines: 346
+
+mount /sysimg FAILED lines (expect 0): 0
+lines: 
+
+mount /vendor rc=0 lines (expect >=1): 1
+lines: 351
+
+mount /vendor FAILED lines (expect 0): 0
+lines: 
+
+mount debugfs rc=0 lines (expect >=1): 1
+lines: 353
+
+mount proc rc=0 lines (expect >=1): 1
+lines: 354
+
+unmount proc rc=0 lines (expect >=1 — INIT-PROC-MOUNT-CONFLICT fix): 1
+lines: 392
+
+unmount proc FAILED lines (expect 0): 0
+lines: 
+
+proc-unmounted verification lines (expect >=1): 1
+lines: 393
+
+proc-still-mounted lines (expect 0): 0
+lines: 
+
+t723-probe finished lines (expect >=1): 1
+lines: 390
+
+probe binary missing lines (expect 0): 0
+lines: 
+
+'inaccessible or not found' lines (T723-blindness signature: expect 0 before the init handoff): 0
+lines: 
+
+--- ALL [T739] unmount-before-handoff hook lines (full text) — DECISIVE: 7 line(s) ---
+L525: [T739] unmount /sysimg (vda) rc=0
+L554: [T739] unmount /vendor (loop1) rc=0
+L583: [T739] unmount debugfs (/sys/kernel/debug) rc=0
+L585: [T739] handoff state verified: /sysimg /vendor /sys/kernel/debug unmounted
+L586: [T739] handoff state verified: /data mounted
+L589: [T739] unmount proc (verify) rc=0
+L590: [T739] kernel-init probe done; handing off to Android init
+
+unmount /sysimg rc=0 lines (expect >=1 — T737 wall fix): 1
+lines: 525
+
+unmount /sysimg FAILED lines (expect 0): 0
+lines: 
+
+unmount /vendor rc=0 lines (expect >=1): 1
+lines: 554
+
+unmount /vendor FAILED lines (expect 0): 0
+lines: 
+
+unmount debugfs rc=0 lines (expect >=1): 1
+lines: 583
+
+unmount debugfs FAILED lines (expect 0): 0
+lines: 
+
+handoff-state-verified lines (expect >=1 — T734 state restored): 1
+lines: 585
+
+/data-mounted verification lines (expect >=1): 1
+lines: 586
+
+handoff-state-DIRTY lines (expect 0): 0
+lines: 
+
+handoff-state-UNVERIFIED lines (expect 0): 0
+lines: 
+
+unmount proc (verify) rc=0 lines (expect >=1 — /proc re-scoped): 1
+lines: 589
+
+unmount proc (verify) FAILED lines (expect 0): 0
+lines: 
+
+HANDOFF ABORTED lines (expect 0 — abort means FAIL, first failing link named): 0
+lines: 
+
+T739 handoff lines (expect >=1): 1
+lines: 590
+
+--- ALL [T740] orphaned-script kill hook lines (full text) — DECISIVE: 3 line(s) ---
+L493: [T740] killing orphaned background scripts: t493 pid=201 t501 pid=202
+L495: [T740] t493-probe.sh killed pid=201
+L496: [T740] t501-keystore2-dump.sh killed pid=202
+
+kill-block entry lines (expect >=1): 1
+lines: 493
+
+t493-probe.sh killed lines (expect >=1): 1
+lines: 495
+
+t501-keystore2-dump.sh killed lines (expect >=1): 1
+lines: 496
+
+t493 STILL ALIVE lines (expect 0): 0
+lines: 
+
+t501 STILL ALIVE lines (expect 0): 0
+lines: 
+
+Post-handoff spam (after line 590, expect ~0 if the kill worked):
+  can't create /dev/null post-handoff: 0 (total in UART: 0; T739 flight-14 total was 4480)
+  inaccessible or not found post-handoff: 0 (total in UART: 0; T739 flight-14 total was 337)
+
+--- ALL T734_KERNEL_OK marker lines (full text) — exec-path control: 1 line(s) ---
+L194: [    3.489061] T734_KERNEL_OK
+
+--- ALL [T734] early-ramdisk hook lines (full text) — probe exec + rc: 1 line(s) ---
+L195: [T734] kernel-init probe finished rc=0
+
+T734_KERNEL_OK count (control: expect >=1, early, guest <10 s): 1
+lines: 194
+
+--- ALL T733_PROBE_OK marker lines (full text) — registration: 3 line(s) ---
+L2779: [   77.080944] T733_PROBE_OK
+L14926: [  527.363705] T733_PROBE_OK
+L27219: [  727.739862] T733_PROBE_OK
+
+--- ALL T728_PROBE_OK marker lines (full text) — registration: 3 line(s) ---
+L2768: [   76.982540] T728_PROBE_OK
+L14921:     0000006ee6734520 0000000000000061 0000000000000061  a.......a.......[  527.290619] T728_PROBE_OK
+L27218: pst"Á¤Ï¿¤ÏÏÇôðÂÇ"mGrResourceProvider::createPatternedIndexBuffer(unsigned short const*, int, int, int, skgpu::UniqueKey const*)(ü2/system/lib64/libhwui.soB f1f522b4440ab02c2feff7196d03d919"ð­ð½ÇôðÂÇ"=skgpu::ganesh::AtlasTextOp::onPrepareDraws(GrMeshDrawTarget*)(#2/system/lib64/libhwui.soB f1f522b4440ab02c2feff7196d03d919"ÉôÂÇ".skgpu::v1::OpsTask::onPrepare(GrOpFlushState*)(Ð2/system/lib64/libhwui.soB f1f522b4440ab02c2feff7196d03d919"°Â°ÂÆôðÂÇ"5GrDrawingManager::executeRenderTasks(GrOpFlushState*)(à2/system/lib64/libhwui.soB f1f522b4440ab02c2feff7196d03d919"ÝÆôðÂÇ"GrDrawingManager::flush(SkSpan<GrSurfaceProxy*>, SkSurface::BackendSurfaceAccess, GrFlushInfo const&, skgpu::MutableTextureState const*)(°2/system/lib64/libhwui.soB f1f522b4440ab02c2feff7196d03d919"Â°íå°íõÇôÊÂÇ"nSkSurface_Gpu::onFlush(SkSurface::BackendSurfaceAccess, GrFlushInfo const&, skgpu::MutableTextureState const*)(°2/system/lib64/libhwui.soB f1f522b4440ab02c2feff7196d03d919"þðÄûðÄÈô ËÂÇ"©android::uirenderer::skiapipeline::SkiaOpenGLPipeline::draw(android::uirenderer::renderthread::Frame const&, SkRect const&, SkRect const&, android::uirenderer::LightGe[  727.736304] T728_PROBE_OK
+
+--- ALL T733_MINIMAL_OK marker lines (full text) — minimal binary under init (expect 0): 0 line(s) ---
+
+--- ALL init service-refusal lines (full text): 2 line(s) ---
+L14917: [  527.211137] init: Command 'start t728probe' action=sys.boot_completed=1 (/system/etc/init/t728probe.rc:13) took 2ms and failed: Could not start service: File /system/bin/t728probe(labeled "u:object_r:system_file:s0") has incorrect label or no domain transition from u:r:init:s0 to another SELinux domain defined. Have you configured your service correctly? https://source.android.com/security/selinux/device-policy#label_new_services_and_address_denials. Note: this error shows up even in permissive mode in order to make auditing denials possible.
+L27105: [  727.315556] init: Command 'start t728probe' action=sys.boot_completed=1 (/system/etc/init/t728probe.rc:13) took 1ms and failed: Could not start service: File /system/bin/t728probe(labeled "u:object_r:system_file:s0") has incorrect label or no domain transition from u:r:init:s0 to another SELinux domain defined. Have you configured your service correctly? https://source.android.com/security/selinux/device-policy#label_new_services_and_address_denials. Note: this error shows up even in permissive mode in order to make auditing denials possible.
+
+init starting service 't728probe' (context only): 0
+lines: 
+
+start-command lines citing t728probe (trigger fired): 2
+lines: 14917, 27105
+
+T720_PROBE DONE status=PASS lines (hold requires >=1): 1
+lines: 232
+
+T720_PROBE DONE status=FAIL lines (hold requires 0): 0
+lines: 
+
+T721 fence-log lines (hold requires >=1): 1
+lines: 16401
+
+Invalid present fence lines (hold requires 0): 0
+lines: 
+
+ALL sw_sync lines (context): 1459
+lines: 198, 199, 201, 202, 210, 211, 230, 15795, 15796, 15797, 15798, 15837, 15838, 15839, 15846, 15847, 15848, 15896, 15897, 15937, 106392, 106665, 106666, 106667, 106709, 106710, 107000, 107001, 109342, 109343, 109450, 109451, 109594, 109595, 109697, 109698, 109699, 109737, 109738, 109740
+(1419 middle lines omitted; count is exact)
+
+T628 REJECT allocate2 lines (hold requires 0): 0
+lines: 
+
+T628 CALL allocate2 lines: 127
+lines: 3145, 3149, 11876, 11880, 11884, 15735, 15818, 15822, 15826, 15833, 16029, 16076, 16624, 25592, 25596, 25600, 27545, 27549, 27553, 30518, 86303, 86307, 88728, 88732, 88736, 93484, 93488, 93492, 93504, 93508, 93512, 97007, 97011, 97015, 101560, 101564, 101568, 102667, 102671, 102675
+(87 middle lines omitted; count is exact)
+
+EPERM lines (hold requires 0): 0
+lines: 
+
+simplefb: mapped lines (hold requires >=1): 1
+lines: 16400
+
+Watchdog KILLING lines (hold requires 0): 0
+lines: 
+
+sys.boot_completed lines (hold requires >=1): 8
+lines: 14375, 14409, 14916, 14917, 15110, 26357, 27104, 27105
+
+boot_completed lines: 8
+lines: 14375, 14409, 14916, 14917, 15110, 26357, 27104, 27105
+
+FATAL EXCEPTION lines: 6
+lines: 18391, 18452, 18499, 18516, 18522, 18525
+
+Kernel panic/Oops/BUG lines (hold requires 0): 0
+lines: 
+
+RenderEngine EGL dup-fail lines: 0
+lines: 
+
+driver loaded lines: 33
+lines: 3087, 3601, 12459, 17915, 19827, 27430, 32590, 36915, 37183, 42854, 46057, 50075, 53484, 56961, 60162, 64166, 66862, 71795, 75981, 78504, 80878, 82607, 84846, 86849, 90059, 92628, 95028, 98545, 102611, 105538, 109341, 111822, 118710
+
+META-EGL banner lines: 1
+lines: 3093
+
+D/libEGL lines: 33
+lines: 3087, 3601, 12459, 17915, 19827, 27430, 32590, 36915, 37183, 42854, 46057, 50075, 53484, 56961, 60162, 64166, 66862, 71795, 75981, 78504, 80878, 82607, 84846, 86849, 90059, 92628, 95028, 98545, 102611, 105538, 109341, 111822, 118710
+
+init parsing the composer rc (fix file present, expect >=1): 0
+lines: 
+
+post-fs-data action lines (fix trigger, expect >=1): 0
+lines: 
+
+--- post-fs-data actions citing the composer rc (full text): 0 line(s) ---
+
+--- chmod 0755 debugfs lines as logged by init (full text; 0 if init does not log the command): 0 line(s) ---
+
+debugfs mount lines (T721 trigger, expect >=1): 0
+lines: 
+
+--- ALL Watchdog KILLING lines (full text) — T741 fixed pattern: 0 line(s) ---
+
+ALL W/Watchdog lines (context): 0
+lines: 
+
+media.c2 one-second waits (preceding distress): 786
+lines: 9311, 9347, 9444, 9482, 9493, 9507, 9532, 9565, 9607, 9627, 9638, 9669, 9705, 9751, 9766, 9789, 9815, 9852, 9868, 9900, 113885, 114332, 114533, 114586, 114679, 114782, 114835, 114890, 114933, 115031, 115317, 115327, 115365, 115455, 115465, 115513, 115559, 115990, 116231, 116234
+(746 middle lines omitted; count is exact)
+
+Camera service unavailable lines (preceding distress): 121
+lines: 7382, 7524, 7710, 7782, 7872, 8009, 8109, 8280, 8359, 8509, 8632, 8635, 8654, 8664, 8737, 8865, 8939, 9014, 9053, 9161, 15266, 15295, 15346, 15426, 15494, 15620, 15773, 15861, 15916, 15949, 15964, 16040, 16055, 16713, 16858, 16975, 17003, 17072, 17260, 18063
+(81 middle lines omitted; count is exact)
+
+gralloc memfd lines (gralloc crash context): 75
+lines: 27835, 33234, 33235, 33236, 37381, 38868, 44061, 44062, 44063, 48041, 48042, 53762, 53806, 53810, 55693, 57624, 63408, 63411, 63412, 63413, 121182, 121183, 121184, 121197, 121198, 121199, 122223, 123291, 123295, 127437, 127438, 127439, 131732, 131733, 131734, 131735, 131736, 131737, 132763, 132765
+(35 middle lines omitted; count is exact)
+
+tombstone lines (native crash dumps): 1634
+lines: 800, 1223, 1224, 1225, 1226, 1227, 1228, 1994, 1995, 1996, 1997, 1998, 1999, 2010, 2011, 2012, 2013, 2024, 2025, 2026, 121205, 121228, 122173, 122227, 122247, 123239, 123297, 123309, 124582, 124584, 124586, 127450, 127473, 128756, 128758, 128760, 131748, 131761, 132706, 132768
+(1594 middle lines omitted; count is exact)
+
+system_server start lines (restart count): 0
+lines: 
+
+OnBootPhase_500 lines (first system_server phase): 286
+lines: 7610, 7611, 7612, 7613, 7614, 7615, 7616, 7617, 7618, 7619, 7628, 7629, 7676, 7677, 7680, 7681, 7682, 7683, 7684, 7685, 22948, 22949, 22952, 22953, 22954, 22955, 22956, 22957, 22958, 22959, 22960, 22961, 22962, 22963, 22964, 22965, 22966, 22967, 22968, 22969
+(246 middle lines omitted; count is exact)
+
+OnBootPhase_550 lines: 288
+lines: 8871, 8872, 8873, 8874, 8875, 8876, 8877, 8878, 8879, 8880, 8882, 8883, 8884, 8890, 8891, 8892, 8893, 8894, 8895, 8896, 23633, 23634, 23635, 23636, 23637, 23638, 23639, 23640, 23641, 23643, 23644, 23781, 23782, 23783, 23784, 23785, 23786, 23787, 23788, 23789
+(248 middle lines omitted; count is exact)
+
+OnBootPhase_600 lines (boot reached phase 600): 306
+lines: 10379, 10380, 10381, 10382, 10383, 10384, 10385, 10386, 10387, 10388, 10408, 10409, 10411, 10412, 10413, 10414, 10415, 10416, 10417, 10418, 24749, 24750, 24751, 24752, 24753, 24754, 24761, 24762, 24763, 24764, 24765, 24766, 24767, 24768, 24769, 24770, 24771, 24772, 24775, 24776
+(266 middle lines omitted; count is exact)
+
+ALL system_server lines (context): 536
+lines: 689, 690, 691, 695, 1112, 1117, 1135, 1366, 1484, 3769, 3770, 3780, 4670, 4716, 4724, 4727, 4731, 4732, 4733, 4734, 105352, 106610, 106653, 107879, 109437, 109438, 111493, 112776, 113280, 113286, 113288, 113329, 113330, 115604, 118567, 122186, 123253, 125080, 129260, 132719
+(496 middle lines omitted; count is exact)
+
+storaged not found: 308 (T734 flight-9: 316; T739 flight-14: 492; T740 flight-15: 492)
+artd could not be found: 0 (T734 flight-9: 1; T739 flight-14: 6; T740 flight-15: 0)
+Waiting for service 'media.metrics': 10 (T734 flight-9: 4; T739 flight-14: 4; T740 flight-15: 8)
+
+avc:  denied (two spaces) total: 6592
+avc:  denied for /dev/mem: 3
+avc denied (sensorservice): 0
+
+Guest kernel time: first=0.0s last=1512.440044s max=1512.440044s
+Dup-fail rate (whole span): 0 / 1512.4s * 1000 = 0.000 per 1000 s (baselines: T721 flight-01 4.058, T721 revert 6.660)
+First sys.boot_completed firing: guest 521.327s
+Presenting time (guest max - first boot_completed): 991.1s (T734 calibration needs ~40 s to the first dup-fail)
+Dup-fail rate (presenting-time basis): 0 / 991.1s * 1000 = 0.000 per 1000 s — T722 differential criteria: BELOW BOTH baselines 4.058/6.660 = fix works
+Verdict signal: BELOW BOTH BASELINES
+
+=== REPORT COMPLETE ===

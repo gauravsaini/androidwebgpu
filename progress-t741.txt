@@ -1,0 +1,196 @@
+T741 progress — vendor init rc fix + 1500 s window
+Lane agent e34acd85-4dc4-4d99-8325-fa3e8e129d56, launched 07:50 AEDT 21 Nov 2026, wedge 10:50 AEDT.
+Brief: hidden_files/briefs/track741-vendor-rc-fix.md, SHA 1164b8b4 (50,531 B).
+Worktree: /Users/Shared/wt-track741-vendor-rc-fix, branch t741, base 1c2c5c9.
+
+Step 0 — DISK GATE (recorded 07:56 AEDT): 18,196,364 KiB free, 92%. Gate 9,769,216 KiB. OPEN.
+Step 1 — INPUT VERIFICATION (complete 07:57 AEDT, all SHAs first 8 hex):
+  kernel t720-Image 70d3859d (20,396,544 B) PASS
+  system t733-system.img af40403a (2,059,816,960 B) PASS
+  vendor t722-vendor.img 5e0607ad (134,217,728 B) PASS
+  T740 CPIO t740-fix.cpio.gz 724dff6c (53,753,289 B) PASS
+  T740 DTB t740-modified.dtb 6b6a118d PASS
+  early-ramdisk-t740 6804341a (20,098 B) PASS
+  supervisor_t740.py f07de12c PASS
+  analyze_t740_probe.py 2e90935e PASS
+  rebuild_cpio_t740.py 2db3ef8e PASS
+  patch_dtb_initrd.py 1f896a01 PASS
+  t734probe b7440e1c (CPIO member) PASS
+  t723-probe 4b275e48 PASS
+  nb-t728probe.bin 19db5d31 PASS
+  nb-t733probe.bin fd189c08 PASS
+  QEMU 8e5c46dc (from T740 flight-15 qemu-command.txt, read) PASS
+  EMBEDDED-VENDOR RULE: CPIO member ramdisk-images/vendor.img = 5e0607ad PASS
+  T722 libEGL (libGLES_swiftshader.so, box debugfs extract) 34b79da2 PASS
+  T721 composer (/bin/hw/android.hardware.graphics.composer@2.1-service, 19,942,712 B) f7600821 PASS
+  T718 shim (/bin/hw/android.hardware.graphics.allocator-service.t628, 1,711,816 B) 3daa5a49 PASS
+  Findings read in full: T740, T739, T738, T737, T736, T734.
+Step 1 verdict: PASS — no missing inputs.
+
+Step 2 — BUILD (complete 08:20 AEDT):
+  (a) VENDOR REPACK (box Linux debugfs, T718 procedure; NEVER macOS debugfs):
+    Base: T722 vendor.img 5e0607ad (134,217,728 B), extracted from the T740 CPIO member.
+    Change: ONE file only — /etc/init/android.hardware.graphics.composer@2.1-service.rc,
+    320 B -> 391 B. The existing `on post-fs-data` action (T721: mount debugfs) extended
+    with the T740-flight-17-proven fix, in the same action, right after the mount:
+        chmod 0755 /sys/kernel/debug
+        chmod 0755 /sys/kernel/debug/sync
+    New rc SHA cdeb88bf (orig 485a59c9, byte-prefix verified: new == orig bytes + append).
+    Repacked image: t741-vendor.img fe0bc359 (134,217,728 B).
+    Verification (patch_vendor_t741.py, report t741_patch_report.json):
+      - inode 305 reused, mode 0100644, uid 0, gid 0, xattr u:object_r:vendor_configs_file:s0
+      - e2fsck -f -y exit 0; e2fsck -f -n exit 0 (clean)
+      - composer ELF f7600821 byte-identical (before AND after)
+      - T718 shim 3daa5a49 byte-identical (before AND after)
+      - T722 libEGL 34b79da2 byte-identical (before AND after)
+      - 8 neighbours byte-identical (init.virt.rc, t628 rc, init.ranchu.rc, allocator@2.0 rc,
+        swiftshader.rc, t637 rc, vintf manifest.xml, mapper@2.0-impl.so)
+      - base image untouched (SHA still 5e0607ad)
+    SELINUX-LABEL: new rc carries u:object_r:vendor_configs_file:s0, verified via debugfs
+    ea_get before AND after the write (the T728 lesson: label verified before the flight).
+  (b) ANALYZER WATCHDOG FIX (scripts/analyze_t741_probe.py):
+    Old pattern `Watchdog:.*KILLING` -> new `W/Watchdog\(\s*\d+\):.*WATCHDOG KILLING`.
+    REGRESSION TEST on T740 flight-15 UART: new analyzer catches L14509
+    (`W/Watchdog( 788): *** WATCHDOG KILLING SYSTEM PROCESS: ...`, count 1) where the
+    T740 analyzer reported 0. Every other count identical (diff of the two analyzer
+    outputs shows only the Watchdog count + the new [T741] sections).
+    New [T741] sections: vendor-rc fix evidence (log lines — EXPECTED 0, see below) +
+    watchdog-kill investigation (kill line, media.c2 waits, camera waits, gralloc,
+    tombstones, system_server starts, OnBootPhase 500/550/600, storaged/artd/media.metrics
+    comparison inputs) + presenting-time dup-fail rate (first sys.boot_completed firing
+    -> presenting span; T722 criteria: BELOW BOTH baselines 4.058/6.660).
+    LOG-LINE CAVEAT (proven by flight-15): the T721 `on post-fs-data` mount action RAN
+    in flight-15 (T721 fence-log L12439 proves the composer opened the timeline; the
+    /dev/sw_sync fallback is dead — T720 probe open rc=-2 ENOENT — and no other mounter
+    exists), yet the flight-15 UART has ZERO lines matching any vendor-rc pattern (no
+    "fs-data" string at all). Init logs `Command ... took Xms` only for slow commands
+    (lmkd/servicemanager ~114-140ms); mount/chmod take <1ms and are not logged. So 0 on
+    the vendor-rc log patterns is the EXPECTED baseline, NOT evidence the fix failed.
+    The FUNCTIONAL proof is the dup-fail rate.
+  (c) CPIO REBUILD (rebuild_cpio_t741.py, run on the Mac):
+    Base: T740 CPIO 724dff6c (241 entries). ONLY member replaced: ramdisk-images/vendor.img
+    5e0607ad -> fe0bc359. Early-ramdisk carried forward BYTE-IDENTICAL (6804341a, NOT
+    replaced). t723-probe 4b275e48 + t734probe b7440e1c preserved. All other 240 entries
+    byte-identical (payload + header fields verified by re-parse).
+    New CPIO: t741-fix.cpio.gz c1203336 (53,753,325 B; +36 B vs T740).
+  (d) DTB RE-PATCH (patch_dtb_initrd.py 1f896a01, run on the Mac):
+    Input t740-modified.dtb 6b6a118d -> t741-modified.dtb 4ecab141 (2,049 B).
+    initrd-start cell @ byte 248 = 0x110000000; initrd-end cell @ byte 268 = 0x1133435ed;
+    end-start = 53,753,325 = CPIO size (verified by searching for the 64-bit BE cell
+    values, NOT the old 251/271 offsets).
+  (e) SUPERVISOR (scripts/supervisor_t741.py): T740 shape, guest target 1500 s, host cap
+    1800 s, flight service-flight-18, EXPECTED SHAs pinned (kernel 70d3859d, DTB 4ecab141,
+    system af40403a, CPIO c1203336, vendor fe0bc359). Import-tested on the Mac (all three
+    scripts parse OK; analyzer re-test on flight-15 UART: Watchdog KILLING 1, first
+    sys.boot_completed guest 1175.836 s — matches the sandbox regression test).
+
+  Step 2 exit (brief Step 2(e) record):
+  - HANDOFF DEVICE STATE: the early-ramdisk is UNCHANGED from T740 (byte-identical
+    6804341a), so the handoff state is identical to T740 flight-15's proven state:
+    /sysimg unmounted, /vendor unmounted, debugfs unmounted, /proc unmounted
+    (all rc=0, handoff state verified, /data mounted, no HANDOFF ABORTED). DIFF vs
+    T734's handoff state (only /data + /data/media mounted): NONE — same script, same
+    hooks, same verification block.
+  - CALL-REACHABILITY: the vendor rc action runs as root via init (uid 0, full
+    capabilities) at `post-fs-data`, before any service starts (class_start core runs
+    in `on boot`, which is after post-fs-data). The chmod targets the debugfs mount
+    created by the SAME action one line above, so the paths exist when chmod runs.
+    The consuming context is uid 1000 (surfaceflinger); after chmod 0755, uid 1000
+    can traverse both dirs. Reachability of the fix itself: the rc file is parsed by
+    init from /vendor/etc/init/ at second-stage startup (same mechanism as the T721
+    mount, which provably ran in flight-15 per the fence-log).
+  - FULL DAC PATH the fix creates (flight-17 empirical proof: chmod 0755 on these two
+    dirs was sufficient for SP3 to open the timeline from uid 1000, so every parent
+    above them was already traversable):
+      / -> /sys -> /sys/kernel -> /sys/kernel/debug (0700 root -> 0755 by the fix)
+      -> /sys/kernel/debug/sync (0700 root -> 0755 by the fix)
+      -> /sys/kernel/debug/sync/sw_sync (the timeline file; openable once the dirs
+         are 0755, as flight-17 proved: SP3 fd=4, CREATE rc=0, INC rc=0, signaled).
+  - VENDOR REPACK VERIFICATION: see (a) above — composer f7600821, shim 3daa5a49,
+    libEGL 34b79da2, all byte-identical before AND after; base untouched.
+  - UMOUNT TOOL NEEDED SET (T738 lesson): the unmount tool is toybox (umount), exec'd
+    from the ramdisk init. Its NEEDED closure (libcrypto/libz/liblog/libprocessgroup/
+    libselinux/libc/libm/libdl + transitive libbase/libcgrouprc/libc++/libpcre2/
+    libpackagelistparser) is fully present in the ramdisk's /system/lib64/ — and with
+    NO LD_LIBRARY_PATH export (T739 fix, carried forward), toybox maps NOTHING from
+    /sysimg, so it can unmount the mounts it undoes: /sysimg (vda, mounted by this
+    same toybox earlier in the script), /vendor (loop1, same), debugfs (/sys/kernel/
+    debug, same). Proven by T740 flight-15: all three unmounts rc=0.
+  - BRANCH CHOICE: FIX-FLOWN (the vendor-rc fix is built, verified, and embedded in
+    the flown CPIO; A/B control = the T740 stack unchanged except the vendor repack).
+  - ADJUDICATION CRITERIA (brief verdict contract): PASS = full 1500 s flight runs AND
+    boot completes (sys.boot_completed fires, literal string + count) AND the dup
+    signal in the surfaceflinger context is measured with guest-origin evidence AND
+    the vendor-rc fix is FLOWN and the dup-fail rate is BELOW BOTH baselines
+    4.058/6.660 on a normalized presenting-time basis + all T721/T722 holds intact
+    AND the [T739] unmount hooks fire (all three rc=0, handoff verified, /data
+    mounted, no HANDOFF ABORTED) AND the orphaned scripts are killed (post-handoff
+    spam ~0). If the fix does not change the dup-fail rate, that is a complete
+    result — record the rate, the presenting time, and the first failing link; do
+    NOT re-diagnose dispatch.
+Step 2 verdict: PASS — fix built, verified, and staged; flight pending disk-gate recheck.
+
+Step 3 — FLIGHT service-flight-18 (launched 08:24:03 AEDT 21 Nov 2026):
+  Disk gate recheck at launch: 15,899,196 KiB free, 93%. Gate 9,769,216 KiB. OPEN.
+  No QEMU running before launch (clean slate).
+  Supervisor PID 48083, QEMU PID 48091, started 2026-11-20T21:24:03Z.
+  Guest target 1500 s, host cap 1800 s. Expected guest-target reach ~08:49-08:50 AEDT.
+  Flown stack: kernel 70d3859d, system af40403a, vendor fe0bc359 (T741 repack),
+  CPIO c1203336 (embedded vendor fe0bc359), DTB 4ecab141 (initrd-end 0x1133435ed),
+  early-ramdisk 6804341a (unchanged), supervisor + analyzer T741.
+  Mid-flight spot-check guest ~1005 s (08:40 AEDT): T734_KERNEL_OK 1, T723_PROBE 27,
+  sys.boot_completed 8, WATCHDOG KILLING 0, UART 57,211 lines. Step 3a gate PASSED
+  (probe ran).
+  Flight ENDED 08:49:20 AEDT (2026-11-20T21:49:20Z): guest 1512.44 s, host 1516.98 s,
+  QEMU exit 0. Stop reason "Guest target reached (1512.4s >= 1500s)". UART 133,388
+  lines, 18,497,574 B, SHA bba22ffe402f69c229128a8f22c19070688f46751f9d532f7f76a64bb8c21342.
+  QEMU + supervisor both gone (clean exit). Step 3a: probe ran (T723_PROBE 27) — full
+  flight flown, no STOP.
+Step 3 verdict: PASS — full 1500 s flight ran, QEMU exit 0.
+
+Step 4 — ADJUDICATION + WATCHDOG INVESTIGATION (complete 09:14 AEDT):
+  Analyzer scripts/analyze_t741_probe.py on the flight-18 UART, exit 0 (361 lines).
+  Independent recounts scripts/verify_t741_step4.py + scripts/verify_t741_step4b.py.
+  - First sys.boot_completed firing: guest 521.327 s (L14375) — FASTEST in the chain
+    (T734 790 s, T740 1175.836 s). sys.boot_completed 8 lines.
+  - Presenting time 991.1 s. RenderEngine EGL dup-fail 0. Rate 0.000/1000 s — BELOW
+    BOTH baselines 4.058/6.660. Presenting proof: CALL allocate2 122 post-boot
+    (guest 538.8–1430.1 s); T721 fence-log L16401 guest ~554.3 s (composer pid 508,
+    fd=10 tl=9); simplefb mapped 1.
+  - Early-ramdisk probe (pre-fix control): SP1 dup rc=-1, SP2 dup rc=-1, SP3 fd=-13,
+    uid 1000, IMAGE libEGL /sysimg/system/lib64/libEGL.so. T722 condition reproduced.
+  - All T721/T722 holds intact; [T739] unmount hooks all rc=0; post-handoff spam 0/0.
+  - Watchdog KILLING 0 — the flight-15 kill did NOT recur (parser fix regression-tested
+    on flight-15 L14509: catches 1 where the T740 parser reported 0).
+  - NEW observation: system_server pid 678 died by SIGKILL at guest ~596 s (Zygote
+    L18508 "Process 678 exited due to signal 9 (Killed)"), post-boot. Killer
+    UNIDENTIFIED in the UART (no lmkd kill line names 678; watchdog ruled out).
+    Zygote reforked system_server 2176 (~623 s); boot re-processed at 723.078 s.
+    6 FATAL EXCEPTIONs are collateral (sdksetup, permissioncontroller, launcher3,
+    phone + 2 unnamed, within 0.64 s). media.c2 waits 786 (5x flight-15) with NO
+    watchdog kill — the waits are NOT the boot-slowness driver.
+  - Control markers T733/T728_PROBE_OK = 3 (not 2): the property action fired twice
+    (527.2 s + 727.3 s, the second from the restarted system_server re-processing
+    boot_completed). Both rc files (SHA-verified from the FLOWN system image)
+    contain `write /dev/kmsg T*_PROBE_OK` — the marker is written by INIT when the
+    action runs, even when the `start` fails. Both leg-2 `start t728probe` commands
+    FAILED on the SELinux label error (L14917, L27105). The markers prove the
+    triggers fired, not that the binaries exec'd.
+Step 4 verdict: PASS — every verdict-contract clause met; see findings-t741.md.
+
+Step 5 — FINDINGS + OUTCOME + SYNC (complete 09:14 AEDT):
+  findings-t741.md written (verdict PASS, wall POST-BOOT-WINDOW-TOO-SHORT CLOSED,
+  full counts + watchdog investigation + reflection + successor direction).
+  outcome-t741.txt: PASS (5 bytes). No DEATH_NOTE (PASS lanes only).
+  TIMELINE.md written. progress-t741.txt this file. heartbeat.json CLOSED.
+  Flight evidence in flights/service-flight-18/ (uart.log + analysis-t741.txt +
+  flight-end.json + preflight.json + qemu-command.txt + supervisor.log +
+  qemu-stderr.log + uart.log.gz + uart.log.numbered.txt).
+  Synced to ~/workspace/t741-scratch/ AND /mnt/sdc3/muse/kernel-primary/t741/,
+  SHA-verified EVERY file on the box.
+  NOTHING committed, pushed, or touched in the registry or GATES.md — driver owns those.
+Step 5 verdict: PASS — lane complete.
+
+LANE VERDICT: PASS. T740 wall POST-BOOT-WINDOW-TOO-SHORT CLOSED. Successor direction:
+T742 — identify the post-boot system_server SIGKILL source (LMK candidate); the dup
+question is CLOSED, the vendor-rc fix carries forward unchanged.

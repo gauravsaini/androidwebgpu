@@ -1,56 +1,34 @@
-# TIMELINE — Track T740 (all times AEDT, 21 Nov 2026)
+# T741 timeline — vendor init rc fix + 1500 s window
 
-- **05:38** — Lane launched (agent `e7f12434`, brief `9efda8f4`, worktree
-  `/Users/Shared/wt-track740-longer-window`, branch t740, base 902c272). Disk
-  gate OPEN (26,325,112 KiB free, 88%). Wedge 08:38.
-- **05:56** — Step 0: disk re-checked, 23,654,800 KiB free, 89% — OPEN.
-  Step 1: all 23 guest-inputs re-hashed, all MATCH; T739/T738/T737/T736/T734
-  findings read in full. Hard gate PASSED.
-- **~06:10–06:25** — Step 2: early-ramdisk-t740 built (`6804341a`, kill block
-  only, no export); CPIO rebuilt (`724dff6c`, 53,753,289 B); DTB re-patched
-  (`6b6a118d`, initrd-end 0x1133435c9); embedded vendor verified `5e0607ad`;
-  supervisor `f07de12c` + analyzer `2e90935e` import-tested; box sync done
-  (CPIO routed Mac→box via sandbox pipe after the sandbox rsync hit quota).
-  Branch: INVESTIGATION-ONLY for the fix build.
-- **06:22:26** — Flight service-flight-15 launched (supervisor PID 87228,
-  QEMU PID 87291, GDB 1269; disk 22,111,368 KiB free, 90% — OPEN).
-- **06:23:36** — Early check: T723_PROBE 27, T734_KERNEL_OK (guest 3.89 s),
-  [T740] kill both PIDs (201/202), all three [T739] unmounts rc=0, handoff
-  verified, init first stage started (guest 11.0 s).
-- **~06:33** — Disk 20,420,696 KiB free (91%), still OPEN. Guest kernel-time
-  reading stalled at 344.8 s for ~3 polls during the logcat-heavy dex2oat
-  phase (QEMU 98.3% CPU, logcat advancing — lagging indicator, not a stall);
-  guest caught up (1094.9 s at host 1097.3 s by 06:40).
-- **06:42:31** — Flight-15 ENDED: "Guest target reached (1202.1s >= 1200s)",
-  host 1202.60 s, guest 1202.06 s, QEMU exit 0. UART 26,242 lines, 3,505,378 B,
-  SHA `0befc1fe`. **Boot completed: sys.boot_completed first fired guest
-  1175.836 s (12 lines).** System_server watchdog-killed at ~guest 935 s and
-  restarted (pid 2323), completing boot. T721 fence created (fd=10 tl=9) +
-  simplefb mapped (guest ~890 s). RenderEngine dup-fail 0 (VOID — only 26 s
-  post-boot).
-- **~06:47** — Analyzer run on flight-15 (exit 0); all counts verified by
-  byte recount on the sandbox UART copy.
-- **07:00:13** — Flight service-flight-16 launched (mechanism test 1: file
-  chmod 0666; supervisor PID 14616, QEMU PID 14620, GDB 1270).
-- **07:02:25** — Flight-16 ENDED: host 130.26 s, guest 126.741 s, QEMU exit 0.
-  UART 3,968 lines, 577,113 B, SHA `56354691`. **Result: SP3 still fd=-13 —
-  the file-chmod route FAILED.** File was already 0644; SP3 opens O_RDONLY;
-  no avc denial against the probe.
-- **07:00–07:16** — Diagnosis: probe source checked on the box (SP3 opens
-  O_RDONLY, line 548); flight-15's first 600 lines contain NO avc denial for
-  the probe; the barrier must be on the open path, not the file. Mech2 built:
-  early-ramdisk-t740-mech2 (`3c9aa19d`, adds `ls -ld` of the parent dirs +
-  `chmod 0755` on them), CPIO `1f8c00f2`, DTB `534f4c39`.
-- **07:17:40** — Flight service-flight-17 launch attempt 1 FAILED on a
-  supervisor checksum refusal (lane typed a fabricated DTB SHA tail; the gate
-  caught it; no QEMU started). Corrected from the supervisor's error message
-  and re-launched (supervisor PID 21028, QEMU PID 21041, GDB 1271).
-- **07:19:45** — Flight-17 ENDED: host 125.27 s, guest 123.601 s, QEMU exit 0.
-  UART 3,817 lines, 548,912 B, SHA `10f6365a`. **Result: MECHANISM PASSES —
-  `/sys/kernel/debug` was drwx------ (0700); after chmod 0755, SP3 opens the
-  timeline (fd=4), SP1 dup rc=5, SP2 dup rc=7; all three sub-probes mint real
-  signaled sw_sync fences.**
-- **~07:23–07:25** — Analyzer runs on flights 16/17 (exit 0); byte recounts
-  on the sandbox copies match the parser exactly; all files synced to sandbox
-  + box; findings/outcome/death note/timeline/progress/heartbeat written.
-  Lane ends: verdict FAIL (clause 3 unmeasured), mechanism PASSED.
+All times AEDT 21 Nov 2026 unless marked Z (UTC). Clock read from `TZ=Australia/Sydney date` at each stamp; no estimated timestamps.
+
+| Time | Event |
+|---|---|
+| 07:50 | Lane launched (agent e34acd85). Wedge 10:50. |
+| 07:56 | Step 0 disk gate: 18,196,364 KiB free, 92%. OPEN. |
+| 07:57 | Step 1 input verification complete, all PASS (kernel 70d3859d, system af40403a, vendor 5e0607ad, T740 CPIO 724dff6c, DTB 6b6a118d, early-ramdisk 6804341a). |
+| 08:20 | Step 2 build complete, PASS. Vendor repacked (fe0bc359), CPIO rebuilt (c1203336), DTB re-patched (4ecab141), analyzer Watchdog pattern fixed + regression-tested on flight-15 L14509. |
+| 08:20:22Z | Heartbeat written (Step 2 complete). |
+| 08:24:03 | Flight service-flight-18 launched (supervisor PID 48083, QEMU PID 48091). Disk recheck 15,899,196 KiB free, 93%. OPEN. |
+| 08:40 | Mid-flight spot-check, guest ~1005 s: T734_KERNEL_OK 1, T723_PROBE 27, sys.boot_completed 8, WATCHDOG KILLING 0, UART 57,211 lines. |
+| 08:49:20 | Flight ended: guest 1512.44 s, host 1516.98 s, QEMU exit 0. "Guest target reached (1512.4s >= 1500s)". UART 133,388 lines, SHA bba22ffe. |
+| 09:14 | Step 4 adjudication + Step 5 findings complete. Verdict PASS. |
+
+## Guest-time anchors (from the flight-18 UART)
+
+| Guest s | Event |
+|---|---|
+| 3.489 | T734_KERNEL_OK (L194) |
+| 4.683 | T723_PROBE start (L357–358); SP3 fd=-13, SP1/SP2 dup rc=-1 |
+| 76.983 / 77.081 | T728_PROBE_OK / T733_PROBE_OK leg 1 (on boot) |
+| 521.327 | First sys.boot_completed firing (L14375) — fastest in the chain |
+| 527.208 / 527.211 | Property action processed; `start t728probe` FAILED (SELinux label, L14917) |
+| 527.291 / 527.364 | T728/T733_PROBE_OK leg 2 (init-written trigger markers) |
+| ~554.3 | T721 fence-log (L16401): composer pid 508, fd=10 tl=9 — real fence, post-boot |
+| ~581 | 6 FATAL EXCEPTIONs within 0.64 s (sdksetup, permissioncontroller, launcher3, phone + 2 unnamed) |
+| ~596 | Zygote: "Process 678 exited due to signal 9 (Killed)" (L18508) — system_server SIGKILL |
+| ~623 | system_server pid 2176 first lines (L18994, "Using CollectorTypeCC GC") |
+| 723.078 | sys.boot_completed re-processed (L26357) by the restarted system_server |
+| 727.313 / 727.740 | Property action re-fired; T728/T733_PROBE_OK leg 2 repeat |
+| 1430.065 | Last post-boot CALL allocate2 (L102675) |
+| 1512.440 | Guest max; flight-end |
