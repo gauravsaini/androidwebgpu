@@ -1,1 +1,11 @@
-{"current_step":"Step 5 DONE — findings written, Verdict FAIL","flight":"service-flight-12","guest_log_max_seconds":11.965,"host_elapsed_seconds":15.02,"note":"Flight-12 ran 02:45 AEDT: probe RAN (27 T723_PROBE, SP1/SP2 dup -1 vs IMAGE libEGL L383), /proc scoping PROVEN (unmount rc=0), but init failed to mount /system from unbound loop0 and rebooted to bootloader at guest 11.965 s. NEW guest wall INIT-SYSTEM-MOUNT-LOOP0-UNBOUND. Successor T738: unmount probe mounts before handoff. Lane complete 02:58 AEDT 21 Nov, inside the 05:03 wedge.","qemu_pid":null,"status":"CLOSED","supervisor_pid":null,"target_guest_seconds":850,"target_host_seconds":1100,"timestamp_utc":"2026-11-20T15:58:19Z","track":"T737","verdict":"FAIL"}
+{
+  "timestamp_utc": "2026-11-20T16:56:01Z",
+  "status": "CLOSED",
+  "track": "T738",
+  "flight": "service-flight-13",
+  "current_step": "Lane complete \u2014 verdict FAIL (INIT-UMOUNT-SELF-BLOCKED)",
+  "verdict": "FAIL",
+  "host_elapsed_seconds": 25.03,
+  "guest_log_max_seconds": 16.485,
+  "note": "unmount /sysimg FAILED rc=1 (L542); HANDOFF ABORTED; probe ran 27 T723_PROBE; successor T739"
+}

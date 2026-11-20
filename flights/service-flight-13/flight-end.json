@@ -1,0 +1,45 @@
+{
+  "track": "T738",
+  "flight": "service-flight-13",
+  "stop_reason": "QEMU process exited with returncode 0",
+  "started_utc": "2026-11-20T16:40:36Z",
+  "ended_utc": "2026-11-20T16:41:01Z",
+  "host_elapsed_seconds": 25.03,
+  "guest_log_max_seconds": 16.485,
+  "qemu_exit_code": 0,
+  "log_bytes": 46953,
+  "log_lines": 613,
+  "log_sha256": "8796fb477df7d3a1866b0fbf779f157aa4638009b6eafad67cbf884caf1825c1",
+  "inputs": {
+    "kernel": {
+      "path": "/Users/Shared/wt-track738-unmount-handoff/guest-inputs/t720-Image",
+      "sha256": "70d3859d6aed1906d27217aa3fdfd9bb953a57f4490c89c51efa4f6490441e04",
+      "bytes": 20396544
+    },
+    "qemu": {
+      "path": "/opt/homebrew/bin/qemu-system-aarch64",
+      "sha256": "8e5c46dc6752c36afbb706f933e72fef835e35f48881a63cadb06c6d29bac869",
+      "bytes": 31498864
+    },
+    "dtb": {
+      "path": "/Users/Shared/wt-track738-unmount-handoff/t738-modified.dtb",
+      "sha256": "4be603328ae1c668e24182b9c1d174e1490d52bb81df943eab8b0c781bd39dec",
+      "bytes": 2049
+    },
+    "boot_image": {
+      "path": "/Users/Shared/wt-track738-unmount-handoff/t738-fix.cpio.gz",
+      "sha256": "5d7affd5d23478fb5e3a6c4624411df20401708761b0efa8d4a08b5242488c8b",
+      "bytes": 53749194
+    },
+    "system_img": {
+      "path": "/Users/Shared/wt-track738-unmount-handoff/guest-inputs/t733-system.img",
+      "sha256": "af40403aa286a770f67dc8599584ef038c3192f2ff43ff89e62a3546ded89043",
+      "bytes": 2059816960
+    },
+    "vendor_img": {
+      "path": "/Users/Shared/wt-track738-unmount-handoff/guest-inputs/t722-vendor.img",
+      "sha256": "5e0607ada51367fbe9f7e5dd7586afbeb9216f478f00a31baa5179eb73f476e0",
+      "bytes": 134217728
+    }
+  }
+}

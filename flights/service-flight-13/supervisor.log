@@ -1,0 +1,9 @@
+[T738 SUPERVISOR] Verifying flight inputs...
+[SUPERVISOR] Launching QEMU T738 service-flight-13 guest flight...
+[SUPERVISOR] QEMU pid=25257 started at 2026-11-20T16:40:36Z
+[SUPERVISOR 2026-11-20T16:40:36Z] host_elapsed=0.0s guest_max=0.0s pid=25257
+[SUPERVISOR 2026-11-20T16:40:51Z] host_elapsed=15.0s guest_max=7.9s pid=25257
+[SUPERVISOR] Flight ended at 2026-11-20T16:41:01Z (QEMU process exited with returncode 0)
+[SUPERVISOR] Host elapsed: 25.03s, Guest log max: 16.49s
+[SUPERVISOR] Generating uart.log.numbered.txt and uart.log.gz...
+[SUPERVISOR] flight-end.json written. Flight /Users/Shared/wt-track738-unmount-handoff/flights/service-flight-13 complete.

@@ -1,11 +1,9 @@
-# T737 timeline
+# T738 timeline — unmount probe mounts before handoff (restore T734 device state)
 
-- 02:03:04 AEDT Sat 21 Nov 2026 — lane launched (agent `199419f7`, brief `7b13f42f`, wedge 05:03 AEDT). Disk gate CLOSED at launch (800,496 KiB free, 100%).
-- 02:03–02:14 — Step 1 DONE: inputs SHA-verified; T736/T735/T734 findings read in full; LD_LIBRARY_PATH mechanism RESOLVED (image lib64 is at /sysimg/system/lib64, not /sysimg/lib64); libEGL byte-identity confirmed (dup fn 56 B identical; eglGetProcAddress logic-identical, 2 address operands shifted 0x10).
-- 02:14–02:32 — Step 2 DONE: early-ramdisk `32b1430c` (proc scoping + corrected LD_LIBRARY_PATH); CPIO `266deb91` (53,747,156 B); DTB `c075b453` (initrd-end 0x113341dd4); supervisor `eed00206`; analyzer `ea9df2fb` (import-tested vs flight-11 UART: certified counts reproduced).
-- 02:35 — Mac disk REOPENED on its own: 18,390,440 KiB free (92%), gate OPEN. (Earlier rsync to the Mac failed once on a transient proxy broken pipe; Mac reachable via macssh throughout.)
-- 02:40–02:43 — Staged to the Mac worktree, all SHAs verified: early-ramdisk `32b1430c`, supervisor `eed00206`, analyzer `ea9df2fb`, DTB `c075b453`, CPIO `266deb91` (via box→Mac pipe; sandbox mirror skipped on quota — box copy is canonical).
-- 02:44 — Step 3: disk gate OPEN (16,198,872 KiB free at 02:43). service-flight-12 LAUNCHING (full 850 s guest target, 1100 s host cap).
-- 02:45 — Step 3: service-flight-12 FLOWN (host 15.02 s, guest 11.965 s, QEMU exit 0). Probe RAN (27 T723_PROBE); SP1/SP2 dup -1 vs the IMAGE's libEGL (L383); /proc scoping PROVEN (L392–393).
-- 02:45–02:52 — Step 4: guest aborted — init tried /system from unbound /dev/block/loop0 (L601–605) and rebooted to bootloader (L607). NEW guest wall INIT-SYSTEM-MOUNT-LOOP0-UNBOUND. T734 comparison PROVEN (fstab says vda; T734 mounted vda; T737 handoff left vda/loop1/debugfs mounted). Full flight NOT run; surfaceflinger context un-runnable; no fix route tested.
-- 02:56–02:58 — Step 5: findings filed (Verdict FAIL), outcome FAIL (4f8e9e45), death note written. Lane complete 02:58 AEDT 21 Nov, inside the 05:03 wedge. Successor: T738 (unmount probe mounts before handoff).
+- 03:19:31 AEDT 21 Nov 2026: lane launched (agent 62e4b03d). Disk 100%, 1,544,900 KiB free — gate CLOSED.
+- 03:20–03:35: Step 1 DONE — inputs SHA-verified; T737/T736/T734 findings read; handoff-state diff confirmed (T734 f1e68858).
+- 03:35–03:39: Step 2 DONE — early-ramdisk-t738 7f4525a9 (unmount block + verify, STOP on failure); CPIO 5d7affd5 (53,749,194 B); DTB 4be60332 (initrd-end 0x1133425ca); supervisor 800d4746; analyzer ea5923ee (regression-checked on flight-12 UART).
+- 03:39: disk gate OPEN — 93%, 16,125,236 KiB free. Flight service-flight-13 launching (guest target 850 s, host cap 1100 s).
+- 03:40:36–03:41:01: flight service-flight-13 — host 25.03 s, guest 16.485 s, QEMU exit 0. Probe ran (27 T723_PROBE); unmount /sysimg FAILED rc=1 (L542); HANDOFF ABORTED (L593); kernel panic guest 16.479 s.
+- 03:41–03:55: Step 4 adjudication DONE — verdict FAIL. New wall INIT-UMOUNT-SELF-BLOCKED (toybox maps /sysimg libraries; the tool is its own blocker). Successor: T739 (scope LD_LIBRARY_PATH to the probe line; verify transitive closure first).
+- ~03:47–03:50: sandbox egress-proxy outage — box ssh/rsync + Mac macssh all failed (nc proxy broken pipe / PREFLIGHT_FAIL). Mac + sandbox evidence complete; box sync pending on recovery.

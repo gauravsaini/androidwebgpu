@@ -1,0 +1,211 @@
+# T738 progress — unmount probe mounts before handoff (restore T734 device state)
+
+Lane agent 62e4b03d-fe50-4604-b95b-12b7bc65e7b4, launched 03:19:31 AEDT Sat 21 Nov 2026, wedge 06:19:31 AEDT.
+Brief: hidden_files/briefs/track738-unmount-before-handoff.md, SHA 46b79f26 (36,796 B), brief-gate READY.
+Worktree /Users/Shared/wt-track738-unmount-handoff, branch t738, base 36ce58a (T737 certification commit).
+Flight: service-flight-13 onwards (guest target 850 s, host cap 1100 s).
+
+## Step 0 — Disk gate
+
+- 03:19 AEDT 21 Nov: Mac data volume 100%, 1,544,900 KiB free (driver launch reading: ~3.5 GiB free, 99%).
+  Gate 9,769,216 KiB — CLOSED at launch. Per the brief: proceed with Steps 1–2 (no flights),
+  gate FLIGHTS at Step 3 with WAIT-DISK if still closed. No 2 GB copies, no QEMU in Steps 1–2.
+
+## Step 1 — Verify inputs + read T737/T736/T734 findings: DONE (03:20–03:35 AEDT)
+
+Findings read in full first: findings-t737.md (9832c9c9, Verdict FAIL), findings-t736.md
+(8bf8eb61, Verdict PASS), findings-t734.md (febad60f, Verdict PASS).
+
+Input verification — every SHA re-hashed on the machine where it will be used (Mac worktree
+guest-inputs/ unless noted), NO network fetch:
+
+- kernel Image 70d3859d (20,396,544 B) — guest-inputs/t720-Image, MATCH
+- system image af40403a (2,059,816,960 B) — guest-inputs/t733-system.img, MATCH
+- vendor image 5e0607ad (134,217,728 B) — guest-inputs/t722-vendor.img, MATCH
+- t723-probe 4b275e48 (68,792 B) — guest-inputs/t723-probe, MATCH
+- T733 patch 4d74f4d1 (6,291,563 B) — guest-inputs/t733.patch, MATCH
+- rc 79ad3cc3 (722 B) — guest-inputs/t733probe-new.rc, MATCH (parser VERDICT ACCEPT)
+- T733 binary fd189c08 (1,648 B) — guest-inputs/nb-t733probe.bin, MATCH
+- T728 binary 19db5d31 (67,168 B) — guest-inputs/nb-t728probe.bin, MATCH
+- T734 CPIO v2 57c04949 (53,391,901 B) — guest-inputs/t734-fix-v2.cpio.gz, MATCH
+- T734 DTB 72831bab (2,049 B) — guest-inputs/t734-modified.dtb, MATCH
+- T723 CPIO a9d6040a (53,391,088 B) — guest-inputs/t723-fix.cpio.gz, MATCH
+- T723 DTB 73d1904b (2,049 B) — guest-inputs/t723-modified.dtb, MATCH
+- T737 CPIO 266deb91 (53,747,156 B) — T737 worktree t737-fix.cpio.gz + box t737/, MATCH (rebuild base)
+- T737 DTB c075b453 (2,049 B; initrd-end 0x113341dd4) — T737 worktree + box, MATCH (reference)
+- early-ramdisk-t737 32b1430c (14,709 B) — T737 worktree, MATCH (edit base)
+- patch_dtb_initrd.py 1f896a01 — T737 worktree, MATCH
+- supervisor_t737.py eed00206 — T737 worktree scripts/, MATCH (adaptation base)
+- analyze_t737_probe.py 25741448 — T737 worktree scripts/, MATCH (adaptation base, path= anchored)
+- rebuild_cpio_t737.py 9e493a57 (7,090 B) — box t737/ copy, MATCH; fetched to sandbox t738-scratch/
+  (NOT in the Mac worktree — the T737 variance; the box copy is canonical)
+
+EMBEDDED-VENDOR RULE: the T737 CPIO's ramdisk-images/vendor.img member hashes to
+5e0607ad (134,217,728 B) — verified by parsing the box T737 CPIO copy. The guest
+consumes the embedded vendor image, not a host-side file.
+
+QEMU command line (from T737 flight-12 preflight.json, driver-verified): QEMU 11.1.2,
+-kernel guest-inputs/t720-Image, -dtb <worktree> t737-modified.dtb, CPIO via
+-device loader,file=<worktree>/t737-fix.cpio.gz,addr=0x110000000,force-raw=on,
+system via virtio-blk file=guest-inputs/t733-system.img,format=raw,readonly=on,
+rdinit=/early-ramdisk, target 850 s. The guest consumes exactly the verified files above.
+
+Handoff-state diff (T734 vs T737, independently confirmed in this lane): the T734
+early-ramdisk was extracted from the box T734 CPIO v2 (13,867 B, SHA f1e68858 — matches
+the T737 findings record). At its handoff (exec /init, line 280) it mounts NOTHING
+except /data (loop2/ram0 ext4) + /data/media (tmpfs); loop1 is attached-but-unmounted;
+there are NO /sysimg, /vendor, debugfs, or /proc mounts anywhere in the script. The
+T737 script differs exactly by the probe mounts (/sysimg vda, /vendor loop1, debugfs,
+/proc scoped). Target handoff state for this lane: T734's state, verbatim.
+
+No missing or mismatched input. Step 1 HARD GATE passed.
+
+## Step 2 — Build: DONE (03:35–03:39 AEDT)
+
+### Edit: early-ramdisk-t738 (SHA 7f4525a9, 17,247 B; base early-ramdisk-t737 32b1430c, 14,709 B)
+
+- Diff vs the T737 script is ONLY the new unmount block (58 lines) inserted
+  immediately before the handoff echo, plus the handoff echo tag [T737] -> [T738].
+  Verified by shell diff (single hunk) + sh -n OK.
+- The block runs AFTER the /data block (the probe needs the mounts during its
+  exec; the /data mounts happen after the probe). It unmounts, in order:
+  /sysimg (vda), /vendor (loop1), /sys/kernel/debug (debugfs). Each unmount
+  emits a [T738] hook line with rc=0, or a FAILED line with rc!=0.
+- Verification: re-mount /proc briefly, grep /proc/mounts for any of
+  " /sysimg ", " /vendor ", " /sys/kernel/debug " (grep -E, anchored on the
+  mountpoint field), emit "[T738] handoff state verified: ..." or DIRTY,
+  then check " /data " is mounted, then unmount /proc again (the /proc
+  scoping pattern). A FAILED verify /proc mount emits UNVERIFIED.
+- STOP rule (brief): if ANY unmount fails, or the state is DIRTY/UNVERIFIED,
+  handoff_abort=1 and the script prints HANDOFF ABORTED and exits 1 (PID 1
+  exit -> kernel panic; the FAILED hook line is the first failing link).
+  No exec /init with a dirty device state.
+
+### Handoff device state (explicit, at exec /init)
+
+- Mounted: /data (loop2 ext4) + /data/media (tmpfs). NOT mounted: /sysimg,
+  /vendor, /sys/kernel/debug, /proc. loop1 attached-but-unmounted; vda not
+  mounted anywhere.
+- Diff vs T734's handoff state: IDENTICAL. T734's script (f1e68858, line 280)
+  mounts only /data + /data/media at its handoff, loop1 attached-but-unmounted,
+  no /sysimg, /vendor, debugfs, or /proc. The only difference is code, not
+  state: T738's script contains the unmount + verify block (dead after exec)
+  and the [T738] hook lines.
+
+### REACHABILITY
+
+- The script mounts the probe mounts itself, so toybox umount on those paths
+  is reachable by construction (same toybox, same paths, same PID 1 context).
+  The verification re-mounts /proc and greps /proc/mounts — the same mechanism
+  T737 proved in the guest ([T737] unmount proc rc=0, L392-393). No claim
+  rests on host-side membership: the guest emits the [T738] hook lines (or
+  the HANDOFF ABORTED line) on the UART, or the flight is void.
+
+### Rebuild (box, canonical)
+
+- rebuild_cpio_t738.py (07f3a513, adapted from 9e493a57): SRC box T737 CPIO
+  266deb91, DST box t738/t738-fix.cpio.gz, NEW_INIT box t738/early-ramdisk-t738
+  (7f4525a9, assertions incl. T738 tag + unmount + handoff-state lines),
+  NEW_BIN box t734/cpio-unpack/t723-probe (4b275e48, already a member, payload
+  identical, no duplicate inserted). Result: t738-fix.cpio.gz SHA 5d7affd5
+  (53,749,194 B, 241 entries, uncompressed 725,825,652 B); all untouched
+  entries byte-identical; early-ramdisk 14,709 -> 17,247 B; t734probe preserved.
+- FLOWN-CPIO member verification (EMBEDDED-VENDOR RULE): early-ramdisk 7f4525a9,
+  ramdisk-images/vendor.img 5e0607ad, t723-probe 4b275e48, t734probe b7440e1c,
+  system/bin/linker64 ffd6af09 (real file). ramdisk-images/system.img: no such
+  member (the system image is the virtio-blk file, as in T737).
+- DTB: patch_dtb_initrd.py (1f896a01) on the box, T737 DTB c075b453 -> 
+  t738-modified.dtb SHA 4be60332 (2,049 B). initrd-end 0x113341dd4 ->
+  0x1133425ca = 0x110000000 + 53,749,194 (verified; only the 8 end bytes
+  changed, asserted by the patcher). First patch attempt failed on argument
+  order (usage is <in.dtb> <initrd-file> <out.dtb>); corrected, no state lost.
+- Supervisor: scripts/supervisor_t738.py (800d4746) — T737 shape, TRACK T738,
+  service-flight-13, T738 env prefixes, EXPECTED dtb 4be60332 / cpio 5d7affd5,
+  progress-t738.txt heartbeat path. Import-tested.
+- Analyzer: scripts/analyze_t738_probe.py (ea5923ee) — T737 hooks kept
+  (carried-forward code still emits [T737] tags) + new [T738] unmount/verify
+  section (3 unmounts, handoff-state verified/DIRTY/UNVERIFIED, unmount proc
+  (verify), HANDOFF ABORTED). Import-tested. Regression check on the T737
+  flight-12 UART: 607 lines / 47,331 B, T723_PROBE 27 (SP1/SP2/SP3 DONE 1 each),
+  IMAGE libEGL maps 1, RAMDISK libEGL maps 0 (anchored path= pattern held),
+  [T738] hooks 0, HANDOFF ABORTED 0 — correct for a pre-T738 UART.
+- All build artifacts synced to the Mac worktree with SHAs verified
+  (early-ramdisk-t738 7f4525a9, t738-fix.cpio.gz 5d7affd5, t738-modified.dtb
+  4be60332, rebuild_cpio_t738.py 07f3a513, patch_dtb_initrd.py 1f896a01,
+  scripts/supervisor_t738.py 800d4746, scripts/analyze_t738_probe.py ea5923ee).
+  The CPIO went box -> Mac via a sandbox pipe (no sandbox disk use); the
+  rebuilder now lives in the worktree root (the T737 "not in the worktree"
+  variance is NOT repeated).
+
+### Branch choice
+
+- INVESTIGATION-ONLY for the timeline-access fix: this flight tests whether
+  restoring T734's handoff device state lets the full 850 s flight run and
+  confirms dup -1 in the surfaceflinger context. The sw_sync timeline-access
+  fix route (open as root and hand the fd down, or relax the debugfs file's
+  permissions) is decided at Step 4 from the flight's outcome. The unmount
+  itself is the T737-wall fix being tested by this flight, not a second fix.
+
+### Adjudication criteria (Step 4)
+
+- PASS = the full 850 s flight runs AND SP1 + SP2 are both answered from the
+  booted guest with the IMAGE libEGL (SP2 maps /sysimg/system/lib64/libEGL.so)
+  AND the [T738] unmount hooks fire (all three unmounts rc=0, handoff state
+  verified, /data mounted, no HANDOFF ABORTED) AND a sw_sync timeline-access
+  fix route is TESTED with its outcome recorded.
+- FAIL = the full flight did not run, or SP1/SP2 are unanswered from the
+  booted guest, or the handoff device state was not restored (any unmount
+  FAILED / DIRTY / UNVERIFIED / ABORTED), or no fix route was tested.
+
+## Step 3 — Flight: IN PROGRESS
+
+- 03:39 AEDT 21 Nov: disk gate OPEN — Mac data volume 93%, 16,125,236 KiB free
+  (gate 9,769,216 KiB). The gate reopened on its own (was 100% / 1,544,900 KiB
+  at launch 03:19). Flight service-flight-13 launching.
+
+## Step 3 — Flight service-flight-13: ENDED EARLY (03:40:36–03:41:01 AEDT)
+
+- Disk gate OPEN at launch (93%, 16,125,236 KiB free). Supervisor PID 25249,
+  QEMU PID 25257. Host 25.03 s, guest 16.485 s, QEMU exit 0.
+- UART 613 lines, 46,953 B, SHA 8796fb47. T723_PROBE 27 (SP1/SP2/SP3 DONE 1
+  each); SP1 dup rc=-1, SP2 dup rc=-1 (IMAGE libEGL, L384), SP3 fd=-13.
+- `[T738] unmount /sysimg (vda) FAILED rc=1` (L542) — first failing link.
+  /vendor rc=0 (L586), debugfs rc=0 (L587); verification printed
+  `/dev/vda /sysimg ext4 ro,relatime 0 0` (L589), DIRTY (L590), HANDOFF
+  ABORTED (L593); kernel panic "Attempted to kill init" guest 16.479 s (L594).
+- Mechanism (PROVEN): toybox maps 5 libraries from /sysimg (readelf NEEDED:
+  libcrypto, libz, liblog, libprocessgroup, libselinux; 60 linker lines name
+  /sysimg/system/lib64/) because the script EXPORTS LD_LIBRARY_PATH (line 90)
+  to every child. The umount tool is its own blocker (EBUSY — errno not
+  observed, umount stderr went to /dev/null; see findings §6 gap 1).
+  sh exonerated (NEEDED = libc only); getprop/logcat ABSENT from the CPIO
+  (never run); /loop-node-keeper is static.
+- All post-handoff holds VOID (guest never reached Android init).
+
+## Step 4 — Adjudication: FAIL
+
+- PASS contract (conjunctive) NOT met: full flight NO (guest 16.485 s);
+  SP1/SP2 from the booted guest NO; unmount hooks all rc=0 NO (/sysimg
+  FAILED, state DIRTY, HANDOFF ABORTED); fix route tested NO (Step 4 not
+  reached — the flight ended in the unmount block).
+- New wall: INIT-UMOUNT-SELF-BLOCKED (guest). T737 wall
+  INIT-SYSTEM-MOUNT-LOOP0-UNBOUND NOT closed (handoff state never restored).
+- Successor: T739 — scope LD_LIBRARY_PATH to the probe line only (remove the
+  line-90 export); FIRST verify the transitive closure on the ramdisk path
+  (libnetd_client.so absent from the ramdisk's /system/lib64/, 13 of 14);
+  fallback: static umount binary. Capture umount stderr next time.
+
+## Step 5 — Findings + outcome + death note: DONE
+
+- findings-t738.md (SHA below), outcome.txt FAIL (4f8e9e45), DEATH_NOTE-T738.md.
+- Flight folder: 9 files (uart.log 8796fb47, analysis-t738.txt, flight-end.json
+  9a381925, preflight.json 71a3bd5e, qemu-command.txt 87bbf0dd, qemu-stderr.log
+  e3b0c442 (0 B), uart.log.gz 3eca8bc7, uart.log.numbered.txt a91339ad,
+  supervisor.log — from supervisor-flight13.log at the worktree root).
+- TRANSPORT OUTAGE ~03:47–03:50 AEDT: box ssh + box rsync + Mac macssh all
+  failed (nc proxy broken pipe / PREFLIGHT_FAIL via hatch-egress-proxy:3130);
+  both transports had worked minutes earlier. Mac + sandbox evidence is
+  complete; box-side sync (vault) is pending on transport recovery — the
+  driver retries at certification.
+- No commit by this lane (driver commits at certification). Registry/GATES.md
+  untouched.

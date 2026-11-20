@@ -1,0 +1,613 @@
+     1: [    0.000000] Booting Linux on physical CPU 0x0000000000 [0x411fd070]
+     2: [    0.000000] Linux version 4.19.130-g4da740c10-dirty (muse@gsai) (Android (13989888, +pgo, +bolt, +lto, +mlgo, based on r563880c) clang version 21.0.0 (https://android.googlesource.com/toolchain/llvm-project 5e96669f06077099aa41290cdb4c5e6fa0f59349), LLD 21.0.0 (/mnt/disks/build-disk/src/googleplex-android/llvm-r563880-release/out/llvm-project/llvm 5e96669f06077099aa41290cdb4c5e6fa0f59349)) #6 SMP PREEMPT Mon Nov 16 08:42:41 AEDT 2026
+     3: [    0.000000] Machine model: arm,virt
+     4: [    0.000000] earlycon: pl11 at MMIO 0x0000000009000000 (options '')
+     5: [    0.000000] bootconsole [pl11] enabled
+     6: [    0.000000] efi: Getting EFI parameters from FDT:
+     7: [    0.000000] efi: UEFI not found.
+     8: [    0.000000] cma: Reserved 16 MiB at 0x000000023f000000
+     9: [    0.000000] On node 0 totalpages: 2096252
+    10: [    0.000000]   Normal zone: 32768 pages used for memmap
+    11: [    0.000000]   Normal zone: 0 pages reserved
+    12: [    0.000000]   Normal zone: 2096252 pages, LIFO batch:63
+    13: [    0.000000] psci: probing for conduit method from DT.
+    14: [    0.000000] psci: PSCIv1.1 detected in firmware.
+    15: [    0.000000] psci: Using standard PSCI v0.2 function IDs
+    16: [    0.000000] psci: Trusted OS migration not required
+    17: [    0.000000] psci: SMC Calling Convention v1.0
+    18: [    0.000000] percpu: Embedded 24 pages/cpu s59224 r8192 d30888 u98304
+    19: [    0.000000] pcpu-alloc: s59224 r8192 d30888 u98304 alloc=24*4096
+    20: [    0.000000] pcpu-alloc: [0] 0 
+    21: [    0.000000] Detected PIPT I-cache on CPU0
+    22: [    0.000000] CPU features: enabling workaround for ARM erratum 832075
+    23: [    0.000000] ARM_SMCCC_ARCH_WORKAROUND_1 missing from firmware
+    24: [    0.000000] CPU features: enabling workaround for EL2 vector hardening
+    25: [    0.000000] Built 1 zonelists, mobility grouping on.  Total pages: 2063484
+    26: [    0.000000] Kernel command line: console=ttyAMA0,115200 earlycon loglevel=8 debug rdinit=/early-ramdisk androidboot.hardware=virt androidboot.selinux=permissive androidboot.veritymode=disabled enforcing=0 printk.ratelimit=0 brd.rd_nr=1 brd.rd_size=524288 androidboot.t720_fix_initramfs_sha256=5d7affd5d23478fb5e3a6c4624411df20401708761b0efa8d4a08b5242488c8b androidboot.t720_flight_target=850 androidboot.t720_dtb_sha256=4be603328ae1c668e24182b9c1d174e1490d52bb81df943eab8b0c781bd39dec androidboot.t720_system_sha256=af40403aa286a770f67dc8599584ef038c3192f2ff43ff89e62a3546ded89043 androidboot.t720_kernel_sha256=70d3859d6aed1906d27217aa3fdfd9bb953a57f4490c89c51efa4f6490441e04
+    27: [    0.000000] Dentry cache hash table entries: 1048576 (order: 11, 8388608 bytes)
+    28: [    0.000000] Inode-cache hash table entries: 524288 (order: 10, 4194304 bytes)
+    29: [    0.000000] mem auto-init: stack:all, heap alloc:on, heap free:off
+    30: [    0.000000] Memory: 8152028K/8385008K available (11196K kernel code, 1294K rwdata, 6432K rodata, 960K init, 463K bss, 216596K reserved, 16384K cma-reserved)
+    31: [    0.000000] random: random: get_random_u64 called from __kmem_cache_create+0x8c/0x694 with crng_init=0
+    32: [    0.000000] SLUB: HWalign=64, Order=0-3, MinObjects=0, CPUs=1, Nodes=1
+    33: [    0.000000] rcu: Preemptible hierarchical RCU implementation.
+    34: [    0.000000] rcu: 	RCU restricting CPUs from NR_CPUS=32 to nr_cpu_ids=1.
+    35: [    0.000000] 	Tasks RCU enabled.
+    36: [    0.000000] rcu: Adjusting geometry for rcu_fanout_leaf=16, nr_cpu_ids=1
+    37: [    0.000000] NR_IRQS: 64, nr_irqs: 64, preallocated irqs: 0
+    38: [    0.000000] arch_timer: cp15 timer(s) running at 62.50MHz (virt).
+    39: [    0.000000] clocksource: arch_sys_counter: mask: 0xffffffffffffff max_cycles: 0x1cd42e208c, max_idle_ns: 881590405314 ns
+    40: [    0.000058] sched_clock: 56 bits at 62MHz, resolution 16ns, wraps every 4398046511096ns
+    41: [    0.006682] Calibrating delay loop (skipped), value calculated using timer frequency.. 125.00 BogoMIPS (lpj=250000)
+    42: [    0.008159] pid_max: default: 32768 minimum: 301
+    43: [    0.009445] Security Framework initialized
+    44: [    0.010266] SELinux:  Initializing.
+    45: [    0.011525] Mount-cache hash table entries: 16384 (order: 5, 131072 bytes)
+    46: [    0.012264] Mountpoint-cache hash table entries: 16384 (order: 5, 131072 bytes)
+    47: [    0.073193] ASID allocator initialised with 32768 entries
+    48: [    0.082276] rcu: Hierarchical SRCU implementation.
+    49: [    0.093804] EFI services will not be available.
+    50: [    0.108096] smp: Bringing up secondary CPUs ...
+    51: [    0.108420] smp: Brought up 1 node, 1 CPU
+    52: [    0.108752] SMP: Total of 1 processors activated.
+    53: [    0.109063] CPU features: detected: 32-bit EL0 Support
+    54: [    0.141749] CPU features: emulated: Privileged Access Never (PAN) using TTBR0_EL1 switching
+    55: [    0.142680] CPU: All CPU(s) started at EL1
+    56: [    0.143117] alternatives: patching kernel code
+    57: [    0.147179] CPU0: update max cpu_capacity 1024
+    58: [    0.162098] Registered cp15_barrier emulation handler
+    59: [    0.162589] Registered setend emulation handler
+    60: [    0.166657] clocksource: jiffies: mask: 0xffffffff max_cycles: 0xffffffff, max_idle_ns: 7645041785100000 ns
+    61: [    0.167301] futex hash table entries: 256 (order: 2, 16384 bytes)
+    62: [    0.170433] pinctrl core: initialized pinctrl subsystem
+    63: [    0.181766] NET: Registered protocol family 16
+    64: [    0.184909] schedtune: configured to support 6 boost groups
+    65: [    0.185577] audit: initializing netlink subsys (disabled)
+    66: [    0.190449] audit: type=2000 audit(0.144:1): state=initialized audit_enabled=0 res=1
+    67: [    0.191198] cpuidle: using governor menu
+    68: [    0.192749] hw-breakpoint: found 6 breakpoint and 4 watchpoint registers.
+    69: [    0.202242] DMA: preallocated 256 KiB pool for atomic allocations
+    70: [    0.203295] Serial: AMBA PL011 UART driver
+    71: [    0.204163] DMA: preallocated 256 KiB pool for atomic allocations
+    72: [    0.213334] 9000000.pl011: ttyAMA0 at MMIO 0x9000000 (irq = 6, base_baud = 0) is a PL011 rev1
+    73: [    0.231822] console [ttyAMA0] enabled
+    74: [    0.231822] console [ttyAMA0] enabled
+    75: [    0.232877] bootconsole [pl11] disabled
+    76: [    0.232877] bootconsole [pl11] disabled
+    77: [    0.244686] cryptd: max_cpu_qlen set to 1000
+    78: [    0.263779] SCSI subsystem initialized
+    79: [    0.264875] usbcore: registered new interface driver usbfs
+    80: [    0.265842] usbcore: registered new interface driver hub
+    81: [    0.266292] usbcore: registered new device driver usb
+    82: [    0.267111] media: Linux media interface: v0.10
+    83: [    0.267522] videodev: Linux video capture interface: v2.00
+    84: [    0.268054] EDAC MC: Ver: 3.0.0
+    85: [    0.276741] Advanced Linux Sound Architecture Driver Initialized.
+    86: [    0.285112] Bluetooth: Core ver 2.22
+    87: [    0.285660] NET: Registered protocol family 31
+    88: [    0.286117] Bluetooth: HCI device and connection manager initialized
+    89: [    0.286585] Bluetooth: HCI socket layer initialized
+    90: [    0.286901] Bluetooth: L2CAP socket layer initialized
+    91: [    0.287518] Bluetooth: SCO socket layer initialized
+    92: [    0.292453] clocksource: Switched to clocksource arch_sys_counter
+    93: [    0.415399] VFS: Disk quotas dquot_6.6.0
+    94: [    0.415956] VFS: Dquot-cache hash table entries: 512 (order 0, 4096 bytes)
+    95: [    0.419460] simple-framebuffer 5f000000.framebuffer: framebuffer at 0x5f000000, 0x384000 bytes, mapped to 0x(____ptrval____)
+    96: [    0.420029] simple-framebuffer 5f000000.framebuffer: format=a8b8g8r8, mode=1280x720x32, linelength=5120
+    97: [    0.421383] simple-framebuffer 5f000000.framebuffer: fb0: simplefb registered!
+    98: [    0.425519] NET: Registered protocol family 2
+    99: [    0.432151] tcp_listen_portaddr_hash hash table entries: 4096 (order: 4, 65536 bytes)
+   100: [    0.433320] TCP established hash table entries: 65536 (order: 7, 524288 bytes)
+   101: [    0.434631] TCP bind hash table entries: 65536 (order: 8, 1048576 bytes)
+   102: [    0.435387] TCP: Hash tables configured (established 65536 bind 65536)
+   103: [    0.437131] UDP hash table entries: 4096 (order: 5, 131072 bytes)
+   104: [    0.438120] UDP-Lite hash table entries: 4096 (order: 5, 131072 bytes)
+   105: [    0.439820] NET: Registered protocol family 1
+   106: [    0.448159] NET: Registered protocol family 44
+   107: [    0.448450] PCI: CLS 0 bytes, default 64
+   108: [    0.455652] Trying to unpack rootfs image as initramfs...
+   109: [    4.670339] Freeing initrd memory: 52488K
+   110: [    4.676502] cryptomgr_test (30) used greatest stack depth: 14880 bytes left
+   111: [    4.685349] Initialise system trusted keyrings
+   112: [    4.688108] workingset: timestamp_bits=45 max_order=21 bucket_order=0
+   113: [    4.702460] fuse init (API version 7.27)
+   114: [    4.715256] cryptomgr_test (74) used greatest stack depth: 14848 bytes left
+   115: [    4.721487] Key type asymmetric registered
+   116: [    4.721830] Asymmetric key parser 'x509' registered
+   117: [    4.722270] Block layer SCSI generic (bsg) driver version 0.4 loaded (major 246)
+   118: [    4.723696] io scheduler noop registered
+   119: [    4.724244] io scheduler deadline registered
+   120: [    4.725210] io scheduler cfq registered (default)
+   121: [    4.725569] io scheduler mq-deadline registered
+   122: [    4.725798] io scheduler kyber registered
+   123: [    4.730900] Serial: 8250/16550 driver, 4 ports, IRQ sharing disabled
+   124: [    4.735633] cacheinfo: Unable to detect cache hierarchy for CPU 0
+   125: [    4.749998] brd: module loaded
+   126: [    4.771195] loop: module loaded
+   127: [    4.780416] virtio_blk virtio0: [vda] 4023080 512-byte logical blocks (2.06 GB/1.92 GiB)
+   128: [    4.796975] zram: Added device: zram0
+   129: [    4.800959] libphy: Fixed MDIO Bus: probed
+   130: [    4.801341] tun: Universal TUN/TAP device driver, 1.6
+   131: [    4.802430] PPP generic driver version 2.4.2
+   132: [    4.803050] PPP BSD Compression module registered
+   133: [    4.803304] PPP Deflate Compression module registered
+   134: [    4.803781] PPP MPPE Compression module registered
+   135: [    4.804005] NET: Registered protocol family 24
+   136: [    4.804202] PPTP driver version 0.8.5
+   137: [    4.804926] usbcore: registered new interface driver r8152
+   138: [    4.807294] usbcore: registered new interface driver xpad
+   139: [    4.807760] i2c /dev entries driver
+   140: [    4.808476] device-mapper: uevent: version 1.0.3
+   141: [    4.809249] device-mapper: ioctl: 4.39.0-ioctl (2018-04-03) initialised: dm-devel@redhat.com
+   142: [    4.816095] device-mapper: verity-avb: AVB error handler initialized with vbmeta device: 
+   143: [    4.817154] sdhci: Secure Digital Host Controller Interface driver
+   144: [    4.817436] sdhci: Copyright(c) Pierre Ossman
+   145: [    4.817631] sdhci-pltfm: SDHCI platform and OF driver helper
+   146: [    4.818201] hidraw: raw HID events driver (C) Jiri Kosina
+   147: [    4.819406] usbcore: registered new interface driver usbhid
+   148: [    4.819679] usbhid: USB HID core driver
+   149: [    4.820180] ashmem: initialized
+   150: [    4.820842] gnss: GNSS driver registered with major 241
+   151: [    4.822377] usbcore: registered new interface driver snd-usb-audio
+   152: [    4.824124] u32 classifier
+   153: [    4.824270]     Actions configured
+   154: [    4.832217] xt_time: kernel timezone is -0000
+   155: [    4.832740] ipip: IPv4 and MPLS over IPv4 tunneling driver
+   156: [    4.834680] gre: GRE over IPv4 demultiplexor driver
+   157: [    4.835046] ip_gre: GRE over IPv4 tunneling driver
+   158: [    4.837204] IPv4 over IPsec tunneling driver
+   159: [    4.843972] Initializing XFRM netlink socket
+   160: [    4.844453] IPsec XFRM device driver
+   161: [    4.846296] NET: Registered protocol family 10
+   162: [    4.859750] Segment Routing with IPv6
+   163: [    4.860787] mip6: Mobile IPv6
+   164: [    4.864771] sit: IPv6, IPv4 and MPLS over IPv4 tunneling driver
+   165: [    4.867626] ip6_gre: GRE over IPv6 tunneling driver
+   166: [    4.869010] NET: Registered protocol family 17
+   167: [    4.869794] NET: Registered protocol family 15
+   168: [    4.870888] l2tp_core: L2TP core driver, V2.0
+   169: [    4.871200] l2tp_ppp: PPPoL2TP kernel driver, V2.0
+   170: [    4.871426] tipc: Activated (version 2.0.0)
+   171: [    4.872694] NET: Registered protocol family 30
+   172: [    4.875068] tipc: Started in single node mode
+   173: [    4.876414] registered taskstats version 1
+   174: [    4.876623] Loading compiled-in X.509 certificates
+   175: [    4.877308] Key type ._fscrypt registered
+   176: [    4.877502] Key type .fscrypt registered
+   177: [    4.877678] Key type fscrypt-provisioning registered
+   178: [    4.880923] cfg80211: Loading compiled-in X.509 certificates for regulatory database
+   179: [    4.893909] kworker/u2:0 (99) used greatest stack depth: 14544 bytes left
+   180: [    4.898487] cryptomgr_probe (101) used greatest stack depth: 14448 bytes left
+   181: [    4.902554] cfg80211: Loaded X.509 cert 'sforshee: 00b28ddf47aef9cea7'
+   182: [    4.904359] platform regulatory.0: Direct firmware load for regulatory.db failed with error -2
+   183: [    4.904859] platform regulatory.0: Falling back to syfs fallback for: regulatory.db
+   184: [    4.906379] ALSA device list:
+   185: [    4.906576]   No soundcards found.
+   186: [    4.909236] uart-pl011 9000000.pl011: no DMA platform data
+   187: [    5.041447] Freeing unused kernel memory: 960K
+   188: [    5.043552] Run /early-ramdisk as init process
+   189: [    5.072581] random: early-ramdisk: uninitialized urandom read (40 bytes read)
+   190: linker: Warning: failed to find generated linker configuration from "/linkerconfig/ld.config.txt"
+   191: WARNING: linker: Warning: failed to find generated linker configuration from "/linkerconfig/ld.config.txt"
+   192: [    5.137936] random: early-ramdisk: uninitialized urandom read (40 bytes read)
+   193: [    5.142686] random: early-ramdisk: uninitialized urandom read (4 bytes read)
+   194: [    5.203892] T734_KERNEL_OK
+   195: [    5.209791] t734probe (104) used greatest stack depth: 14080 bytes left
+   196: [T734] kernel-init probe finished rc=0
+   197: [T552] initramfs boot path selected; Track A552 software Gralloc/HWC retry & diagnostics
+   198: T720_PROBE: start (sw_sync fence-source probe)
+   199: [    5.239720] T720_PROBE: start (sw_sync fence-source probe)
+   200: [    5.239917] 
+   201: T720_PROBE: open /dev/sw_sync rc=-2 (expect -2: 4.19 sw_sync is debugfs-only)
+   202: [    5.241044] T720_PROBE: open /dev/sw_sync rc=-2 (expect -2: 4.19 sw_sync is debugfs-only)
+   203: [    5.246609] 
+   204: T720_PROBE: mkdir /t720dbg rc=0
+   205: [    5.247559] T720_PROBE: mkdir /t720dbg rc=0
+   206: [    5.247699] 
+   207: T720_PROBE: mount debugfs rc=0
+   208: [    5.254788] T720_PROBE: mount debugfs rc=0
+   209: [    5.254942] 
+   210: T720_PROBE: open /t720dbg/sync/sw_sync fd=4
+   211: [    5.256118] T720_PROBE: open /t720dbg/sync/sw_sync fd=4
+   212: [    5.256286] 
+   213: T720_PROBE: CREATE_FENCE ioctl rc=0
+   214: T720_PROBE: fence fd=5 (must be >= 0, not -1)
+   215: T720_PROBE: INC ioctl rc=0
+   216: linker: Warning: failed to find generated linker configuration from "/linkerconfig/ld.config.txt"
+   217: WARNING: linker: Warning: failed to find generated linker configuration from "/linkerconfig/ld.config.txt"
+   218: T720_PROBE: ppoll fence rc=1
+   219: T720_PROBE: ppoll revents=1 (1=POLLIN signaled)
+   220: T720_PROBE: FILE_INFO call1 rc=0
+   221: T720_PROBE: FILE_INFO num_fences=1
+   222: T720_PROBE: FILE_INFO call2 rc=0
+   223: T720_PROBE: fence status=1 (1=signaled, 0=active, <0=error)
+   224: T720_PROBE: fence driver_name=sw_sync
+   225: T720_PROBE: fence obj_name=t720-probe
+   226: T720_PROBE DONE status=PASS timeline_fd=4 fence_fd=5 poll_rc=1 poll_revents=1 fileinfo_rc=0 fence_status=1 num_fences=1
+   227: linker: readlink("/proc/self/fd/3") failed: No such file or directory [fd=3]
+   228: linker: warning: unable to get realpath for the library "/system/lib64/libcrypto.so". Will use given path.
+   229: linker: readlink("/proc/self/fd/4") failed: No such file or directory [fd=4]
+   230: linker: warning: unable to get realpath for the library "/system/lib64/libz.so". Will use given path.
+   231: linker: readlink("/proc/self/fd/5") failed: No such file or directory [fd=5]
+   232: linker: warning: unable to get realpath for the library "/system/lib64/liblog.so". Will use given path.
+   233: linker: readlink("/proc/self/fd/6") failed: No such file or directory [fd=6]
+   234: linker: T720_PROBE: umount debugfs rc=0
+   235: T720_PROBE: rmdir /t720dbg rc=0
+   236: [    5.284767] t720-probe: 28 output lines suppressed due to ratelimiting
+   237: [    5.287443] t720-probe (105) used greatest stack depth: 14016 bytes left
+   238: warning: unable to get realpath for the library "/system/lib64/libprocessgroup.so". Will use given path.
+   239: linker: readlink("/proc/self/fd/7") failed: No such file or directory [fd=7]
+   240: linker: warning: unable to get realpath for the library "/system/lib64/libselinux.so". Will use given path.
+   241: linker: readlink("/proc/self/fd/8") failed: No such file or directory [fd=8]
+   242: linker: warning: unable to get realpath for the library "/system/lib64/libc.so". Will use given path.
+   243: linker: readlink("/proc/self/fd/9") failed: No such file or directory [fd=9]
+   244: linker: warning: unable to get realpath for the library "/system/lib64/libm.so". Will use given path.
+   245: linker: readlink("/proc/self/fd/10") failed: No such file or directory [fd=10]
+   246: linker: warning: unable to get realpath for the library "/system/lib64/libdl.so". Will use given path.
+   247: linker: readlink("/proc/self/fd/11") failed: No such file or directory [fd=11]
+   248: linker: warning: unable to get realpath for the library "/system/lib64/libc++.so". Will use given path.
+   249: linker: readlink("/proc/self/fd/12") failed: No such file or directory [fd=12]
+   250: linker: warning: unable to get realpath for the library "/system/lib64/libbase.so". Will use given path.
+   251: linker: readlink("/proc/self/fd/13") failed: No such file or directory [fd=13]
+   252: linker: warning: unable to get realpath for the library "/system/lib64/libcgrouprc.so". Will use given path.
+   253: linker: readlink("/proc/self/fd/14") failed: No such file or directory [fd=14]
+   254: linker: warning: unable to get realpath for the library "/system/lib64/libpcre2.so". Will use given path.
+   255: linker: readlink("/proc/self/fd/15") failed: No such file or directory [fd=15]
+   256: linker: warning: unable to get realpath for the library "/system/lib64/libpackagelistparser.so". Will use given path.
+   257: [    5.385433] toybox (106) used greatest stack depth: 13472 bytes left
+   258: linker: Warning: failed to find generated linker configuration from "/linkerconfig/ld.config.txt"
+   259: WARNING: linker: Warning: failed to find generated linker configuration from "/linkerconfig/ld.config.txt"
+   260: linker: readlink("/proc/self/fd/3") failed: No such file or directory [fd=3]
+   261: linker: warning: unable to get realpath for the library "/system/lib64/libcrypto.so". Will use given path.
+   262: linker: readlink("/proc/self/fd/4") failed: No such file or directory [fd=4]
+   263: linker: warning: unable to get realpath for the library "/system/lib64/libz.so". Will use given path.
+   264: linker: readlink("/proc/self/fd/5") failed: No such file or directory [fd=5]
+   265: linker: warning: unable to get realpath for the library "/system/lib64/liblog.so". Will use given path.
+   266: linker: readlink("/proc/self/fd/6") failed: No such file or directory [fd=6]
+   267: linker: warning: unable to get realpath for the library "/system/lib64/libprocessgroup.so". Will use given path.
+   268: linker: readlink("/proc/self/fd/7") failed: No such file or directory [fd=7]
+   269: linker: warning: unable to get realpath for the library "/system/lib64/libselinux.so". Will use given path.
+   270: linker: readlink("/proc/self/fd/8") failed: No such file or directory [fd=8]
+   271: linker: warning: unable to get realpath for the library "/system/lib64/libc.so". Will use given path.
+   272: linker: readlink("/proc/self/fd/9") failed: No such file or directory [fd=9]
+   273: linker: warning: unable to get realpath for the library "/system/lib64/libm.so". Will use given path.
+   274: linker: readlink("/proc/self/fd/10") failed: No such file or directory [fd=10]
+   275: linker: warning: unable to get realpath for the library "/system/lib64/libdl.so". Will use given path.
+   276: linker: readlink("/proc/self/fd/11") failed: No such file or directory [fd=11]
+   277: linker: warning: unable to get realpath for the library "/system/lib64/libc++.so". Will use given path.
+   278: linker: readlink("/proc/self/fd/12") failed: No such file or directory [fd=12]
+   279: linker: warning: unable to get realpath for the library "/system/lib64/libbase.so". Will use given path.
+   280: linker: readlink("/proc/self/fd/13") failed: No such file or directory [fd=13]
+   281: linker: warning: unable to get realpath for the library "/system/lib64/libcgrouprc.so". Will use given path.
+   282: linker: readlink("/proc/self/fd/14") failed: No such file or directory [fd=14]
+   283: linker: warning: unable to get realpath for the library "/system/lib64/libpcre2.so". Will use given path.
+   284: linker: readlink("/proc/self/fd/15") failed: No such file or directory [fd=15]
+   285: linker: warning: unable to get realpath for the library "/system/lib64/libpackagelistparser.so". Will use given path.
+   286: linker: Warning: failed to find generated linker configuration from "/linkerconfig/ld.config.txt"
+   287: WARNING: linker: Warning: failed to find generated linker configuration from "/linkerconfig/ld.config.txt"
+   288: linker: readlink("/proc/self/fd/3") failed: No such file or directory [fd=3]
+   289: linker: warning: unable to get realpath for the library "/system/lib64/libcrypto.so". Will use given path.
+   290: linker: readlink("/proc/self/fd/4") failed: No such file or directory [fd=4]
+   291: linker: warning: unable to get realpath for the library "/system/lib64/libz.so". Will use given path.
+   292: linker: readlink("/proc/self/fd/5") failed: No such file or directory [fd=5]
+   293: linker: warning: unable to get realpath for the library "/system/lib64/liblog.so". Will use given path.
+   294: linker: readlink("/proc/self/fd/6") failed: No such file or directory [fd=6]
+   295: linker: warning: unable to get realpath for the library "/system/lib64/libprocessgroup.so". Will use given path.
+   296: linker: readlink("/proc/self/fd/7") failed: No such file or directory [fd=7]
+   297: linker: warning: unable to get realpath for the library "/system/lib64/libselinux.so". Will use given path.
+   298: linker: readlink("/proc/self/fd/8") failed: No such file or directory [fd=8]
+   299: linker: warning: unable to get realpath for the library "/system/lib64/libc.so". Will use given path.
+   300: linker: readlink("/proc/self/fd/9") failed: No such file or directory [fd=9]
+   301: linker: warning: unable to get realpath for the library "/system/lib64/libm.so". Will use given path.
+   302: linker: readlink("/proc/self/fd/10") failed: No such file or directory [fd=10]
+   303: linker: warning: unable to get realpath for the library "/system/lib64/libdl.so". Will use given path.
+   304: linker: readlink("/proc/self/fd/11") failed: No such file or directory [fd=11]
+   305: linker: warning: unable to get realpath for the library "/system/lib64/libc++.so". Will use given path.
+   306: linker: readlink("/proc/self/fd/12") failed: No such file or directory [fd=12]
+   307: linker: warning: unable to get realpath for the library "/system/lib64/libbase.so". Will use given path.
+   308: linker: readlink("/proc/self/fd/13") failed: No such file or directory [fd=13]
+   309: linker: warning: unable to get realpath for the library "/system/lib64/libcgrouprc.so". Will use given path.
+   310: linker: readlink("/proc/self/fd/14") failed: No such file or directory [fd=14]
+   311: linker: warning: unable to get realpath for the library "/system/lib64/libpcre2.so". Will use given path.
+   312: linker: readlink("/proc/self/fd/15") failed: No such file or directory [fd=15]
+   313: linker: warning: unable to get realpath for the library "/system/lib64/libpackagelistparser.so". Will use given path.
+   314: linker: Warning: failed to find generated linker configuration from "/linkerconfig/ld.config.txt"
+   315: WARNING: linker: Warning: failed to find generated linker configuration from "/linkerconfig/ld.config.txt"
+   316: linker: readlink("/proc/self/fd/3") failed: No such file or directory [fd=3]
+   317: linker: warning: unable to get realpath for the library "/system/lib64/libcrypto.so". Will use given path.
+   318: linker: readlink("/proc/self/fd/4") failed: No such file or directory [fd=4]
+   319: linker: warning: unable to get realpath for the library "/system/lib64/libz.so". Will use given path.
+   320: linker: readlink("/proc/self/fd/5") failed: No such file or directory [fd=5]
+   321: linker: warning: unable to get realpath for the library "/system/lib64/liblog.so". Will use given path.
+   322: linker: readlink("/proc/self/fd/6") failed: No such file or directory [fd=6]
+   323: linker: warning: unable to get realpath for the library "/system/lib64/libprocessgroup.so". Will use given path.
+   324: linker: readlink("/proc/self/fd/7") failed: No such file or directory [fd=7]
+   325: linker: warning: unable to get realpath for the library "/system/lib64/libselinux.so". Will use given path.
+   326: linker: readlink("/proc/self/fd/8") failed: No such file or directory [fd=8]
+   327: linker: warning: unable to get realpath for the library "/system/lib64/libc.so". Will use given path.
+   328: linker: readlink("/proc/self/fd/9") failed: No such file or directory [fd=9]
+   329: linker: warning: unable to get realpath for the library "/system/lib64/libm.so". Will use given path.
+   330: linker: readlink("/proc/self/fd/10") failed: No such file or directory [fd=10]
+   331: linker: warning: unable to get realpath for the library "/system/lib64/libdl.so". Will use given path.
+   332: linker: readlink("/proc/self/fd/11") failed: No such file or directory [fd=11]
+   333: linker: warning: unable to get realpath for the library "/system/lib64/libc++.so". Will use given path.
+   334: linker: readlink("/proc/self/fd/12") failed: No such file or directory [fd=12]
+   335: linker: warning: unable to get realpath for the library "/system/lib64/libbase.so". Will use given path.
+   336: linker: readlink("/proc/self/fd/13") failed: No such file or directory [fd=13]
+   337: linker: warning: unable to get realpath for the library "/system/lib64/libcgrouprc.so". Will use given path.
+   338: linker: readlink("/proc/self/fd/14") failed: No such file or directory [fd=14]
+   339: linker: warning: unable to get realpath for the library "/system/lib64/libpcre2.so". Will use given path.
+   340: linker: readlink("/proc/self/fd/15") failed: No such file or directory [fd=15]
+   341: linker: warning: unable to get realpath for the library "/system/lib64/libpackagelistparser.so". Will use given path.
+   342: [T705] guest attached embedded vendor.img to loop1
+   343: [    5.789191] toybox (111) used greatest stack depth: 13120 bytes left
+   344: [T705] /dev/vda configured for /sysimg mount
+   345: [    6.129834] EXT4-fs (vda): mounted filesystem without journal. Opts: barrier=1
+   346: [T737] mount /sysimg (vda) rc=0
+   347: [    6.138327] toybox (114) used greatest stack depth: 12528 bytes left
+   348: [T737] INTERP tripwire: toybox alive after /sysimg mount
+   349: [T737] INTERP tripwire rc=0
+   350: [    6.369713] EXT4-fs (loop1): mounted filesystem without journal. Opts: barrier=1
+   351: [T737] mount /vendor (loop1) rc=0
+   352: [    6.498189] toybox (119) used greatest stack depth: 12464 bytes left
+   353: [T737] mount debugfs (/sys/kernel/debug) rc=0
+   354: [T737] mount proc (/proc) rc=0
+   355: linker: Warning: failed to find generated linker configuration from "/linkerconfig/ld.config.txt"
+   356: WARNING: linker: Warning: failed to find generated linker configuration from "/linkerconfig/ld.config.txt"
+   357: T723_PROBE: start (EGL dispatch probe, uid 1000)
+   358: [    7.059654] T723_PROBE: start (EGL dispatch probe, uid 1000)
+   359: [    7.059820] 
+   360: T723_PROBE: uid=0 euid=0 gid=0 egid=0
+   361: [    7.060722] T723_PROBE: uid=0 euid=0 gid=0 egid=0
+   362: [    7.060869] 
+   363: T723_PROBE: setresgid rc=0
+   364: [    7.061658] T723_PROBE: setresgid rc=0
+   365: [    7.061839] 
+   366: T723_PROBE: setresuid rc=0
+   367: [    7.063138] T723_PROBE: setresuid rc=0
+   368: [    7.063352] 
+   369: T723_PROBE: after uid=1000 euid=1000 gid=1000 egid=1000
+   370: [    7.064326] T723_PROBE: after uid=1000 euid=1000 gid=1000 egid=1000
+   371: [    7.064464] 
+   372: T723_PROBE SP3: open timeline fd=-13
+   373: T723_PROBE SP3 DONE control_fd=-999
+   374: T723_PROBE SP1: load_stub rc=0 base=0x7cf43a9000 size=52416
+   375: T723_PROBE SP1: create=0x7cf43aec84 dup=0x7cf43aecb0
+   376: T723_PROBE SP1: create sync=0x5001
+   377: T723_PROBE SP1: dup rc=-1
+   378: T723_PROBE SP1: fence_check skip fd=-1
+   379: T723_PROBE SP1 DONE direct_fd=-1
+   380: T723_PROBE SP2: eglGetDisplay=0x3141
+   381: T723_PROBE SP2: eglInitialize ok=1 major=1 minor=4 error=0x3000
+   382: T723_PROBE SP2: create sync=0x5001 error=0x3000
+   383: T723_PROBE SP2: getprocaddress dup=0x7f913407a8
+   384: T723_PROBE SP2: map addr=0x7f913407a8 start=0x7f91337000 path=/sysimg/system/lib64/libEGL.so
+   385: T723_PROBE SP2: dup rc=-1 error=0x3000
+   386: T723_PROBE SP2: fence_check skip fd=-1
+   387: T723_PROBE SP2 DONE meta_fd=-1
+   388: T723_PROBE DONE drop_ok=1 control_fd=-999 direct_fd=-1 meta_fd=-1
+   389: [    7.208325] t723-probe: 34 output lines suppressed due to ratelimiting
+   390: [T737] t723-probe finished rc=0
+   391: [    7.214410] t723-probe (122) used greatest stack depth: 12400 bytes left
+   392: [    7.269039] random: fast init done
+   393: [T737] unmount proc (/proc) rc=0
+   394: [T737] proc unmounted: /proc/self/maps unreadable
+   395: [    7.874761] EXT4-fs (loop2): mounted filesystem with ordered data mode. Opts: barrier=1
+   396: [T666] ext4 userdata mounted on /data via /dev/loop2
+   397: [    7.881873] toybox (129) used greatest stack depth: 11792 bytes left
+   398: linker: Warning: failed to find generated linker configuration from "/linkerconfig/ld.config.txt"
+   399: WARNING: linker: Warning: failed to find generated linker configuration from "/linkerconfig/ld.config.txt"
+   400: linker: readlink("/proc/self/fd/3") failed: No such file or directory [fd=3]
+   401: linker: warning: unable to get realpath for the library "/sysimg/system/lib64/libcrypto.so". Will use given path.
+   402: linker: readlink("/proc/self/fd/4") failed: No such file or directory [fd=4]
+   403: linker: warning: unable to get realpath for the library "/sysimg/system/lib64/libz.so". Will use given path.
+   404: linker: readlink("/proc/self/fd/5") failed: No such file or directory [fd=5]
+   405: linker: warning: unable to get realpath for the library "/sysimg/system/lib64/liblog.so". Will use given path.
+   406: linker: readlink("/proc/self/fd/6") failed: No such file or directory [fd=6]
+   407: linker: warning: unable to get realpath for the library "/sysimg/system/lib64/libprocessgroup.so". Will use given path.
+   408: linker: readlink("/proc/self/fd/7") failed: No such file or directory [fd=7]
+   409: linker: warning: unable to get realpath for the library "/sysimg/system/lib64/libselinux.so". Will use given path.
+   410: linker: readlink("/proc/self/fd/8") failed: No such file or directory [fd=8]
+   411: linker: warning: unable to get realpath for the library "/system/lib64/libc.so". Will use given path.
+   412: linker: readlink("/proc/self/fd/9") failed: No such file or directory [fd=9]
+   413: linker: warning: unable to get realpath for the library "/system/lib64/libm.so". Will use given path.
+   414: linker: readlink("/proc/self/fd/10") failed: No such file or directory [fd=10]
+   415: linker: warning: unable to get realpath for the library "/system/lib64/libdl.so". Will use given path.
+   416: linker: readlink("/proc/self/fd/11") failed: No such file or directory [fd=11]
+   417: linker: warning: unable to get realpath for the library "/sysimg/system/lib64/libc++.so". Will use given path.
+   418: linker: readlink("/proc/self/fd/12") failed: No such file or directory [fd=12]
+   419: linker: warning: unable to get realpath for the library "/sysimg/system/lib64/libbase.so". Will use given path.
+   420: linker: readlink("/proc/self/fd/13") failed: No such file or directory [fd=13]
+   421: linker: warning: unable to get realpath for the library "/sysimg/system/lib64/libcgrouprc.so". Will use given path.
+   422: linker: readlink("/proc/self/fd/14") failed: No such file or directory [fd=14]
+   423: linker: warning: unable to get realpath for the library "/sysimg/system/lib64/libpcre2.so". Will use given path.
+   424: linker: readlink("/proc/self/fd/15") failed: No such file or directory [fd=15]
+   425: linker: warning: unable to get realpath for the library "/sysimg/system/lib64/libpackagelistparser.so". Will use given path.
+   426: linker: readlink("/proc/self/fd/3") failed: No such file or directory [fd=3]
+   427: linker: warning: unable to get realpath for the library "/sysimg/system/lib64/libnetd_client.so". Will use given path.
+   428: linker: Warning: failed to find generated linker configuration from "/linkerconfig/ld.config.txt"
+   429: WARNING: linker: Warning: failed to find generated linker configuration from "/linkerconfig/ld.config.txt"
+   430: linker: readlink("/proc/self/fd/3") failed: No such file or directory [fd=3]
+   431: linker: warning: unable to get realpath for the library "/sysimg/system/lib64/libcrypto.so". Will use given path.
+   432: linker: readlink("/proc/self/fd/4") failed: No such file or directory [fd=4]
+   433: linker: warning: unable to get realpath for the library "/sysimg/system/lib64/libz.so". Will use given path.
+   434: linker: readlink("/proc/self/fd/5") failed: No such file or directory [fd=5]
+   435: linker: warning: unable to get realpath for the library "/sysimg/system/lib64/liblog.so". Will use given path.
+   436: linker: readlink("/proc/self/fd/6") failed: No such file or directory [fd=6]
+   437: linker: warning: unable to get realpath for the library "/sysimg/system/lib64/libprocessgroup.so". Will use given path.
+   438: linker: readlink("/proc/self/fd/7") failed: No such file or directory [fd=7]
+   439: linker: warning: unable to get realpath for the library "/sysimg/system/lib64/libselinux.so". Will use given path.
+   440: linker: readlink("/proc/self/fd/8") failed: No such file or directory [fd=8]
+   441: linker: warning: unable to get realpath for the library "/system/lib64/libc.so". Will use given path.
+   442: linker: readlink("/proc/self/fd/9") failed: No such file or directory [fd=9]
+   443: linker: warning: unable to get realpath for the library "/system/lib64/libm.so". Will use given path.
+   444: linker: readlink("/proc/self/fd/10") failed: No such file or directory [fd=10]
+   445: linker: warning: unable to get realpath for the library "/system/lib64/libdl.so". Will use given path.
+   446: linker: readlink("/proc/self/fd/11") failed: No such file or directory [fd=11]
+   447: linker: warning: unable to get realpath for the library "/sysimg/system/lib64/libc++.so". Will use given path.
+   448: linker: readlink("/proc/self/fd/12") failed: No such file or directory [fd=12]
+   449: linker: warning: unable to get realpath for the library "/sysimg/system/lib64/libbase.so". Will use given path.
+   450: linker: readlink("/proc/self/fd/13") failed: No such file or directory [fd=13]
+   451: linker: warning: unable to get realpath for the library "/sysimg/system/lib64/libcgrouprc.so". Will use given path.
+   452: linker: readlink("/proc/self/fd/14") failed: No such file or directory [fd=14]
+   453: linker: warning: unable to get realpath for the library "/sysimg/system/lib64/libpcre2.so". Will use given path.
+   454: linker: readlink("/proc/self/fd/15") failed: No such file or directory [fd=15]
+   455: linker: warning: unable to get realpath for the library "/sysimg/system/lib64/libpackagelistparser.so". Will use given path.
+   456: linker: readlink("/proc/self/fd/3") failed: No such file or directory [fd=3]
+   457: linker: warning: unable to get realpath for the library "/sysimg/system/lib64/libnetd_client.so". Will use given path.
+   458: [T636] copied /t636-diag.sh to /data/t636-diag.sh
+   459: [T666] userdata filesystem initialization complete
+   460: [T667] tmpfs mounted on /data/media
+   461: [T667] userdata and media filesystem initialization complete
+   462: [T668] /data/misc/gatekeeper pre-created (0700 1000:1000)
+   463: [T669] /data/vendor_de/0/fpdata pre-created (0700 1000:1000)
+   464: [T670] /data/.../com.android.media.swcodec pre-created (0771 1000:1000)
+   465: [T709] /data/user_de/0/com.android.providers.settings/databases pre-created (0777 1000:1000)
+   466: [T710] /data/dummy_sensorservice pre-created (0755 1000:1000)
+   467: [T711] /data/dummy_sensorservice labeled (u:object_r:system_file:s0)
+   468: [T699] /dev/fb0 and /dev/graphics/fb0 character devices pre-created (c 29 0)
+   469: [T699] /data/misc/odrefresh/compilation-log.txt pre-created
+   470: linker: Warning: failed to find generated linker configuration from "/linkerconfig/ld.config.txt"
+   471: WARNING: linker: Warning: failed to find generated linker configuration from "/linkerconfig/ld.config.txt"
+   472: linker: readlink("/proc/self/fd/3") failed: No such file or directory [fd=3]
+   473: linker: warning: unable to get realpath for the library "/sysimg/system/lib64/libcrypto.so". Will use given path.
+   474: linker: readlink("/proc/self/fd/4") failed: No such file or directory [fd=4]
+   475: linker: warning: unable to get realpath for the library "/sysimg/system/lib64/libz.so". Will use given path.
+   476: linker: readlink("/proc/self/fd/5") failed: No such file or directory [fd=5]
+   477: linker: warning: unable to get realpath for the library "/sysimg/system/lib64/liblog.so". Will use given path.
+   478: linker: readlink("/proc/self/fd/6") failed: No such file or directory [fd=6]
+   479: linker: warning: unable to get realpath for the library "/sysimg/system/lib64/libprocessgroup.so". Will use given path.
+   480: linker: readlink("/proc/self/fd/7") failed: No such file or directory [fd=7]
+   481: linker: warning: unable to get realpath for the library "/sysimg/system/lib64/libselinux.so". Will use given path.
+   482: linker: readlink("/proc/self/fd/8") failed: No such file or directory [fd=8]
+   483: linker: warning: unable to get realpath for the library "/system/lib64/libc.so". Will use given path.
+   484: linker: readlink("/proc/self/fd/9") failed: No such file or directory [fd=9]
+   485: linker: warning: unable to get realpath for the library "/system/lib64/libm.so". Will use given path.
+   486: linker: readlink("/proc/self/fd/10") failed: No such file or directory [fd=10]
+   487: linker: warning: unable to get realpath for the library "/system/lib64/libdl.so". Will use given path.
+   488: linker: readlink("/proc/self/fd/11") failed: No such file or directory [fd=11]
+   489: linker: warning: unable to get realpath for the library "/sysimg/system/lib64/libc++.so". Will use given path.
+   490: linker: readlink("/proc/self/fd/12") failed: No such file or directory [fd=12]
+   491: linker: warning: unable to get realpath for the library "/sysimg/system/lib64/libbase.so". Will use given path.
+   492: linker: readlink("/proc/self/fd/13") failed: No such file or directory [fd=13]
+   493: linker: warning: unable to get realpath for the library "/sysimg/system/lib64/libcgrouprc.so". Will use given path.
+   494: linker: readlink("/proc/self/fd/14") failed: No such file or directory [fd=14]
+   495: linker: warning: unable to get realpath for the library "/sysimg/system/lib64/libpcre2.so". Will use given path.
+   496: linker: readlink("/proc/self/fd/15") failed: No such file or directory [fd=15]
+   497: linker: warning: unable to get realpath for the library "/sysimg/system/lib64/libpackagelistparser.so". Will use given path.
+   498: linker: readlink("/proc/self/fd/3") failed: No such file or directory [fd=3]
+   499: linker: warning: unable to get realpath for the library "/sysimg/system/lib64/libnetd_client.so". Will use given path.
+   500: [T431] static loop-node keeper started
+   501: linker: Warning: failed to find generated linker configuration from "/linkerconfig/ld.config.txt"
+   502: WARNING: linker: Warning: failed to find generated linker configuration from "/linkerconfig/ld.config.txt"
+   503: linker: readlink("/proc/self/fd/3") failed: No such file or directory [fd=3]
+   504: linker: Warning: failed to find generated linker configuration from "/linkerconfig/ld.config.txt"
+   505: WARNING: linker: Warning: failed to find generated linker configuration from "/linkerconfig/ld.config.txt"
+   506: linker: warning: unable to get realpath for the library "/system/lib64/libc.so". Will use given path.
+   507: linker: readlink("/proc/self/fd/4") failed: No such file or directory [fd=4]
+   508: linker: warning: unable to get realpath for the library "/system/lib64/libdl.so". Will use given path.linker: readlink("/proc/self/fd/3") failed: No such file or directory [fd=3]
+   509: linker: warning: unable to get realpath for the library "/system/lib64/libc.so". Will use given path.
+   510: linker: readlink("/proc/self/fd/4") failed: No such file or directory [fd=4]
+   511: linker: warning: unable to get realpath for the library "/system/lib64/libdl.so". Will use given path.
+   512: 
+   513: linker: readlink("/proc/self/fd/3") failed: No such file or directory [fd=3]
+   514: linker: warning: unable to get realpath for the library "/sysimg/system/lib64/libnetd_client.so". Will use given path.
+   515: linker: readlink("/proc/self/fd/4") failed: No such file or directory [fd=4]
+   516: linker: warning: unable to get realpath for the library "/sysimg/system/lib64/libc++.so". Will use given path.
+   517: linker: readlink("/proc/self/fd/3") failed: No such file or directory [fd=3]
+   518: linker: warning: unable to get realpath for the library "/sysimg/system/lib64/libnetd_client.so". Will use given path.
+   519: linker: readlink("/proc/self/fd/4") failed: No such file or directory [fd=4]
+   520: linker: warning: unable to get realpath for the library "/sysimg/system/lib64/libc++.so". Will use given path.linker: readlink("/proc/self/fd/5") failed: No such file or directory [fd=5]
+   521: linker: warning: unable to get realpath for the library "/system/lib64/libm.so". Will use given path.
+   522: 
+   523: linker: readlink("/proc/self/fd/5") failed: No such file or directory [fd=5]
+   524: linker: warning: unable to get realpath for the library "/system/lib64/libm.so". Will use given path.
+   525: linker: Warning: failed to find generated linker configuration from "/linkerconfig/ld.config.txt"
+   526: WARNING: linker: Warning: failed to find generated linker configuration from "/linkerconfig/ld.config.txt"
+   527: linker: readlink("/proc/self/fd/3") failed: No such file or directory [fd=3]
+   528: linker: warning: unable to get realpath for the library "/sysimg/system/lib64/libcrypto.so". Will use given path.
+   529: linker: readlink("/proc/self/fd/4") failed: No such file or directory [fd=4]
+   530: linker: warning: unable to get realpath for the library "/sysimg/system/lib64/libz.so". Will use given path.
+   531: linker: Warning: failed to find generated linker configuration from "/linkerconfig/ld.config.txt"
+   532: WARNING: linker: Warning: failed to find generated linker configuration from "/linkerconfig/ld.config.txt"
+   533: linker: readlink("/proc/self/fd/5") failed: No such file or directory [fd=5]
+   534: linker: warning: unable to get realpath for the library "/sysimg/system/lib64/liblog.so". Will use given path.
+   535: linker: readlink("/proc/self/fd/6") failed: No such file or directory [fd=6]
+   536: linker: readlink("/proc/self/fd/3") failed: No such file or directory [fd=3]
+   537: linker: warning: unable to get realpath for the library "/sysimg/system/lib64/libprocessgroup.so". Will use given path.
+   538: linker: readlink("/proc/self/fd/7") failed: No such file or directory [fd=7]
+   539: linker: warning: unable to get realpath for the library "/sysimg/system/lib64/libcrypto.so". Will use given path.
+   540: linker: readlink("/proc/self/fd/4") failed: No such file or directory [fd=4]
+   541: linker: warning: unable to get realpath for the library "/sysimg/system/lib64/libz.so". Will use given path.
+   542: [T738] unmount /sysimg (vda) FAILED rc=1
+   543: linker: warning: unable to get realpath for the library "/sysimg/system/lib64/libselinux.so". Will use given path.linker: readlink("/proc/self/fd/5") failed: No such file or directory [fd=5]
+   544: linker: warning: unable to get realpath for the library "/sysimg/system/lib64/liblog.so". Will use given path.
+   545: 
+   546: linker: readlink("/proc/self/fd/8") failed: No such file or directory [fd=8]
+   547: linker: readlink("/proc/self/fd/6") failed: No such file or directory [fd=6]
+   548: linker: warning: unable to get realpath for the library "/sysimg/system/lib64/libprocessgroup.so". Will use given path.
+   549: linker: readlink("/proc/self/fd/7") failed: No such file or directory [fd=7]
+   550: linker: warning: unable to get realpath for the library "/system/lib64/libc.so". Will use given path.
+   551: linker: readlink("/proc/self/fd/9") failed: No such file or directory [fd=9]
+   552: linker: warning: unable to get realpath for the library "/system/lib64/libm.so". Will use given path.linker: warning: unable to get realpath for the library "/sysimg/system/lib64/libselinux.so". Will use given path.
+   553: linker: readlink("/proc/self/fd/8") failed: No such file or directory [fd=8]
+   554: linker: readlink("/proc/self/fd/10") failed: No such file or directory [fd=10]
+   555: linker: warning: unable to get realpath for the library "/system/lib64/libdl.so". Will use given path.
+   556: linker: readlink("/proc/self/fd/11") failed: No such file or directory [fd=11]
+   557: linker: warning: unable to get realpath for the library "/system/lib64/libc.so". Will use given path.
+   558: 
+   559: linker: warning: unable to get realpath for the library "/sysimg/system/lib64/libc++.so". Will use given path.
+   560: linker: readlink("/proc/self/fd/9") failed: No such file or directory [fd=9]
+   561: linker: warning: unable to get realpath for the library "/system/lib64/libm.so". Will use given path.
+   562: linker: readlink("/proc/self/fd/10") failed: No such file or directory [fd=10]
+   563: linker: warning: unable to get realpath for the library "/system/lib64/libdl.so". Will use given path.
+   564: linker: readlink("/proc/self/fd/12") failed: No such file or directory [fd=12]
+   565: linker: warning: unable to get realpath for the library "/sysimg/system/lib64/libbase.so". Will use given path.
+   566: linker: readlink("/proc/self/fd/13") failed: No such file or directory [fd=13]
+   567: linker: warning: unable to get realpath for the library "/sysimg/system/lib64/libcgrouprc.so". Will use given path.linker: readlink("/proc/self/fd/11") failed: No such file or directory [fd=11]
+   568: linker: warning: unable to get realpath for the library "/sysimg/system/lib64/libc++.so". Will use given path.
+   569: 
+   570: linker: readlink("/proc/self/fd/14") failed: No such file or directory [fd=14]
+   571: linker: warning: unable to get realpath for the library "/sysimg/system/lib64/libpcre2.so". Will use given path.
+   572: linker: readlink("/proc/self/fd/15") failed: No such file or directory [fd=15]
+   573: linker: warning: unable to get realpath for the library "/sysimg/system/lib64/libpackagelistparser.so". Will use given path.linker: readlink("/proc/self/fd/12") failed: No such file or directory [fd=12]
+   574: linker: warning: unable to get realpath for the library "/sysimg/system/lib64/libbase.so". Will use given path.
+   575: 
+   576: linker: readlink("/proc/self/fd/13") failed: No such file or directory [fd=13]
+   577: linker: warning: unable to get realpath for the library "/sysimg/system/lib64/libcgrouprc.so". Will use given path.
+   578: linker: readlink("/proc/self/fd/14") failed: No such file or directory [fd=14]
+   579: linker: warning: unable to get realpath for the library "/sysimg/system/lib64/libpcre2.so". Will use given path.
+   580: linker: readlink("/proc/self/fd/15") failed: No such file or directory [fd=15]
+   581: linker: warning: unable to get realpath for the library "/sysimg/system/lib64/libpackagelistparser.so". Will use given path.
+   582: linker: readlink("/proc/self/fd/3") failed: No such file or directory [fd=3]
+   583: linker: warning: unable to get realpath for the library "/sysimg/system/lib64/libnetd_client.so". Will use given path.
+   584: linker: readlink("/proc/self/fd/3") failed: No such file or directory [fd=3]
+   585: linker: warning: unable to get realpath for the library "/sysimg/system/lib64/libnetd_client.so". Will use given path.
+   586: [T738] unmount /vendor (loop1) rc=0
+   587: [T738] unmount debugfs (/sys/kernel/debug) rc=0
+   588: [T431] keeper restored PID1:/dev/block/loop0 as block 7:0
+   589: /dev/vda /sysimg ext4 ro,relatime 0 0
+   590: [T738] handoff state DIRTY: a probe mount is still mounted (see /proc/mounts above)
+   591: [T738] handoff state verified: /data mounted
+   592: [T738] unmount proc (verify) rc=0
+   593: [T738] HANDOFF ABORTED: dirty device state - not handing off to /init
+   594: [   16.479479] Kernel panic - not syncing: Attempted to kill init! exitcode=0x00000100
+   595: [   16.479479] 
+   596: [   16.480658] CPU: 0 PID: 1 Comm: early-ramdisk Not tainted 4.19.130-g4da740c10-dirty #6
+   597: [   16.481239] Hardware name: arm,virt (DT)
+   598: [   16.481600] Call trace:
+   599: [   16.481778]  dump_backtrace+0x0/0x14c
+   600: [   16.481996]  show_stack+0x14/0x1c
+   601: [   16.482185]  __dump_stack+0x20/0x28
+   602: [   16.482403]  dump_stack+0xa0/0xc4
+   603: [   16.482693]  panic+0x13c/0x2b4
+   604: [   16.482864]  do_exit+0x90c/0xa18
+   605: [   16.483049]  do_group_exit+0x94/0x98
+   606: [   16.483314]  __wake_up_parent+0x0/0x28
+   607: [   16.483486]  el0_svc_common+0x94/0x148
+   608: [   16.483649]  el0_svc_handler+0x20/0x60
+   609: [   16.483813]  el0_svc+0x8/0xc
+   610: [   16.484240] Kernel Offset: disabled
+   611: [   16.484518] CPU features: 0x00000000,20006002
+   612: [   16.484748] Memory Limit: none
+   613: [   16.485112] Rebooting in 5 seconds..
