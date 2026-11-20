@@ -1,0 +1,45 @@
+{
+  "track": "T734",
+  "flight": "service-flight-9",
+  "stop_reason": "Guest target reached (856.0s >= 850s)",
+  "started_utc": "2026-11-20T11:52:43Z",
+  "ended_utc": "2026-11-20T12:07:00Z",
+  "host_elapsed_seconds": 856.93,
+  "guest_log_max_seconds": 855.994,
+  "qemu_exit_code": 0,
+  "log_bytes": 3009973,
+  "log_lines": 25539,
+  "log_sha256": "33c9b12a9b64fa852cfcf4740de39ca41eefd1bb7c19db5a113a6ee4ce0ac3b4",
+  "inputs": {
+    "kernel": {
+      "path": "/Users/Shared/wt-track734-kernel-init-exec/guest-inputs/t720-Image",
+      "sha256": "70d3859d6aed1906d27217aa3fdfd9bb953a57f4490c89c51efa4f6490441e04",
+      "bytes": 20396544
+    },
+    "qemu": {
+      "path": "/opt/homebrew/bin/qemu-system-aarch64",
+      "sha256": "8e5c46dc6752c36afbb706f933e72fef835e35f48881a63cadb06c6d29bac869",
+      "bytes": 31498864
+    },
+    "dtb": {
+      "path": "guest-inputs/t734-modified.dtb",
+      "sha256": "72831bab02ed6bd40b72f3d65f1d6b01fe4dc478b7cfb6941b84ad26dd441de9",
+      "bytes": 2049
+    },
+    "boot_image": {
+      "path": "guest-inputs/t734-fix-v2.cpio.gz",
+      "sha256": "57c04949958eec0ff22e940fd87e15d3be3e579210e1d80c9a98e20f6b8bd282",
+      "bytes": 53391901
+    },
+    "system_img": {
+      "path": "/Users/Shared/wt-track734-kernel-init-exec/guest-inputs/t733-system.img",
+      "sha256": "af40403aa286a770f67dc8599584ef038c3192f2ff43ff89e62a3546ded89043",
+      "bytes": 2059816960
+    },
+    "vendor_img": {
+      "path": "/Users/Shared/wt-track734-kernel-init-exec/guest-inputs/t722-vendor.img",
+      "sha256": "5e0607ada51367fbe9f7e5dd7586afbeb9216f478f00a31baa5179eb73f476e0",
+      "bytes": 134217728
+    }
+  }
+}

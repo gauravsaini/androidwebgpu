@@ -1,0 +1,174 @@
+Total lines: 8340 (trailing partial line: 0)
+Total bytes: 671210
+
+--- ALL T723_PROBE lines (full text): 0 line(s) ---
+
+T723_PROBE DONE summary lines (context: expect 0): 0
+lines: 
+
+SP1 DONE lines (context: expect 0): 0
+lines: 
+
+SP2 DONE lines (context: expect 0): 0
+lines: 
+
+SP3 DONE lines (context: expect 0): 0
+lines: 
+
+DROP_FAIL lines (expect 0): 0
+lines: 
+
+SP1 RESOLVE_FAIL lines (expect 0): 0
+lines: 
+
+SP2 GETPROCADDRESS_NULL lines (expect 0): 0
+lines: 
+
+--- ALL [T723] early-ramdisk hook lines (context: hook timeout ~33 s): 1 line(s) ---
+L3261: [T723] boot_completed never detected in 600s; probe not run
+
+--- ALL T728_SERVICE_OK marker lines (full text) — payload ran: 0 line(s) ---
+
+--- ALL T728_PROBE_OK marker lines (full text) — registration: 0 line(s) ---
+
+--- ALL T728_PROBE helper lines (full text) — start + context: 0 line(s) ---
+
+--- ALL T728_ARGV lines (full text) — the argv handoff, verbatim: 0 line(s) ---
+
+--- ALL T728_ARGC lines (full text): 0 line(s) ---
+
+--- ALL t728probe lines (service + rc citations): 0 line(s) ---
+
+--- ALL init service-refusal lines (full text) — SELinux refusal if present: 0 line(s) ---
+
+--- ALL label/domain-transition lines (full text): 0 line(s) ---
+
+--- ALL t728probe service EXIT lines (full text) — authoritative start proof: 0 line(s) ---
+
+init starting service 't728probe' (context only — may be absent per T727 lesson): 0
+lines: 
+
+t728probe.rc citations (init parsed the new file): 0
+lines: 
+
+start-command lines citing t728probe (trigger fired): 0
+lines: 
+
+ALL boot_completed action processing lines (stock control + mine): 0
+lines: 
+
+on boot action processing lines citing t728probe.rc: 0
+lines: 
+
+service exec/start failures (expect 0): 0
+lines: 
+
+write-to-kmsg command lines (context): 0
+lines: 
+
+--- ALL T733_MINIMAL_OK marker lines (full text) — minimal binary ran: 0 line(s) ---
+
+--- ALL T733_PROBE_OK marker lines (full text) — registration: 0 line(s) ---
+
+--- ALL t733probe lines (service + rc citations): 0 line(s) ---
+
+--- ALL t733probe service EXIT lines (full text) — authoritative start proof: 0 line(s) ---
+
+init starting service 't733probe' (context only — may be absent per T727 lesson): 0
+lines: 
+
+t733probe.rc citations (init parsed the new file): 0
+lines: 
+
+start-command lines citing t733probe (trigger fired): 0
+lines: 
+
+on boot action processing lines citing t733probe.rc: 0
+lines: 
+
+service exec/start failures (expect 0): 0
+lines: 
+
+write-to-kmsg command lines (context): 0
+lines: 
+
+--- ALL T734_KERNEL_OK marker lines (full text) — kernel-init exec ran: 1 line(s) ---
+L194: [    4.091944] T734_KERNEL_OK
+
+--- ALL [T734] early-ramdisk hook lines (full text) — probe exec + rc: 1 line(s) ---
+L196: [T734] kernel-init probe finished rc=0
+
+T734_KERNEL_OK count (verdict condition: >=1, early, guest <10 s): 1
+lines: 194
+
+T727_SERVICE_OK lines (control: expect 0 — old rc replaced): 0
+lines: 
+
+T727_PROBE_OK lines (control: expect 0 — old rc replaced): 0
+lines: 
+
+t727probe lines (control: expect 0 — old rc replaced): 0
+lines: 
+
+T720_PROBE DONE status=PASS lines (hold requires >=1): 1
+lines: 230
+
+T720_PROBE DONE status=FAIL lines (hold requires 0): 0
+lines: 
+
+T721 fence-log lines (hold requires >=1): 0
+lines: 
+
+Invalid present fence lines (hold requires 0): 0
+lines: 
+
+ALL sw_sync lines (context): 7
+lines: 198, 199, 201, 202, 210, 211, 224
+
+T628 REJECT allocate2 lines (hold requires 0): 0
+lines: 
+
+T628 CALL allocate2 lines: 0
+lines: 
+
+EPERM lines (hold requires 0): 0
+lines: 
+
+simplefb: mapped lines (hold requires >=1): 0
+lines: 
+
+Watchdog KILLING lines (hold requires 0): 0
+lines: 
+
+sys.boot_completed lines (hold requires >=1): 0
+lines: 
+
+boot_completed lines: 1
+lines: 3261
+
+FATAL EXCEPTION lines: 0
+lines: 
+
+Kernel panic/Oops/BUG lines (hold requires 0): 0
+lines: 
+
+RenderEngine EGL dup-fail lines: 0
+lines: 
+
+driver loaded lines: 0
+lines: 
+
+META-EGL banner lines: 0
+lines: 
+
+D/libEGL lines: 0
+lines: 
+
+avc:  denied (two spaces) total: 405
+avc:  denied for /dev/mem: 0
+avc denied (sensorservice): 9
+
+Guest kernel time: first=0.0s last=124.671332s max=124.671332s
+Dup-fail rate: 0 / 124.7s * 1000 = 0.000 per 1000 s (baselines: T721 flight-01 4.058, T721 revert 6.660)
+
+=== REPORT COMPLETE ===

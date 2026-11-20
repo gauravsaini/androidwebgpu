@@ -1,1 +1,15 @@
-{"current_step":"Step 5 adjudication complete","flight":"service-flight-3","guest_log_max_seconds":851.062,"host_elapsed_seconds":851.93,"note":"T733 FAIL: minimal no-libc binary produced no marker under either leg. Wall INIT-EXEC-DISPATCH-SILENTLY-FAILED (guest). Findings + outcome + death note written.","qemu_pid":null,"status":"CLOSED","supervisor_pid":87411,"target_guest_seconds":850,"target_host_seconds":1100,"timestamp_utc":"2026-11-20T09:52:00Z","track":"T733","verdict":"FAIL"}
+{
+  "timestamp_utc": "2026-11-20T12:07:00Z",
+  "status": "CLOSED",
+  "track": "T734",
+  "flight": "service-flight-9",
+  "current_step": "Complete \u2014 Verdict: PASS",
+  "verdict": "PASS",
+  "host_elapsed_seconds": 856.93,
+  "guest_log_max_seconds": 855.994,
+  "target_host_seconds": 1100,
+  "target_guest_seconds": 850,
+  "supervisor_pid": 84291,
+  "qemu_pid": 84314,
+  "note": "T734_KERNEL_OK appeared (guest 7.80 s). Full flight service-flight-9 complete. Findings febad60f, outcome c26de83a."
+}

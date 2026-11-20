@@ -1,0 +1,183 @@
+Total lines: 25539 (trailing partial line: 1)
+Total bytes: 3009973
+
+--- ALL T723_PROBE lines (full text): 0 line(s) ---
+
+T723_PROBE DONE summary lines (context: expect 0): 0
+lines: 
+
+SP1 DONE lines (context: expect 0): 0
+lines: 
+
+SP2 DONE lines (context: expect 0): 0
+lines: 
+
+SP3 DONE lines (context: expect 0): 0
+lines: 
+
+DROP_FAIL lines (expect 0): 0
+lines: 
+
+SP1 RESOLVE_FAIL lines (expect 0): 0
+lines: 
+
+SP2 GETPROCADDRESS_NULL lines (expect 0): 0
+lines: 
+
+--- ALL [T723] early-ramdisk hook lines (context: hook timeout ~33 s): 1 line(s) ---
+L4835: [T723] boot_completed never detected in 600s; probe not run
+
+--- ALL T728_SERVICE_OK marker lines (full text) — payload ran: 0 line(s) ---
+
+--- ALL T728_PROBE_OK marker lines (full text) — registration: 2 line(s) ---
+L10640: [  196.109029] T728_PROBE_OK
+L22665: [  797.671516] T728_PROBE_OK
+
+--- ALL T728_PROBE helper lines (full text) — start + context: 2 line(s) ---
+L10640: [  196.109029] T728_PROBE_OK
+L22665: [  797.671516] T728_PROBE_OK
+
+--- ALL T728_ARGV lines (full text) — the argv handoff, verbatim: 0 line(s) ---
+
+--- ALL T728_ARGC lines (full text): 0 line(s) ---
+
+--- ALL t728probe lines (service + rc citations): 0 line(s) ---
+
+--- ALL init service-refusal lines (full text) — SELinux refusal if present: 1 line(s) ---
+L10148: [  176.995973] init: Could not start service 'vendor.camera-provider-ranchu' as part of class 'hal': File /system/bin/sh(labeled "u:object_r:shell_exec:s0") has incorrect label or no domain transition from u:r:init:s0 to another SELinux domain defined. Have you configured your service correctly? https://source.android.com/security/selinux/device-policy#label_new_services_and_address_denials. Note: this error shows up even in permissive mode in order to make auditing denials possible.
+
+--- ALL label/domain-transition lines (full text): 1 line(s) ---
+L10148: [  176.995973] init: Could not start service 'vendor.camera-provider-ranchu' as part of class 'hal': File /system/bin/sh(labeled "u:object_r:shell_exec:s0") has incorrect label or no domain transition from u:r:init:s0 to another SELinux domain defined. Have you configured your service correctly? https://source.android.com/security/selinux/device-policy#label_new_services_and_address_denials. Note: this error shows up even in permissive mode in order to make auditing denials possible.
+
+--- ALL t728probe service EXIT lines (full text) — authoritative start proof: 0 line(s) ---
+
+init starting service 't728probe' (context only — may be absent per T727 lesson): 0
+lines: 
+
+t728probe.rc citations (init parsed the new file): 0
+lines: 
+
+start-command lines citing t728probe (trigger fired): 0
+lines: 
+
+ALL boot_completed action processing lines (stock control + mine): 1
+lines: 22271
+
+on boot action processing lines citing t728probe.rc: 0
+lines: 
+
+service exec/start failures (expect 0): 0
+lines: 
+
+write-to-kmsg command lines (context): 0
+lines: 
+
+--- ALL T733_MINIMAL_OK marker lines (full text) — minimal binary ran: 0 line(s) ---
+
+--- ALL T733_PROBE_OK marker lines (full text) — registration: 2 line(s) ---
+L10643: [  196.184969] T733_PROBE_OK
+L22666: [  797.691172] T733_PROBE_OK
+
+--- ALL t733probe lines (service + rc citations): 0 line(s) ---
+
+--- ALL t733probe service EXIT lines (full text) — authoritative start proof: 0 line(s) ---
+
+init starting service 't733probe' (context only — may be absent per T727 lesson): 0
+lines: 
+
+t733probe.rc citations (init parsed the new file): 0
+lines: 
+
+start-command lines citing t733probe (trigger fired): 0
+lines: 
+
+on boot action processing lines citing t733probe.rc: 0
+lines: 
+
+service exec/start failures (expect 0): 0
+lines: 
+
+write-to-kmsg command lines (context): 0
+lines: 
+
+--- ALL T734_KERNEL_OK marker lines (full text) — kernel-init exec ran: 1 line(s) ---
+L195: [    7.802587] T734_KERNEL_OK
+
+--- ALL [T734] early-ramdisk hook lines (full text) — probe exec + rc: 1 line(s) ---
+L197: [T734] kernel-init probe finished rc=0
+
+T734_KERNEL_OK count (verdict condition: >=1, early, guest <10 s): 1
+lines: 195
+
+T727_SERVICE_OK lines (control: expect 0 — old rc replaced): 0
+lines: 
+
+T727_PROBE_OK lines (control: expect 0 — old rc replaced): 0
+lines: 
+
+t727probe lines (control: expect 0 — old rc replaced): 0
+lines: 
+
+T720_PROBE DONE status=PASS lines (hold requires >=1): 1
+lines: 226
+
+T720_PROBE DONE status=FAIL lines (hold requires 0): 0
+lines: 
+
+T721 fence-log lines (hold requires >=1): 1
+lines: 22952
+
+Invalid present fence lines (hold requires 0): 0
+lines: 
+
+ALL sw_sync lines (context): 204
+lines: 199, 200, 202, 203, 211, 212, 224, 22180, 22181, 22202, 22203, 22216, 22217, 22240, 22241, 22243, 22244, 22245, 22246, 22326, 24980, 24981, 24982, 24984, 24985, 24986, 24987, 25407, 25408, 25438, 25439, 25454, 25455, 25476, 25478, 25506, 25509, 25514, 25519, 25521
+(164 middle lines omitted; count is exact)
+
+T628 REJECT allocate2 lines (hold requires 0): 0
+lines: 
+
+T628 CALL allocate2 lines: 13
+lines: 11049, 11053, 19922, 19926, 19930, 23621, 23779, 23783, 23787, 23802, 23844, 24018, 24400
+
+EPERM lines (hold requires 0): 0
+lines: 
+
+simplefb: mapped lines (hold requires >=1): 1
+lines: 22951
+
+Watchdog KILLING lines (hold requires 0): 0
+lines: 
+
+sys.boot_completed lines (hold requires >=1): 7
+lines: 22271, 22294, 22428, 22452, 22796, 22820, 22846
+
+boot_completed lines: 8
+lines: 4835, 22271, 22294, 22428, 22452, 22796, 22820, 22846
+
+FATAL EXCEPTION lines: 0
+lines: 
+
+Kernel panic/Oops/BUG lines (hold requires 0): 0
+lines: 
+
+RenderEngine EGL dup-fail lines: 4
+lines: 25025, 25303, 25304, 25419
+
+driver loaded lines: 3
+lines: 11025, 11559, 20489
+
+META-EGL banner lines: 1
+lines: 11034
+
+D/libEGL lines: 3
+lines: 11025, 11559, 20489
+
+avc:  denied (two spaces) total: 2218
+avc:  denied for /dev/mem: 6
+avc denied (sensorservice): 4
+
+Guest kernel time: first=0.0s last=855.993582s max=855.993582s
+Dup-fail rate: 4 / 856.0s * 1000 = 4.673 per 1000 s (baselines: T721 flight-01 4.058, T721 revert 6.660)
+
+=== REPORT COMPLETE ===

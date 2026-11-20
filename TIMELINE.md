@@ -1,57 +1,25 @@
-# T733 TIMELINE — minimal no-libc binary discrimination
+# Track T734 — TIMELINE
 
-- 2026-11-20 20:26:48 AEDT — lane launched (agent 96a895a6, brief
-  1dcf6423, worktree /Users/Shared/wt-track733-minimal-binary, branch
-  t733, base 928027c). Wedge 23:26:48 AEDT.
-- 20:27 AEDT — Step 0 PASS: df avail 22,198,032 KiB, GATE OPEN.
-  Step 1 PASS: inputs verified on Mac, all SHAs match T732 (kernel
-  70d3859d, DTB 73d1904b, CPIO a9d6040a, vendor 5e0607ad, binary
-  19db5d31, T732 image f7980cfb, patch d7d1cee5, T732 rc f9baa479).
-- 20:30–20:33 AEDT — Step 2 PASS: minimal binary built on the box
-  (1,648 B, SHA fd189c08, ELF64 EXEC AArch64, entry 0x400120 = _start,
-  no INTERP/DYNAMIC; openat/write/exit_group confirmed by disassembly).
-  New rc t733probe-new.rc 722 B SHA 79ad3cc3 (T732 rc + 3 renames only,
-  diff-verified). Parser VERDICT ACCEPT, 0 errors, 1 service, 2
-  actions, 0 imports. Image built on the box: new image SHA af40403a,
-  patch SHA 4d74f4d1 (6 chunks, 6,291,456 B). Label verified from the
-  new image: new binary u:object_r:system_file:s0, new rc xattr-empty.
-  Marker uniqueness: 0 T733_MINIMAL_OK / T733_PROBE_OK in earlier UARTs.
-- 20:35 AEDT — Step 3 PASS: image/patch/rc/binaries verified at every
-  hop (box = sandbox = Mac). Scripts adapted from T732 (supervisor /
-  launch_probe / analyze / df_poll, T733_, 850/1100, image af40403a,
-  flight service-flight-3, GDB port 1261). Analyzer sanity: T732 UART
-  reproduced driver counts exactly.
-- 20:35:46 AEDT — Step 4: service-flight-3 LAUNCHED. Preflight
-  verified (QEMU 11.1.2, kernel 70d3859d, DTB 73d1904b, CPIO a9d6040a,
-  system t733-system.img af40403a, vendor 5e0607ad, target 850).
-  Launch-time disk poll GATE_OPEN 16,234,540 KiB.
-- 20:40 AEDT — Poll 1: host ~275 s, guest 254.23 s, ratio ~0.92,
-  projected guest at host cap ~1015 s — trigger leg NOT at risk. df
-  avail 14,049,756 KiB, GATE OPEN. T733_PROBE_OK 1 (L10652, guest
-  117.83 s), T733_MINIMAL_OK 0, T728_PROBE_OK 1 (L10651, guest 117.77 s,
-  control leg 1 OK), boot_completed 0. Interim: on-boot action executed;
-  the exec RETURNED but the minimal binary wrote no marker.
-- 20:42 AEDT — Poll: host ~421 s, guest 399.7 s, ratio ~0.95. Markers
-  unchanged. Kernel in quiet period.
-- 20:44 AEDT — Poll: host ~545 s, guest 542.8 s, ratio ~1.00. Markers
-  unchanged. Kernel resumed logging.
-- 20:46:52 AEDT — Poll 2: host ~665 s, guest 663.8 s, ratio ~1.00.
-  TRIGGER FIRED (sys.boot_completed 11 lines). T733_PROBE_OK 2 (L10652
-  guest 117.83 s, L22750 guest 633.74 s — property action ran),
-  T728_PROBE_OK 2 (control legs both fired), T733_MINIMAL_OK 0.
-  DECISIVE INTERIM: the minimal no-libc binary produced NO marker under
-  EITHER leg. The fault is in init's exec dispatch, not the payload.
-- 20:49:11 AEDT — Poll: host 796.7 s, guest 785.7 s. QEMU running.
-- 20:49:58 AEDT — Flight COMPLETE: guest target reached (851.1 s >=
-  850 s). Host 851.93 s, guest 851.062 s, QEMU exit 0. UART 33,821
-  lines, 4,001,204 B, SHA acc4763e.
-- 20:51 AEDT — Step 5 adjudication: analyzer run on the flight UART.
-  T733_MINIMAL_OK 0, T733_PROBE_OK 2, T728_PROBE_OK 2 (control intact),
-  T728_SERVICE_OK 0, sys.boot_completed 11 (first guest 628.63 s,
-  L22420). Control service refused with the SELinux label /
-  domain-transition error at L22700; the t733probe start's log lines
-  were lost in the Bluetooth ANR crash-dump flood (L22714–L22752).
-  FATAL EXCEPTION 4 (DeadSystemException, late flight, ~guest 672 s).
-- Verdict: FAIL. Wall: INIT-EXEC-DISPATCH-SILENTLY-FAILED (guest, NEW)
-  — supersedes BINARY-EXEC-SILENTLY-FAILED as the fault location.
-  Findings + outcome + death note written; heartbeat CLOSED.
+- 21:10 AEDT 20 Nov 2026: T734 lane launched (agent 617da37f). Step 0: Mac disk 94%, 12,738,764 KiB free; flight gate 9,769,216 KiB OPEN.
+- 21:11 AEDT: Step 1 PASS — all 10 input SHAs verified on the Mac, matching T733.
+- 21:11–21:16 AEDT: binary nb-t734probe.bin built on the box (1,640 B, SHA b7440e1c). CPIO unpack hit the mknod wall (box user muse has no root/sudo — dev nodes cannot be created); unpack otherwise complete (178 files). /early-ramdisk identified as a /system/bin/sh script (the rdinit).
+- 21:16 AEDT: early-ramdisk modified (T734 probe exec block inserted after `exec >/dev/console 2>&1`); 13,430 -> 13,867 B.
+- 21:21 AEDT: CPIO rebuilt with a Python newc rebuilder (dev nodes copied verbatim, correct major/minor); new CPIO t734-fix.cpio.gz SHA 03668437, 53,745,734 B, 241 entries; all untouched entries byte-identical (re-parse verified). Step 2 PASS.
+- 21:24 AEDT: new CPIO + binary + rebuild script synced to the Mac worktree (SHA-verified Mac ↔ sandbox ↔ box).
+- 21:27 AEDT: scripts adapted (supervisor/launch/analyze/df_poll/parse_init_rc); py_compile OK on sandbox and Mac. Analyzer sanity on the T733 UART reproduced all driver counts exactly. Parser ACCEPT on the reused T733 rc (79ad3cc3). Step 3 PASS.
+- 21:28 AEDT: progress + TIMELINE + heartbeat written; disk poll next, then flight service-flight-4.
+- 21:29:13 AEDT 20 Nov 2026: service-flight-4 launched (QEMU PID 14957).
+- 21:29:28 AEDT: service-flight-4 ENDED — KERNEL PANIC at guest 7.87 s (host 15.03 s, QEMU exit 0). "rootfs image is not initramfs (read error)" + "Kernel panic - not syncing: VFS: Unable to mount root fs". Root cause: v1 CPIO gzip wrapper (Python gzip FNAME flag); newc content verified correct. No verdict from this flight.
+- 21:35 AEDT: CPIO rebuilt as v2 (system gzip -9n, header matches original; SHA 57c04949). Scripts updated for re-fly service-flight-5 (GDB 1263).
+- 22:06 AEDT 20 Nov 2026: DISK CRITICAL — df avail 2,550,764 KiB (99%), draining ~750 MB/min (foreign agy build, 9 procs). Flight gate far closed. Lane exiting WAIT-DISK; bisect (probe-only / init-only) staged and ready for a recovery relaunch when the disk is freed. No findings, no verdict.
+- 21:38:33 AEDT: service-flight-5 launched (v2 CPIO, system gzip -9n, SHA 57c04949). ENDED 21:38:48 AEDT — KERNEL PANIC again at guest 6.48 s (host 15.02 s). Identical "read error" panic. The gzip-wrapper theory is REFUTED.
+- 21:47–22:06 AEDT: bisect staged (probe-only SHA 530adf05, init-only SHA ae2b5a18); disk drained 12.7 GiB -> 2.55 GiB (99%); first lane exited WAIT-DISK 22:07:47 AEDT, no verdict.
+- 22:25 AEDT: T734 RECOVERY 1 launched (agent 78b059b9). Steps 0-3 re-verified (8 input SHAs match T733; original CPIO decompresses to 725,820,076 B; bisect CPIOs re-verified).
+- 22:26:28 AEDT: service-flight-6 (probe-only) launched. ENDED 22:27:53 AEDT — KERNEL PANIC at guest 7.152 s (host 15.06 s). "read error" at guest 3.79 s. Verdict on the variant: BAD.
+- 22:28:16 AEDT: service-flight-7 (init-only) launched. ENDED ~22:29:42 AEDT — KERNEL PANIC at guest 5.936 s (host 15.02 s). "read error" at guest 3.28 s. Verdict on the variant: BAD. Bisect INCONCLUSIVE as designed — both single-change variants fail identically, so the fault is not in either content change alone.
+- 22:30–22:39 AEDT: ROOT CAUSE FOUND. Gzip streams valid (headers, ISIZE, CRC); newc structure valid (strict independent walk clean; rebuilder round-trips the original byte-identically, SHA 3ddd4c75); entry diffs minimal and clean. The 4.19 kernel source (init/initramfs.c + lib/decompress_inflate.c) shows "read error" means gunzip ran out of input before the deflate stream ended. The DTB hardcodes linux,initrd-end = 0x1132eaef0 = 0x110000000 + 53391088 (the ORIGINAL CPIO size), and the supervisor loads the CPIO via QEMU -device loader (not -initrd, so QEMU does not update the DTB). The kernel therefore reads only the first 53,391,088 bytes of any flown CPIO; every variant is larger, so inflate runs out of input near the end of the stream. WALL: DTB-INITRD-END-CAP (harness, NEW).
+- 22:39 AEDT: patched DTB built (t734-modified.dtb, SHA 72831bab): linux,initrd-end 0x1132eaef0 -> 0x1132eb21d (= start + 53391901, the v2 CPIO size). Only 2 bytes differ; DTB size unchanged (2049 B). Verified by re-parse. Synced to the Mac worktree and the box.
+- 22:36–22:47 AEDT: disk gate CLOSED (8,267,924 KiB at 22:36, 3,413,784 at 22:41, 1,176,568 at 22:44, 100%). Gate REOPENED 22:47 AEDT (21,192,428 KiB, 90%) — the foreign agy build freed ~20 GiB on its own.
+- 22:48:42 AEDT: service-flight-8 (validation, 120 s guest) launched — v2 CPIO + patched DTB, GDB 1266. COMPLETE 22:50:50 AEDT — BOOT SUCCEEDED. Host 125.48 s, guest 124.671 s, QEMU exit 0. UART 8340 lines, SHA ce664283. "Freeing initrd memory: 52140K" (3.69 s); T734_KERNEL_OK 1 (L194, guest 4.09 s). The DTB fix is confirmed.
+- 22:52:40 AEDT: service-flight-9 (full, 850 s guest) launched — v2 CPIO + patched DTB, GDB 1267. COMPLETE 23:07:00 AEDT — BOOT SUCCEEDED. Host 856.93 s, guest 855.994 s (850 s target reached), QEMU exit 0. UART 25539 lines, SHA 33c9b12a. T734_KERNEL_OK 1 (L195, guest 7.80 s); T733_PROBE_OK 2 (196.19 s, 797.69 s); T728_PROBE_OK 2 (196.11 s, 797.67 s); T733_MINIMAL_OK 0; sys.boot_completed 7 (first 790.04 s); panic/Oops/BUG 0; FATAL EXCEPTION 0. All holds met.
+- 23:07 AEDT: Verdict: PASS. The kernel-init exec runs the binary; the fault is in Android init's exec dispatch (confirms the T733 guest wall INIT-EXEC-DISPATCH-SILENTLY-FAILED). Findings findings-t734.md (SHA febad60f), outcome outcome-t734.txt (PASS, SHA c26de83a). No death note (PASS). Heartbeat CLOSED.
