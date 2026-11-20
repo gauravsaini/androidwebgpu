@@ -1,0 +1,144 @@
+Total lines: 31938 (trailing partial line: 0)
+Total bytes: 3748681
+
+--- ALL T723_PROBE lines (full text): 0 line(s) ---
+
+T723_PROBE DONE summary lines (context: expect 0): 0
+lines: 
+
+SP1 DONE lines (context: expect 0): 0
+lines: 
+
+SP2 DONE lines (context: expect 0): 0
+lines: 
+
+SP3 DONE lines (context: expect 0): 0
+lines: 
+
+DROP_FAIL lines (expect 0): 0
+lines: 
+
+SP1 RESOLVE_FAIL lines (expect 0): 0
+lines: 
+
+SP2 GETPROCADDRESS_NULL lines (expect 0): 0
+lines: 
+
+--- ALL [T723] early-ramdisk hook lines (context: hook timeout ~33 s): 1 line(s) ---
+L2016: [T723] boot_completed never detected in 600s; probe not run
+
+--- ALL T728_SERVICE_OK marker lines (full text) — payload ran: 0 line(s) ---
+
+--- ALL T728_PROBE_OK marker lines (full text) — registration: 2 line(s) ---
+L10593: [  122.694872] T728_PROBE_OK
+L23016: [  653.260548] T728_PROBE_OK
+
+--- ALL T728_PROBE helper lines (full text) — start + context: 2 line(s) ---
+L10593: [  122.694872] T728_PROBE_OK
+L23016: [  653.260548] T728_PROBE_OK
+
+--- ALL T728_ARGV lines (full text) — the argv handoff, verbatim: 0 line(s) ---
+
+--- ALL T728_ARGC lines (full text): 0 line(s) ---
+
+--- ALL t728probe lines (service + rc citations): 0 line(s) ---
+
+--- ALL init service-refusal lines (full text) — SELinux refusal if present: 0 line(s) ---
+
+--- ALL label/domain-transition lines (full text): 0 line(s) ---
+
+--- ALL t728probe service EXIT lines (full text) — authoritative start proof: 0 line(s) ---
+
+init starting service 't728probe' (context only — may be absent per T727 lesson): 0
+lines: 
+
+t728probe.rc citations (init parsed the new file): 0
+lines: 
+
+start-command lines citing t728probe (trigger fired): 0
+lines: 
+
+ALL boot_completed action processing lines (stock control + mine): 3
+lines: 22683, 22819, 22820
+
+on boot action processing lines citing t728probe.rc: 0
+lines: 
+
+service exec/start failures (expect 0): 0
+lines: 
+
+write-to-kmsg command lines (context): 0
+lines: 
+
+T727_SERVICE_OK lines (control: expect 0 — old rc replaced): 0
+lines: 
+
+T727_PROBE_OK lines (control: expect 0 — old rc replaced): 0
+lines: 
+
+t727probe lines (control: expect 0 — old rc replaced): 0
+lines: 
+
+T720_PROBE DONE status=PASS lines (hold requires >=1): 1
+lines: 224
+
+T720_PROBE DONE status=FAIL lines (hold requires 0): 0
+lines: 
+
+T721 fence-log lines (hold requires >=1): 1
+lines: 24914
+
+Invalid present fence lines (hold requires 0): 0
+lines: 
+
+ALL sw_sync lines (context): 162
+lines: 196, 197, 199, 200, 208, 209, 222, 24218, 24231, 24260, 24261, 24313, 24353, 24406, 24587, 24588, 24617, 24618, 24619, 24621, 30260, 30279, 30280, 30304, 30305, 30307, 30316, 30327, 30350, 30351, 30352, 30353, 30354, 30355, 30390, 30391, 30392, 30393, 30420, 30421
+(122 middle lines omitted; count is exact)
+
+T628 REJECT allocate2 lines (hold requires 0): 0
+lines: 
+
+T628 CALL allocate2 lines: 5
+lines: 11002, 11011, 20037, 20041, 20045
+
+EPERM lines (hold requires 0): 0
+lines: 
+
+simplefb: mapped lines (hold requires >=1): 1
+lines: 24913
+
+Watchdog KILLING lines (hold requires 0): 0
+lines: 
+
+sys.boot_completed lines (hold requires >=1): 8
+lines: 22683, 22693, 22795, 22811, 22819, 22820, 23155, 23201
+
+boot_completed lines: 9
+lines: 2016, 22683, 22693, 22795, 22811, 22819, 22820, 23155, 23201
+
+FATAL EXCEPTION lines: 6
+lines: 26629, 26635, 26841, 26854, 26958, 26964
+
+Kernel panic/Oops/BUG lines (hold requires 0): 0
+lines: 
+
+RenderEngine EGL dup-fail lines: 0
+lines: 
+
+driver loaded lines: 5
+lines: 11171, 11504, 20526, 26193, 27520
+
+META-EGL banner lines: 1
+lines: 11176
+
+D/libEGL lines: 5
+lines: 11171, 11504, 20526, 26193, 27520
+
+avc:  denied (two spaces) total: 2281
+avc:  denied for /dev/mem: 6
+avc denied (sensorservice): 6
+
+Guest kernel time: first=0.0s last=851.001214s max=851.001214s
+Dup-fail rate: 0 / 851.0s * 1000 = 0.000 per 1000 s (baselines: T721 flight-01 4.058, T721 revert 6.660)
+
+=== REPORT COMPLETE ===
