@@ -1,0 +1,145 @@
+# T740 progress — longer flight window (1200 s guest / 1500 s host) + kill orphaned background scripts at the handoff
+
+Lane agent: e7f12434-0efc-4e68-8dee-b4a9f458f427. Launched ~05:38 AEDT 21 Nov 2026, wedge 08:38 AEDT.
+Brief: hidden_files/briefs/track740-longer-window.md, SHA 9efda8f4 (41,393 B), brief-gate READY.
+Worktree: /Users/Shared/wt-track740-longer-window, branch t740, base 902c272 (T739 certification commit).
+Flight: service-flight-15 (guest target 1200 s, host cap 1500 s).
+
+## Step 0 — Disk gate (2026-11-21 05:56 AEDT, driver-verified at launch + lane re-check)
+
+- Mac data volume df at 05:56 AEDT: 23,654,800 KiB free, 89% used. Gate 9,769,216 KiB: OPEN (margin ~13.9 GiB).
+- Gate was OPEN at launch (26,325,112 KiB free, 88%, ~05:38). Recheck immediately before the flight launch; if closed, WAIT-DISK per brief Step 0.
+
+## Step 1 — Verify inputs + read findings (2026-11-21 ~05:56–06:10 AEDT)
+
+All SHAs re-hashed on the Mac where the files will be used. NO network fetch.
+
+Guest-inputs/ (23 files, hardlinked from the T739 worktree, driver SHA-verified identical):
+- t720-Image 70d3859d6aed1906d27217aa3fdfd9bb953a57f4490c89c51efa4f6490441e04 (20,396,544 B) MATCH
+- t722-vendor.img 5e0607ada51367fbe9f7e5dd7586afbeb9216f478f00a31baa5179eb73f476e0 (134,217,728 B) MATCH
+- t723-probe 4b275e48cab6efa03e6878a25a7168f2ae1b08a6b9617a171985b82bbd1387ad (68,792 B) MATCH
+- t733-system.img af40403aa286a770f67dc8599584ef038c3192f2ff43ff89e62a3546ded89043 (2,059,816,960 B) MATCH
+- t733.patch 4d74f4d1689635535a4eaa511e8c79f0c39b016470f34342f5b6121b6572f35b (6,291,563 B) MATCH
+- t733probe-new.rc 79ad3cc3c96580b0c84ae38f4ac91f7c4f847bb15d53ed4605eb701b62984215 (722 B) MATCH
+- nb-t728probe.bin 19db5d316aa6c1d2ceaca174e502e9397d9e914f2c9cd4272fb377fb3d427f9b (67,168 B) MATCH
+- nb-t733probe.bin fd189c0818ff4bed7167931f3b5f193a1d39b12d3420d0a7cde340622462f043 (1,648 B) MATCH
+- t723-fix.cpio.gz a9d6040a3984e9d60837187d3b5d02211002966e4f051f23765d1f05390f3521 MATCH
+- t723-modified.dtb 73d1904b3191edc3c36082f4cec744944ff56fe6b947dd6910d25d4b2a858eea MATCH (unpatched DTB base)
+- t728probe.rc f61b9c0fdd1c129a8bf51c849d1ab26a23516d1e54eafe40fb819053b71453b3 MATCH
+- t728probe-t732-new.rc f9baa4799e55882448d83b569828e7596a809264d24f52c2dcb0a5f45e72a123 MATCH
+- t729-system.img 568af6ac96393d961f2cf0df0f6f464a3f00fdf591f90bef380c57694fae7bf2 (superseded; not flown)
+- t729.patch e421162f6fc4cfb0d8fc122fdc31b443dc439c7b172f1c065fd716110a949095 (superseded; not flown)
+- t731-system.img 15c79aad1348c72f76f4ad831bc51d637c8bbbc453c09a574d924c22dbe49f22 (superseded; not flown)
+- t731.patch 259807d874f7727f03474e783b69565e47a48d2afdf72535cc652126ba757d66 (superseded; not flown)
+- t732-system.img f7980cfba319fdb23764508664fa5dd1ea7e290ae9be72c3863cdc70c94ed5d7 (superseded; not flown)
+- t732.patch d7d1cee5046e58e4dbe452e837427844e75c1c31df462bd666bfed85a58834a7 (superseded; not flown)
+- t734-fix-v2.cpio.gz 57c04949958eec0ff22e940fd87e15d3be3e579210e1d80c9a98e20f6b8bd282 MATCH
+- t734-fix.cpio.gz 03668437895dadee093f2156ea634a564338358371f42746611f8f0b75c57885 MATCH
+- t734-init-only.cpio.gz ae2b5a1833c8ead29d92d7a85dd7d6aa2637e07e0527ec7ba4b0690d7acd7791 MATCH
+- t734-modified.dtb 72831bab02ed6bd40b72f3d65f1d6b01fe4dc478b7cfb6941b84ad26dd441de9 MATCH
+- t734-probe-only.cpio.gz 530adf05c19e8d9344a82b47e40ff5b8093f73f3baa5b3c2425e0ad7dc4d71de MATCH
+
+T739 build files (copied/hardlinked from the T739 worktree into the T740 worktree, SHAs re-verified):
+- t739-fix.cpio.gz df2a6c9ac4940eed0d409eb8d2ce51326ef4429d1c9113532a219142ad86e592 (53,751,329 B) MATCH — rebuild base
+- t739-modified.dtb e4b0ff795bfad36a73768b88e2cb00e51810cc58c11e54b2e79b6acccb03a60f (2,049 B; initrd-end 0x113342e21) MATCH — reference only; the flown DTB is a NEW patch from the unpatched base for the NEW CPIO size
+- early-ramdisk-t739 d75f56587124f50398e9167f7121be8fc92c9e7e3da08928d6f895e7a012f690 (18,359 B) MATCH
+- rebuild_cpio_t739.py e48dd63b8e6dbbd04202029aefc81a75f1602d9c298fd5b7b13335669d8db496 MATCH
+- scripts/supervisor_t739.py 8f6cc5ea644030afc3e668da641cd28a2180a387a02bf7d7a668199b63897673 MATCH (copied to scripts/supervisor_t740.py)
+- scripts/analyze_t739_probe.py 67b771986149d0658fe74a76cbb1e4c9b91ef3476ad9177f980fd1dbc2d37861 MATCH (copied to scripts/analyze_t740_probe.py)
+- patch_dtb_initrd.py 1f896a01954d91bb5095aa34a0a88e6bc74476a903bbfa78d2e137a0cee79af2 MATCH (worktree root, inherited)
+
+Findings read in full (sandbox scratch copies, SHAs match the brief list):
+- findings-t739.md 3e346924 (17,731 B, Verdict FAIL) — read in full
+- findings-t738.md b348d01b (13,780 B, Verdict FAIL) — read in full
+- findings-t737.md 9832c9c9 (15,022 B, Verdict FAIL) — read in full
+- findings-t736.md 8bf8eb61 (13,835 B, Verdict PASS) — read in full
+- findings-t734.md febad60f (12,929 B, Verdict PASS) — read in full
+
+System image decision carried from T735: af40403a (NOT the revert 0ba6d6d3). No re-decision.
+No missing or mismatched inputs — Step 1 hard gate PASSED.
+
+## Step 2 — Kill the orphaned scripts at the handoff + rebuild (IN PROGRESS)
+
+(Pending — filled at the Step 2 exit.)
+
+## Step 2 — Kill the orphaned scripts at the handoff + rebuild (EXIT 2026-11-21 ~06:25 AEDT)
+
+Early-ramdisk edit (early-ramdisk-t740, SHA 6804341a, 20,098 B; diff vs early-ramdisk-t739 shows ONLY the intended changes; sh -n OK):
+- PIDs captured at launch: `/t493-probe.sh ... & P493=$!`, `/t501-keystore2-dump.sh ... & P501=$!` (/loop-node-keeper NOT captured, NOT killed — static, holds device nodes).
+- New [T740] block immediately before the T739 unmount block: SIGKILL both PIDs, `wait` to reap (so kill -0 is a true liveness test — a zombie would answer kill -0), then kill -0 verification with `[T740] ... killed pid=` / `STILL ALIVE` hook lines. An in-flight toybox sleep child may survive up to its sleep (t493: 30 s, t501: 1 s) as an orphan, but sleep is silent — it prints nothing.
+- NO `export LD_LIBRARY_PATH` anywhere (grep-verified in the script AND in the flown CPIO member). Scoped inline probe-line path carried forward unchanged.
+- Kill proof (flight): analyzer [T740] section counts post-handoff "can't create /dev/null" + "inaccessible or not found" — must fall to ~0 (T739 flight-14: 4480 + 337). Analyzer logic validated against the flight-14 UART (reproduces 4480/337 exactly).
+
+CPIO rebuild (rebuild_cpio_t740.py, SHA 2db3ef8e, adapted from the T739 rebuilder; run on the Mac):
+- t740-fix.cpio.gz SHA 724dff6c (53,753,289 B, 241 entries). Rebuilder verify: all untouched entries byte-identical; early-ramdisk replaced; t723-probe + t734probe preserved.
+- EMBEDDED-VENDOR RULE: ramdisk-images/vendor.img member SHA 5e0607ad (verified from the NEW CPIO on the Mac). Early-ramdisk member == 6804341a, kill block present, NO export. t723-probe 4b275e48, t734probe b7440e1c, linker64 ffd6af09.
+- DTB re-patch (patch_dtb_initrd.py 1f896a01, from the UNPATCHED base guest-inputs/t723-modified.dtb 73d1904b): t740-modified.dtb SHA 6b6a118d (2,049 B; initrd-end 0x1133435c9 = 0x110000000 + 53,753,289 — patcher-verified end-start == filesize).
+
+INTERP chain (readelf on the box, from the T740 CPIO unpack + system image via debugfs):
+- toybox: INTERP /system/bin/linker64; NEEDED libcrypto, libz, liblog, libprocessgroup, libselinux, libc, libm, libdl.
+- sh: INTERP /system/bin/linker64; NEEDED libc.so only.
+- t723-probe: INTERP /system/bin/linker64; NEEDED libEGL.so only.
+- t734probe: STATIC — no INTERP, no NEEDED (minimal no-libc binary).
+- /init is a symlink (16 B) to /system/bin/init (2,770,616 B, SHA 646f5efa): INTERP /system/bin/bootstrap/linker64 (resolves from the mounted image after root switch).
+- Each INTERP resolves AFTER the mount, from the mounted state: proven in-flight by the [T737] INTERP tripwire (toybox alive after /sysimg mount) + probe exec rc=0 + T734_KERNEL_OK in every prior flight; this flight re-proves all three.
+
+Umount tool NEEDED set vs the mount it undoes (T738 reflection lesson, binding):
+- The unmount tool is toybox (system/bin/toybox, 560,720 B). Its 8 direct NEEDED libraries are ALL present in the ramdisk's /system/lib64/ (verified T739; the T740 rebuilder byte-verified every CPIO member identical except early-ramdisk). libnetd_client is NOT in toybox's closure (T739 finding). With NO export, toybox maps nothing from /sysimg — T739 flight-14 proved it (all three unmounts rc=0). The kill block removes the backgrounded scripts' toybox holders as well, so no live process maps /sysimg at unmount time except the unmount tool itself (ramdisk-loaded).
+
+Handoff device state (explicit, diffed against T734's):
+- T739 unmount block carried forward verbatim: /sysimg (vda), /vendor (loop1), debugfs unmounted after the probe exec, before exec /init; /proc re-mounted briefly for verification, then unmounted; handoff state verified ([T739] lines). At the handoff, only /data + /data/media are mounted — IDENTICAL to T734's proven-booting state. No new mounts added in this lane. No new device-state risk introduced by the kill block (it kills processes, adds no mounts).
+
+CALL-REACHABILITY: the probe execs synchronously from PID 1 (the early-ramdisk script); dispatch reachability is proven by the T736–T739 flights (SP1/SP2 answered 4x from the probe context). The kill block touches no dispatch path and runs after the probe exec — it cannot affect reachability.
+
+Branch choice: INVESTIGATION-ONLY for the fix BUILD (no vendor.img repack in this lane).
+- The tested fix route (Step 4) is the probe-context MECHANISM test: a short second flight (service-flight-16) with a CPIO whose early-ramdisk additionally relaxes the debugfs sw_sync file's permissions (chmod) before the probe exec, so the uid-1000 probe opens the timeline. Adjudication criteria: mechanism PASSES if SP3 opens the timeline (fd>=0) after the chmod and SP1/SP2 dup returns a real fence fd; it FAILS (route refuted) if the open still fails, with the errno named.
+- The booted-guest fix (vendor init rc, living in the booted guest) is a SUCCESSOR lane's build, only if the mechanism test passes — it needs a vendor.img repack + a full 1200 s differential flight, which does not fit this lane's wedge after flight-15 + flight-16.
+- If flight-15's boot still has not completed at 1200 s, the mechanism test still runs (the probe runs at guest ~5–10 s, independent of boot completion); the successor extends the window from the new tail.
+
+Supervisor: scripts/supervisor_t740.py SHA f07de12c (guest target 1200 s, host cap 1500 s, GDB 1269, flight service-flight-15; EXPECTED SHAs: kernel 70d3859d, DTB 6b6a118d, CPIO 724dff6c, system af40403a, vendor 5e0607ad). Analyzer: scripts/analyze_t740_probe.py SHA 2e90935e (service-flight-15 default + [T740] kill + post-handoff spam sections; validated against the flight-14 UART). Both py_compile OK + import-tested (sandbox; Mac import test follows at sync).
+
+Box sync (Step 2): box /mnt/sdc3/muse/kernel-primary/t740/ holds t740-fix.cpio.gz 724dff6c, t740-modified.dtb 6b6a118d, early-ramdisk-t740 6804341a, rebuild_cpio_t740.py 2db3ef8e, cpio-unpack/ (toybox/sh/t723-probe/t734probe/linker64). Sandbox quota blocked the 53 MB CPIO via rsync — routed Mac→box via a sandbox pipe instead (PIPE-EXIT=0, SHA-verified on the box). The sandbox t740-scratch/ mirror holds the small files only (CPIO/DTB skipped on quota; the box copy is canonical).
+
+## Step 3 — Fly service-flight-15 (LAUNCHED 2026-11-21 06:22:26 AEDT)
+
+- Disk gate re-checked immediately before launch: 22,111,368 KiB free, 90% — OPEN (gate 9,769,216 KiB). No QEMU running before launch.
+- Supervisor PID 87228, QEMU PID 87291, GDB 1269. Guest target 1200 s, host cap 1500 s. QEMU started 2026-11-20T19:22:28Z; guest 12.0 s at host 15.0 s.
+- Expected end ~06:47-06:48 AEDT (host cap) or earlier on guest target reached.
+Flight in progress (service-flight-15): host=301s guest=278.2s pid=87291. 2026-11-20T19:27:29Z
+Flight in progress (service-flight-15): host=601s guest=344.8s pid=87291. 2026-11-20T19:32:30Z
+Flight in progress (service-flight-15): host=902s guest=900.2s pid=87291. 2026-11-20T19:37:30Z
+
+## Step 3 — Flight service-flight-15 (ENDED 2026-11-21 06:42:31 AEDT)
+
+- Ended: "Guest target reached (1202.1s >= 1200s)", host 1202.60 s, guest 1202.06 s, QEMU exit 0. UART 26,242 lines, 3,505,378 B, SHA 0befc1fe. Started 2026-11-20T19:22:28Z, ended 19:42:31Z.
+- BOOT COMPLETED: sys.boot_completed 12 lines, first firing L23295 guest 1175.836 s. T733/T728 leg 2 fired (1184 s). T721 fence created (fd=10 tl=9) + simplefb mapped (guest ~890 s). RenderEngine dup-fail 0 — VOID (only 26 s post-boot; T734 calibration needs ~40 s).
+- System_server watchdog-killed at ~guest 935 s (main thread blocked 94 s; gralloc pid 614 native crash) and restarted (pid 2323), completing boot. FATAL EXCEPTION 2 (Launcher3, permissioncontroller — DeadSystemException, consequences of the restart).
+- Orphaned scripts killed ([T740] L494-496, pids 201/202); post-handoff spam 0/0. All [T739] unmounts rc=0; handoff verified. T734_KERNEL_OK 1 (L194, guest 3.892 s). T720_PROBE DONE PASS 1 (L227). avc: denied 2440. "storaged not found" 492 (identical to T739). Analyzer exit 0; byte recount matches parser exactly.
+- Supervisor-flight15.log copied into flights/service-flight-15/ (9 files total).
+
+## Step 4 — Mechanism tests (service-flight-16 + service-flight-17)
+
+### Flight-16 (file chmod only) — 07:00:13–07:02:25 AEDT: ROUTE FAILED as specified
+- Supervisor PID 14616, QEMU PID 14620, GDB 1270. Host 130.26 s, guest 126.741 s, QEMU exit 0. UART 3,968 lines, 577,113 B, SHA 56354691. qemu-stderr 81 B (SIGTERM at target, expected).
+- CPIO b03ff37b (53,753,865 B), DTB 5d2f4f14 (initrd-end 0x113343809), early-ramdisk-t740-mech 83dcb08e (21,119 B), rebuilder a3a98980.
+- [T740M]: file present (L351); mode before -rw-r--r-- 0644 (L380); chmod 0666 rc=0 (L409); mode after -rw-rw-rw- (L438).
+- SP3 open timeline fd=-13 (L458) — STILL FAILS after chmod 0666. SP1 dup -1 (L463), SP2 dup -1 (L471). T723_PROBE 27. T734_KERNEL_OK 1 (L194, guest 3.695 s). Unmounts rc=0 (L610/639/668). Post-handoff spam 0/0.
+- Diagnosis: the file was ALREADY world-readable and SP3 opens O_RDONLY (probe source line 548, verified on the box) — DAC on the file could never be the barrier. No avc denial for the probe's open in flight-15's first 600 lines. The barrier had to be on the open path.
+
+### Flight-17 (file + parent-dir chmod) — 07:17:40–07:19:45 AEDT: MECHANISM PASSES
+- First launch attempt FAILED on a supervisor checksum refusal — the lane typed a fabricated DTB SHA tail into the env var; the gate caught it (no QEMU started). Corrected from the supervisor's error message (real SHA 534f4c393197d147568e55b8a74421a3ad175ed09a864bb1c7c5450a25a9c47c) and re-launched. The checksum gate worked as designed. Lesson: never type a SHA from memory — copy it from the tool output that produced it.
+- Supervisor PID 21028, QEMU PID 21041, GDB 1271. Host 125.27 s, guest 123.601 s, QEMU exit 0. UART 3,817 lines, 548,912 B, SHA 10f6365a. qemu-stderr 81 B.
+- CPIO 1f8c00f2 (53,753,970 B), DTB 534f4c39 (initrd-end 0x113343872), early-ramdisk-t740-mech2 3c9aa19d (21,761 B), rebuilder 93afe6f0.
+- [T740M2]: parent dir modes BEFORE — /sys drwxr-xr-x, /sys/kernel drwxr-xr-x, /sys/kernel/debug drwx------ (0700 root — THE BARRIER), /sys/kernel/debug/sync drwxr-xr-x. chmod 0755 on the dirs rc=0 (L501).
+- SP3 open timeline fd=4 (L552); CREATE rc=0 fence=5 (L553); INC rc=0 (L554); poll signaled (L555); FILE_INFO num_fences=1 (L556); FILE_INFO2 status=1 signaled (L557); driver_name=sw_sync (L558). SP1 dup rc=5 (L564); SP2 dup rc=7 (L576) — the error=0x3000 is the stale EGL error from the create path, the dup fd is real (fence_check signaled, FILE_INFO 1, FILE_INFO2 status=1, driver sw_sync). T723_PROBE 42. T734_KERNEL_OK 1 (L194, guest 4.095 s). Unmounts rc=0 (L720/749/778). Post-handoff spam 0/0.
+- Adjudication: the timeline-access fix route is VALIDATED in the probe context. Barrier = DAC traversal on /sys/kernel/debug (0700), NOT the file mode, NOT SELinux, NOT dispatch. The booted-guest fix (vendor init rc) is a SUCCESSOR lane's build.
+
+## Step 5 — Findings + outcome + death note + sync-back (DONE ~07:25 AEDT)
+
+- Verdict: FAIL (conjunctive contract: clause 3 unmet — dup -1 in the surfaceflinger context UNMEASURED, only 26.2 s post-boot; T734 calibration needs ~40 s). All other clauses met. Mechanism test PASSED.
+- Wall: POST-BOOT-WINDOW-TOO-SHORT (engine/harness). Rust par bhi lagu: nahi. T729 wall BOOT-COMPLETED-NEVER-FIRED: CLOSED.
+- Findings findings-t740.md (26,765 B, SHA 2c211b07) carries all 5 required literals (Verdict:, WALL-TYPE-TAG, Rust par bhi lagu, parser, sys.boot_completed). outcome-t740.txt 5 bytes FAIL, SHA 4f8e9e45 (canonical FAIL). DEATH_NOTE-T740.md, TIMELINE.md written. Heartbeat CLOSED.
+- Flights: service-flight-15 (9 files), service-flight-16 (8 files), service-flight-17 (8 files) — all synced to sandbox ~/workspace/t740-scratch/ AND box /mnt/sdc3/muse/kernel-primary/t740/ (SHAs verified).
+- Box t740/ now also holds: t740-mech-fix.cpio.gz b03ff37b, t740-mech-modified.dtb 5d2f4f14, early-ramdisk-t740-mech 83dcb08e, rebuild_cpio_t740_mech.py a3a98980, t740-mech2-fix.cpio.gz 1f8c00f2, t740-mech2-modified.dtb 534f4c39, early-ramdisk-t740-mech2 3c9aa19d, rebuild_cpio_t740_mech2.py 93afe6f0 (CPIOs routed Mac→box via sandbox pipe; sandbox rsync of 53 MB hits quota).
+- Nothing committed; nothing touches the registry or GATES.md. Driver certifies and launches T741.
+- Successor (T741): (1) vendor init rc making /sys/kernel/debug traversable by uid 1000 (mechanism proven); (2) guest target ~1500 s (boot-tail ~1180 s + ≥60 s post-boot margin), host cap ~1800 s, T722 differential criteria; (3) investigate the system_server watchdog kill as a boot-slowness contributor.

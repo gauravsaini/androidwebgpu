@@ -1,0 +1,45 @@
+{
+  "track": "T740",
+  "flight": "service-flight-16",
+  "stop_reason": "Guest target reached (126.7s >= 120s)",
+  "started_utc": "2026-11-20T20:00:15Z",
+  "ended_utc": "2026-11-20T20:02:25Z",
+  "host_elapsed_seconds": 130.26,
+  "guest_log_max_seconds": 126.741,
+  "qemu_exit_code": 0,
+  "log_bytes": 577113,
+  "log_lines": 3968,
+  "log_sha256": "56354691c769616378b5f078c928d04c8fbd9100ed2e1e852407f15ff21ae1a6",
+  "inputs": {
+    "kernel": {
+      "path": "/Users/Shared/wt-track740-longer-window/guest-inputs/t720-Image",
+      "sha256": "70d3859d6aed1906d27217aa3fdfd9bb953a57f4490c89c51efa4f6490441e04",
+      "bytes": 20396544
+    },
+    "qemu": {
+      "path": "/opt/homebrew/bin/qemu-system-aarch64",
+      "sha256": "8e5c46dc6752c36afbb706f933e72fef835e35f48881a63cadb06c6d29bac869",
+      "bytes": 31498864
+    },
+    "dtb": {
+      "path": "/Users/Shared/wt-track740-longer-window/t740-mech-modified.dtb",
+      "sha256": "5d2f4f14032bff24fcb7d886bc7260d5dc9d44b4153760deafebd8860f58f00e",
+      "bytes": 2049
+    },
+    "boot_image": {
+      "path": "/Users/Shared/wt-track740-longer-window/t740-mech-fix.cpio.gz",
+      "sha256": "b03ff37b08a1171c4d790c2f26af1bce9896331f3c373de517df5fb0ef12d687",
+      "bytes": 53753865
+    },
+    "system_img": {
+      "path": "/Users/Shared/wt-track740-longer-window/guest-inputs/t733-system.img",
+      "sha256": "af40403aa286a770f67dc8599584ef038c3192f2ff43ff89e62a3546ded89043",
+      "bytes": 2059816960
+    },
+    "vendor_img": {
+      "path": "/Users/Shared/wt-track740-longer-window/guest-inputs/t722-vendor.img",
+      "sha256": "5e0607ada51367fbe9f7e5dd7586afbeb9216f478f00a31baa5179eb73f476e0",
+      "bytes": 134217728
+    }
+  }
+}
