@@ -1,0 +1,50 @@
+T736 — re-fly T723 EGL-dispatch probe via Option A (/sysimg mount + LD_LIBRARY_PATH)
+Launch: 00:54 AEDT 21 Nov 2026 (agent 2e7308b1; brief f806a630; wedge 03:54 AEDT 21 Nov). Worktree /Users/Shared/wt-track736-sysimg-mount, branch t736, base 477a987.
+
+Step 0 — Disk gate: CLOSED at launch (1,873,920 KiB free at 00:46 AEDT 21 Nov, 100% used); 1,770,036 KiB free at 00:54; 119,684 KiB free at ~00:59 (foreign drain, same pattern as 20 Nov evening); 21,371,952 KiB free (90%) at ~01:00 — gate REOPENED on its own. Flight gate 9,769,216 KiB. Steps 1-2 proceed; flights gated at Step 3 with WAIT-DISK if the gate closes again. Recheck df immediately before every flight launch.
+
+Step 1 — Inputs verified (re-hashed on the machine where used, no network fetch):
+- kernel Image 70d3859d (20,396,544 B) — guest-inputs/t720-Image MATCH
+- t723-probe 4b275e48 (68,792 B) MATCH; t733-system.img af40403a (2,059,816,960 B) MATCH; t722-vendor.img 5e0607ad (134,217,728 B) MATCH
+- t733.patch 4d74f4d1 MATCH; t733probe-new.rc 79ad3cc3 MATCH; nb-t733probe.bin fd189c08 MATCH; nb-t728probe.bin 19db5d31 MATCH
+- t734-fix-v2.cpio.gz 57c04949 MATCH; t734-modified.dtb 72831bab MATCH
+- Embedded CPIO vendor member ramdisk-images/vendor.img = 5e0607ad (EMBEDDED-VENDOR RULE satisfied)
+- System image decision carried from T735: af40403a (not revert 0ba6d6d3); preserves the T734 control.
+- T735 findings f2a46b2a + T734 findings febad60f read in full. QEMU command line read (T735 supervisor shape; T736 supervisor same shape, T736 paths).
+
+INTERP chain (fresh readelf, box):
+- toybox INTERP /system/bin/linker64; sh INTERP /system/bin/linker64; /init INTERP /system/bin/bootstrap/linker64
+- t723-probe INTERP /system/bin/linker64, NEEDED libEGL.so only
+- t734probe: NO INTERP (static no-libc binary) — exec-path control needs no linker
+- Image /system/lib64/libEGL.so = fed36a9b (290,120 B); ramdisk /system/lib64/libEGL.so = a9641828 (290,104 B) — differ, as expected
+- Probe source (box /home/muse/t723-work/t723-probe.c): SP1 load_stub("/vendor/lib64/egl/libGLES_swiftshader.so") absolute path; SP2 linked against libEGL.so (DT_NEEDED only) — LD_LIBRARY_PATH=/sysimg/lib64 makes the linker load the image libEGL.so. SP3 raw sw_sync control, runs FIRST, needs debugfs mount.
+
+Step 2 — IN PROGRESS: early-ramdisk edit (Option A) + CPIO rebuild + DTB re-patch.
+
+Step 2 — DONE (01:07 AEDT 21 Nov).
+- Early-ramdisk edited (Option A): mount point /system -> /sysimg; LD_LIBRARY_PATH=/sysimg/lib64 for the probe exec; INTERP tripwire hook added (toybox exec after the /sysimg mount, before the probe exec; probe exec SKIPPED if the tripwire fails); /vendor loop-mount kept BEFORE the probe exec; t734probe control kept; /dev/null looping artifact absent (no run_probe in the T735 base). New early-ramdisk-t736 a467a546 (13,082 B; was b6301e09, 12,168 B). Syntax-checked (sh -n OK); diff vs T735 base shows ONLY the intended T736 block changes.
+- CPIO rebuilt from T735 base b183380d via rebuild_cpio_t736.py (800de584): NEW t736-fix.cpio.gz da6186e5 (53,745,730 B, 241 entries); all untouched entries byte-identical; t723-probe preserved (no duplicate insert); t734probe preserved (b7440e1c).
+- DTB re-patched for the new size via patch_dtb_initrd.py (1f896a01): NEW t736-modified.dtb bc44f717 (2,049 B), initrd-end 0x113341842 = start + 53,745,730 (patcher-verified: end-start == filesize).
+- Supervisor supervisor_t736.py (a4db25c0) filled with the flown SHAs (boot_image da6186e5, dtb bc44f717); verify_inputs() passed on the Mac (no QEMU launched): kernel 70d3859d, qemu 8e5c46dc, dtb bc44f717, boot_image da6186e5, system af40403a, vendor 5e0607ad.
+- Analyzer analyze_t736_probe.py (ad77e7a4) adapted: [T736] hooks, /sysimg mount lines, INTERP tripwire lines; counts T723_PROBE SP1/SP2/SP3 + T734_KERNEL_OK + T733/T728_PROBE_OK + sys.boot_completed + T721 fence-log + simplefb + dup-fail rate vs baselines 4.058/6.660.
+
+REACHABILITY ANSWER (Step 2 exit criterion, CALL-REACHABILITY): YES — the probe CAN reach the dispatch chain from the ramdisk context via Option A. Static chain (T723 probe (a), re-verified from the flown binaries): SP1 loads the driver .so by absolute path /vendor/lib64/egl/libGLES_swiftshader.so (mini-load, no libc); SP2 is linked against libEGL.so (DT_NEEDED only) — with LD_LIBRARY_PATH=/sysimg/lib64 the linker loads the image libEGL.so fed36a9b; eglGetProcAddress("eglDupNativeFenceFDANDROID") resolves from that META-EGL. INTERP chain: toybox/sh/t723-probe INTERP /system/bin/linker64 (ramdisk real file, stays live — /system NOT overmounted); /init INTERP /system/bin/bootstrap/linker64; t734probe static (no INTERP). Whether META-EGL forwards to the 0x5cb0 stub is exactly what the flight answers.
+Branch: INVESTIGATION-ONLY (fix branch decided only after the flight identifies the dispatch point).
+
+Step 3a — READY: fly service-flight-11 (guest target 850 s, host cap 1100 s) once the disk gate is re-checked immediately before launch. Disk 21,391,344 KiB free (90%) at 01:07 AEDT 21 Nov — gate OPEN.
+
+Step 3a — FLOWN + ADJUDICATED (01:13–01:38 AEDT 21 Nov). Verdict: PASS.
+- Disk re-checked immediately before launch: 16,610,376 KiB free (93%) — gate OPEN. service-flight-11 launched 01:13:13 AEDT; QEMU exit 0 at 01:13:28; host 15.02 s, guest 11.251 s. UART 446 lines, 32,545 B, SHA d46e2ae1.
+- PROBE RAN. T723_PROBE 27 lines: start 2 (L355-356), DONE 1 (L389), SP1 DONE 1 (L377), SP2 DONE 1 (L388), SP3 DONE 1 (L371). T734_KERNEL_OK 1 (L194, guest 4.70 s). [T736] hooks 8. T720_PROBE DONE status=PASS 1 (L226).
+- SP1: load_stub rc=0 base=0x7d929e9000 size=52416; create=0x7d929eec84 (base+0x5c84); dup=0x7d929eecb0 (base+0x5cb0 — the stub); create sync=0x5001; dup rc=-1.
+- SP2: eglGetDisplay=0x3141; eglInitialize ok=1 major=1 minor=4; create sync=0x5001; getprocaddress dup=0x7fad02d7a8; maps path=/system/lib64/libEGL.so; dup rc=-1 error=0x3000. libEGL loaded the driver (L379).
+- SP3: open timeline fd=-13 (EACCES, uid 1000); control_fd=-999.
+- CORRECTION to the Step 2 prediction: LD_LIBRARY_PATH=/sysimg/lib64 did NOT load the image libEGL — the linker loaded the RAMDISK's libEGL (a9641828), per the SP2 maps line. Mechanism unexplained (probe has no RPATH/RUNPATH; env was set). Disassembly closes the gap: eglDupNativeFenceFDANDROID is BYTE-IDENTICAL in ramdisk (a9641828) and image (fed36a9b) libEGLs; eglGetProcAddress is logic-identical. SP2's answer transfers.
+- DISPATCH ANSWER: dispatch FORWARDS — the call reaches the stub at 0x5cb0 (SP1 direct + SP2 META-EGL). The stub branches to the sw_sync trampoline at 0x56dc (flown driver 34b79da2): open /sys/kernel/debug/sync/sw_sync, CREATE_FENCE + INC, return the fence fd or -1. The dup returns -1 because the trampoline's timeline open fails EACCES as uid 1000 (SP3 proves the same open fails with the same errno). T722's zero effect mechanism named. Fix point: sw_sync timeline access, NOT dispatch. Dispatch EXONERATED. No dispatch fix owed.
+- NEW guest wall INIT-PROC-MOUNT-CONFLICT: the script's /proc mount (L352 rc=0) broke first-stage init — init's own proc mount failed EBUSY (L435) -> InitFatalReboot (L437) -> reboot to bootloader (L446). Guest stopped at 11.251 s. All post-probe holds VOID (sys.boot_completed 0, T733/T728_PROBE_OK 0, T721 0, simplefb 0, dup-fail rate VOID). system_server NEVER FORKED. Successor fix: drop the /proc mount, or mount -> probe -> umount before handoff.
+- Parser verdict: analyzer analyze_t736_probe.py (ad77e7a4) exit 0, REPORT COMPLETE; counts agree with independent recounts on every line.
+- Outcome: PASS. Findings findings-t736.md written (01:38 AEDT 21 Nov). No death note (PASS lane). TIMELINE.md written. Heartbeat CLOSED.
+- Branch: INVESTIGATION-ONLY (no fix built; dispatch exonerated, no dispatch fix owed).
+- Successor (T737): fix the /proc mount; resolve the LD_LIBRARY_PATH mechanism; with a full boot, confirm dup -1 in the surfaceflinger context and test a sw_sync timeline-access fix route.
+
+Step 4 — DONE (01:38 AEDT 21 Nov). Findings + outcome + TIMELINE + CLOSED heartbeat written on the Mac worktree root; synced to sandbox ~/workspace/t736-scratch/ + box /mnt/sdc3/muse/kernel-primary/t736/. Lane complete, inside the 03:54 wedge.
