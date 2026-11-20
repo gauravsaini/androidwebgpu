@@ -1,0 +1,45 @@
+{
+  "track": "T737",
+  "flight": "service-flight-12",
+  "stop_reason": "QEMU process exited with returncode 0",
+  "started_utc": "2026-11-20T15:45:15Z",
+  "ended_utc": "2026-11-20T15:45:30Z",
+  "host_elapsed_seconds": 15.02,
+  "guest_log_max_seconds": 11.965,
+  "qemu_exit_code": 0,
+  "log_bytes": 47331,
+  "log_lines": 607,
+  "log_sha256": "64f535ee639da35c0cc43d9da02be92027e53b7ef8485618e7bfa7a7247b4052",
+  "inputs": {
+    "kernel": {
+      "path": "/Users/Shared/wt-track737-full-flight/guest-inputs/t720-Image",
+      "sha256": "70d3859d6aed1906d27217aa3fdfd9bb953a57f4490c89c51efa4f6490441e04",
+      "bytes": 20396544
+    },
+    "qemu": {
+      "path": "/opt/homebrew/bin/qemu-system-aarch64",
+      "sha256": "8e5c46dc6752c36afbb706f933e72fef835e35f48881a63cadb06c6d29bac869",
+      "bytes": 31498864
+    },
+    "dtb": {
+      "path": "/Users/Shared/wt-track737-full-flight/t737-modified.dtb",
+      "sha256": "c075b453942fcff4ea282a9497da99fbb4dae3bc06a3e0fac9c2d1cab51b83b8",
+      "bytes": 2049
+    },
+    "boot_image": {
+      "path": "/Users/Shared/wt-track737-full-flight/t737-fix.cpio.gz",
+      "sha256": "266deb9144ab4e97bbed733e05c64d233816b92ec14ef1e1ccac6d61540394e4",
+      "bytes": 53747156
+    },
+    "system_img": {
+      "path": "/Users/Shared/wt-track737-full-flight/guest-inputs/t733-system.img",
+      "sha256": "af40403aa286a770f67dc8599584ef038c3192f2ff43ff89e62a3546ded89043",
+      "bytes": 2059816960
+    },
+    "vendor_img": {
+      "path": "/Users/Shared/wt-track737-full-flight/guest-inputs/t722-vendor.img",
+      "sha256": "5e0607ada51367fbe9f7e5dd7586afbeb9216f478f00a31baa5179eb73f476e0",
+      "bytes": 134217728
+    }
+  }
+}

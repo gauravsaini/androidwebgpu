@@ -1,0 +1,85 @@
+# T737 progress — full 850 s flight of the T723 probe
+
+Lane agent `199419f7-af12-4cda-80b5-56308aded682`, launched 02:03 AEDT Sat 21 Nov 2026, wedge 05:03 AEDT 21 Nov.
+Brief: `hidden_files/briefs/track737-full-flight.md`, SHA `7b13f42f` (33,488 B), brief-gate READY.
+Worktree `/Users/Shared/wt-track737-full-flight`, branch `t737`, base `f35f9da` (T736 certification commit).
+
+## Step 0 — Disk gate: CLOSED at launch
+
+- Mac disk 100% at 02:02 AEDT 21 Nov: 800,496 KiB free (gate 9,769,216 KiB). Flight gate CLOSED.
+- Per the brief's Step 0: Steps 1–2 proceed (no flights, no supervisor, no QEMU, no 2 GB copies). Flights gated at Step 3 with WAIT-DISK if the gate is still closed.
+
+## Step 1 — Verify inputs + read T736/T735/T734 findings: DONE (02:03–02:14 AEDT 21 Nov)
+
+Input SHAs verified on the Mac worktree (guest-inputs/ hardlinked from T736, 23 files):
+- Kernel Image `70d3859d` (20,396,544 B) MATCH
+- T733 system image `af40403a` (2,059,816,960 B) MATCH
+- Vendor.img `5e0607ad` (134,217,728 B) MATCH
+- t723-probe `4b275e48` (68,792 B) MATCH
+- T736 CPIO `da6186e5` (53,745,730 B) MATCH (box copy same SHA); CPIO listing 240 entries + trailer = 241 per the rebuild count
+- T736 DTB `bc44f717` (2,049 B) MATCH; initrd-end 0x113341842 = start + 53,745,730
+- Early-ramdisk `a467a546` (13,082 B) MATCH
+- Rebuilder `800de584`, patcher `1f896a01`, analyzer `ad77e7a4` — all MATCH
+- Supervisor: box template `a4db25c0` vs Mac filled copy `a93d74ac` — the ONLY diff is the two FILL_AFTER lines (DTB SHA + boot-image SHA filled with the flown values bc44f717/da6186e5). The flown supervisor is the Mac filled copy; T737 adapts from it. (Citation variance in findings-t736.md §5, not a substance issue.)
+- EMBEDDED-VENDOR RULE: CPIO member `ramdisk-images/vendor.img` extracted on the box and hashed = `5e0607ad` MATCH.
+
+Findings read in full (SHAs verified): findings-t736.md `8bf8eb61` (13,835 B, Verdict PASS), findings-t735.md `f2a46b2a` (13,314 B, Verdict FAIL), findings-t734.md `febad60f` (12,929 B, Verdict PASS).
+Supervisor QEMU command line read (T736 shape): `-machine virt,gic-version=2 -cpu cortex-a57 -m 8192 -smp 4 -kernel <Image> -dtb <DTB> -device loader,file=<CPIO>,addr=0x110000000,force-raw=on -drive virtio-blk system.img -append ... rdinit=/early-ramdisk ... -gdb tcp:127.0.0.1:1268 -display none -serial file:<flight>/uart.log -monitor none -no-reboot`.
+
+### Defect 2 RESOLVED — LD_LIBRARY_PATH mechanism found (box debugfs, fresh)
+
+- The flown system image `af40403a` is a GSI system-as-root image: its root has a `system/` directory holding the real partition content; `bin` is a symlink (11 B → `system/bin`); there is NO `lib64` at the image root.
+- The image's libEGL.so is at `<image-root>/system/lib64/libEGL.so` (debugfs stat: regular file, 290,120 B; dumped, SHA `fed36a9b`). `/lib64/libEGL.so` does NOT exist in the image (debugfs: "File not found by ext2_lookup").
+- Mounted at /sysimg, the image's libEGL is at `/sysimg/system/lib64/libEGL.so` — NOT `/sysimg/lib64/libEGL.so`. The T736 script set `LD_LIBRARY_PATH=/sysimg/lib64`, a directory that does not exist in the mounted image, so the linker found nothing there and fell back to the default `/system/lib64` — the ramdisk's libEGL (`a9641828`). That is the whole mechanism. No linker-config involvement: the T736 CPIO's `linkerconfig` entry is an EMPTY directory (no ld.config.txt), consistent with the UART's "failed to find generated linker configuration" warnings.
+- libEGL byte-identity (brief requirement): `eglDupNativeFenceFDANDROID` at 0x297a8, 56 bytes — IDENTICAL between image (`fed36a9b`) and ramdisk (`a9641828`) files (cmp clean). `eglGetProcAddress` at 0x28b5c, 96 bytes — 3 bytes differ, confirmed by disassembly to be exactly two data-address operands shifted by 0x10 (the 16-byte file-size difference): `adr x8, 54c58` vs `54c48`, `add x0, #0xf12` vs `#0xd48`. Logic-identical, as the T736 findings claimed.
+- T737 fix: `LD_LIBRARY_PATH=/sysimg/system/lib64:/sysimg/lib64`, set via `export` AND the exec prefix. The flight-12 SP2 maps line is the proof (expect `/sysimg/system/lib64/libEGL.so`).
+
+### Mount justifications (T736 reflection lesson — binding)
+
+Every mount in the T737 early-ramdisk script, with its guest consumer + whether first-stage init re-mounts the same point:
+- `/sysimg` (vda, ro): consumer = the probe (needs the image's libEGL.so + deps). Init does NOT mount /sysimg — safe. (T736-proven: rc=0, tripwire passed.)
+- `/vendor` (loop1, ro): consumer = the probe (needs the driver .so). Init mounts /vendor itself in first stage — but the T734 flights 8/9 and the T736 flight both ran with this pre-mount and init booted past it (T736's abort was proc-only, L435). Proven safe by flight evidence; kept.
+- `debugfs` on /sys/kernel/debug: consumer = the probe (needs the sw_sync timeline path). Init does NOT mount debugfs in first stage. Proven safe by T734 flights 8/9 + T736 flight (no debugfs complaint in the UART). Kept.
+- `/proc` (proc): consumer = the probe's maps_lookup ONLY (SP2's maps line proving which libEGL loaded). Init mounts /proc itself in first stage with hidepid=2 and treats an existing mount as fatal (INIT-PROC-MOUNT-CONFLICT, T736 L435). MUST be scoped: mount → probe → UNMOUNT before the handoff to /init. The T737 script does exactly that, with rc hooks for the mount, the probe, and the unmount.
+- `/data` (T666 ext4/tmpfs) + `/data/media` (T667 tmpfs): consumers = init's later stages + services (gatekeeper, fingerprint, settings DBs). Long-standing since T666/T667; T734 flights 8/9 booted cleanly with them. Init does not re-mount /data in first stage. Kept unchanged.
+
+### REACHABILITY ANSWER (Step 2 exit criterion, CALL-REACHABILITY)
+
+YES — the probe CAN reach the dispatch chain from the ramdisk context via Option A (proven by T736 flight-11: SP1+SP2+SP3 all DONE, guest-origin). The T737 changes (proc-mount scoping + corrected LD_LIBRARY_PATH) do not alter the reachability path; they unblock the full flight and load the image's libEGL.
+
+### Branch choice (Step 2 exit)
+
+INVESTIGATION-ONLY at the Step 2 exit — the timeline-access fix route is TESTED in Step 4 from the full flight's evidence (open-as-root-and-hand-down vs relaxed debugfs permissions); a fix is built ONLY if the flight evidence supports a specific route. Adjudication criteria: full 850 s flight runs (guest time reached, sys.boot_completed reported) + SP1/SP2 answered from the booted guest with the loaded libEGL identified by maps line + SHA + LD_LIBRARY_PATH mechanism proven by the maps line + T734_KERNEL_OK fired + system_server fork state reported. If a fix is flown: dup-fail rate BELOW BOTH baselines 4.058/6.660 + all T721/T722 holds intact + A/B control (T736 stack unchanged).
+
+## Step 2 — Build: DONE (02:14–02:32 AEDT 21 Nov)
+
+- Early-ramdisk edited: `early-ramdisk-t737`, SHA `32b1430c`, 14,694 B (was 13,082 B). `sh -n` OK. Diff vs the T736 base shows ONLY the intended changes: header comment (both fixes), [T736]→[T737] retags, `export LD_LIBRARY_PATH=/sysimg/system/lib64:/sysimg/lib64` + corrected exec prefix, the /proc unmount + verification hooks after the probe exec, and the handoff retag.
+- CPIO rebuilt from the T736 base `da6186e5` via `rebuild_cpio_t737.py` (SHA `9e493a57`, adapted from the T736 rebuilder; one fix during the build: NEW_BIN pointed at the primary-store guest-inputs path, which does not exist on the box — repointed to the verified box copy `/mnt/sdc3/muse/kernel-primary/t734/cpio-unpack/t723-probe`, SHA `4b275e48`). NEW CPIO `t737-fix.cpio.gz`, SHA `266deb91`, 53,747,156 B (T736: 53,745,730 B). Rebuilder self-verified: 241 entries, all untouched entries byte-identical, t734probe preserved (`b7440e1c`), t723-probe identical, no duplicate inserted.
+- DTB re-patched via `patch_dtb_initrd.py` (`1f896a01`) from the T736 DTB `bc44f717`: NEW DTB `t737-modified.dtb`, SHA `c075b453`, 2,049 B; initrd-end `0x113341dd4` = 0x110000000 + 53,747,156, patcher-verified (end-start == filesize). Assertion initrd-end == 0x110000000 + filesize(CPIO) HOLDS.
+- Supervisor adapted from the Mac filled T736 copy (`a93d74ac`): `supervisor_t737.py`, SHA `eed00206` (13,161 B). T737 env prefixes, flight service-flight-12, CPIO `t737-fix.cpio.gz` / DTB `t737-modified.dtb`, EXPECTED SHAs dtb `c075b453…`, boot_image `266deb91…`, kernel/system/vendor unchanged. py_compile OK. NOT RUN (disk gate closed; no QEMU invoked in this lane so far).
+- Analyzer adapted from `ad77e7a4`: `analyze_t737_probe.py`, SHA `ea9df2fb` (10,757 B). [T737] hooks incl. the new unmount-proc + proc-unmounted verification counters and the IMAGE-vs-RAMDISK libEGL maps counters; verdict contract rewritten for the full-flight lane. py_compile OK. Import-tested against the T736 flight-11 UART: reproduces the certified counts exactly (446 lines, 32,545 B, T723_PROBE start 2 / DONE 1 / SP1 1 / SP2 1 / SP3 1, T734_KERNEL_OK 1, sys.boot_completed 0, dup-fail rate 0.000) and the new counters detect the old state correctly (IMAGE libEGL 0, RAMDISK libEGL 1, unmount hooks 0).
+- Adaptation note (analyzer): the file's regex patterns escape BOTH brackets (`\[T737\]`), so a plain '[T736]' substring replace misses the patterns (the `]` is preceded by a backslash). Fixed by a bare-token replace first, with the intentional historical T736 mentions restored by the docstring rewrites. Same trap checked in the supervisor: no regex patterns there, functional identifiers all T737 (remaining T736 mentions are historical docstring notes only).
+- Mac worktree staging: the small files (early-ramdisk, supervisor, analyzer, rebuilder) sync to the Mac worktree now; the CPIO (53 MB) + DTB sync to the Mac worktree now as well (781 MB free — fits; the disk gate is about the 9.3 GiB flight margin, not these files). If any Mac write fails ENOSPC, the recovery lane re-syncs from the box (canonical).
+
+## Step 3 — Flight service-flight-12: FLOWN, guest aborted 11.965 s (02:45 AEDT 21 Nov)
+
+- Disk gate OPEN at launch (15,975,984 KiB free, 93% at 02:45 AEDT; reopened on its own ~02:35). Supervisor's own 8 GiB gate passed. Launched 02:45:15Z, ended 02:45:30Z; host 15.02 s, guest 11.965 s, QEMU exit 0. UART 607 lines, 47,331 B, SHA 64f535ee.
+- The probe RAN fully: 27 T723_PROBE lines (SP1/SP2/SP3 DONE). SP1 dup rc=-1, SP2 dup rc=-1, SP3 open timeline fd=-13. T734_KERNEL_OK 1 (guest 3.909 s), T720_PROBE DONE status=PASS 1.
+- LD_LIBRARY_PATH fix PROVEN: L383 maps path=/sysimg/system/lib64/libEGL.so (IMAGE libEGL 1, RAMDISK 0 — corrected analyzer run).
+- /proc scoping PROVEN: unmount rc=0 (L392), proc-unmounted verification (L393); init first stage started cleanly, no proc EBUSY abort.
+- Guest end: init first stage started (L594, 11.374 s) → tried /system from /dev/block/loop0 (L601–604) → Failed to mount /system → reboot to bootloader (L607, 11.965 s). sys.boot_completed 0, T733/T728_PROBE_OK 0, T721 fence-log 0, simplefb 0 — all VOID.
+- Mechanism established (see findings § Mechanism): fstab says vda; T734 mounted vda; T737 tried loop0; loop0 unbound (script attaches loop1/loop2 only); the ONLY differing input is the handoff device state (T734: nothing mounted except /data + /data/media; T737: vda at /sysimg, loop1 at /vendor, debugfs mounted). Best-supported hypothesis: already-mounted vda → fallback to loop0 (fstab header's diskless-boot design).
+- Analyzer correction: the first analysis double-counted L383 (RAMDISK pattern matched inside the /sysimg path). Pattern anchored to `path=`, analysis re-run, filed analysis is the corrected run (analyzer ea9df2fb → 25741448; corrected copy synced to Mac scripts/ + box).
+
+## Step 4 — Adjudication
+
+- Full 850 s flight: NOT run. dup -1 in the surfaceflinger context: NOT confirmed (guest never booted; the route that would run it is the T738 unmount fix → boot → surfaceflinger). Timeline-access fix route: NOT tested (no booted guest).
+- Branch at Step 4: INVESTIGATION-ONLY stands (no fix built in this lane — the fix route needs a booted guest first).
+
+## Step 5 — Findings written, Verdict FAIL
+
+- findings-t737.md SHA 9832c9c9 (15,022 B; all required literals present: Verdict: 1, WALL-TYPE-TAG 2, Rust par bhi lagu 2, parser 1, sys.boot_completed 3).
+- outcome-t737.txt 5 bytes, SHA 4f8e9e45 (canonical FAIL).
+- DEATH_NOTE-T737.md SHA b2f9a55e. New guest wall: INIT-SYSTEM-MOUNT-LOOP0-UNBOUND.
+- Successor direction: T738 unmounts /sysimg + /vendor + debugfs after the probe, before exec /init (restores T734's handoff device state); alternative losetup vda→loop0. Then re-fly the full flight + test the timeline-access fix route.
+- Lane complete 02:58 AEDT 21 Nov (findings filed ~02:56), inside the 05:03 wedge. No commit (driver commits).

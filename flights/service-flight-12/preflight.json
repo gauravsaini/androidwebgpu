@@ -1,0 +1,70 @@
+{
+  "track": "T737",
+  "flight": "service-flight-12",
+  "created_utc": "2026-11-20T15:45:15Z",
+  "qemu_version": "QEMU emulator version 11.1.2",
+  "command": [
+    "/opt/homebrew/bin/qemu-system-aarch64",
+    "-machine",
+    "virt,gic-version=2,virtio-mmio-transports=1",
+    "-cpu",
+    "cortex-a57",
+    "-m",
+    "8192",
+    "-smp",
+    "4",
+    "-kernel",
+    "/Users/Shared/wt-track737-full-flight/guest-inputs/t720-Image",
+    "-dtb",
+    "/Users/Shared/wt-track737-full-flight/t737-modified.dtb",
+    "-device",
+    "loader,file=/Users/Shared/wt-track737-full-flight/t737-fix.cpio.gz,addr=0x110000000,force-raw=on",
+    "-drive",
+    "if=none,id=t720system,file=/Users/Shared/wt-track737-full-flight/guest-inputs/t733-system.img,format=raw,readonly=on",
+    "-device",
+    "virtio-blk-device,drive=t720system",
+    "-append",
+    "console=ttyAMA0,115200 earlycon loglevel=8 debug rdinit=/early-ramdisk androidboot.hardware=virt androidboot.selinux=permissive androidboot.veritymode=disabled enforcing=0 printk.ratelimit=0 brd.rd_nr=1 brd.rd_size=524288 androidboot.t720_fix_initramfs_sha256=266deb9144ab4e97bbed733e05c64d233816b92ec14ef1e1ccac6d61540394e4 androidboot.t720_flight_target=850 androidboot.t720_dtb_sha256=c075b453942fcff4ea282a9497da99fbb4dae3bc06a3e0fac9c2d1cab51b83b8 androidboot.t720_system_sha256=af40403aa286a770f67dc8599584ef038c3192f2ff43ff89e62a3546ded89043 androidboot.t720_kernel_sha256=70d3859d6aed1906d27217aa3fdfd9bb953a57f4490c89c51efa4f6490441e04",
+    "-gdb",
+    "tcp:127.0.0.1:1268",
+    "-display",
+    "none",
+    "-serial",
+    "file:/Users/Shared/wt-track737-full-flight/flights/service-flight-12/uart.log",
+    "-monitor",
+    "none",
+    "-no-reboot"
+  ],
+  "inputs": {
+    "kernel": {
+      "path": "/Users/Shared/wt-track737-full-flight/guest-inputs/t720-Image",
+      "sha256": "70d3859d6aed1906d27217aa3fdfd9bb953a57f4490c89c51efa4f6490441e04",
+      "bytes": 20396544
+    },
+    "qemu": {
+      "path": "/opt/homebrew/bin/qemu-system-aarch64",
+      "sha256": "8e5c46dc6752c36afbb706f933e72fef835e35f48881a63cadb06c6d29bac869",
+      "bytes": 31498864
+    },
+    "dtb": {
+      "path": "/Users/Shared/wt-track737-full-flight/t737-modified.dtb",
+      "sha256": "c075b453942fcff4ea282a9497da99fbb4dae3bc06a3e0fac9c2d1cab51b83b8",
+      "bytes": 2049
+    },
+    "boot_image": {
+      "path": "/Users/Shared/wt-track737-full-flight/t737-fix.cpio.gz",
+      "sha256": "266deb9144ab4e97bbed733e05c64d233816b92ec14ef1e1ccac6d61540394e4",
+      "bytes": 53747156
+    },
+    "system_img": {
+      "path": "/Users/Shared/wt-track737-full-flight/guest-inputs/t733-system.img",
+      "sha256": "af40403aa286a770f67dc8599584ef038c3192f2ff43ff89e62a3546ded89043",
+      "bytes": 2059816960
+    },
+    "vendor_img": {
+      "path": "/Users/Shared/wt-track737-full-flight/guest-inputs/t722-vendor.img",
+      "sha256": "5e0607ada51367fbe9f7e5dd7586afbeb9216f478f00a31baa5179eb73f476e0",
+      "bytes": 134217728
+    }
+  }
+}
