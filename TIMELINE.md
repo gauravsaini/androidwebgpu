@@ -1,15 +1,57 @@
-# TIMELINE — T732 (exec probe)
+# T733 TIMELINE — minimal no-libc binary discrimination
 
-- 19:36 AEDT — Launched (agent 9a4ea164). Brief 6de476cb, brief-gate READY. Worktree /Users/Shared/wt-track732-exec-probe, branch t732, base 18d3a6c. Window 850 s guest / 1100 s host. Wedge 22:36 AEDT.
-- 19:37 AEDT — Step 0 PASS: df avail 26,397,680 KiB, gate OPEN. Step 1 PASS: all input SHAs match T731 (kernel 70d3859d, DTB 73d1904b, CPIO a9d6040a, vendor 5e0607ad, binary 19db5d31, T731 image 15c79aad, patch 259807d8, rc 053189d0).
-- 19:41 AEDT — Step 2 (rc): new rc written, one line changed (line 18, on-boot `start t728probe` -> `exec /system/bin/t728probe`), 722 B, SHA f9baa479. Parser VERDICT ACCEPT, 0 errors, 1 service, 2 actions, 0 imports.
-- 19:42 AEDT — Step 2 (build, box): full verification trail — base 15c79aad, e2fsck clean pre/post, neighbours identical pre/post, label pre/post (binary system_file, rc xattr-empty), dump-backs identical (binary 19db5d31, rc f9baa479). New image SHA f7980cfb. Patch: 3 chunks, 3,145,728 bytes, SHA d7d1cee5. Mac apply 19:43 AEDT: 3 chunks, t732-system.img SHA f7980cfb — matches box.
-- 19:44 AEDT — Step 2 (marker uniqueness): 0 T728 markers in all 5 T724-T727 UARTs. 19:46 AEDT — Step 2 (embedded vendor): CPIO member vendor.img SHA 5e0607ad, PASS. Step 2 PASS 19:46 AEDT.
-- 19:48 AEDT — Step 3 PASS: image/patch/rc/binary verified at every hop; label verified from the new image; scripts adapted (T732_, 850/1100, f7980cfb) and on the Mac; analyzer sanity reproduces driver counts exactly on the T731 UART (8b2d922c); df_poll reads /System/Volumes/Data; gate OPEN (df avail 25,796,216 KiB).
-- 19:50 AEDT — Step 4 (flight name): flights/service-flight/ holds the COMPLETED T731 flight (committed in 18d3a6c) — reusing the name would overwrite it, forbidden by the standing no-overwrite rule. T732 flight name is service-flight-2 (T732_FLIGHT=service-flight-2); T731 folder untouched.
-- 19:50 AEDT — Step 4 LAUNCHED: service-flight-2, supervisor PID 59180, QEMU pid 59184 started 19:50:03 AEDT. Preflight verified (QEMU 11.1.2, system f7980cfb, target 850). Host cap 1100 s — ends ~20:08 AEDT. First guest-pace check ~19:55 AEDT.
-- 19:54 AEDT — Step 4 poll 1: host 284 s, guest 258.67 s, ratio 0.91, projected guest at host cap ~1001 s — trigger leg NOT at risk. df avail 25,201,420 KiB, GATE OPEN. T728_PROBE_OK 1 (L10593, guest 122.69 s), T728_SERVICE_OK 0, T728_ARGV 0, boot_completed 0. Interim: rc has exec (line 18) BEFORE write (line 19); exec is synchronous, so the write firing proves the exec RETURNED by 122.69 s — but the binary wrote no marker and init logged no exec line for t728probe (execs 11 -> 16 -> 18 bracket the window). Init NOT blocked (exec 16/18, artd/drm/bootanim after the probe). Kernel silent since 258.67 s; userspace alive. boot_completed 0 — property leg not yet fired. Flight continues to window.
-- 20:03 AEDT — Step 4 poll 2: host 781 s, guest 786.86 s, ratio ~1.01 — guest caught up. df avail 22,312,364 KiB, GATE OPEN. TRIGGER FIRED: sys.boot_completed=1 at guest 646.03 s (L22683); stock boot_completed actions processing + succeeding — dispatch control works. Second T728_PROBE_OK at guest 653.26 s (L23016) — property action ran. But: ZERO t728probe service lines, T728_SERVICE_OK 0, T728_ARGV 0. Property leg's `start` failed silently, same as T731. Mode/binary check (box): binary Mode 0755, label system_file, valid static aarch64 ELF, no INTERP/DYNAMIC — EACCES/mode theory REFUTED. Fault is in the binary's execution path, not the start path and not the binary bytes. Flight continues to host cap (~20:08 AEDT).
-- 20:04 AEDT — Step 4 COMPLETE: service-flight-2 ended, "Guest target reached (851.0s >= 850s)". Host 851.56 s, guest 851.001 s, QEMU exit 0. UART 31,938 lines, 3,748,681 B, SHA 395bedf3.
-- 20:10 AEDT — Step 5 VERDICT: FAIL. Analyzer: T728_SERVICE_OK 0, T728_PROBE_OK 2 (122.69 s, 653.26 s), T728_ARGV 0, t728probe service lines 0, sys.boot_completed 8 (first 646.03 s), T720 DONE PASS 1, T721 fence-log 1, simplefb mapped 1, CALL allocate2 5, avc 2281, FATAL EXCEPTION 6 (all DeadSystemException — system_server killed ~guest 725 s, after both legs). Wall BINARY-EXEC-SILENTLY-FAILED (NEW) — supersedes SERVICE-START-SILENTLY-FAILED as the fault location. Trigger leg FIXED.
-- 20:14 AEDT — Sync COMPLETE: all 15 deliverables SHA-identical Mac <-> sandbox. T731 flight folder intact (uart 8b2d922c). No QEMU running. Heartbeat CLOSED. No commit (driver commits). T732 DONE — awaiting driver certification.
+- 2026-11-20 20:26:48 AEDT — lane launched (agent 96a895a6, brief
+  1dcf6423, worktree /Users/Shared/wt-track733-minimal-binary, branch
+  t733, base 928027c). Wedge 23:26:48 AEDT.
+- 20:27 AEDT — Step 0 PASS: df avail 22,198,032 KiB, GATE OPEN.
+  Step 1 PASS: inputs verified on Mac, all SHAs match T732 (kernel
+  70d3859d, DTB 73d1904b, CPIO a9d6040a, vendor 5e0607ad, binary
+  19db5d31, T732 image f7980cfb, patch d7d1cee5, T732 rc f9baa479).
+- 20:30–20:33 AEDT — Step 2 PASS: minimal binary built on the box
+  (1,648 B, SHA fd189c08, ELF64 EXEC AArch64, entry 0x400120 = _start,
+  no INTERP/DYNAMIC; openat/write/exit_group confirmed by disassembly).
+  New rc t733probe-new.rc 722 B SHA 79ad3cc3 (T732 rc + 3 renames only,
+  diff-verified). Parser VERDICT ACCEPT, 0 errors, 1 service, 2
+  actions, 0 imports. Image built on the box: new image SHA af40403a,
+  patch SHA 4d74f4d1 (6 chunks, 6,291,456 B). Label verified from the
+  new image: new binary u:object_r:system_file:s0, new rc xattr-empty.
+  Marker uniqueness: 0 T733_MINIMAL_OK / T733_PROBE_OK in earlier UARTs.
+- 20:35 AEDT — Step 3 PASS: image/patch/rc/binaries verified at every
+  hop (box = sandbox = Mac). Scripts adapted from T732 (supervisor /
+  launch_probe / analyze / df_poll, T733_, 850/1100, image af40403a,
+  flight service-flight-3, GDB port 1261). Analyzer sanity: T732 UART
+  reproduced driver counts exactly.
+- 20:35:46 AEDT — Step 4: service-flight-3 LAUNCHED. Preflight
+  verified (QEMU 11.1.2, kernel 70d3859d, DTB 73d1904b, CPIO a9d6040a,
+  system t733-system.img af40403a, vendor 5e0607ad, target 850).
+  Launch-time disk poll GATE_OPEN 16,234,540 KiB.
+- 20:40 AEDT — Poll 1: host ~275 s, guest 254.23 s, ratio ~0.92,
+  projected guest at host cap ~1015 s — trigger leg NOT at risk. df
+  avail 14,049,756 KiB, GATE OPEN. T733_PROBE_OK 1 (L10652, guest
+  117.83 s), T733_MINIMAL_OK 0, T728_PROBE_OK 1 (L10651, guest 117.77 s,
+  control leg 1 OK), boot_completed 0. Interim: on-boot action executed;
+  the exec RETURNED but the minimal binary wrote no marker.
+- 20:42 AEDT — Poll: host ~421 s, guest 399.7 s, ratio ~0.95. Markers
+  unchanged. Kernel in quiet period.
+- 20:44 AEDT — Poll: host ~545 s, guest 542.8 s, ratio ~1.00. Markers
+  unchanged. Kernel resumed logging.
+- 20:46:52 AEDT — Poll 2: host ~665 s, guest 663.8 s, ratio ~1.00.
+  TRIGGER FIRED (sys.boot_completed 11 lines). T733_PROBE_OK 2 (L10652
+  guest 117.83 s, L22750 guest 633.74 s — property action ran),
+  T728_PROBE_OK 2 (control legs both fired), T733_MINIMAL_OK 0.
+  DECISIVE INTERIM: the minimal no-libc binary produced NO marker under
+  EITHER leg. The fault is in init's exec dispatch, not the payload.
+- 20:49:11 AEDT — Poll: host 796.7 s, guest 785.7 s. QEMU running.
+- 20:49:58 AEDT — Flight COMPLETE: guest target reached (851.1 s >=
+  850 s). Host 851.93 s, guest 851.062 s, QEMU exit 0. UART 33,821
+  lines, 4,001,204 B, SHA acc4763e.
+- 20:51 AEDT — Step 5 adjudication: analyzer run on the flight UART.
+  T733_MINIMAL_OK 0, T733_PROBE_OK 2, T728_PROBE_OK 2 (control intact),
+  T728_SERVICE_OK 0, sys.boot_completed 11 (first guest 628.63 s,
+  L22420). Control service refused with the SELinux label /
+  domain-transition error at L22700; the t733probe start's log lines
+  were lost in the Bluetooth ANR crash-dump flood (L22714–L22752).
+  FATAL EXCEPTION 4 (DeadSystemException, late flight, ~guest 672 s).
+- Verdict: FAIL. Wall: INIT-EXEC-DISPATCH-SILENTLY-FAILED (guest, NEW)
+  — supersedes BINARY-EXEC-SILENTLY-FAILED as the fault location.
+  Findings + outcome + death note written; heartbeat CLOSED.

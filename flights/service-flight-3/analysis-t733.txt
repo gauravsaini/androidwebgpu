@@ -1,0 +1,176 @@
+Total lines: 33821 (trailing partial line: 0)
+Total bytes: 4001204
+
+--- ALL T723_PROBE lines (full text): 0 line(s) ---
+
+T723_PROBE DONE summary lines (context: expect 0): 0
+lines: 
+
+SP1 DONE lines (context: expect 0): 0
+lines: 
+
+SP2 DONE lines (context: expect 0): 0
+lines: 
+
+SP3 DONE lines (context: expect 0): 0
+lines: 
+
+DROP_FAIL lines (expect 0): 0
+lines: 
+
+SP1 RESOLVE_FAIL lines (expect 0): 0
+lines: 
+
+SP2 GETPROCADDRESS_NULL lines (expect 0): 0
+lines: 
+
+--- ALL [T723] early-ramdisk hook lines (context: hook timeout ~33 s): 1 line(s) ---
+L2010: [T723] boot_completed never detected in 600s; probe not run
+
+--- ALL T728_SERVICE_OK marker lines (full text) — payload ran: 0 line(s) ---
+
+--- ALL T728_PROBE_OK marker lines (full text) — registration: 2 line(s) ---
+L10651: [  117.765785] T728_PROBE_OK
+L22702: [  633.643682] T728_PROBE_OK
+
+--- ALL T728_PROBE helper lines (full text) — start + context: 2 line(s) ---
+L10651: [  117.765785] T728_PROBE_OK
+L22702: [  633.643682] T728_PROBE_OK
+
+--- ALL T728_ARGV lines (full text) — the argv handoff, verbatim: 0 line(s) ---
+
+--- ALL T728_ARGC lines (full text): 0 line(s) ---
+
+--- ALL t728probe lines (service + rc citations): 2 line(s) ---
+L22691: [  633.512261] init: processing action (sys.boot_completed=1) from (/system/etc/init/t728probe.rc:12)
+L22700: 11-10 23:26:08.815 D/ActivityManagerTiming( 2859): OnBootPhase_1000_com.android.server.voiceinteraction.VoiceInteractionManagerService[  633.543606] init: Command 'start t728probe' action=sys.boot_completed=1 (/system/etc/init/t728probe.rc:13) took 30ms and failed: Could not start service: File /system/bin/t728probe(labeled "u:object_r:system_file:s0") has incorrect label or no domain transition from u:r:init:s0 to another SELinux domain defined. Have you configured your service correctly? https://source.android.com/security/selinux/device-policy#label_new_services_and_address_denials. Note: this error shows up even in permissive mode in order to make auditing denials possible.
+
+--- ALL init service-refusal lines (full text) — SELinux refusal if present: 1 line(s) ---
+L22700: 11-10 23:26:08.815 D/ActivityManagerTiming( 2859): OnBootPhase_1000_com.android.server.voiceinteraction.VoiceInteractionManagerService[  633.543606] init: Command 'start t728probe' action=sys.boot_completed=1 (/system/etc/init/t728probe.rc:13) took 30ms and failed: Could not start service: File /system/bin/t728probe(labeled "u:object_r:system_file:s0") has incorrect label or no domain transition from u:r:init:s0 to another SELinux domain defined. Have you configured your service correctly? https://source.android.com/security/selinux/device-policy#label_new_services_and_address_denials. Note: this error shows up even in permissive mode in order to make auditing denials possible.
+
+--- ALL label/domain-transition lines (full text): 1 line(s) ---
+L22700: 11-10 23:26:08.815 D/ActivityManagerTiming( 2859): OnBootPhase_1000_com.android.server.voiceinteraction.VoiceInteractionManagerService[  633.543606] init: Command 'start t728probe' action=sys.boot_completed=1 (/system/etc/init/t728probe.rc:13) took 30ms and failed: Could not start service: File /system/bin/t728probe(labeled "u:object_r:system_file:s0") has incorrect label or no domain transition from u:r:init:s0 to another SELinux domain defined. Have you configured your service correctly? https://source.android.com/security/selinux/device-policy#label_new_services_and_address_denials. Note: this error shows up even in permissive mode in order to make auditing denials possible.
+
+--- ALL t728probe service EXIT lines (full text) — authoritative start proof: 0 line(s) ---
+
+init starting service 't728probe' (context only — may be absent per T727 lesson): 0
+lines: 
+
+t728probe.rc citations (init parsed the new file): 2
+lines: 22691, 22700
+
+start-command lines citing t728probe (trigger fired): 1
+lines: 22700
+
+ALL boot_completed action processing lines (stock control + mine): 2
+lines: 22420, 22691
+
+on boot action processing lines citing t728probe.rc: 0
+lines: 
+
+service exec/start failures (expect 0): 0
+lines: 
+
+write-to-kmsg command lines (context): 0
+lines: 
+
+--- ALL T733_MINIMAL_OK marker lines (full text) — minimal binary ran: 0 line(s) ---
+
+--- ALL T733_PROBE_OK marker lines (full text) — registration: 2 line(s) ---
+L10652: [  117.829794] T733_PROBE_OK
+L22750:   1.2% 687/logd: 0.2% user + 0.9% kernel / faults: 81 minor[  633.736329] T733_PROBE_OK
+
+--- ALL t733probe lines (service + rc citations): 0 line(s) ---
+
+--- ALL t733probe service EXIT lines (full text) — authoritative start proof: 0 line(s) ---
+
+init starting service 't733probe' (context only — may be absent per T727 lesson): 0
+lines: 
+
+t733probe.rc citations (init parsed the new file): 0
+lines: 
+
+start-command lines citing t733probe (trigger fired): 0
+lines: 
+
+on boot action processing lines citing t733probe.rc: 0
+lines: 
+
+service exec/start failures (expect 0): 0
+lines: 
+
+write-to-kmsg command lines (context): 0
+lines: 
+
+T727_SERVICE_OK lines (control: expect 0 — old rc replaced): 0
+lines: 
+
+T727_PROBE_OK lines (control: expect 0 — old rc replaced): 0
+lines: 
+
+t727probe lines (control: expect 0 — old rc replaced): 0
+lines: 
+
+T720_PROBE DONE status=PASS lines (hold requires >=1): 1
+lines: 228
+
+T720_PROBE DONE status=FAIL lines (hold requires 0): 0
+lines: 
+
+T721 fence-log lines (hold requires >=1): 1
+lines: 24182
+
+Invalid present fence lines (hold requires 0): 0
+lines: 
+
+ALL sw_sync lines (context): 272
+lines: 195, 196, 198, 199, 207, 209, 226, 23433, 23439, 23440, 23441, 23442, 23443, 23444, 23480, 23482, 23548, 23549, 23561, 23563, 33663, 33664, 33665, 33678, 33679, 33680, 33720, 33721, 33722, 33723, 33724, 33725, 33726, 33727, 33794, 33796, 33798, 33799, 33800, 33801
+(232 middle lines omitted; count is exact)
+
+T628 REJECT allocate2 lines (hold requires 0): 0
+lines: 
+
+T628 CALL allocate2 lines: 15
+lines: 11068, 11072, 19638, 19642, 19646, 23343, 23515, 23519, 23523, 23534, 23935, 24069, 33442, 33446, 33450
+
+EPERM lines (hold requires 0): 0
+lines: 
+
+simplefb: mapped lines (hold requires >=1): 1
+lines: 24181
+
+Watchdog KILLING lines (hold requires 0): 0
+lines: 
+
+sys.boot_completed lines (hold requires >=1): 11
+lines: 22420, 22442, 22691, 22700, 23019, 23021, 23023, 23036, 23056, 23073, 23078
+
+boot_completed lines: 12
+lines: 2010, 22420, 22442, 22691, 22700, 23019, 23021, 23023, 23036, 23056, 23073, 23078
+
+FATAL EXCEPTION lines: 4
+lines: 26035, 26043, 26074, 26081
+
+Kernel panic/Oops/BUG lines (hold requires 0): 0
+lines: 
+
+RenderEngine EGL dup-fail lines: 4
+lines: 24533, 24744, 25237, 25431
+
+driver loaded lines: 5
+lines: 10909, 11412, 20226, 25697, 26911
+
+META-EGL banner lines: 1
+lines: 10913
+
+D/libEGL lines: 5
+lines: 10909, 11412, 20226, 25697, 26911
+
+avc:  denied (two spaces) total: 2489
+avc:  denied for /dev/mem: 6
+avc denied (sensorservice): 0
+
+Guest kernel time: first=0.0s last=851.06221s max=851.06221s
+Dup-fail rate: 4 / 851.1s * 1000 = 4.700 per 1000 s (baselines: T721 flight-01 4.058, T721 revert 6.660)
+
+=== REPORT COMPLETE ===
