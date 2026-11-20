@@ -1,9 +1,32 @@
-# T738 timeline — unmount probe mounts before handoff (restore T734 device state)
+# T739 timeline — scope LD_LIBRARY_PATH to the probe line only
 
-- 03:19:31 AEDT 21 Nov 2026: lane launched (agent 62e4b03d). Disk 100%, 1,544,900 KiB free — gate CLOSED.
-- 03:20–03:35: Step 1 DONE — inputs SHA-verified; T737/T736/T734 findings read; handoff-state diff confirmed (T734 f1e68858).
-- 03:35–03:39: Step 2 DONE — early-ramdisk-t738 7f4525a9 (unmount block + verify, STOP on failure); CPIO 5d7affd5 (53,749,194 B); DTB 4be60332 (initrd-end 0x1133425ca); supervisor 800d4746; analyzer ea5923ee (regression-checked on flight-12 UART).
-- 03:39: disk gate OPEN — 93%, 16,125,236 KiB free. Flight service-flight-13 launching (guest target 850 s, host cap 1100 s).
-- 03:40:36–03:41:01: flight service-flight-13 — host 25.03 s, guest 16.485 s, QEMU exit 0. Probe ran (27 T723_PROBE); unmount /sysimg FAILED rc=1 (L542); HANDOFF ABORTED (L593); kernel panic guest 16.479 s.
-- 03:41–03:55: Step 4 adjudication DONE — verdict FAIL. New wall INIT-UMOUNT-SELF-BLOCKED (toybox maps /sysimg libraries; the tool is its own blocker). Successor: T739 (scope LD_LIBRARY_PATH to the probe line; verify transitive closure first).
-- ~03:47–03:50: sandbox egress-proxy outage — box ssh/rsync + Mac macssh all failed (nc proxy broken pipe / PREFLIGHT_FAIL). Mac + sandbox evidence complete; box sync pending on recovery.
+- 04:14:16 AEDT 21 Nov 2026 — Lane launched (agent 41481a8a). Disk gate CLOSED
+  (6,341,956 KiB free, 98%). Brief a3b081e5. Wedge 07:14:16 AEDT.
+- 04:14–04:25 — Step 1 DONE: findings T738/T737/T736/T734 read in full; all 12
+  guest-input SHAs re-verified on the Mac worktree; EMBEDDED-VENDOR RULE:
+  CPIO's ramdisk-images/vendor.img = 5e0607ad; QEMU command line confirmed
+  from T738 flight-13 preflight.json. No missing/mismatched input.
+- 04:25–04:45 — Step 2 DONE: transitive-closure check FIRST (toybox closure =
+  13 libs, all in ramdisk /system/lib64/; libnetd_client NOT in toybox's
+  closure; backgrounded scripts hold no /sysimg mapping) -> scoped-path route;
+  early-ramdisk edited (export removed, umount stderr -> /dev/console,
+  hooks retagged [T739]) d75f5658; CPIO rebuilt on the box df2a6c9a
+  (53,751,329 B, 241 entries, all untouched byte-identical); DTB re-patched
+  e4b0ff79 (initrd-end 0x113342e21); supervisor 8f6cc5ea + analyzer 67b77198
+  adapted + import-tested; INTERP chain verified (toybox/sh/probe ->
+  /system/bin/linker64 real file; /init -> bootstrap/linker64; t734probe
+  static). All 7 build files SHA-verified on the Mac worktree.
+- 04:47 — Step 3: disk gate re-checked: 16,820,316 KiB free (93%) — OPEN.
+  Launching service-flight-14 (guest target 850 s, host cap 1100 s).
+- 04:42:28–04:56:40 — Step 3 DONE: service-flight-14 flew the FULL 850 s
+  (guest 851.145 s, host 852.35 s, QEMU exit 0, UART 918ef4b4). Probe RAN
+  (27 T723_PROBE, SP1/SP2 dup -1 vs IMAGE libEGL 0x7f9ada97a8); ALL THREE
+  unmounts rc=0, handoff verified, init mounted /system from vda (guest
+  22.287 s) and switched root (22.293 s). T737 + T738 walls CLOSED.
+- 04:57–05:05 — Step 4 adjudication: sys.boot_completed 0 — system_server
+  still in OnBootPhase_500 (83/143) at the target; surfaceflinger started
+  but never presented; fix route NOT TESTED (blocked, no presenting
+  context). T729 wall BOOT-COMPLETED-NEVER-FIRED RECURREND (boot times
+  495/790/>851 s on identical inputs). Verdict FAIL per the conjunctive
+  PASS contract. Successor: T740 (longer window ~1200 s + kill orphaned
+  scripts at the handoff).

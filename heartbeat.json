@@ -1,11 +1,9 @@
 {
-  "timestamp_utc": "2026-11-20T16:56:01Z",
+  "timestamp_utc": "2026-11-20T18:05:00Z",
   "status": "CLOSED",
-  "track": "T738",
-  "flight": "service-flight-13",
-  "current_step": "Lane complete \u2014 verdict FAIL (INIT-UMOUNT-SELF-BLOCKED)",
+  "track": "T739",
+  "flight": "service-flight-14",
+  "current_step": "Lane complete — findings filed",
   "verdict": "FAIL",
-  "host_elapsed_seconds": 25.03,
-  "guest_log_max_seconds": 16.485,
-  "note": "unmount /sysimg FAILED rc=1 (L542); HANDOFF ABORTED; probe ran 27 T723_PROBE; successor T739"
+  "note": "Full 850 s flight ran; scope fix worked (all unmounts rc=0, T737+T738 walls closed); boot never completed in window (T729 wall recurred); surfaceflinger never presented, fix route not tested"
 }

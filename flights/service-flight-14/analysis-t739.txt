@@ -1,0 +1,270 @@
+Total lines: 13683 (trailing partial line: 0)
+Total bytes: 1568512
+
+--- ALL T723_PROBE lines (full text) — DECISIVE: 27 line(s) ---
+L356: T723_PROBE: start (EGL dispatch probe, uid 1000)
+L357: [   10.830356] T723_PROBE: start (EGL dispatch probe, uid 1000)
+L359: T723_PROBE: uid=0 euid=0 gid=0 egid=0
+L360: [   10.831654] T723_PROBE: uid=0 euid=0 gid=0 egid=0
+L362: T723_PROBE: setresgid rc=0
+L363: [   10.832620] T723_PROBE: setresgid rc=0
+L365: T723_PROBE: setresuid rc=0
+L366: [   10.833672] T723_PROBE: setresuid rc=0
+L368: T723_PROBE: after uid=1000 euid=1000 gid=1000 egid=1000
+L369: [   10.834662] T723_PROBE: after uid=1000 euid=1000 gid=1000 egid=1000
+L371: T723_PROBE SP3: open timeline fd=-13
+L372: T723_PROBE SP3 DONE control_fd=-999
+L373: T723_PROBE SP1: load_stub rc=0 base=0x7cfd3fd000 size=52416
+L374: T723_PROBE SP1: create=0x7cfd402c84 dup=0x7cfd402cb0
+L375: T723_PROBE SP1: create sync=0x5001
+L376: T723_PROBE SP1: dup rc=-1
+L377: T723_PROBE SP1: fence_check skip fd=-1
+L378: T723_PROBE SP1 DONE direct_fd=-1
+L379: T723_PROBE SP2: eglGetDisplay=0x3141
+L380: T723_PROBE SP2: eglInitialize ok=1 major=1 minor=4 error=0x3000
+L381: T723_PROBE SP2: create sync=0x5001 error=0x3000
+L382: T723_PROBE SP2: getprocaddress dup=0x7f9ada97a8
+L383: T723_PROBE SP2: map addr=0x7f9ada97a8 start=0x7f9ada0000 path=/sysimg/system/lib64/libEGL.so
+L384: T723_PROBE SP2: dup rc=-1 error=0x3000
+L385: T723_PROBE SP2: fence_check skip fd=-1
+L386: T723_PROBE SP2 DONE meta_fd=-1
+L387: T723_PROBE DONE drop_ok=1 control_fd=-999 direct_fd=-1 meta_fd=-1
+
+T723_PROBE start lines (probe executed: expect >=1): 2
+lines: 356, 357
+
+T723_PROBE DONE summary lines (expect >=1): 1
+lines: 387
+
+SP1 DONE lines (direct driver call: expect >=1): 1
+lines: 378
+
+SP2 DONE lines (META-EGL dispatch call: expect >=1): 1
+lines: 386
+
+SP3 DONE lines (sw_sync control: expect >=1): 1
+lines: 372
+
+DROP_FAIL lines (expect 0 — results must be uid-1000 context): 0
+lines: 
+
+SP1 RESOLVE_FAIL lines (expect 0): 0
+lines: 
+
+SP2 GETPROCADDRESS_NULL lines (expect 0): 0
+lines: 
+
+--- SP1 dup rc lines (direct-call result): 1 line(s) ---
+L376: T723_PROBE SP1: dup rc=-1
+
+--- SP2 dup rc lines (META-EGL-call result): 1 line(s) ---
+L384: T723_PROBE SP2: dup rc=-1 error=0x3000
+
+--- SP2 resolved-address lines (what META-EGL resolves): 1 line(s) ---
+L382: T723_PROBE SP2: getprocaddress dup=0x7f9ada97a8
+
+--- SP1 create-sync lines (direct-call sync handle): 1 line(s) ---
+L375: T723_PROBE SP1: create sync=0x5001
+
+--- SP2 create-sync lines (META-EGL create-sync handle): 1 line(s) ---
+L381: T723_PROBE SP2: create sync=0x5001 error=0x3000
+
+--- SP2 maps_lookup lines (backing file of resolved address): 1 line(s) ---
+L392: [T737] proc unmounted: /proc/self/maps unreadable
+
+maps lines showing the IMAGE libEGL loaded (expect >=1 — LD_LIBRARY_PATH fix proof): 1
+lines: 383
+
+maps lines showing the RAMDISK libEGL loaded (expect 0 — the T736 fallback): 0
+lines: 
+
+--- ALL [T737] early-ramdisk hook lines (full text) — carried forward from T737: 9 line(s) ---
+L345: [T737] mount /sysimg (vda) rc=0
+L347: [T737] INTERP tripwire: toybox alive after /sysimg mount
+L348: [T737] INTERP tripwire rc=0
+L350: [T737] mount /vendor (loop1) rc=0
+L352: [T737] mount debugfs (/sys/kernel/debug) rc=0
+L353: [T737] mount proc (/proc) rc=0
+L389: [T737] t723-probe finished rc=0
+L391: [T737] unmount proc (/proc) rc=0
+L392: [T737] proc unmounted: /proc/self/maps unreadable
+
+mount /sysimg rc=0 lines (expect >=1): 1
+lines: 345
+
+mount /sysimg FAILED lines (expect 0): 0
+lines: 
+
+mount /vendor rc=0 lines (expect >=1): 1
+lines: 350
+
+mount /vendor FAILED lines (expect 0): 0
+lines: 
+
+mount debugfs rc=0 lines (expect >=1): 1
+lines: 352
+
+mount proc rc=0 lines (expect >=1): 1
+lines: 353
+
+unmount proc rc=0 lines (expect >=1 — INIT-PROC-MOUNT-CONFLICT fix): 1
+lines: 391
+
+unmount proc FAILED lines (expect 0): 0
+lines: 
+
+proc-unmounted verification lines (expect >=1): 1
+lines: 392
+
+proc-still-mounted lines (expect 0): 0
+lines: 
+
+t723-probe finished lines (expect >=1): 1
+lines: 389
+
+probe binary missing lines (expect 0): 0
+lines: 
+
+'inaccessible or not found' lines (T723-blindness signature: expect 0 before the init handoff): 337
+lines: 697, 698, 699, 700, 701, 702, 703, 704, 705, 706, 716, 717, 718, 719, 720, 721, 722, 723, 724, 725, 3761, 3875, 3991, 4105, 4219, 4333, 4447, 4561, 4675, 4791, 4905, 5021, 5135, 5251, 5365, 5479, 5593, 5707, 5821, 5936
+(297 middle lines omitted; count is exact)
+
+--- ALL [T739] unmount-before-handoff hook lines (full text) — DECISIVE: 7 line(s) ---
+L589: [T739] unmount /sysimg (vda) rc=0
+L618: [T739] unmount /vendor (loop1) rc=0
+L647: [T739] unmount debugfs (/sys/kernel/debug) rc=0
+L649: [T739] handoff state verified: /sysimg /vendor /sys/kernel/debug unmounted
+L650: [T739] handoff state verified: /data mounted
+L653: [T739] unmount proc (verify) rc=0
+L654: [T739] kernel-init probe done; handing off to Android init
+
+unmount /sysimg rc=0 lines (expect >=1 — T737 wall fix): 1
+lines: 589
+
+unmount /sysimg FAILED lines (expect 0): 0
+lines: 
+
+unmount /vendor rc=0 lines (expect >=1): 1
+lines: 618
+
+unmount /vendor FAILED lines (expect 0): 0
+lines: 
+
+unmount debugfs rc=0 lines (expect >=1): 1
+lines: 647
+
+unmount debugfs FAILED lines (expect 0): 0
+lines: 
+
+handoff-state-verified lines (expect >=1 — T734 state restored): 1
+lines: 649
+
+/data-mounted verification lines (expect >=1): 1
+lines: 650
+
+handoff-state-DIRTY lines (expect 0): 0
+lines: 
+
+handoff-state-UNVERIFIED lines (expect 0): 0
+lines: 
+
+unmount proc (verify) rc=0 lines (expect >=1 — /proc re-scoped): 1
+lines: 653
+
+unmount proc (verify) FAILED lines (expect 0): 0
+lines: 
+
+HANDOFF ABORTED lines (expect 0 — abort means FAIL, first failing link named): 0
+lines: 
+
+T739 handoff lines (expect >=1): 1
+lines: 654
+
+--- ALL T734_KERNEL_OK marker lines (full text) — exec-path control: 1 line(s) ---
+L194: [    8.789260] T734_KERNEL_OK
+
+--- ALL [T734] early-ramdisk hook lines (full text) — probe exec + rc: 1 line(s) ---
+L196: [T734] kernel-init probe finished rc=0
+
+T734_KERNEL_OK count (control: expect >=1, early, guest <10 s): 1
+lines: 194
+
+--- ALL T733_PROBE_OK marker lines (full text) — registration: 1 line(s) ---
+L7816: [  102.052736] T733_PROBE_OK
+
+--- ALL T728_PROBE_OK marker lines (full text) — registration: 1 line(s) ---
+L7812: [  102.002136] T728_PROBE_OK
+
+--- ALL T733_MINIMAL_OK marker lines (full text) — minimal binary under init (expect 0): 0 line(s) ---
+
+--- ALL init service-refusal lines (full text): 1 line(s) ---
+L7348: [   93.094158] init: Could not start service 'vendor.camera-provider-ranchu' as part of class 'hal': File /system/bin/sh(labeled "u:object_r:shell_exec:s0") has incorrect label or no domain transition from u:r:init:s0 to another SELinux domain defined. Have you configured your service correctly? https://source.android.com/security/selinux/device-policy#label_new_services_and_address_denials. Note: this error shows up even in permissive mode in order to make auditing denials possible.
+
+init starting service 't728probe' (context only): 0
+lines: 
+
+start-command lines citing t728probe (trigger fired): 0
+lines: 
+
+T720_PROBE DONE status=PASS lines (hold requires >=1): 1
+lines: 226
+
+T720_PROBE DONE status=FAIL lines (hold requires 0): 0
+lines: 
+
+T721 fence-log lines (hold requires >=1): 0
+lines: 
+
+Invalid present fence lines (hold requires 0): 0
+lines: 
+
+ALL sw_sync lines (context): 7
+lines: 198, 199, 201, 202, 210, 211, 224
+
+T628 REJECT allocate2 lines (hold requires 0): 0
+lines: 
+
+T628 CALL allocate2 lines: 2
+lines: 8250, 8255
+
+EPERM lines (hold requires 0): 0
+lines: 
+
+simplefb: mapped lines (hold requires >=1): 0
+lines: 
+
+Watchdog KILLING lines (hold requires 0): 0
+lines: 
+
+sys.boot_completed lines (hold requires >=1): 0
+lines: 
+
+boot_completed lines: 0
+lines: 
+
+FATAL EXCEPTION lines: 0
+lines: 
+
+Kernel panic/Oops/BUG lines (hold requires 0): 0
+lines: 
+
+RenderEngine EGL dup-fail lines: 0
+lines: 
+
+driver loaded lines: 2
+lines: 8098, 8616
+
+META-EGL banner lines: 1
+lines: 8101
+
+D/libEGL lines: 2
+lines: 8098, 8616
+
+avc:  denied (two spaces) total: 1257
+avc:  denied for /dev/mem: 0
+avc denied (sensorservice): 0
+
+Guest kernel time: first=0.0s last=851.14511s max=851.14511s
+Dup-fail rate: 0 / 851.1s * 1000 = 0.000 per 1000 s (baselines: T721 flight-01 4.058, T721 revert 6.660)
+
+=== REPORT COMPLETE ===

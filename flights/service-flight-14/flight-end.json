@@ -1,0 +1,45 @@
+{
+  "track": "T739",
+  "flight": "service-flight-14",
+  "stop_reason": "Guest target reached (851.1s >= 850s)",
+  "started_utc": "2026-11-20T17:42:28Z",
+  "ended_utc": "2026-11-20T17:56:40Z",
+  "host_elapsed_seconds": 852.35,
+  "guest_log_max_seconds": 851.145,
+  "qemu_exit_code": 0,
+  "log_bytes": 1568512,
+  "log_lines": 13683,
+  "log_sha256": "918ef4b400c785bed99c225863465ca4ed367c6acd5de1c85518326922f5762c",
+  "inputs": {
+    "kernel": {
+      "path": "/Users/Shared/wt-track739-scope-ld-library-path/guest-inputs/t720-Image",
+      "sha256": "70d3859d6aed1906d27217aa3fdfd9bb953a57f4490c89c51efa4f6490441e04",
+      "bytes": 20396544
+    },
+    "qemu": {
+      "path": "/opt/homebrew/bin/qemu-system-aarch64",
+      "sha256": "8e5c46dc6752c36afbb706f933e72fef835e35f48881a63cadb06c6d29bac869",
+      "bytes": 31498864
+    },
+    "dtb": {
+      "path": "/Users/Shared/wt-track739-scope-ld-library-path/t739-modified.dtb",
+      "sha256": "e4b0ff795bfad36a73768b88e2cb00e51810cc58c11e54b2e79b6acccb03a60f",
+      "bytes": 2049
+    },
+    "boot_image": {
+      "path": "/Users/Shared/wt-track739-scope-ld-library-path/t739-fix.cpio.gz",
+      "sha256": "df2a6c9ac4940eed0d409eb8d2ce51326ef4429d1c9113532a219142ad86e592",
+      "bytes": 53751329
+    },
+    "system_img": {
+      "path": "/Users/Shared/wt-track739-scope-ld-library-path/guest-inputs/t733-system.img",
+      "sha256": "af40403aa286a770f67dc8599584ef038c3192f2ff43ff89e62a3546ded89043",
+      "bytes": 2059816960
+    },
+    "vendor_img": {
+      "path": "/Users/Shared/wt-track739-scope-ld-library-path/guest-inputs/t722-vendor.img",
+      "sha256": "5e0607ada51367fbe9f7e5dd7586afbeb9216f478f00a31baa5179eb73f476e0",
+      "bytes": 134217728
+    }
+  }
+}

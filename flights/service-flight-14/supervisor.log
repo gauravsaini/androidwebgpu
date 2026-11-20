@@ -1,0 +1,64 @@
+[T739 SUPERVISOR] Verifying flight inputs...
+[SUPERVISOR] Launching QEMU T739 service-flight-14 guest flight...
+[SUPERVISOR] QEMU pid=82450 started at 2026-11-20T17:42:28Z
+[SUPERVISOR 2026-11-20T17:42:28Z] host_elapsed=0.0s guest_max=0.0s pid=82450
+[SUPERVISOR 2026-11-20T17:42:43Z] host_elapsed=15.0s guest_max=11.6s pid=82450
+[SUPERVISOR 2026-11-20T17:42:58Z] host_elapsed=30.1s guest_max=22.9s pid=82450
+[SUPERVISOR 2026-11-20T17:43:13Z] host_elapsed=45.1s guest_max=44.2s pid=82450
+[SUPERVISOR 2026-11-20T17:43:28Z] host_elapsed=60.1s guest_max=59.3s pid=82450
+[SUPERVISOR 2026-11-20T17:43:43Z] host_elapsed=75.1s guest_max=74.1s pid=82450
+[SUPERVISOR 2026-11-20T17:43:58Z] host_elapsed=90.1s guest_max=88.5s pid=82450
+[SUPERVISOR 2026-11-20T17:44:13Z] host_elapsed=105.1s guest_max=103.9s pid=82450
+[SUPERVISOR 2026-11-20T17:44:28Z] host_elapsed=120.2s guest_max=109.7s pid=82450
+[SUPERVISOR 2026-11-20T17:44:43Z] host_elapsed=135.2s guest_max=109.7s pid=82450
+[SUPERVISOR 2026-11-20T17:44:58Z] host_elapsed=150.2s guest_max=109.7s pid=82450
+[SUPERVISOR 2026-11-20T17:45:13Z] host_elapsed=165.3s guest_max=109.7s pid=82450
+[SUPERVISOR 2026-11-20T17:45:28Z] host_elapsed=180.3s guest_max=179.6s pid=82450
+[SUPERVISOR 2026-11-20T17:45:43Z] host_elapsed=195.3s guest_max=189.8s pid=82450
+[SUPERVISOR 2026-11-20T17:45:58Z] host_elapsed=210.4s guest_max=200.4s pid=82450
+[SUPERVISOR 2026-11-20T17:46:13Z] host_elapsed=225.4s guest_max=200.4s pid=82450
+[SUPERVISOR 2026-11-20T17:46:28Z] host_elapsed=240.4s guest_max=200.4s pid=82450
+[SUPERVISOR 2026-11-20T17:46:43Z] host_elapsed=255.5s guest_max=247.3s pid=82450
+[SUPERVISOR 2026-11-20T17:46:58Z] host_elapsed=270.5s guest_max=262.7s pid=82450
+[SUPERVISOR 2026-11-20T17:47:13Z] host_elapsed=285.5s guest_max=283.2s pid=82450
+[SUPERVISOR 2026-11-20T17:47:28Z] host_elapsed=300.6s guest_max=299.3s pid=82450
+[SUPERVISOR 2026-11-20T17:47:43Z] host_elapsed=315.6s guest_max=313.5s pid=82450
+[SUPERVISOR 2026-11-20T17:47:58Z] host_elapsed=330.7s guest_max=329.2s pid=82450
+[SUPERVISOR 2026-11-20T17:48:13Z] host_elapsed=345.7s guest_max=339.9s pid=82450
+[SUPERVISOR 2026-11-20T17:48:28Z] host_elapsed=360.8s guest_max=339.9s pid=82450
+[SUPERVISOR 2026-11-20T17:48:43Z] host_elapsed=375.8s guest_max=339.9s pid=82450
+[SUPERVISOR 2026-11-20T17:48:59Z] host_elapsed=390.9s guest_max=339.9s pid=82450
+[SUPERVISOR 2026-11-20T17:49:14Z] host_elapsed=405.9s guest_max=339.9s pid=82450
+[SUPERVISOR 2026-11-20T17:49:29Z] host_elapsed=420.9s guest_max=339.9s pid=82450
+[SUPERVISOR 2026-11-20T17:49:44Z] host_elapsed=436.0s guest_max=420.3s pid=82450
+[SUPERVISOR 2026-11-20T17:49:59Z] host_elapsed=451.0s guest_max=420.3s pid=82450
+[SUPERVISOR 2026-11-20T17:50:14Z] host_elapsed=466.0s guest_max=420.3s pid=82450
+[SUPERVISOR 2026-11-20T17:50:29Z] host_elapsed=481.1s guest_max=466.0s pid=82450
+[SUPERVISOR 2026-11-20T17:50:44Z] host_elapsed=496.2s guest_max=466.0s pid=82450
+[SUPERVISOR 2026-11-20T17:50:59Z] host_elapsed=511.2s guest_max=466.0s pid=82450
+[SUPERVISOR 2026-11-20T17:51:14Z] host_elapsed=526.2s guest_max=466.0s pid=82450
+[SUPERVISOR 2026-11-20T17:51:29Z] host_elapsed=541.2s guest_max=466.0s pid=82450
+[SUPERVISOR 2026-11-20T17:51:44Z] host_elapsed=556.3s guest_max=466.0s pid=82450
+[SUPERVISOR 2026-11-20T17:51:59Z] host_elapsed=571.3s guest_max=466.0s pid=82450
+[SUPERVISOR 2026-11-20T17:52:14Z] host_elapsed=586.4s guest_max=466.0s pid=82450
+[SUPERVISOR 2026-11-20T17:52:29Z] host_elapsed=601.4s guest_max=466.0s pid=82450
+[SUPERVISOR 2026-11-20T17:52:44Z] host_elapsed=616.4s guest_max=466.0s pid=82450
+[SUPERVISOR 2026-11-20T17:52:59Z] host_elapsed=631.5s guest_max=466.0s pid=82450
+[SUPERVISOR 2026-11-20T17:53:14Z] host_elapsed=646.5s guest_max=466.0s pid=82450
+[SUPERVISOR 2026-11-20T17:53:29Z] host_elapsed=661.5s guest_max=466.0s pid=82450
+[SUPERVISOR 2026-11-20T17:53:44Z] host_elapsed=676.6s guest_max=466.0s pid=82450
+[SUPERVISOR 2026-11-20T17:53:59Z] host_elapsed=691.6s guest_max=466.0s pid=82450
+[SUPERVISOR 2026-11-20T17:54:14Z] host_elapsed=706.6s guest_max=466.0s pid=82450
+[SUPERVISOR 2026-11-20T17:54:29Z] host_elapsed=721.7s guest_max=466.0s pid=82450
+[SUPERVISOR 2026-11-20T17:54:44Z] host_elapsed=736.7s guest_max=466.0s pid=82450
+[SUPERVISOR 2026-11-20T17:54:59Z] host_elapsed=751.7s guest_max=466.0s pid=82450
+[SUPERVISOR 2026-11-20T17:55:14Z] host_elapsed=766.8s guest_max=466.0s pid=82450
+[SUPERVISOR 2026-11-20T17:55:29Z] host_elapsed=781.8s guest_max=466.0s pid=82450
+[SUPERVISOR 2026-11-20T17:55:45Z] host_elapsed=796.9s guest_max=466.0s pid=82450
+[SUPERVISOR 2026-11-20T17:56:00Z] host_elapsed=812.0s guest_max=801.4s pid=82450
+[SUPERVISOR 2026-11-20T17:56:15Z] host_elapsed=827.0s guest_max=821.7s pid=82450
+[SUPERVISOR 2026-11-20T17:56:30Z] host_elapsed=842.1s guest_max=841.0s pid=82450
+[SUPERVISOR] Flight ended at 2026-11-20T17:56:40Z (Guest target reached (851.1s >= 850s))
+[SUPERVISOR] Host elapsed: 852.35s, Guest log max: 851.15s
+[SUPERVISOR] Generating uart.log.numbered.txt and uart.log.gz...
+[SUPERVISOR] flight-end.json written. Flight /Users/Shared/wt-track739-scope-ld-library-path/flights/service-flight-14 complete.
