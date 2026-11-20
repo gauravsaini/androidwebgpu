@@ -1,0 +1,191 @@
+# Progress — Track T735 (re-fly T723 EGL-dispatch probe via kernel-init exec)
+# Lane agent 4a4306b9-2735-4d2d-a92d-19f3e0b44c79, launched 23:25 AEDT 20 Nov 2026, wedge 02:25 AEDT 21 Nov
+# Brief: hidden_files/briefs/track735-t723-probe-kernel-init.md SHA 93f7fa10 (33,788 B)
+# Worktree /Users/Shared/wt-track735-t723-probe, branch t735, base 840df20 (T734 cert commit)
+# Gates G735-1/2 registered UNCHECKED (driver adjudicates)
+
+## Step 0 — Disk gate (23:26 AEDT 20 Nov 2026)
+- Mac df /System/Volumes/Data: 8,583,440 KiB free (96%) — BELOW the flight gate 9,769,216 KiB. GATE CLOSED.
+- Per brief static-first design: proceed with Steps 1-2 (CPIO rebuild + DTB re-patch + probe design/build, NO flights, NO supervisor, NO QEMU, no 2 GB copies). Flights gated at Step 3: WAIT-DISK if the gate is still closed when the first flight is due.
+- T734 findings + T723 findings read in full (sandbox ~/workspace/t735-scratch/findings-t723.md SHA 2d1631fc; T734 findings febad60f).
+
+## Step 1 — Verify inputs + decide the image (IN PROGRESS)
+
+--- Step 1 COMPLETE (lane, 23:4x AEDT 20 Nov) ---
+SHA verification (all on Mac worktree, shasum -a 256, first 8 hex):
+  kernel t720-Image 70d3859d OK
+  DTB t723-modified.dtb 73d1904b OK (unpatched base; re-patch in Step 2)
+  CPIO v2 t734-fix-v2.cpio.gz 57c04949 OK
+  system image t733-system.img af40403a OK
+  vendor t722-vendor.img 5e0607ad OK
+  v2 CPIO embedded ramdisk-images/vendor.img 5e0607ad OK (box unpack, matches)
+  t723-probe 4b275e48 OK (68,792 B, exonerated, never executed)
+  nb-t734probe.bin b7440e1c OK (Mac T734 worktree + sandbox t734-scratch, both)
+Disk: /Users/Shared 5,682,524 KiB free (98%), gate CLOSED (needs 9,769,216 KiB).
+  Gate was 8,583,440 KiB at Step 0; still falling. Build-only path confirmed.
+SYSTEM-IMAGE DECISION: fly af40403a (T733 image). REJECT 0ba6d6d3 (revert).
+  Evidence (box debugfs, read-only): surfaceflinger in af40403a = 259d39f5 =
+  original; libEGL.so in af40403a = fed36a9b = libEGL.so in revert 0ba6d6d3.
+  Both images are IDENTICAL for the dispatch question (same surfaceflinger,
+  same libEGL.so). af40403a preserves the T734 control (T728/T733 probe
+  binaries + rc in the image); revert loses it. af40403a is also the image
+  T734 flight-9 flew successfully (boot_completed fired, guest 855.994 s).
+libEGL ROUTE DECISION (Step 2 exit criterion, preliminary):
+  The probe loads libEGL.so via /system/bin/linker64 from /system/lib64 at
+  exec time. Ramdisk libEGL.so = a9641828 (290,104 B); system-image libEGL.so
+  = fed36a9b (290,120 B). 11 of 18 NEEDED deps DIFFER ramdisk vs image
+  (liblog, libgraphicsenv, libvndksupport, configstore@1.0, libhidlbase,
+  libutils, libunwindstack, libc++, libc, libm, libdl). libc/libm/libdl in
+  the image are symlinks (debugfs cat returned empty); in the ramdisk they
+  are real files. Extracting libEGL.so alone into the CPIO is NOT rigorous.
+  ROUTE (Option 1, mount): the script mounts /dev/vda (ext4 ro) onto /system
+  + /dev/loop1 (ext4 ro) onto /vendor + debugfs/sysfs/proc mounts,
+  synchronously, BEFORE the probe exec. The probe then loads fed36a9b + the
+  image deps from the MOUNTED files -- the exact bytes RenderEngine uses.
+  Init later overmounts /system + /vendor per fstab (same devices) -- standard
+  mount stacking. The script prints each mount rc; the mount rc is the
+  guest-origin evidence of which libEGL.so was in effect. SP1: /vendor mounted
+  so the driver .so path resolves. SP3: debugfs mounted by the script itself,
+  not relying on the backgrounded T720 probe timing.
+BLIND-LOOP TIMING (from T734 flight-9 UART): first "inaccessible or not found"
+  at L459, AFTER the script echo "[T552] handing off to Android init" (L453)
+  and BEFORE init first-stage start (guest 19.635717 s, L581). The loops fail
+  only after the init handoff. The SYNCHRONOUS probe (guest ~7.8 s, before
+  init) is unaffected -- T734 + T720 probes prove that exec path. Step 2 will
+  REMOVE run_probe (T552) and t723_probe_wait (the T723 wall, superseded);
+  run_probe setprop was already a no-op (blind), so removal changes nothing
+  functionally. /dev/null artifact: locate in Step 2 (grep script).
+Supervisor QEMU cmdline (from supervisor_t734.py, read in full): virt machine,
+  cortex-a57, 8G, 4 smp, kernel + DTB + loader device file=CPIO addr=0x110000000
+  force-raw=on, virtio-blk system, rdinit=/early-ramdisk. DTB initrd-start
+  0x110000000; initrd-end MUST equal start + filesize(CPIO) -- assert before
+  EVERY launch (T734 DTB-INITRD-END-CAP lesson).
+Step 1 DONE. Next: Step 2 -- rebuild CPIO from v2 + t723-probe member +
+  modified early-ramdisk (mounts + probe exec + loop removal + /dev/null fix);
+  re-patch DTB for the new CPIO size; record REACHABILITY ANSWER.
+
+--- Step 2 COMPLETE (lane, 23:44 AEDT 20 Nov) ---
+BUILD ARTIFACTS (all on Mac worktree, SHA-verified):
+  early-ramdisk-t735: b6301e09, 12,168 B, 236 lines, sh -n OK.
+    Changes vs T734 (279 lines): + T735 mount+probe block after the /dev/vda
+    config (mount vda->/system ro, loop1->/vendor ro, debugfs->/sys/kernel/debug,
+    proc->/proc, then exec /t723-probe synchronously, print rc); - run_probe
+    (T552, blind, setprop was already a no-op); - t723_probe_wait (the T723
+    wall, superseded by the kernel-init exec). Kept: T734 probe exec (control),
+    T720 probe, /loop-node-keeper, /t493, /t501, logcat_streamer, /guest_diag,
+    exec /init. The /dev/null artifact came from run_probe (pid 256) after the
+    init handoff; removing run_probe removes it.
+  t735-fix.cpio.gz: b183380d, 53,745,361 B, 241 entries.
+    Rebuilt from v2 (57c04949) with rebuild_cpio_t735.py (adapted T734 rebuilder).
+    FIRST ATTEMPT FAILED (verify): the v2 CPIO already carries t723-probe
+    (staged in the original CPIO, SHA 4b275e48) -- my insert created a duplicate
+    member and the verify caught the mtime mismatch. FIXED: rebuilder now
+    verifies the existing member payload == staged binary and skips insertion.
+    Rebuilt clean: verify passed (all untouched entries byte-identical,
+    early-ramdisk correct, t723-probe 4b275e48, t734probe b7440e1c preserved).
+  t735-modified.dtb: eb86dc37, 2,049 B.
+    Patched from t723-modified.dtb (73d1904b) with patch_dtb_initrd.py (1f896a01).
+    initrd-start 0x110000000 unchanged; initrd-end 0x1132eaef0 -> 0x1133416d1
+    (= start + 53,745,361, the T735 CPIO size). ASSERTED before launch (T734
+    DTB-INITRD-END-CAP lesson). Only the 8 end bytes differ from the base DTB.
+REACHABILITY ANSWER (Step 2 exit criterion): YES, the probe can reach the
+  dispatch chain from the ramdisk context.
+  - INTERP /system/bin/linker64 exists in the ramdisk (2,052,848 B); the
+    dynamic probe loads. All 18 of libEGL.so NEEDED libs exist in the ramdisk
+    /system/lib64 (verified on the box).
+  - The script mounts /dev/vda onto /system + /dev/loop1 onto /vendor BEFORE
+    the probe exec, so the probe loads the SYSTEM IMAGE libEGL.so (fed36a9b,
+    the exact file RenderEngine uses) + the vendor driver .so
+    (libGLES_swiftshader.so, 52,416 B, confirmed present in vendor.img via
+    box debugfs). The ramdisk libEGL.so (a9641828) is NOT what the probe loads
+    (the mount hides it); 11/18 deps differ ramdisk vs image, which is WHY the
+    mount route was chosen over extracting libEGL.so alone.
+  - The script mounts debugfs at /sys/kernel/debug + proc at /proc, so SP3
+    (sw_sync) and the maps_lookup resolve.
+  - The probe exec is synchronous from pid 1 (the script), before exec /init
+    -- the T734-proven exec path (T734_KERNEL_OK fired guest 7.80 s, T734 f9).
+  - The DTB initrd-end matches the new CPIO size, so the kernel unpacks the
+    full CPIO (T734 flights 4-7 panicked on the stale cap; fixed in T734 f8).
+  - Toybox + sh are byte-identical ramdisk vs image (c3d9a9b4, d5becb67), so the
+    /data setup after the /system mount behaves exactly as in T734.
+  The flight (Step 3a) confirms this empirically; the answer is the design
+  verdict, not a flight verdict.
+BRANCH (Step 2 exit): INVESTIGATION-ONLY. The dispatch point is not yet
+  identified (that needs the flight SP1/SP2 results); the fix branch (Step
+  3b/3c) is decided only after Step 3a passes, per the brief.
+Scripts adapted (sandbox t735-scratch, to be synced to the Mac worktree):
+  rebuild_cpio_t735.py (used above), supervisor_t735.py (adapt next, Step 3),
+  launch_probe_t735.py, analyze_t735_probe.py (adapt as needed).
+Step 2 DONE. Next: Step 3 gate check -- disk gate decides WAIT-DISK vs flight.
+
+--- Step 3 GATE CHECK -> WAIT-DISK (lane, 23:55 AEDT 20 Nov) ---
+Disk at Step 3: /Users/Shared 1,062,316 KiB free (100% used). Flight gate needs
+  9,769,216 KiB. Gate CLOSED by 8,706,900 KiB. The disk fell all evening:
+  8,583,440 (Step 0) -> 5,682,524 (Step 1) -> 4,304,324 (Step 2) -> 1,062,316
+  (Step 3). No flight is possible. This is a DESIGNED gate-exit (WAIT-DISK),
+  NOT a failure, NOT a wedge, NO verdict. No flight was launched; no flight
+  folder exists; no findings/outcome/death note is written (those carry a
+  terminal verdict -- the recovery lane writes them after it flies).
+STATE PRESERVED (all SHA-verified Mac <-> sandbox <-> box unless noted):
+  - t735-fix.cpio.gz b183380d (53,745,361 B) -- Mac + BOX. Sandbox MISSING
+    (53 MB, sandbox quota exceeded on rsync; the pipe Mac->box worked).
+    Recovery: pull it from the box, or re-rsync Mac->sandbox when quota frees.
+  - t735-modified.dtb eb86dc37 (2,049 B) -- Mac + sandbox + box.
+  - early-ramdisk-t735 b6301e09 (12,168 B, 236 lines) -- Mac + sandbox + box.
+  - rebuild_cpio_t735.py 9b3bf0ec -- Mac + sandbox + box.
+  - scripts/supervisor_t735.py 7110033a -- Mac (scripts/) + sandbox. Box: NOT
+    yet synced (sync it with the final progress/heartbeat below).
+  - patch_dtb_initrd.py 1f896a01 -- Mac worktree root (tracked in 840df20).
+  - progress-t735.txt, heartbeat.json, TIMELINE.md -- Mac + sandbox + box
+    (final versions synced at lane end, below).
+  - guest-inputs/ (23 files, all Step-1 SHAs verified) -- Mac worktree.
+SUPERVISOR PRE-FLIGHT VERIFIED (on the Mac, verify_inputs, no QEMU launched):
+  kernel 70d3859d, qemu 8e5c46dc, dtb eb86dc37, boot_image b183380d,
+  system_img af40403a, vendor_img 5e0607ad -- all OK. FLIGHT =
+  worktree/flights/service-flight-10. GDB port 1268. Host cap 1100 s, guest
+  target 850 s. The recovery agent launches it with:
+    python3 scripts/supervisor_t735.py   (from the worktree; detached/nohup)
+  It re-checks the disk gate (8 GiB supervisor-level) + all input SHAs
+  before launching QEMU. It asserts nothing about initrd-end at runtime --
+  the DTB is already patched (eb86dc37); the recovery MUST re-assert
+  initrd-end == 0x110000000 + filesize(t735-fix.cpio.gz) before launching.
+RECOVERY HANDOFF (for the driver / recovery agent):
+  1. Wait for the disk gate to reopen (>= 9,769,216 KiB free on /Users/Shared).
+     Do NOT relaunch into a closed gate (T734 lesson).
+  2. Re-verify the build SHAs (CPIO b183380d, DTB eb86dc37) + re-assert the
+     DTB initrd-end. Pull the CPIO from the box if the sandbox copy is absent.
+  3. Launch service-flight-10 (850 s guest / 1100 s host, GDB 1268) via the
+     supervisor. NEVER reuse a T734 flight name; NEVER overwrite a flight.
+  4. Adapt analyze_t734_probe.py -> analyze_t735_probe.py (T723_PROBE SP1/SP2/
+     SP3 markers, T734_KERNEL_OK x1 control, T733/T728_PROBE_OK x2 control,
+     sys.boot_completed, T721 fence-log, simplefb, dup-fail rate vs baselines
+     4.058 / 6.660) -- the T734 version is in sandbox t734-scratch + box t734/.
+  5. Step 4: findings-t735.md (Verdict PASS/FAIL + WALL-TYPE-TAG + Rust par
+     bhi lagu + sys.boot_completed literal + reflection on FAIL) + outcome +
+     death note (FAIL) + TIMELINE + CLOSED heartbeat; sync Mac <-> sandbox
+     <-> box. Then the driver certifies (gates G735-1/2) and launches T736
+     or the fix track.
+  6. If the dispatch point IS identified AND a minimal fix is buildable, the
+     fix branch (Step 3b/3c) fires with the T722 differential criteria
+     (dup-fail rate BELOW BOTH baselines 4.058/6.660 + all T721/T722 holds).
+     Otherwise the lane certifies the dispatch answer as the verdict.
+WEDGE: 02:25 AEDT 21 Nov (not hit; clean exit 23:55 AEDT 20 Nov).
+LANE EXIT: WAIT-DISK (clean, designed, no verdict). State preserved above.
+
+--- RECOVERY 1 (lane agent 5a34039c-3689-48f6-9153-c55ebeb953c9, launched 00:12 AEDT 21 Nov 2026, wedge 03:12 AEDT 21 Nov) ---
+Brief: hidden_files/briefs/track735-recovery1-t723-probe-kernel-init.md SHA a73acc92 (39,220 B; preamble + original brief 93f7fa10 verbatim, tail byte-equals verified).
+Disk gate at recovery launch: driver-verified 16,164,032 KiB free (93%) at 00:10 AEDT 21 Nov — GATE OPEN.
+RE-VERIFICATION (Mac worktree, shasum -a 256, first 8 hex):
+  t735-fix.cpio.gz b183380d OK (53,745,361 B)
+  t735-modified.dtb eb86dc37 OK (2,049 B)
+  early-ramdisk-t735 b6301e09 OK (12,168 B)
+  scripts/supervisor_t735.py 7110033a OK
+DTB initrd-end ASSERTED: initrd-start 0x110000000 at DTB offset 248; initrd-end 0x1133416d1 (= start + 53,745,361) at offset 268; old end 0x1132eaef0 ABSENT. (T734 DTB-INITRD-END-CAP lesson applied.)
+Disk at re-verification: 16,154,936 KiB free (93%), gate OPEN.
+Findings read in full (recovery lane): findings-t723.md (FAIL, probe never ran; RAMDISK-MOUNT-BLIND; 0 T723_PROBE lines; holds: T720 PASS 1, T721 fence 1, simplefb 1, boot_completed 8 first 516.118 s, dup-fail 4 rate 6.449/1000 s; late system_server crash guest 560.16 s — probe runs at ~7.8 s, unaffected) + findings-t734.md (PASS; flight-9: T734_KERNEL_OK 1 L195 guest 7.80 s, T733/T728_PROBE_OK 2+2, sys.boot_completed 7 first 790.04 s, dup-fail 4 rate 4.673/1000 s).
+Probe source read (box /home/muse/t723-work/t723-probe.c, 631 lines): marker formats confirmed — T723_PROBE start/uid/setresgid/setresuid/after uid, DROP_FAIL, SP3 open/CREATE/INC/DONE control_fd, SP1 load_stub/create/create sync/dup rc/RESOLVE_FAIL/DONE direct_fd, SP2 eglGetDisplay/eglInitialize/create sync/getprocaddress dup/dup rc/GETPROCADDRESS_NULL/DONE meta_fd, T723_PROBE DONE drop_ok.
+ANALYZER ADAPTED: scripts/analyze_t735_probe.py (from analyze_t734_probe.py; default flight service-flight-10; T723_PROBE + [T735] hook sections DECISIVE; T734_KERNEL_OK + T733/T728_PROBE_OK controls; holds + dup-fail rate vs baselines 4.058/6.660). py_compile OK. Smoke-tested on T734 flight-9 UART: total 25,539 lines, T723_PROBE 0, T734_KERNEL_OK 1, sys.boot_completed 7, dup-fail rate 4.673 — all match the T734 findings. Synced to Mac scripts/ + sandbox.
+
+FLIGHT service-flight-10 FLOWN (recovery 1): launched 00:15:13 AEDT 21 Nov (supervisor PID 48025, QEMU 48028; disk 16,156,444 KiB free, gate OPEN). Ended 00:15:28 AEDT: host 15.02 s, guest 4.765 s, QEMU exit 0. UART 395 lines, 28,254 B, SHA b0dbacf6. Guest kernel-panicked guest 4.761032 s (Attempted to kill init! exitcode=0x00007e00). Analyzer (b90b2bb2) exit 0: T723_PROBE 0 (probe never ran); T734_KERNEL_OK 1 L194 guest 3.962264 s (exec-path control FIRED); [T735] hooks 6: mount /system rc=0 L345, mount /vendor FAILED rc=127 L347, debugfs FAILED rc=127 L348, proc FAILED rc=127 L349, t723-probe finished rc=126 L351; ELOOP /t723-probe L350, /t493 L373, /t501 L374, /init L375; toybox "inaccessible or not found" 4 lines L353/354/355/370; T720_PROBE DONE PASS 1 L224; sys.boot_completed 0, T721 fence 0, simplefb 0, dup-fail 0 (void — guest died at 4.76 s); panic 1 L376.
+MECHANISM PROVEN (fresh evidence, this lane): image /system/bin/linker64 is a symlink (38 B) -> /apex/com.android.runtime/bin/linker64 (box debugfs stat, fresh); /apex absent from T735 CPIO (box cpio -t, fresh) and from the script (only /data/misc/apexdata); image root /apex EMPTY dir (box debugfs, fresh), /system/apex holds .capex files; readelf (fresh): toybox/sh/t723-probe INTERP /system/bin/linker64, init INTERP /system/bin/bootstrap/linker64 (image: real file 2,053,192 B); sandbox control test (fresh): dangling INTERP -> ENOENT, self-loop INTERP -> ELOOP, real-file INTERP -> runs. Static /loop-node-keeper RAN post-mount (L371) — failure is INTERP resolution, not exec. ELOOP-vs-ENOENT discrepancy for same-INTERP binaries explicitly UNRESOLVED (findings Mechanism §5); does not change verdict or fix direction.
+ADJUDICATED FAIL (Step 3a stop rule): probe never ran; dispatch question UNANSWERED (SP1+SP2 both unanswered); no full flight; no fix built (dispatch point unidentified). First failing link: mount /vendor FAILED rc=127 (L347); root cause: mount /system rc=0 (L345). Wall RAMDISK-MOUNT-BREAKS-LINKER (guest); Rust par bhi lagu: haan. Successor: Option A recommended (mount image at /sysimg + LD_LIBRARY_PATH, ramdisk linker64 stays live); B extract libEGL+18 deps; C SP1-only. Mount-onto-/system route REFUTED — do not re-fly. Disk gate CLOSED again by lane end (7,125,120 KiB free 00:34 AEDT, below 9,769,216 KiB gate) — driver must re-check before any successor flight. Findings-t735.md + outcome FAIL + DEATH_NOTE-T735.md + TIMELINE.md written; synced Mac + sandbox + box. Heartbeat CLOSED.

@@ -1,15 +1,1 @@
-{
-  "timestamp_utc": "2026-11-20T12:07:00Z",
-  "status": "CLOSED",
-  "track": "T734",
-  "flight": "service-flight-9",
-  "current_step": "Complete \u2014 Verdict: PASS",
-  "verdict": "PASS",
-  "host_elapsed_seconds": 856.93,
-  "guest_log_max_seconds": 855.994,
-  "target_host_seconds": 1100,
-  "target_guest_seconds": 850,
-  "supervisor_pid": 84291,
-  "qemu_pid": 84314,
-  "note": "T734_KERNEL_OK appeared (guest 7.80 s). Full flight service-flight-9 complete. Findings febad60f, outcome c26de83a."
-}
+{"current_step":"Lane closed — adjudicated FAIL","flight":"service-flight-10","guest_log_max_seconds":4.765,"host_elapsed_seconds":15.02,"note":"Recovery 1 lane closed. service-flight-10 panicked at guest 4.765 s (kernel panic, Attempted to kill init). Probe never ran (0 T723_PROBE lines). Wall RAMDISK-MOUNT-BREAKS-LINKER (guest). All supervisors exited; no QEMU running.","qemu_pid":null,"status":"CLOSED","supervisor_pid":48025,"target_guest_seconds":850,"target_host_seconds":1100,"timestamp_utc":"2026-11-20T13:37:45Z","track":"T735","verdict":"FAIL"}

@@ -1,0 +1,161 @@
+Total lines: 395 (trailing partial line: 0)
+Total bytes: 28254
+
+--- ALL T723_PROBE lines (full text) — DECISIVE: 0 line(s) ---
+
+T723_PROBE start lines (probe executed: expect >=1): 0
+lines: 
+
+T723_PROBE DONE summary lines (expect >=1): 0
+lines: 
+
+SP1 DONE lines (direct driver call: expect >=1): 0
+lines: 
+
+SP2 DONE lines (META-EGL dispatch call: expect >=1): 0
+lines: 
+
+SP3 DONE lines (sw_sync control: expect >=1): 0
+lines: 
+
+DROP_FAIL lines (expect 0 — results must be uid-1000 context): 0
+lines: 
+
+SP1 RESOLVE_FAIL lines (expect 0): 0
+lines: 
+
+SP2 GETPROCADDRESS_NULL lines (expect 0): 0
+lines: 
+
+--- SP1 dup rc lines (direct-call result): 0 line(s) ---
+
+--- SP2 dup rc lines (META-EGL-call result): 0 line(s) ---
+
+--- SP2 resolved-address lines (what META-EGL resolves): 0 line(s) ---
+
+--- SP1 create-sync lines (direct-call sync handle): 0 line(s) ---
+
+--- SP2 create-sync lines (META-EGL create-sync handle): 0 line(s) ---
+
+--- SP2 maps_lookup lines (backing file of resolved address): 0 line(s) ---
+
+--- ALL [T735] early-ramdisk hook lines (full text) — DECISIVE: 6 line(s) ---
+L345: [T735] mount /system (vda) rc=0
+L347: [T735] mount /vendor (loop1) FAILED rc=127
+L348: [T735] mount debugfs (/sys/kernel/debug) FAILED rc=127
+L349: [T735] mount proc (/proc) FAILED rc=127
+L351: [T735] t723-probe finished rc=126
+L372: [T735] kernel-init probe done; handing off to Android init
+
+mount /system rc=0 lines (expect >=1): 1
+lines: 345
+
+mount /system FAILED lines (expect 0): 0
+lines: 
+
+mount /vendor rc=0 lines (expect >=1): 0
+lines: 
+
+mount /vendor FAILED lines (expect 0): 1
+lines: 347
+
+mount debugfs rc=0 lines (expect >=1): 0
+lines: 
+
+mount proc rc=0 lines (expect >=1): 0
+lines: 
+
+t723-probe finished lines (expect >=1): 1
+lines: 351
+
+probe binary missing lines (expect 0): 0
+lines: 
+
+'inaccessible or not found' lines (T723-blindness signature: expect 0 before the init handoff): 4
+lines: 353, 354, 355, 370
+
+--- ALL T734_KERNEL_OK marker lines (full text) — exec-path control: 1 line(s) ---
+L194: [    3.962264] T734_KERNEL_OK
+
+--- ALL [T734] early-ramdisk hook lines (full text) — probe exec + rc: 1 line(s) ---
+L196: [T734] kernel-init probe finished rc=0
+
+T734_KERNEL_OK count (control: expect >=1, early, guest <10 s): 1
+lines: 194
+
+--- ALL T733_PROBE_OK marker lines (full text) — registration: 0 line(s) ---
+
+--- ALL T728_PROBE_OK marker lines (full text) — registration: 0 line(s) ---
+
+--- ALL T733_MINIMAL_OK marker lines (full text) — minimal binary under init (expect 0): 0 line(s) ---
+
+--- ALL init service-refusal lines (full text): 0 line(s) ---
+
+init starting service 't728probe' (context only): 0
+lines: 
+
+start-command lines citing t728probe (trigger fired): 0
+lines: 
+
+T720_PROBE DONE status=PASS lines (hold requires >=1): 1
+lines: 224
+
+T720_PROBE DONE status=FAIL lines (hold requires 0): 0
+lines: 
+
+T721 fence-log lines (hold requires >=1): 0
+lines: 
+
+Invalid present fence lines (hold requires 0): 0
+lines: 
+
+ALL sw_sync lines (context): 7
+lines: 198, 199, 201, 202, 210, 211, 222
+
+T628 REJECT allocate2 lines (hold requires 0): 0
+lines: 
+
+T628 CALL allocate2 lines: 0
+lines: 
+
+EPERM lines (hold requires 0): 0
+lines: 
+
+simplefb: mapped lines (hold requires >=1): 0
+lines: 
+
+Watchdog KILLING lines (hold requires 0): 0
+lines: 
+
+sys.boot_completed lines (hold requires >=1): 0
+lines: 
+
+boot_completed lines: 0
+lines: 
+
+FATAL EXCEPTION lines: 0
+lines: 
+
+Kernel panic/Oops/BUG lines (hold requires 0): 1
+lines: 376
+
+RenderEngine EGL dup-fail lines: 0
+lines: 
+
+driver loaded lines: 0
+lines: 
+
+META-EGL banner lines: 0
+lines: 
+
+D/libEGL lines: 0
+lines: 
+
+avc:  denied (two spaces) total: 0
+avc:  denied for /dev/mem: 0
+avc denied (sensorservice): 0
+
+Guest kernel time: first=0.0s last=4.76453s max=4.76453s
+Dup-fail rate: 0 / 4.8s * 1000 = 0.000 per 1000 s (baselines: T721 flight-01 4.058, T721 revert 6.660)
+
+=== REPORT COMPLETE ===
