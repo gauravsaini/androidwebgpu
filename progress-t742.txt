@@ -1,0 +1,30 @@
+T742 progress
+Step 1 DONE (2026-11-21 ~10:10 AEDT): all inputs verified vs T741 flown stack.
+ kernel 70d3859d, dtb 4ecab141, cpio c1203336, system af40403a (t733-system.img),
+ vendor fe0bc359, qemu 8e5c46dc, early-ramdisk 6804341a (standalone + CPIO member).
+ CPIO/DTB/supervisor/analyzer/early-ramdisk-t741 fetched box->Mac via pipe (sandbox EDQUOT),
+ SHAs verified on the Mac. Sandbox quota STILL tripped (~10:00 AEDT, 3rd episode today).
+ Mac disk gate CLOSED at Step 1: 2,286,004 KiB free (99%), gate needs 9,769,216 KiB.
+ Steps 1-2 flight-free, proceeding. Flight waits for the gate to reopen.
+Step 2 IN PROGRESS: analyzer extension (SIGKILL probe + named start-probe failures).
+Step 2 DONE (2026-11-21 ~10:25 AEDT): supervisor_t742.py (SHA 4b40bb9a, diff vs T741 = track/flight/env-prefix/progress-file/docstring only) + analyze_t742_probe.py v3 (SHA 1ce9f532, +SIGKILL probe + named start-probe failures + signal-11 distinction).
+Regression vs flight-18 UART: carried T741 counts reproduce EXACTLY (diff = 3 baseline lines + new sections only). New section surfaces pid-678 evidence: Zygote L18508, interpolated guest ~596.9 s, Exit-zygote L18514, refork 2176 L18962, 6 FATAL EXCEPTIONs, flood ~3.8 lines/s (no flood loss). Bonus: 2nd system_server death pid 2176 is SIGSEGV (L115605), NOT SIGKILL — separate mode. lmkd conn-drop lines precede BOTH deaths (L18388-89, L115602-03) — correlation, causation open; killer still UNIDENTIFIED for 678.
+Step 3 PENDING: disk gate check before flight.
+Step 3 LAUNCHED 10:20:03 AEDT 21 Nov (supervisor pid 13028, QEMU pid 13068, started 2026-11-20T23:20:13Z). Disk gate OPEN at launch: 13,534,352 KiB free (94%), margin ~3.7 GiB above gate. Preflight inputs block verified: all 6 SHAs match Step 1. Guest target 1500 s, due ~10:45 AEDT.
+Flight in progress (service-flight-19): host=301s guest=261.1s pid=13068. 2026-11-20T23:25:14Z
+Step 3 flight-19 CUT 10:25:44 AEDT: disk gate fired mid-flight (7.57 GiB < 8 GiB supervisor floor) at host 315.7 s, guest 261.05 s. QEMU terminated cleanly (exit 0, SIGTERM). Partial UART preserved: 6,475 lines, 870,178 B, SHA f6416a8d. Stack HEALTHY before cut: T723_PROBE start 2, T734_KERNEL_OK 1 (analysis-t742-partial-flight19.txt). No verdict from a 261 s flight — VOID as evidence.
+RECOVERY DECISION (in-lane, 10:32 AEDT): disk gate REOPENED (13,252,576 KiB free, 94%) minutes after the cut. Wedge has ~2.3 h left. Re-flying NOW as service-flight-20 (new folder; flight-19 folder NEVER reused) on the identical stack. If cut again, exit WAIT-DISK with both partial flights preserved.
+Step 3 flight-20 LAUNCHED 10:28:01 AEDT 21 Nov (supervisor pid 21533, QEMU pid 21543, started 2026-11-20T23:28:12Z). Disk gate OPEN at launch: 12,048,936 KiB free (95%). Preflight inputs block verified: all 6 SHAs match Step 1. Guest target 1500 s, due ~10:53 AEDT.
+Flight in progress (service-flight-20): host=300s guest=239.7s pid=21543. 2026-11-20T23:33:12Z
+Flight in progress (service-flight-20): host=601s guest=239.7s pid=21543. 2026-11-20T23:38:13Z
+Flight-20 mid-flight 10:39 AEDT (host ~646 s): QEMU pid 21543 + supervisor pid 21533 alive. Guest kernel time ~710 s (whole-UART max; supervisor last-1MB window lagged at 239.7 s — kernel timestamps sparse mid-boot, NOT a guest stall; replica re-read gives 710.25). T723_PROBE 27 already. boot_completed 0 so far (flight-18 took 521 s; distribution T734 790 / T740 1175 / T741 521 — still in range). Disk 19,375,640 KiB free (91%), gate OPEN.
+Flight in progress (service-flight-20): host=902s guest=867.6s pid=21543. 2026-11-20T23:43:14Z
+Flight in progress (service-flight-20): host=1203s guest=1202.4s pid=21543. 2026-11-20T23:48:15Z
+Flight in progress (service-flight-20): host=1504s guest=1493.3s pid=21543. 2026-11-20T23:53:16Z
+Recovery 1 (agent 70f6b424-d75e-4e59-85e2-8fcb89b52aec, launched ~11:02 AEDT 21 Nov, wedge 14:00 AEDT): brief verified — original-brief tail after the marker byte-equals SHA f6b05b2c (13,625 B).
+Recovery Step 1 verified: flight-20 flight-end.json inputs (kernel 70d3859d, QEMU 8e5c46dc, DTB 4ecab141, CPIO c1203336, system af40403a, vendor fe0bc359, early-ramdisk 6804341a) all match the Step 1 SHAs; CPIO byte-identical to T741 (vendor member carried verification fe0bc359 / rc cdeb88bf).
+Recovery Step 2 verified: analyzer scripts/analyze_t742_probe.py SHA 1ce9f532 (v3); supervisor scripts/supervisor_t742.py SHA 4b40bb9a. My re-run of the analyzer on flight-18's UART reproduces the first lane's analysis-t742-regression-flight18.txt byte-identically (diff 0 lines, 605 lines) — saved as analysis-t742-myreg-flight18.txt (SHA 588a0f6b).
+Recovery recount (driver-style, bytes + literal patterns): every analyzer count reproduced; candidate exhaustion for the pid-1960 killer (watchdog 1 line total, pid 705 only; LMK kill-decision lines 0; 'Low on memory' 0; init 'Sending signal 9' 27 lines, 0 naming system_server; AM 'Killing ... system_server' 0; kill-verb grep "Killing " whole UART = 2 lines, both AM killing apps); flood 2.6 lines/s around guest 1230.109 s — no flood loss.
+Recovery adjudication: boot first firing is L20510 guest 1167.317 s (analyzer reports 1167.684 s — its regex misses the concatenated line; presenting time 349.4 s, not 349.1 s; rates unchanged, still 0.000). Analyzer docstring "service-flight-19" is stale — the analyzed file is flight-20 (totals 29547 lines / 3832505 B match flight-end.json).
+Verdict: FAIL. Wall SYSTEM_SERVER-SIGKILL-KILLER-UNIDENTIFIED (guest, NEW). findings-t742.md SHA 55cecf6a (18,851 B); outcome-t742.txt "FAIL" SHA 4f8e9e45; DEATH_NOTE-T742.md written; heartbeat CLOSED FAIL 11:24 AEDT.
+Sync: box t742/ created at /mnt/sdc3/muse/kernel-primary/t742/ (root deliverables + flights/service-flight-19/ VOID + flights/service-flight-20/ evidence + scripts/); CPIO/DTB copied box-side from t741/ (byte-identical SHAs). All SHAs verified Mac <-> box.
