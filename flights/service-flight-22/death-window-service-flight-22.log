@@ -1,0 +1,479 @@
+# T744 death-window tap for T744 service-flight-22 — live supervisor-side tap, written as the flight runs
+[   85.496410] audit: type=1400 audit(85.316:46): avc:  denied  { search } for  pid=283 comm="crash_dump64" name="/" dev="loop2" ino=2 scontext=u:r:crash_dump:s0 tcontext=u:object_r:unlabeled:s0 tclass=dir permissive=1
+[   85.509406] audit: type=1400 audit(85.332:47): avc:  denied  { read } for  pid=283 comm="crash_dump64" name="dummy_sensorservice" dev="loop2" ino=35 scontext=u:r:crash_dump:s0 tcontext=u:object_r:unlabeled:s0 tclass=file permissive=1
+[   85.522040] audit: type=1400 audit(85.340:48): avc:  denied  { open } for  pid=283 comm="crash_dump64" path="/data/dummy_sensorservice" dev="loop2" ino=35 scontext=u:r:crash_dump:s0 tcontext=u:object_r:unlabeled:s0 tclass=file permissive=1
+[   85.524635] audit: type=1400 audit(85.340:49): avc:  denied  { getattr } for  pid=283 comm="crash_dump64" path="/data/dummy_sensorservice" dev="loop2" ino=35 scontext=u:r:crash_dump:s0 tcontext=u:object_r:unlabeled:s0 tclass=file permissive=1
+[   85.738892] audit: type=1400 audit(85.340:50): avc:  denied  { map } for  pid=283 comm="crash_dump64" path="/data/dummy_sensorservice" dev="loop2" ino=35 scontext=u:r:crash_dump:s0 tcontext=u:object_r:unlabeled:s0 tclass=file permissive=1
+01-01 00:01:45.877 I/tombstoned(  321): tombstoned successfully initialized
+01-01 00:01:25.316 I/auditd  (  283): type=1400 audit(0.0:46): avc:  denied  { search } for  comm="crash_dump64" name="/" dev="loop2" ino=2 scontext=u:r:crash_dump:s0 tcontext=u:object_r:unlabeled:s0 tclass=dir permissive=1
+01-01 00:01:25.316 I/crash_dump64(  283): type=1400 audit(0.0:46): avc:  denied  { search } for  name="/" dev="loop2" ino=2 scontext=u:r:crash_dump:s0 tcontext=u:object_r:unlabeled:s0 tclass=dir permissive=1
+01-01 00:01:25.332 I/auditd  (  283): type=1400 audit(0.0:47): avc:  denied  { read } for  comm="crash_dump64" name="dummy_sensorservice" dev="loop2" ino=35 scontext=u:r:crash_dump:s0 tcontext=u:object_r:unlabeled:s0 tclass=file permissive=1
+01-01 00:01:25.332 I/crash_dump64(  283): type=1400 audit(0.0:47): avc:  denied  { read } for  name="dummy_sensorservice" dev="loop2" ino=35 scontext=u:r:crash_dump:s0 tcontext=u:object_r:unlabeled:s0 tclass=file permissive=1
+01-01 00:01:25.340 I/auditd  (  283): type=1400 audit(0.0:48): avc:  denied  { open } for  comm="crash_dump64" path="/data/dummy_sensorservice" dev="loop2" ino=35 scontext=u:r:crash_dump:s0 tcontext=u:object_r:unlabeled:s0 tclass=file permissive=1
+01-01 00:01:25.340 I/crash_dump64(  283): type=1400 audit(0.0:48): avc:  denied  { open } for  path="/data/dummy_sensorservice" dev="loop2" ino=35 scontext=u:r:crash_dump:s0 tcontext=u:object_r:unlabeled:s0 tclass=file permissive=1
+01-01 00:01:25.340 I/auditd  (  283): type=1400 audit(0.0:49): avc:  denied  { getattr } for  comm="crash_dump64" path="/data/dummy_sensorservice" dev="loop2" ino=35 scontext=u:r:crash_dump:s0 tcontext=u:object_r:unlabeled:s0 tclass=file permissive=1
+01-01 00:01:25.340 I/crash_dump64(  283): type=1400 audit(0.0:49): avc:  denied  { getattr } for  path="/data/dummy_sensorservice" dev="loop2" ino=35 scontext=u:r:crash_dump:s0 tcontext=u:object_r:unlabeled:s0 tclass=file permissive=1
+01-01 00:01:25.340 I/auditd  (  283): type=1400 audit(0.0:50): avc:  denied  { map } for  comm="crash_dump64" path="/data/dummy_sensorservice" dev="loop2" ino=35 scontext=u:r:crash_dump:s0 tcontext=u:object_r:unlabeled:s0 tclass=file permissive=1
+01-01 00:01:25.340 I/crash_dump64(  283): type=1400 audit(0.0:50): avc:  denied  { map } for  path="/data/dummy_sensorservice" dev="loop2" ino=35 scontext=u:r:crash_dump:s0 tcontext=u:object_r:unlabeled:s0 tclass=file permissive=1
+01-01 00:02:53.260 I/auditd  (    1): type=1107 audit(0.0:476): uid=0 auid=4294967295 ses=4294967295 subj=u:r:init:s0 msg='avc:  denied  { set } for property=ctl.start$tombstoned pid=503 uid=0 gid=0 scontext=u:r:toolbox:s0 tcontext=u:object_r:ctl_start_prop:s0 tclass=property_service permissive=0'
+01-01 00:02:53.260 W//system/bin/init(    1): type=1107 audit(0.0:476): uid=0 auid=4294967295 ses=4294967295 subj=u:r:init:s0 msg='avc:  denied  { set } for property=ctl.start$tombstoned pid=503 uid=0 gid=0 scontext=u:r:toolbox:s0 tcontext=u:object_r:ctl_start_prop:s0 tclass=property_service permissive=0'
+11-10 23:20:06.779 I/system_server(  731): libdebuggerd_client: started dumping process 731
+11-10 23:20:07.306 I/tombstoned(  321): registered intercept for pid 731 and type kDebuggerdJavaBacktrace
+11-10 23:20:11.769 I/tombstoned(  321): received crash request for pid 731
+11-10 23:20:11.820 I/tombstoned(  321): found intercept fd 512 for pid 731 and type kDebuggerdJavaBacktrace
+11-10 23:20:11.864 I/system_server(  731): Wrote stack traces to tombstoned
+11-10 23:20:11.905 W/tombstoned(  321): skipping tombstone file creation due to intercept
+11-10 23:20:12.579 I/system_server(  731): libdebuggerd_client: done dumping process 731
+11-10 23:20:12.877 I/system_server(  731): libdebuggerd_client: started dumping process 642
+11-10 23:20:12.921 I/tombstoned(  321): registered intercept for pid 642 and type kDebuggerdNativeBacktrace
+11-10 23:20:14.916 E/system_server(  731): libdebuggerd_client: failed to read status response from tombstoned: Try again
+11-10 23:20:14.928 I/tombstoned(  321): intercept for pid 642 and type kDebuggerdNativeBacktrace terminated: due to input
+11-10 23:20:15.365 I/system_server(  731): libdebuggerd_client: started dumping process 644
+11-10 23:20:15.476 I/tombstoned(  321): registered intercept for pid 644 and type kDebuggerdNativeBacktrace
+11-10 23:20:17.492 E/system_server(  731): libdebuggerd_client: failed to read status response from tombstoned: Try again
+11-10 23:20:17.529 I/tombstoned(  321): intercept for pid 644 and type kDebuggerdNativeBacktrace terminated: due to input
+11-10 23:20:17.730 I/system_server(  731): libdebuggerd_client: started dumping process 647
+11-10 23:20:17.917 I/tombstoned(  321): registered intercept for pid 647 and type kDebuggerdNativeBacktrace
+11-10 23:20:18.562 I/crash_dump64(  956): obtaining output fd from tombstoned, type: kDebuggerdNativeBacktrace
+11-10 23:20:18.705 I/tombstoned(  321): received crash request for pid 642
+11-10 23:20:18.706 E/tombstoned(  321): failed to get crash output for type kDebuggerdNativeBacktrace
+11-10 23:20:18.789 I/crash_dump64(  956): performing dump of process 642 (target tid = 642)
+11-10 23:20:19.779 E/system_server(  731): libdebuggerd_client: failed to read status response from tombstoned: Try again
+11-10 23:20:19.782 I/tombstoned(  321): intercept for pid 647 and type kDebuggerdNativeBacktrace terminated: due to input
+11-10 23:20:21.274 I/system_server(  731): libdebuggerd_client: started dumping process 585
+11-10 23:20:21.553 I/tombstoned(  321): registered intercept for pid 585 and type kDebuggerdNativeBacktrace
+11-10 23:20:21.846 I/crash_dump64(  964): obtaining output fd from tombstoned, type: kDebuggerdNativeBacktrace
+11-10 23:20:21.886 I/tombstoned(  321): received crash request for pid 644
+11-10 23:20:21.888 E/tombstoned(  321): failed to get crash output for type kDebuggerdNativeBacktrace
+11-10 23:20:21.925 I/crash_dump64(  964): performing dump of process 644 (target tid = 644)
+11-10 23:20:23.299 E/system_server(  731): libdebuggerd_client: failed to read status response from tombstoned: Try again[  474.337574] init: Untracked pid 964 did not have an associated service entry and will not be reaped
+11-10 23:20:23.308 I/tombstoned(  321): intercept for pid 585 and type kDebuggerdNativeBacktrace terminated: due to input
+11-10 23:20:23.459 I/system_server(  731): libdebuggerd_client: started dumping process 619
+11-10 23:20:23.545 I/tombstoned(  321): registered intercept for pid 619 and type kDebuggerdNativeBacktrace
+11-10 23:20:24.782 I/crash_dump64(  973): obtaining output fd from tombstoned, type: kDebuggerdNativeBacktrace
+11-10 23:20:24.865 I/tombstoned(  321): received crash request for pid 647
+11-10 23:20:24.866 E/tombstoned(  321): failed to get crash output for type kDebuggerdNativeBacktrace
+11-10 23:20:24.870 I/crash_dump64(  973): performing dump of process 647 (target tid = 647)
+11-10 23:20:25.473 E/system_server(  731): libdebuggerd_client: failed to read status response from tombstoned: Try again
+11-10 23:20:25.475 I/tombstoned(  321): intercept for pid 619 and type kDebuggerdNativeBacktrace terminated: due to input
+11-10 23:20:25.876 I/system_server(  731): libdebuggerd_client: started dumping process 651
+11-10 23:20:25.928 I/tombstoned(  321): registered intercept for pid 651 and type kDebuggerdNativeBacktrace
+11-10 23:20:26.482 I/crash_dump64(  977): obtaining output fd from tombstoned, type: kDebuggerdNativeBacktrace
+11-10 23:20:26.521 I/tombstoned(  321): received crash request for pid 585
+11-10 23:20:26.521 E/tombstoned(  321): failed to get crash output for type kDebuggerdNativeBacktrace
+11-10 23:20:26.533 I/crash_dump64(  977): performing dump of process 585 (target tid = 585)
+11-10 23:20:28.594 I/crash_dump64(  984): obtaining output fd from tombstoned, type: kDebuggerdNativeBacktrace
+11-10 23:20:28.747 I/tombstoned(  321): received crash request for pid 619
+11-10 23:20:28.748 E/tombstoned(  321): failed to get crash output for type kDebuggerdNativeBacktrace
+11-10 23:20:28.784 I/crash_dump64(  984): performing dump of process 619 (target tid = 619)
+11-10 23:20:31.081 I/crash_dump64(  988): obtaining output fd from tombstoned, type: kDebuggerdNativeBacktrace
+11-10 23:20:31.116 I/tombstoned(  321): received crash request for pid 651
+11-10 23:20:31.116 I/tombstoned(  321): found intercept fd 512 for pid 651 and type kDebuggerdNativeBacktrace
+11-10 23:20:31.125 I/crash_dump64(  988): performing dump of process 651 (target tid = 651)
+11-10 23:20:33.165 W/tombstoned(  321): skipping tombstone file creation due to intercept
+11-10 23:20:33.177 I/system_server(  731): libdebuggerd_client: done dumping process 651
+11-10 23:26:48.911 I/system_server(  731): libdebuggerd_client: started dumping process 731
+11-10 23:26:48.918 I/tombstoned(  321): registered intercept for pid 731 and type kDebuggerdJavaBacktrace
+11-10 23:26:56.850 I/tombstoned(  321): received crash request for pid 731
+11-10 23:26:56.850 I/tombstoned(  321): found intercept fd 512 for pid 731 and type kDebuggerdJavaBacktrace
+11-10 23:26:56.870 I/system_server(  731): Wrote stack traces to tombstoned
+11-10 23:26:56.889 W/tombstoned(  321): skipping tombstone file creation due to intercept
+11-10 23:26:57.372 I/system_server(  731): libdebuggerd_client: done dumping process 731
+11-10 23:26:57.479 I/system_server(  731): libdebuggerd_client: started dumping process 642
+11-10 23:26:57.500 I/tombstoned(  321): registered intercept for pid 642 and type kDebuggerdNativeBacktrace
+11-10 23:26:58.818 I/crash_dump64( 1657): obtaining output fd from tombstoned, type: kDebuggerdNativeBacktrace
+11-10 23:26:58.830 I/tombstoned(  321): received crash request for pid 642
+11-10 23:26:58.830 I/tombstoned(  321): found intercept fd 512 for pid 642 and type kDebuggerdNativeBacktrace
+11-10 23:26:58.835 I/crash_dump64( 1657): performing dump of process 642 (target tid = 642)
+11-10 23:26:59.001 I/system_server(  731): libdebuggerd_client: done dumping process 642
+11-10 23:26:59.004 W/tombstoned(  321): skipping tombstone file creation due to intercept
+11-10 23:26:59.136 I/system_server(  731): libdebuggerd_client: started dumping process 644
+11-10 23:26:59.140 I/tombstoned(  321): registered intercept for pid 644 and type kDebuggerdNativeBacktrace
+11-10 23:27:00.270 I/crash_dump64( 1668): obtaining output fd from tombstoned, type: kDebuggerdNativeBacktrace
+11-10 23:27:00.287 I/tombstoned(  321): received crash request for pid 644
+11-10 23:27:00.288 I/tombstoned(  321): found intercept fd 512 for pid 644 and type kDebuggerdNativeBacktrace
+11-10 23:27:00.292 I/crash_dump64( 1668): performing dump of process 644 (target tid = 644)
+11-10 23:27:00.524 I/system_server(  731): libdebuggerd_client: done dumping process 644
+11-10 23:27:00.532 I/system_server(  731): libdebuggerd_client: started dumping process 647
+11-10 23:27:00.536 W/tombstoned(  321): skipping tombstone file creation due to intercept
+11-10 23:27:00.540 I/tombstoned(  321): registered intercept for pid 647 and type kDebuggerdNativeBacktrace
+11-10 23:27:01.589 I/crash_dump64( 1676): obtaining output fd from tombstoned, type: kDebuggerdNativeBacktrace
+11-10 23:27:01.602 I/tombstoned(  321): received crash request for pid 647
+11-10 23:27:01.603 I/tombstoned(  321): found intercept fd 512 for pid 647 and type kDebuggerdNativeBacktrace
+11-10 23:27:01.617 I/crash_dump64( 1676): performing dump of process 647 (target tid = 647)
+11-10 23:27:01.868 I/system_server(  731): libdebuggerd_client: done dumping process 647
+11-10 23:27:01.876 W/tombstoned(  321): skipping tombstone file creation due to intercept
+11-10 23:27:01.882 I/system_server(  731): libdebuggerd_client: started dumping process 585
+11-10 23:27:01.933 I/tombstoned(  321): registered intercept for pid 585 and type kDebuggerdNativeBacktrace
+11-10 23:27:03.228 I/crash_dump64( 1683): obtaining output fd from tombstoned, type: kDebuggerdNativeBacktrace
+11-10 23:27:03.232 I/tombstoned(  321): received crash request for pid 585
+11-10 23:27:03.232 I/tombstoned(  321): found intercept fd 512 for pid 585 and type kDebuggerdNativeBacktrace
+11-10 23:27:03.234 I/crash_dump64( 1683): performing dump of process 585 (target tid = 585)
+11-10 23:27:03.631 I/system_server(  731): libdebuggerd_client: done dumping process 585
+11-10 23:27:03.641 I/system_server(  731): libdebuggerd_client: started dumping process 619
+11-10 23:27:03.644 W/tombstoned(  321): skipping tombstone file creation due to intercept
+11-10 23:27:03.664 I/tombstoned(  321): registered intercept for pid 619 and type kDebuggerdNativeBacktrace
+11-10 23:27:04.577 I/crash_dump64( 1692): obtaining output fd from tombstoned, type: kDebuggerdNativeBacktrace
+11-10 23:27:04.596 I/tombstoned(  321): received crash request for pid 619
+11-10 23:27:04.596 I/tombstoned(  321): found intercept fd 512 for pid 619 and type kDebuggerdNativeBacktrace
+11-10 23:27:04.607 I/crash_dump64( 1692): performing dump of process 619 (target tid = 619)
+11-10 23:27:04.783 I/system_server(  731): libdebuggerd_client: done dumping process 619
+11-10 23:27:04.793 W/tombstoned(  321): skipping tombstone file creation due to intercept
+11-10 23:27:04.832 I/system_server(  731): libdebuggerd_client: started dumping process 651
+11-10 23:27:04.844 I/tombstoned(  321): registered intercept for pid 651 and type kDebuggerdNativeBacktrace
+11-10 23:27:05.616 I/crash_dump64( 1699): obtaining output fd from tombstoned, type: kDebuggerdNativeBacktrace
+11-10 23:27:05.620 I/tombstoned(  321): received crash request for pid 651
+11-10 23:27:05.620 I/tombstoned(  321): found intercept fd 512 for pid 651 and type kDebuggerdNativeBacktrace
+11-10 23:27:05.623 I/crash_dump64( 1699): performing dump of process 651 (target tid = 651)
+11-10 23:27:06.146 I/system_server(  731): libdebuggerd_client: done dumping process 651
+11-10 23:27:06.154 W/tombstoned(  321): skipping tombstone file creation due to intercept
+11-10 23:27:06.170 I/system_server(  731): libdebuggerd_client: started dumping process 300
+11-10 23:27:06.181 I/tombstoned(  321): registered intercept for pid 300 and type kDebuggerdNativeBacktrace
+[  877.953804] type=1400 audit(1699658826.956:623): avc:  denied  { ptrace } for  comm="crash_dump64" scontext=u:r:crash_dump:s0 tcontext=u:r:vold:s0 tclass=process permissive=1
+11-10 23:27:06.956 I/auditd  ( 1706): type=1400 audit(0.0:623): avc:  denied  { ptrace } for  comm="crash_dump64" scontext=u:r:crash_dump:s0 tcontext=u:r:vold:s0 tclass=process permissive=1
+11-10 23:27:06.956 I/crash_dump64( 1706): type=1400 audit(0.0:623): avc:  denied  { ptrace } for  scontext=u:r:crash_dump:s0 tcontext=u:r:vold:s0 tclass=process permissive=1
+11-10 23:27:07.079 I/crash_dump64( 1706): obtaining output fd from tombstoned, type: kDebuggerdNativeBacktrace
+11-10 23:27:07.091 I/tombstoned(  321): received crash request for pid 300
+11-10 23:27:07.091 I/tombstoned(  321): found intercept fd 512 for pid 300 and type kDebuggerdNativeBacktrace
+11-10 23:27:07.102 I/crash_dump64( 1706): performing dump of process 300 (target tid = 300)
+11-10 23:27:07.422 I/system_server(  731): libdebuggerd_client: done dumping process 300
+11-10 23:27:07.429 W/tombstoned(  321): skipping tombstone file creation due to intercept
+11-10 23:27:07.475 I/system_server(  731): libdebuggerd_client: started dumping process 655
+11-10 23:27:07.478 I/tombstoned(  321): registered intercept for pid 655 and type kDebuggerdNativeBacktrace
+11-10 23:27:07.627 I/crash_dump64( 1713): obtaining output fd from tombstoned, type: kDebuggerdNativeBacktrace
+11-10 23:27:07.634 I/tombstoned(  321): received crash request for pid 655
+11-10 23:27:07.634 I/tombstoned(  321): found intercept fd 512 for pid 655 and type kDebuggerdNativeBacktrace
+11-10 23:27:07.637 I/crash_dump64( 1713): performing dump of process 655 (target tid = 655)
+11-10 23:27:07.748 W/tombstoned(  321): skipping tombstone file creation due to intercept
+11-10 23:27:07.770 I/system_server(  731): libdebuggerd_client: done dumping process 655
+11-10 23:27:07.927 I/system_server(  731): libdebuggerd_client: started dumping process 593
+11-10 23:27:07.932 I/tombstoned(  321): registered intercept for pid 593 and type kDebuggerdNativeBacktrace
+11-10 23:27:09.588 I/crash_dump64( 1723): obtaining output fd from tombstoned, type: kDebuggerdNativeBacktrace
+11-10 23:27:09.595 I/tombstoned(  321): received crash request for pid 593
+11-10 23:27:09.595 I/tombstoned(  321): found intercept fd 512 for pid 593 and type kDebuggerdNativeBacktrace
+11-10 23:27:09.597 I/crash_dump64( 1723): performing dump of process 593 (target tid = 593)
+11-10 23:27:09.930 I/system_server(  731): libdebuggerd_client: done dumping process 593
+11-10 23:27:09.939 W/tombstoned(  321): skipping tombstone file creation due to intercept
+11-10 23:27:46.652 F/libc    ( 1848): Fatal signal 11 (SIGSEGV), code 1 (SEGV_MAPERR), fault addr 0x67750 in tid 1848 (droid.bluetooth), pid 1848 (droid.bluetooth)
+libdebuggerd_client: failed to read status response from tombstoned: Try again
+11-10 23:28:00.685 I/system_server(  731): libdebuggerd_client: started dumping process 1848
+11-10 23:28:01.224 I/tombstoned(  321): registered intercept for pid 1848 and type kDebuggerdJavaBacktrace
+11-10 23:28:10.533 I/system_server(  731): libdebuggerd_client: started dumping process 1885
+11-10 23:28:10.640 I/tombstoned(  321): registered intercept for pid 1885 and type kDebuggerdJavaBacktrace
+11-10 23:28:10.720 E/system_server(  731): libdebuggerd_client: failed to read status response from tombstoned: Try again
+11-10 23:28:10.722 I/tombstoned(  321): intercept for pid 1848 and type kDebuggerdJavaBacktrace terminated: due to input
+11-10 23:28:13.372 I/tombstoned(  321): registered intercept for pid 1848 and type kDebuggerdNativeBacktrace
+11-10 23:28:13.585 F/crash_dump64( 1956): crash_dump.cpp:363] process didn't stop due to PTRACE_O_TRACECLONE (status = 9087)
+11-10 23:28:13.760 I/tombstoned(  321): received crash request for pid 1848[ 1051.266121] apexd: Failed waiting for /dev/block/mapper/by-uuid/dfa72a66-4e27-401a-91ec-3b935e5bee51 to be deleted
+11-10 23:28:13.761 I/tombstoned(  321): found registered intercept of type kDebuggerdNativeBacktrace for requested type kDebuggerdAnyIntercept
+11-10 23:28:13.762 I/tombstoned(  321): found intercept fd 512 for pid 1848 and type kDebuggerdNativeBacktrace
+11-10 23:28:13.796 I/system_server(  731): libdebuggerd_client: done dumping process 1848
+11-10 23:28:13.982 W/tombstoned(  321): crash socket received short read of length 0 (expected 12)
+11-10 23:28:14.636 I/tombstoned(  321): received crash request for pid 1885
+11-10 23:28:14.636 I/tombstoned(  321): found intercept fd 513 for pid 1885 and type kDebuggerdJavaBacktrace
+11-10 23:28:14.645 I/m.android.phone( 1885): Wrote stack traces to tombstoned
+11-10 23:28:14.657 W/tombstoned(  321): skipping tombstone file creation due to intercept[ 1053.016388] type=1400 audit(1699658954.492:753): avc:  denied  { read } for  comm="logcat_streamer" name="tombstones" dev="loop2" ino=16396 scontext=u:r:kernel:s0 tcontext=u:object_r:tombstone_data_file:s0 tclass=dir permissive=1
+11-10 23:28:14.790 I/system_server(  731): libdebuggerd_client: done dumping process 1885
+11-10 23:28:15.948 I/system_server(  731): libdebuggerd_client: started dumping process 1548
+11-10 23:28:16.636 I/tombstoned(  321): registered intercept for pid 1548 and type kDebuggerdJavaBacktrace
+11-10 23:28:26.249 I/tombstoned(  321): intercept for pid 1548 and type kDebuggerdJavaBacktrace terminated: due to input
+11-10 23:28:28.637 I/system_server(  731): libdebuggerd_client: started dumping process 1548[ 1062.169947] init: Control message: Could not find 'android.hardware.media.c2@1.0::IComponentStore/software' for ctl.interface_start from pid: 293 (/system/bin/hwservicemanager)
+11-10 23:28:28.750 I/tombstoned(  321): registered intercept for pid 1548 and type kDebuggerdNativeBacktrace
+11-10 23:28:30.660 E/system_server(  731): libdebuggerd_client: failed to read status response from tombstoned: Try again
+11-10 23:28:30.662 I/tombstoned(  321): intercept for pid 1548 and type kDebuggerdNativeBacktrace terminated: due to input
+11-10 23:28:31.501 I/tombstoned(  321): registered intercept for pid 731 and type kDebuggerdJavaBacktrace
+  0.2% 321/tombstoned: 0.1% user + 0.1% kernel
+ +0% 2247/crash_dump64: 0% user + 0% kernel
+libdebuggerd_client: failed to read status response from tombstoned: timeout reached?
+libdebuggerd_client: failed to read status response from tombstoned: Try again
+11-10 23:28:41.524 I/tombstoned(  321): intercept for pid 731 and type kDebuggerdJavaBacktrace terminated: due to timeout
+11-10 23:28:50.440 I/system_server(  731): libdebuggerd_client: started dumping process 731
+11-10 23:28:50.518 I/tombstoned(  321): registered intercept for pid 731 and type kDebuggerdNativeBacktrace
+11-10 23:28:52.454 E/system_server(  731): libdebuggerd_client: failed to read status response from tombstoned: Try again
+11-10 23:28:52.543 I/tombstoned(  321): intercept for pid 731 and type kDebuggerdNativeBacktrace terminated: due to input
+11-10 23:28:53.399 I/crash_dump64( 2056): obtaining output fd from tombstoned, type: kDebuggerdNativeBacktrace
+11-10 23:28:53.517 I/tombstoned(  321): received crash request for pid 1548
+11-10 23:28:53.519 E/tombstoned(  321): failed to get crash output for type kDebuggerdNativeBacktrace
+11-10 23:28:53.804 I/crash_dump64( 2056): performing dump of process 1548 (target tid = 1548)
+11-10 23:28:55.274 I/crash_dump64( 2087): obtaining output fd from tombstoned, type: kDebuggerdTombstoneProto
+11-10 23:28:55.407 I/tombstoned(  321): received crash request for pid 2074
+11-10 23:28:55.545 I/crash_dump64( 2087): performing dump of process 2023 (target tid = 2074)
+11-10 23:29:00.596 I/tombstoned(  321): received crash request for pid 1548
+11-10 23:29:01.690 I/ndroid.systemui( 1548): Wrote stack traces to tombstoned
+11-10 23:29:01.885 E/tombstoned(  321): Traces for pid 1548 written to: trace_00
+11-10 23:29:11.125 F/DEBUG   ( 2087): *** *** *** *** *** *** *** *** *** *** *** *** *** *** *** ***
+11-10 23:29:11.151 F/DEBUG   ( 2087): Build fingerprint: 'Android/aosp_arm64/generic_arm64:14/UQ1A.231205.015/11084887:user/release-keys'
+11-10 23:29:11.151 F/DEBUG   ( 2087): Revision: '0'
+11-10 23:29:11.152 F/DEBUG   ( 2087): ABI: 'arm64'
+11-10 23:29:11.152 F/DEBUG   ( 2087): Timestamp: 2023-11-10 23:28:56.032936000+0000
+11-10 23:29:11.153 F/DEBUG   ( 2087): Process uptime: 28s
+11-10 23:29:11.154 F/DEBUG   ( 2087): Cmdline: /vendor/bin/hw/android.hardware.biometrics.fingerprint-service.ranchu
+11-10 23:29:11.154 F/DEBUG   ( 2087): pid: 2023, tid: 2074, name: binder:2023_2  >>> /vendor/bin/hw/android.hardware.biometrics.fingerprint-service.ranchu <<<
+11-10 23:29:11.176 F/DEBUG   ( 2087): uid: 1000
+11-10 23:29:11.177 F/DEBUG   ( 2087): signal 6 (SIGABRT), code -1 (SI_QUEUE), fault addr --------
+11-10 23:29:11.178 F/DEBUG   ( 2087): Abort message: 'Could not open the sensor service: 'fingerprintlisten''
+11-10 23:29:11.202 F/DEBUG   ( 2087):     x0  0000000000000000  x1  000000000000081a  x2  0000000000000006  x3  00000072de941540
+11-10 23:29:11.204 F/DEBUG   ( 2087):     x4  6268757164721f71  x5  6268757164721f71  x6  6268757164721f71  x7  7f7f7f7f7f7f7f7f
+11-10 23:29:11.204 F/DEBUG   ( 2087):     x8  00000000000000f0  x9  00000075712c9090  x10 0000000000000001  x11 000000757131c058[ 1090.642607] type=1400 audit(1699659037.344:797): avc:  denied  { ioctl } for  comm="composer@2.1-se" path="/sys/kernel/debug/sync/sw_sync" dev="debugfs" ino=7480 ioctlcmd=0x5701 scontext=u:r:hal_graphics_composer_default:s0 tcontext=u:object_r:debugfs:s0 tclass=file permissive=1
+11-10 23:29:11.205 F/DEBUG   ( 2087):     x12 00000072de941510  x13 0000000000000037  x14 00000072de9416d0  x15 0000000e469acb24
+11-10 23:29:11.205 F/DEBUG   ( 2087):     x16 0000007571389d08  x17 000000757135de90  x18 000000000006d994  x19 00000000000007e7
+11-10 23:29:11.206 F/DEBUG   ( 2087):     x20 000000000000081a  x21 00000000ffffffff  x22 00000000000007e7  x23 00000000000007e7
+11-10 23:29:11.239 F/DEBUG   ( 2087):     x24 00000072de941cb0  x25 00000072de941cb0  x26 00000072de941ff8  x27 00000000000fc000
+11-10 23:29:11.239 F/DEBUG   ( 2087):     x28 00000000000fe000  x29 00000072de9415c0
+11-10 23:29:11.240 F/DEBUG   ( 2087):     lr  000000757130d9b8  sp  00000072de941520  pc  000000757130d9e4  pst 0000000000001000
+11-10 23:29:11.241 F/DEBUG   ( 2087): 8 total frames
+11-10 23:29:11.241 F/DEBUG   ( 2087): backtrace:
+11-10 23:29:11.288 F/DEBUG   ( 2087):       #00 pc 00000000000669e4  /apex/com.android.runtime/lib64/bionic/libc.so (abort+164) (BuildId: a87908b48b368e6282bcc9f34bcfc28c)
+11-10 23:29:11.291 F/DEBUG   ( 2087):       #01 pc 00000000000142c0  /system/lib64/liblog.so (__android_log_default_aborter+12) (BuildId: 92c5c07c91ae9ba19b8c063bb7b8ef10)
+11-10 23:29:11.310 F/DEBUG   ( 2087):       #02 pc 0000000000014410  /system/lib64/liblog.so (__android_log_assert+308) (BuildId: 92c5c07c91ae9ba19b8c063bb7b8ef10)
+11-10 23:29:11.311 F/DEBUG   ( 2087):       #03 pc 00000000000131f4  /vendor/bin/hw/android.hardware.biometrics.fingerprint-service.ranchu (aidl::android::hardware::biometrics::fingerprint::Session::sensorListenerFuncImpl()+1084) (BuildId: a12c39834aee142811cc01066a27284c)
+11-10 23:29:11.312 F/DEBUG   ( 2087):       #04 pc 0000000000011398  /vendor/bin/hw/android.hardware.biometrics.fingerprint-service.ranchu (aidl::android::hardware::biometrics::fingerprint::Session::sensorListenerFunc()+20) (BuildId: a12c39834aee142811cc01066a27284c)
+11-10 23:29:11.313 F/DEBUG   ( 2087):       #05 pc 00000000000135a4  /vendor/bin/hw/android.hardware.biometrics.fingerprint-service.ranchu (void* std::__1::__thread_proxy<std::__1::tuple<std::__1::unique_ptr<std::__1::__thread_struct, std::__1::default_delete<std::__1::__thread_struct> >, void (aidl::android::hardware::biometrics::fingerprint::Session::*)(), aidl::android::hardware::biometrics::fingerprint::Session*> >(void*)+60) (BuildId: a12c39834aee142811cc01066a27284c)
+11-10 23:29:11.314 F/DEBUG   ( 2087):       #06 pc 00000000000cb6a8  /apex/com.android.runtime/lib64/bionic/libc.so (__pthread_start(void*)+208) (BuildId: a87908b48b368e6282bcc9f34bcfc28c)
+11-10 23:29:11.316 F/DEBUG   ( 2087):       #07 pc 000000000006821c  /apex/com.android.runtime/lib64/bionic/libc.so (__start_thread+64) (BuildId: a87908b48b368e6282bcc9f34bcfc28c)
+11-10 23:29:12.766 E/crash_dump64( 2087): failed to notify tombstoned of completion
+11-10 23:29:14.415 I/crash_dump64( 2113): obtaining output fd from tombstoned, type: kDebuggerdNativeBacktrace
+11-10 23:29:14.599 I/tombstoned(  321): received crash request for pid 731
+11-10 23:29:14.600 E/tombstoned(  321): failed to get crash output for type kDebuggerdNativeBacktrace
+11-10 23:29:14.607 I/crash_dump64( 2113): performing dump of process 731 (target tid = 731)
+11-10 23:29:30.358 I/tombstoned(  321): registered intercept for pid 731 and type kDebuggerdJavaBacktrace
+11-10 23:29:34.021 I/tombstoned(  321): registered intercept for pid 2099 and type kDebuggerdJavaBacktrace
+11-10 23:29:40.399 I/tombstoned(  321): intercept for pid 731 and type kDebuggerdJavaBacktrace terminated: due to timeout
+11-10 23:29:44.034 I/tombstoned(  321): intercept for pid 2099 and type kDebuggerdJavaBacktrace terminated: due to timeout
+11-10 23:29:45.800 I/tombstoned(  321): registered intercept for pid 2099 and type kDebuggerdNativeBacktrace
+11-10 23:29:47.461 I/tombstoned(  321): intercept for pid 2099 and type kDebuggerdNativeBacktrace terminated: due to input
+11-10 23:29:49.278 I/crash_dump64( 2202): obtaining output fd from tombstoned, type: kDebuggerdNativeBacktrace
+11-10 23:29:49.894 I/tombstoned(  321): received crash request for pid 2099
+11-10 23:29:50.114 E/tombstoned(  321): failed to get crash output for type kDebuggerdNativeBacktrace
+11-10 23:29:50.320 I/crash_dump64( 2202): performing dump of process 2099 (target tid = 2099)
+11-10 23:29:53.246 I/tombstoned(  321): registered intercept for pid 731 and type kDebuggerdNativeBacktrace
+11-10 23:29:54.860 I/tombstoned(  321): intercept for pid 731 and type kDebuggerdNativeBacktrace terminated: due to input[ 1130.068580] init: starting service 'vendor.audio-hal'...
+11-10 23:30:03.850 I/tombstoned(  321): received crash request for pid 2099
+11-10 23:30:04.312 I/putmethod.latin( 2099): Wrote stack traces to tombstoned
+11-10 23:30:04.411 E/tombstoned(  321): Traces for pid 2099 written to: trace_01
+11-10 23:30:18.662 I/crash_dump64( 2247): obtaining output fd from tombstoned, type: kDebuggerdNativeBacktrace
+11-10 23:30:18.949 I/tombstoned(  321): received crash request for pid 731
+11-10 23:30:18.949 E/tombstoned(  321): failed to get crash output for type kDebuggerdNativeBacktrace
+11-10 23:30:18.987 I/crash_dump64( 2247): performing dump of process 731 (target tid = 731)
+11-10 23:33:17.329 I/system_server( 2437): libdebuggerd_client: started dumping process 2437
+11-10 23:33:17.384 I/tombstoned(  321): registered intercept for pid 2437 and type kDebuggerdJavaBacktrace
+11-10 23:33:20.157 I/tombstoned(  321): received crash request for pid 2437
+11-10 23:33:20.166 I/tombstoned(  321): found intercept fd 512 for pid 2437 and type kDebuggerdJavaBacktrace
+11-10 23:33:20.268 I/system_server( 2437): Wrote stack traces to tombstoned
+11-10 23:33:20.370 W/tombstoned(  321): skipping tombstone file creation due to intercept
+11-10 23:33:21.260 I/system_server( 2437): libdebuggerd_client: done dumping process 2437
+11-10 23:33:21.734 I/system_server( 2437): libdebuggerd_client: started dumping process 642
+11-10 23:33:21.864 I/tombstoned(  321): registered intercept for pid 642 and type kDebuggerdNativeBacktrace
+11-10 23:33:23.751 E/system_server( 2437): libdebuggerd_client: failed to read status response from tombstoned: Try again
+11-10 23:33:23.781 I/tombstoned(  321): intercept for pid 642 and type kDebuggerdNativeBacktrace terminated: due to input
+11-10 23:33:23.975 I/system_server( 2437): libdebuggerd_client: started dumping process 644
+11-10 23:33:24.101 I/tombstoned(  321): registered intercept for pid 644 and type kDebuggerdNativeBacktrace
+11-10 23:33:25.987 E/system_server( 2437): libdebuggerd_client: failed to read status response from tombstoned: Try again
+11-10 23:33:25.990 I/tombstoned(  321): intercept for pid 644 and type kDebuggerdNativeBacktrace terminated: due to input
+11-10 23:33:26.220 I/system_server( 2437): libdebuggerd_client: started dumping process 647
+11-10 23:33:26.259 I/tombstoned(  321): registered intercept for pid 647 and type kDebuggerdNativeBacktrace
+11-10 23:33:26.317 I/crash_dump64( 2563): obtaining output fd from tombstoned, type: kDebuggerdNativeBacktrace
+11-10 23:33:26.384 I/tombstoned(  321): received crash request for pid 642
+11-10 23:33:26.384 E/tombstoned(  321): failed to get crash output for type kDebuggerdNativeBacktrace
+11-10 23:33:26.437 I/crash_dump64( 2563): performing dump of process 642 (target tid = 642)
+11-10 23:33:28.259 E/system_server( 2437): libdebuggerd_client: failed to read status response from tombstoned: Try again
+11-10 23:33:28.261 I/tombstoned(  321): intercept for pid 647 and type kDebuggerdNativeBacktrace terminated: due to input
+11-10 23:33:28.562 I/crash_dump64( 2569): obtaining output fd from tombstoned, type: kDebuggerdNativeBacktrace
+11-10 23:33:28.615 I/tombstoned(  321): received crash request for pid 644
+11-10 23:33:28.615 E/tombstoned(  321): failed to get crash output for type kDebuggerdNativeBacktrace
+11-10 23:33:28.639 I/crash_dump64( 2569): performing dump of process 644 (target tid = 644)
+11-10 23:33:28.887 I/system_server( 2437): libdebuggerd_client: started dumping process 655
+11-10 23:33:28.998 I/tombstoned(  321): registered intercept for pid 655 and type kDebuggerdNativeBacktrace
+11-10 23:33:29.477 I/crash_dump64( 2576): obtaining output fd from tombstoned, type: kDebuggerdNativeBacktrace
+11-10 23:33:29.498 I/tombstoned(  321): received crash request for pid 655
+11-10 23:33:29.508 I/tombstoned(  321): found intercept fd 512 for pid 655 and type kDebuggerdNativeBacktrace
+11-10 23:33:29.511 I/crash_dump64( 2576): performing dump of process 655 (target tid = 655)
+11-10 23:33:29.901 W/tombstoned(  321): skipping tombstone file creation due to intercept
+11-10 23:33:30.112 I/system_server( 2437): libdebuggerd_client: done dumping process 655
+11-10 23:33:30.255 I/system_server( 2437): libdebuggerd_client: started dumping process 593
+11-10 23:33:30.312 I/tombstoned(  321): registered intercept for pid 593 and type kDebuggerdNativeBacktrace
+11-10 23:33:32.035 I/crash_dump64( 2582): obtaining output fd from tombstoned, type: kDebuggerdNativeBacktrace
+11-10 23:33:32.090 I/tombstoned(  321): received crash request for pid 647
+11-10 23:33:32.210 E/tombstoned(  321): failed to get crash output for type kDebuggerdNativeBacktrace
+11-10 23:33:32.357 I/crash_dump64( 2582): performing dump of process 647 (target tid = 647)
+11-10 23:33:32.421 E/system_server( 2437): libdebuggerd_client: failed to read status response from tombstoned: Try again
+11-10 23:33:32.422 I/tombstoned(  321): intercept for pid 593 and type kDebuggerdNativeBacktrace terminated: due to input
+11-10 23:33:32.666 I/system_server( 2437): libdebuggerd_client: started dumping process 2322
+11-10 23:33:32.714 I/tombstoned(  321): registered intercept for pid 2322 and type kDebuggerdNativeBacktrace
+11-10 23:33:34.699 E/system_server( 2437): libdebuggerd_client: failed to read status response from tombstoned: Try again
+11-10 23:33:34.703 I/tombstoned(  321): intercept for pid 2322 and type kDebuggerdNativeBacktrace terminated: due to input
+11-10 23:33:35.156 I/system_server( 2437): libdebuggerd_client: started dumping process 596
+11-10 23:33:35.171 I/tombstoned(  321): registered intercept for pid 596 and type kDebuggerdNativeBacktrace
+11-10 23:33:35.818 I/crash_dump64( 2589): obtaining output fd from tombstoned, type: kDebuggerdNativeBacktrace
+11-10 23:33:35.904 I/tombstoned(  321): received crash request for pid 593
+11-10 23:33:35.905 E/tombstoned(  321): failed to get crash output for type kDebuggerdNativeBacktrace
+11-10 23:33:36.007 I/crash_dump64( 2589): performing dump of process 593 (target tid = 593)
+11-10 23:33:36.273 E/system_server( 2437): libdebuggerd_client: failed to read status response from tombstoned: Try again
+11-10 23:33:36.276 I/tombstoned(  321): intercept for pid 596 and type kDebuggerdNativeBacktrace terminated: due to input
+11-10 23:33:36.535 I/system_server( 2437): libdebuggerd_client: started dumping process 597
+11-10 23:33:36.645 I/tombstoned(  321): registered intercept for pid 597 and type kDebuggerdNativeBacktrace
+11-10 23:33:37.286 I/tombstoned(  321): received crash request for pid 597
+11-10 23:33:37.287 I/tombstoned(  321): found intercept fd 512 for pid 597 and type kDebuggerdNativeBacktrace
+11-10 23:33:39.086 I/crash_dump64( 2596): obtaining output fd from tombstoned, type: kDebuggerdNativeBacktrace
+11-10 23:33:39.123 I/tombstoned(  321): received crash request for pid 2322
+11-10 23:33:39.149 I/tombstoned(  321): enqueueing crash request for pid 2322
+11-10 23:33:40.489 I/crash_dump64( 2600): obtaining output fd from tombstoned, type: kDebuggerdNativeBacktrace
+11-10 23:33:40.529 I/tombstoned(  321): received crash request for pid 596
+11-10 23:33:40.530 I/tombstoned(  321): enqueueing crash request for pid 596
+11-10 23:33:44.497 I/system_server( 2437): libdebuggerd_client: done dumping process 597
+11-10 23:33:44.499 W/tombstoned(  321): skipping tombstone file creation due to intercept
+11-10 23:33:44.499 E/tombstoned(  321): failed to get crash output for type kDebuggerdNativeBacktrace
+11-10 23:33:44.499 E/tombstoned(  321): failed to get crash output for type kDebuggerdNativeBacktrace
+11-10 23:33:44.503 I/crash_dump64( 2596): performing dump of process 2322 (target tid = 2322)
+11-10 23:33:44.508 I/crash_dump64( 2600): performing dump of process 596 (target tid = 596)
+    00000075a28810d0 100d000c01414d4c 2825221f1c191613  LMA.........."%([ 1433.197600] type=1400 audit(1699659354.744:1012): avc:  denied  { ptrace } for  comm="crash_dump64" scontext=u:r:crash_dump:s0 tcontext=u:r:vold:s0 tclass=process permissive=1
+11-10 23:35:54.744 I/auditd  ( 3095): type=1400 audit(0.0:1012): avc:  denied  { ptrace } for  comm="crash_dump64" scontext=u:r:crash_dump:s0 tcontext=u:r:vold:s0 tclass=process permissive=1
+11-10 23:35:54.744 I/crash_dump64( 3095): type=1400 audit(0.0:1012): avc:  denied  { ptrace } for  scontext=u:r:crash_dump:s0 tcontext=u:r:vold:s0 tclass=process permissive=1
+[ 1439.828823] type=1400 audit(1699659359.472:1038): avc:  denied  { ptrace } for  comm="crash_dump64" scontext=u:r:crash_dump:s0 tcontext=u:r:keystore:s0 tclass=process permissive=1
+11-10 23:35:26.793 I/crash_dump64( 2924): obtaining output fd from tombstoned, type: kDebuggerdTombstoneProto
+11-10 23:35:26.817 I/tombstoned(  321): received crash request for pid 2916
+11-10 23:35:59.472 I/crash_dump64( 3128): type=1400 audit(0.0:1038): avc:  denied  { ptrace } for  scontext=u:r:crash_dump:s0 tcontext=u:r:keystore:s0 tclass=process permissive=1
+11-10 23:35:26.823 I/crash_dump64( 2924): performing dump of process 2904 (target tid = 2916)
+[ 1442.272207] type=1400 audit(1699659364.912:1045): avc:  denied  { ptrace } for  comm="crash_dump64" scontext=u:r:crash_dump:s0 tcontext=u:r:keystore:s0 tclass=process permissive=1
+11-10 23:36:04.912 I/auditd  ( 3128): type=1400 audit(0.0:1045): avc:  denied  { ptrace } for  comm="crash_dump64" scontext=u:r:crash_dump:s0 tcontext=u:r:keystore:s0 tclass=process permissive=1
+11-10 23:36:04.912 I/crash_dump64( 3128): type=1400 audit(0.0:1045): avc:  denied  { ptrace } for  scontext=u:r:crash_dump:s0 tcontext=u:r:keystore:s0 tclass=process permissive=1
+11-10 23:35:31.261 F/DEBUG   ( 2924): *** *** *** *** *** *** *** *** *** *** *** *** *** *** *** ***
+11-10 23:35:31.261 F/DEBUG   ( 2924): Build fingerprint: 'Android/aosp_arm64/generic_arm64:14/UQ1A.231205.015/11084887:user/release-keys'
+11-10 23:35:31.271 F/DEBUG   ( 2924): Revision: '0'
+11-10 23:35:31.271 F/DEBUG   ( 2924): ABI: 'arm64'
+11-10 23:35:31.271 F/DEBUG   ( 2924): Timestamp: 2023-11-10 23:35:26.920853008+0000
+11-10 23:35:31.272 F/DEBUG   ( 2924): Process uptime: 6s
+11-10 23:35:31.272 F/DEBUG   ( 2924): Cmdline: /vendor/bin/hw/android.hardware.biometrics.fingerprint-service.ranchu
+11-10 23:35:31.272 F/DEBUG   ( 2924): pid: 2904, tid: 2916, name: binder:2904_2  >>> /vendor/bin/hw/android.hardware.biometrics.fingerprint-service.ranchu <<<
+11-10 23:35:31.273 F/DEBUG   ( 2924): uid: 1000
+11-10 23:35:31.304 F/DEBUG   ( 2924): signal 6 (SIGABRT), code -1 (SI_QUEUE), fault addr --------
+11-10 23:35:31.304 F/DEBUG   ( 2924): Abort message: 'Could not open the sensor service: 'fingerprintlisten''
+11-10 23:35:31.305 F/DEBUG   ( 2924):     x0  0000000000000000  x1  0000000000000b64  x2  0000000000000006  x3  000000730e7cf540
+11-10 23:35:31.305 F/DEBUG   ( 2924):     x4  6268757164721f71  x5  6268757164721f71  x6  6268757164721f71  x7  7f7f7f7f7f7f7f7f
+11-10 23:35:31.306 F/DEBUG   ( 2924):     x8  00000000000000f0  x9  00000075a2881090  x10 0000000000000001  x11 00000075a28d4058
+11-10 23:35:31.306 F/DEBUG   ( 2924):     x12 000000730e7cf510  x13 0000000000000037  x14 000000730e7cf6d0  x15 0000001407734934
+11-10 23:35:31.306 F/DEBUG   ( 2924):     x16 00000075a2941d08  x17 00000075a2915e90  x18 0000000000096372  x19 0000000000000b58
+11-10 23:35:31.307 F/DEBUG   ( 2924):     x20 0000000000000b64  x21 00000000ffffffff  x22 0000000000000b58  x23 0000000000000b58
+11-10 23:35:31.323 F/DEBUG   ( 2924):     x24 000000730e7cfcb0  x25 000000730e7cfcb0  x26 000000730e7cfff8  x27 00000000000fc000
+11-10 23:35:31.323 F/DEBUG   ( 2924):     x28 00000000000fe000  x29 000000730e7cf5c0
+11-10 23:35:31.323 F/DEBUG   ( 2924):     lr  00000075a28c59b8  sp  000000730e7cf520  pc  00000075a28c59e4  pst 0000000000000000
+11-10 23:35:31.324 F/DEBUG   ( 2924): 8 total frames
+11-10 23:35:31.324 F/DEBUG   ( 2924): backtrace:
+11-10 23:35:31.325 F/DEBUG   ( 2924):       #00 pc 00000000000669e4  /apex/com.android.runtime/lib64/bionic/libc.so (abort+164) (BuildId: a87908b48b368e6282bcc9f34bcfc28c)
+11-10 23:35:31.325 F/DEBUG   ( 2924):       #01 pc 00000000000142c0  /system/lib64/liblog.so (__android_log_default_aborter+12) (BuildId: 92c5c07c91ae9ba19b8c063bb7b8ef10)
+11-10 23:35:31.325 F/DEBUG   ( 2924):       #02 pc 0000000000014410  /system/lib64/liblog.so (__android_log_assert+308) (BuildId: 92c5c07c91ae9ba19b8c063bb7b8ef10)
+11-10 23:35:31.326 F/DEBUG   ( 2924):       #03 pc 00000000000131f4  /vendor/bin/hw/android.hardware.biometrics.fingerprint-service.ranchu (aidl::android::hardware::biometrics::fingerprint::Session::sensorListenerFuncImpl()+1084) (BuildId: a12c39834aee142811cc01066a27284c)
+11-10 23:35:31.326 F/DEBUG   ( 2924):       #04 pc 0000000000011398  /vendor/bin/hw/android.hardware.biometrics.fingerprint-service.ranchu (aidl::android::hardware::biometrics::fingerprint::Session::sensorListenerFunc()+20) (BuildId: a12c39834aee142811cc01066a27284c)
+11-10 23:35:31.347 F/DEBUG   ( 2924):       #05 pc 00000000000135a4  /vendor/bin/hw/android.hardware.biometrics.fingerprint-service.ranchu (void* std::__1::__thread_proxy<std::__1::tuple<std::__1::unique_ptr<std::__1::__thread_struct, std::__1::default_delete<std::__1::__thread_struct> >, void (aidl::android::hardware::biometrics::fingerprint::Session::*)(), aidl::android::hardware::biometrics::fingerprint::Session*> >(void*)+60) (BuildId: a12c39834aee142811cc01066a27284c)
+11-10 23:35:31.348 F/DEBUG   ( 2924):       #06 pc 00000000000cb6a8  /apex/com.android.runtime/lib64/bionic/libc.so (__pthread_start(void*)+208) (BuildId: a87908b48b368e6282bcc9f34bcfc28c)[ 1459.718192] init: Control message: Could not find 'android.hardware.media.c2@1.0::IComponentStore/software' for ctl.interface_start from pid: 293 (/system/bin/hwservicemanager)
+11-10 23:35:31.348 F/DEBUG   ( 2924):       #07 pc 000000000006821c  /apex/com.android.runtime/lib64/bionic/libc.so (__start_thread+64) (BuildId: a87908b48b368e6282bcc9f34bcfc28c)
+11-10 23:35:31.964 E/tombstoned(  321): Tombstone written to: tombstone_00
+11-10 23:35:33.528 I/system_server( 2437): libdebuggerd_client: started dumping process 2437
+11-10 23:35:33.589 I/tombstoned(  321): registered intercept for pid 2437 and type kDebuggerdJavaBacktrace
+11-10 23:35:37.712 I/system_server( 2437): libdebuggerd_client: started dumping process 2864
+11-10 23:35:37.750 I/tombstoned(  321): registered intercept for pid 2864 and type kDebuggerdJavaBacktrace
+11-10 23:35:39.425 I/tombstoned(  321): received crash request for pid 2864
+11-10 23:35:39.426 I/tombstoned(  321): found intercept fd 513 for pid 2864 and type kDebuggerdJavaBacktrace
+11-10 23:35:39.429 I/ndroid.systemui( 2864): Wrote stack traces to tombstoned
+11-10 23:35:39.436 W/tombstoned(  321): skipping tombstone file creation due to intercept
+11-10 23:35:39.964 I/tombstoned(  321): received crash request for pid 2437
+11-10 23:35:39.964 I/tombstoned(  321): found intercept fd 512 for pid 2437 and type kDebuggerdJavaBacktrace
+11-10 23:35:39.968 W/tombstoned(  321): skipping tombstone file creation due to intercept
+11-10 23:35:40.821 I/tombstoned(  321): registered intercept for pid 642 and type kDebuggerdNativeBacktrace
+11-10 23:35:40.855 I/tombstoned(  321): registered intercept for pid 2437 and type kDebuggerdJavaBacktrace[ 1472.473029] init: Control message: Could not find 'android.hardware.media.c2@1.0::IComponentStore/software' for ctl.interface_start from pid: 293 (/system/bin/hwservicemanager)
+11-10 23:35:43.025 I/tombstoned(  321): intercept for pid 642 and type kDebuggerdNativeBacktrace terminated: due to input
+11-10 23:35:43.593 I/tombstoned(  321): registered intercept for pid 644 and type kDebuggerdNativeBacktrace
+11-10 23:35:45.570 I/tombstoned(  321): intercept for pid 644 and type kDebuggerdNativeBacktrace terminated: due to input
+11-10 23:35:45.960 I/crash_dump64( 2993): obtaining output fd from tombstoned, type: kDebuggerdNativeBacktrace
+11-10 23:35:45.995 I/tombstoned(  321): received crash request for pid 642
+11-10 23:35:45.995 E/tombstoned(  321): failed to get crash output for type kDebuggerdNativeBacktrace
+11-10 23:35:46.001 I/crash_dump64( 2993): performing dump of process 642 (target tid = 642)
+11-10 23:35:46.061 I/tombstoned(  321): received crash request for pid 2437
+11-10 23:35:46.082 I/tombstoned(  321): found intercept fd 513 for pid 2437 and type kDebuggerdJavaBacktrace
+11-10 23:35:46.213 W/tombstoned(  321): skipping tombstone file creation due to intercept
+11-10 23:35:46.446 I/tombstoned(  321): registered intercept for pid 647 and type kDebuggerdNativeBacktrace
+11-10 23:35:48.023 I/tombstoned(  321): registered intercept for pid 300 and type kDebuggerdNativeBacktrace
+11-10 23:35:48.326 I/crash_dump64( 3023): obtaining output fd from tombstoned, type: kDebuggerdNativeBacktrace
+11-10 23:35:48.346 I/tombstoned(  321): received crash request for pid 644
+11-10 23:35:48.346 E/tombstoned(  321): failed to get crash output for type kDebuggerdNativeBacktrace
+11-10 23:35:48.348 I/crash_dump64( 3023): performing dump of process 644 (target tid = 644)
+11-10 23:35:48.386 I/tombstoned(  321): intercept for pid 647 and type kDebuggerdNativeBacktrace terminated: due to input
+11-10 23:35:49.792 I/tombstoned(  321): intercept for pid 300 and type kDebuggerdNativeBacktrace terminated: due to input
+11-10 23:35:49.830 I/tombstoned(  321): registered intercept for pid 655 and type kDebuggerdNativeBacktrace
+11-10 23:35:50.085 I/crash_dump64( 3061): obtaining output fd from tombstoned, type: kDebuggerdNativeBacktrace
+11-10 23:35:50.104 I/tombstoned(  321): received crash request for pid 655
+11-10 23:35:50.105 I/tombstoned(  321): found intercept fd 512 for pid 655 and type kDebuggerdNativeBacktrace
+11-10 23:35:50.107 I/crash_dump64( 3061): performing dump of process 655 (target tid = 655)
+11-10 23:35:50.432 W/tombstoned(  321): skipping tombstone file creation due to intercept
+11-10 23:35:50.620 I/tombstoned(  321): registered intercept for pid 309 and type kDebuggerdNativeBacktrace
+11-10 23:35:51.008 I/tombstoned(  321): registered intercept for pid 593 and type kDebuggerdNativeBacktrace
+11-10 23:35:51.971 I/tombstoned(  321): intercept for pid 593 and type kDebuggerdNativeBacktrace terminated: due to input
+11-10 23:35:52.164 I/crash_dump64( 3070): obtaining output fd from tombstoned, type: kDebuggerdNativeBacktrace
+11-10 23:35:52.264 I/tombstoned(  321): received crash request for pid 647
+11-10 23:35:52.264 E/tombstoned(  321): failed to get crash output for type kDebuggerdNativeBacktrace[ 1478.550780] init: Control message: Could not find 'android.hardware.media.c2@1.0::IComponentStore/software' for ctl.interface_start from pid: 293 (/system/bin/hwservicemanager)
+11-10 23:35:52.335 I/crash_dump64( 3070): performing dump of process 647 (target tid = 647)
+11-10 23:35:52.340 I/tombstoned(  321): intercept for pid 309 and type kDebuggerdNativeBacktrace terminated: due to input
+11-10 23:35:52.406 I/tombstoned(  321): registered intercept for pid 2322 and type kDebuggerdNativeBacktrace
+11-10 23:35:52.758 I/tombstoned(  321): registered intercept for pid 534 and type kDebuggerdNativeBacktrace
+11-10 23:35:54.784 I/tombstoned(  321): intercept for pid 534 and type kDebuggerdNativeBacktrace terminated: due to input
+11-10 23:35:55.172 I/crash_dump64( 3095): obtaining output fd from tombstoned, type: kDebuggerdNativeBacktrace
+11-10 23:35:55.327 I/tombstoned(  321): received crash request for pid 300
+11-10 23:35:55.327 E/tombstoned(  321): failed to get crash output for type kDebuggerdNativeBacktrace
+11-10 23:35:55.377 I/crash_dump64( 3095): performing dump of process 300 (target tid = 300)
+11-10 23:35:55.584 I/tombstoned(  321): registered intercept for pid 655 and type kDebuggerdNativeBacktrace
+11-10 23:35:56.035 I/crash_dump64( 3107): obtaining output fd from tombstoned, type: kDebuggerdNativeBacktrace
+11-10 23:35:56.072 I/tombstoned(  321): received crash request for pid 655
+11-10 23:35:56.073 I/tombstoned(  321): found intercept fd 513 for pid 655 and type kDebuggerdNativeBacktrace
+11-10 23:35:56.156 I/crash_dump64( 3107): performing dump of process 655 (target tid = 655)
+11-10 23:35:56.455 W/tombstoned(  321): skipping tombstone file creation due to intercept
+11-10 23:35:58.119 W/tombstoned(  321): pid 2322 already intercepted, type 0
+11-10 23:36:00.867 I/crash_dump64( 3128): obtaining output fd from tombstoned, type: kDebuggerdNativeBacktrace
+11-10 23:36:01.188 I/tombstoned(  321): received crash request for pid 309
+11-10 23:36:01.189 E/tombstoned(  321): failed to get crash output for type kDebuggerdNativeBacktrace
+11-10 23:36:01.198 I/crash_dump64( 3128): performing dump of process 309 (target tid = 309)
+11-10 23:36:02.216 I/crash_dump64( 3134): obtaining output fd from tombstoned, type: kDebuggerdNativeBacktrace
+11-10 23:36:02.219 I/tombstoned(  321): received crash request for pid 593
+11-10 23:36:02.220 E/tombstoned(  321): failed to get crash output for type kDebuggerdNativeBacktrace
+11-10 23:36:02.221 I/crash_dump64( 3134): performing dump of process 593 (target tid = 593)
+11-10 23:36:02.405 I/tombstoned(  321): intercept for pid 2322 and type kDebuggerdNativeBacktrace terminated: due to timeout
+11-10 23:36:04.807 I/crash_dump64( 3145): obtaining output fd from tombstoned, type: kDebuggerdNativeBacktrace
+11-10 23:36:04.811 I/tombstoned(  321): received crash request for pid 2322
+11-10 23:36:04.811 E/tombstoned(  321): failed to get crash output for type kDebuggerdNativeBacktrace
+11-10 23:36:04.813 I/crash_dump64( 3145): performing dump of process 2322 (target tid = 2322)
+11-10 23:36:05.089 I/crash_dump64( 3146): obtaining output fd from tombstoned, type: kDebuggerdNativeBacktrace
+11-10 23:36:05.099 I/tombstoned(  321): received crash request for pid 534
+11-10 23:36:05.099 E/tombstoned(  321): failed to get crash output for type kDebuggerdNativeBacktrace
+11-10 23:36:05.101 I/crash_dump64( 3146): performing dump of process 534 (target tid = 534)
+11-10 23:36:09.411 I/tombstoned(  321): registered intercept for pid 2994 and type kDebuggerdNativeBacktrace
+11-10 23:36:09.413 I/tombstoned(  321): intercept for pid 2994 and type kDebuggerdNativeBacktrace terminated: due to input
+11-10 23:36:09.870 I/tombstoned(  321): registered intercept for pid 3008 and type kDebuggerdJavaBacktrace
+11-10 23:36:10.209 I/tombstoned(  321): received crash request for pid 3008
+11-10 23:36:10.209 I/tombstoned(  321): found intercept fd 512 for pid 3008 and type kDebuggerdJavaBacktrace
+11-10 23:36:10.211 I/rkstack.process( 3008): Wrote stack traces to tombstoned
+11-10 23:36:10.211 W/tombstoned(  321): skipping tombstone file creation due to intercept
+11-10 23:37:13.212 I/loop-node-keepe(  201): type=1400 audit(0.0:1245): avc:  denied  { read } for  name="root" dev="proc" ino=9972 scontext=u:r:kernel:s0 tcontext=u:r:init:s0 tclass=lnk_file permissive=1[ 1492.119559] type=1400 audit(1699659441.120:1257): avc:  denied  { ptrace } for  comm="crash_dump64" scontext=u:r:crash_dump:s0 tcontext=u:r:vold:s0 tclass=process permissive=1
+11-10 23:36:12.632 F/libc    ( 3022): Fatal signal 11 (SIGSEGV), code 1 (SEGV_MAPERR), fault addr 0x9b51e in tid 3022 (droid.bluetooth), pid 3022 (droid.bluetooth)
+11-10 23:36:14.938 I/system_server( 2437): libdebuggerd_client: started dumping process 3022
+11-10 23:36:14.967 I/tombstoned(  321): registered intercept for pid 3022 and type kDebuggerdJavaBacktrace
+11-10 23:37:21.120 I/auditd  ( 3529): type=1400 audit(0.0:1257): avc:  denied  { ptrace } for  comm="crash_dump64" scontext=u:r:crash_dump:s0 tcontext=u:r:vold:s0 tclass=process permissive=1
+11-10 23:37:21.120 I/crash_dump64( 3529): type=1400 audit(0.0:1257): avc:  denied  { ptrace } for  scontext=u:r:crash_dump:s0 tcontext=u:r:vold:s0 tclass=process permissive=1
+11-10 23:36:17.533 I/system_server( 2437): libdebuggerd_client: started dumping process 3050
+11-10 23:36:17.614 I/tombstoned(  321): registered intercept for pid 3050 and type kDebuggerdJavaBacktrace
+[ 1493.117747] type=1400 audit(1699659442.116:1258): avc:  denied  { ptrace } for  comm="crash_dump64" scontext=u:r:crash_dump:s0 tcontext=u:r:keystore:s0 tclass=process permissive=1
+11-10 23:36:19.024 I/tombstoned(  321): received crash request for pid 3050
+11-10 23:36:19.024 I/tombstoned(  321): found intercept fd 513 for pid 3050 and type kDebuggerdJavaBacktrace
+11-10 23:36:19.029 I/m.android.phone( 3050): Wrote stack traces to tombstoned
+11-10 23:36:19.036 W/tombstoned(  321): skipping tombstone file creation due to intercept
+11-10 23:36:19.145 I/system_server( 2437): libdebuggerd_client: done dumping process 3050
+11-10 23:37:22.116 I/auditd  ( 3536): type=1400 audit(0.0:1258): avc:  denied  { ptrace } for  comm="crash_dump64" scontext=u:r:crash_dump:s0 tcontext=u:r:keystore:s0 tclass=process permissive=1
+11-10 23:37:22.116 I/crash_dump64( 3536): type=1400 audit(0.0:1258): avc:  denied  { ptrace } for  scontext=u:r:crash_dump:s0 tcontext=u:r:keystore:s0 tclass=process permissive=1
+11-10 23:36:24.975 I/tombstoned(  321): intercept for pid 3022 and type kDebuggerdJavaBacktrace terminated: due to timeout
+11-10 23:36:25.381 I/tombstoned(  321): registered intercept for pid 3022 and type kDebuggerdNativeBacktrace
+11-10 23:36:25.384 F/crash_dump64( 3222): crash_dump.cpp:363] process didn't stop due to PTRACE_O_TRACECLONE (status = 9087)
+11-10 23:36:25.388 I/tombstoned(  321): received crash request for pid 3022
+11-10 23:36:25.388 I/tombstoned(  321): found registered intercept of type kDebuggerdNativeBacktrace for requested type kDebuggerdAnyIntercept
+11-10 23:36:25.388 I/tombstoned(  321): found intercept fd 512 for pid 3022 and type kDebuggerdNativeBacktrace
+11-10 23:36:25.394 W/tombstoned(  321): crash socket received short read of length 0 (expected 12)
+11-10 23:36:27.424 I/tombstoned(  321): received crash request for pid 3022
+11-10 23:36:27.430 I/droid.bluetooth( 3022): Wrote stack traces to tombstoned
+11-10 23:36:27.433 E/tombstoned(  321): Traces for pid 3022 written to: trace_02
