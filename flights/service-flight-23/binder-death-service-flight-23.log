@@ -1,0 +1,53 @@
+# T745 binder-death tap for T745 service-flight-23 — live supervisor-side tap, written as the flight runs
+11-10 23:24:56.028 W/InputManager-JNI(  667): Input channel object 'fa92320 com.android.settings/com.android.settings.FallbackHome (client)' was disposed without first being removed with the input manager!
+11-10 23:28:11.947 I/WindowManager( 2118): WIN DEATH: Window{435e6fd u0 com.android.settings/com.android.settings.FallbackHome}
+11-10 23:28:11.949 W/InputManager-JNI( 2118): Input channel object '435e6fd com.android.settings/com.android.settings.FallbackHome (client)' was disposed without first being removed with the input manager!
+11-10 23:28:11.963 I/ActivityManager( 2118): Process com.android.settings (pid 2575) has died: fg  TOP 
+11-10 23:28:31.528 I/ActivityManager( 2118): Process com.android.settings (pid 2773) has died: fg  TOP 
+11-10 23:28:31.538 I/WindowManager( 2118): WIN DEATH: Window{17a333 u0 com.android.settings/com.android.settings.FallbackHome}
+11-10 23:28:31.539 W/InputManager-JNI( 2118): Input channel object '17a333 com.android.settings/com.android.settings.FallbackHome (client)' was disposed without first being removed with the input manager!
+11-10 23:29:05.870 W/InputManager-JNI( 2118): Input channel object '[Gesture Monitor] swipe-up (client)' was disposed without first being removed with the input manager!
+11-10 23:29:19.129 I/WindowManager( 2118): WIN DEATH: Window{3a25cd2 u0 com.android.systemui.wallpapers.ImageWallpaper}
+11-10 23:29:19.130 W/InputManager-JNI( 2118): Input channel object '3a25cd2 com.android.systemui.wallpapers.ImageWallpaper (client)' was disposed without first being removed with the input manager!
+11-10 23:29:19.508 I/WindowManager( 2118): WIN DEATH: Window{51a5dfb u0 ShellDropTarget}
+11-10 23:29:19.509 W/InputManager-JNI( 2118): Input channel object '51a5dfb ShellDropTarget (client)' was disposed without first being removed with the input manager!
+11-10 23:29:19.528 I/WindowManager( 2118): WIN DEATH: Window{9d5dad0 u0 ScreenDecorOverlayBottom}
+11-10 23:29:19.529 W/InputManager-JNI( 2118): Input channel object '9d5dad0 ScreenDecorOverlayBottom (client)' was disposed without first being removed with the input manager!
+11-10 23:29:19.538 I/WindowManager( 2118): WIN DEATH: Window{d405ed u0 ScreenDecorOverlay}
+11-10 23:31:48.781 W/KeyguardServiceWrapper( 2118): 	at com.android.server.wm.TransitionController$$ExternalSyntheticLambda0.binderDied(R8$$SyntheticClass:0)
+11-10 23:31:48.781 W/KeyguardServiceWrapper( 2118): 	at android.os.IBinder$DeathRecipient.binderDied(IBinder.java:319)
+11-10 23:31:48.794 I/WindowManager( 2118): WIN DEATH: Window{62a016b u0 com.android.systemui.wallpapers.ImageWallpaper}
+11-10 23:31:48.794 W/InputManager-JNI( 2118): Input channel object '62a016b com.android.systemui.wallpapers.ImageWallpaper (client)' was disposed without first being removed with the input manager!
+11-10 23:31:48.801 I/WindowManager( 2118): WIN DEATH: Window{75f79d7 u0 ScreenDecorOverlay}
+11-10 23:31:48.801 W/InputManager-JNI( 2118): Input channel object '75f79d7 ScreenDecorOverlay (client)' was disposed without first being removed with the input manager!
+11-10 23:31:48.804 I/WindowManager( 2118): WIN DEATH: Window{ba189de u0 ScreenDecorOverlayBottom}
+11-10 23:31:48.805 W/InputManager-JNI( 2118): Input channel object 'ba189de ScreenDecorOverlayBottom (client)' was disposed without first being removed with the input manager!
+11-10 23:31:48.814 I/WindowManager( 2118): WIN DEATH: Window{6436783 u0 NotificationShade}
+11-10 23:31:48.815 W/InputManager-JNI( 2118): Input channel object '6436783 NotificationShade (client)' was disposed without first being removed with the input manager!
+11-10 23:32:00.838 I/WindowManager( 2118): WIN DEATH: Window{99707ea u0 com.android.launcher3/com.android.launcher3.uioverrides.QuickstepLauncher}
+11-10 23:32:00.839 W/InputManager-JNI( 2118): Input channel object '99707ea com.android.launcher3/com.android.launcher3.uioverrides.QuickstepLauncher (client)' was disposed without first being removed with the input manager!
+11-10 23:32:01.093 I/ActivityManager( 2118): Process com.android.launcher3 (pid 4190) has died: fg  TPSL
+11-10 23:36:34.583 I/ActivityManager( 4778): Process com.android.settings (pid 5509) has died: fg  TOP 
+11-10 23:37:09.357 W/InputManager-JNI( 4778): Input channel object 'recents_animation_input_consumer (client)' was disposed without first being removed with the input manager!
+11-10 23:37:09.366 I/WindowManager( 4778): WIN DEATH: Window{55b4575 u0 com.android.launcher3/com.android.launcher3.uioverrides.QuickstepLauncher}
+11-10 23:37:09.367 W/InputManager-JNI( 4778): Input channel object '55b4575 com.android.launcher3/com.android.launcher3.uioverrides.QuickstepLauncher (client)' was disposed without first being removed with the input manager!
+11-10 23:37:09.370 I/ActivityManager( 4778): Process com.android.launcher3 (pid 5309) has died: fg  TOP 
+11-10 23:39:33.649 I/WindowManager( 4778): WIN DEATH: Window{20d5154 u0 ShellDropTarget}
+11-10 23:39:33.650 W/InputManager-JNI( 4778): Input channel object '20d5154 ShellDropTarget (client)' was disposed without first being removed with the input manager!
+    00000073'75a91000-00000073'75a93fff r-x     10000      3000  /system/lib64/capture_state_listener-aidl-cpp.so (Bui11-10 23:39:38.893 W/InputManager-JNI( 4778): Input channel object 'recents_animation_input_consumer (client)' was disposed without first being removed with the input manager!
+11-10 23:39:38.913 I/WindowManager( 4778): WIN DEATH: Window{567c335 u0 com.android.launcher3/com.android.launcher3.uioverrides.QuickstepLauncher}
+11-10 23:39:38.914 W/InputManager-JNI( 4778): Input channel object '567c335 com.android.launcher3/com.android.launcher3.uioverrides.QuickstepLauncher (client)' was disposed without first being removed with the input manager!
+11-10 23:39:38.919 I/ActivityManager( 4778): Process com.android.launcher3 (pid 6790) has died: fg  TOP 
+11-10 23:39:38.924 I/WindowManager( 4778): WIN DEATH: Window{49553f7 u0 Taskbar}
+11-10 23:39:38.925 W/InputManager-JNI( 4778): Input channel object '49553f7 Taskbar (client)' was disposed without first being removed with the input manager!
+11-10 23:39:38.944 W/InputManager-JNI( 4778): Input channel object '[Gesture Monitor] swipe-up (client)' was disposed without first being removed with the input manager!
+11-10 23:39:39.065 E/ActivityTaskManager( 4778): 	at com.android.server.wm.WindowState$DeathRecipient.binderDied(WindowState.java:2945)
+11-10 23:39:39.065 E/ActivityTaskManager( 4778): 	at android.os.IBinder$DeathRecipient.binderDied(IBinder.java:319)
+11-10 23:39:56.581 I/WindowManager( 4778): WIN DEATH: Window{97b7fa3 u0 com.android.launcher3/com.android.launcher3.uioverrides.QuickstepLauncher}
+11-10 23:39:56.582 W/InputManager-JNI( 4778): Input channel object '97b7fa3 com.android.launcher3/com.android.launcher3.uioverrides.QuickstepLauncher (client)' was disposed without first being removed with the input manager!
+11-10 23:39:56.590 I/ActivityManager( 4778): Process com.android.launcher3 (pid 6927) has died: fg  TOP 
+11-10 23:40:22.284 I/ActivityManager( 4778): Process com.android.launcher3 (pid 7035) has died: fg  TOP 
+11-10 23:40:22.290 I/WindowManager( 4778): WIN DEATH: Window{c05be16 u0 com.android.launcher3/com.android.launcher3.uioverrides.QuickstepLauncher}
+11-10 23:40:22.291 W/InputManager-JNI( 4778): Input channel object 'c05be16 com.android.launcher3/com.android.launcher3.uioverrides.QuickstepLauncher (client)' was disposed without first being removed with the input manager!
+11-10 23:40:46.272 W/InputManager-JNI( 4778): Input channel object 'recents_animation_input_consumer (client)' was disposed without first being removed with the input manager!
+11-10 23:40:46.292 I/WindowManager( 4778): WIN DEATH: Window{1239302 u0 Taskbar}

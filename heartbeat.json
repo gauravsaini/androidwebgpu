@@ -1,1 +1,16 @@
-{"boot_completed_first_guest_seconds":1044.345,"current_step":"Step 4 complete — findings written, verdict PASS","dup_fail_presenting_seconds":456.2,"dup_fail_rate_per_1000s":0.0,"flight":"service-flight-22","guest_log_max_seconds":1500.555,"host_elapsed_seconds":1501.98,"note":"T744 RECOVERY 1 complete. Flight-22 full 1500 s, QEMU exit 0, boot completed, dup 0 in 456.2 s presenting. New wall: system_server 731 SIGKILL, killer unidentified.","qemu_exit_code":0,"qemu_pid":null,"status":"CLOSED","supervisor_pid":68738,"target_guest_seconds":1500,"target_host_seconds":1800,"timestamp_utc":"2026-11-21T05:24:48Z","track":"T744","trigger":"NAMED by flight-21 mining (launcher3 RenderThread 0x8893 -> binder death -> NPE connectionToken must not be null -> disposed channel -> binder thread 4302 SIGSEGV 0xd1008403); chain did NOT recur in flight-22 — inferential link remains inferential","verdict":"PASS","wall":"SYSTEM_SERVER-SIGKILL-731-KILLER-UNIDENTIFIED (new, open — successor track's question; T743 GateKeeper mechanism ruled out)"}
+{
+  "status": "CLOSED",
+  "track": "T745",
+  "flight": "service-flight-23",
+  "current_step": "Lane closed - verdict FAIL",
+  "verdict": "FAIL",
+  "wall": "SYSTEM_SERVER-SIGKILL-731-KILLER-UNIDENTIFIED",
+  "host_elapsed_seconds": 1503.21,
+  "guest_log_max_seconds": 1500.936,
+  "target_host_seconds": 1800,
+  "target_guest_seconds": 1500,
+  "supervisor_pid": 32625,
+  "qemu_pid": null,
+  "note": "T745 FAIL - killer of system_server pid 731 still UNIDENTIFIED after full 1500 s flight with exclusion table extended. Findings findings-t745.md SHA a38b126e.",
+  "closed_aedt": "2026-11-21 ~18:05"
+}
