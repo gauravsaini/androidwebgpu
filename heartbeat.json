@@ -1,16 +1,1 @@
-{
-  "status": "CLOSED",
-  "track": "T745",
-  "flight": "service-flight-23",
-  "current_step": "Lane closed - verdict FAIL",
-  "verdict": "FAIL",
-  "wall": "SYSTEM_SERVER-SIGKILL-731-KILLER-UNIDENTIFIED",
-  "host_elapsed_seconds": 1503.21,
-  "guest_log_max_seconds": 1500.936,
-  "target_host_seconds": 1800,
-  "target_guest_seconds": 1500,
-  "supervisor_pid": 32625,
-  "qemu_pid": null,
-  "note": "T745 FAIL - killer of system_server pid 731 still UNIDENTIFIED after full 1500 s flight with exclusion table extended. Findings findings-t745.md SHA a38b126e.",
-  "closed_aedt": "2026-11-21 ~18:05"
-}
+{"timestamp_utc": "2026-11-21T09:20:00Z", "status": "CLOSED — Verdict: FAIL", "track": "T746", "flight": "service-flight-24", "current_step": "Step 5 complete; box sync in progress", "verdict": "FAIL", "note": "731 killer unidentified (4th flight); 670 new 731-class instance; 2143 trigger 3rd recurrence; sender unnamed"}

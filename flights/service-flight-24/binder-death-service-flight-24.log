@@ -1,0 +1,42 @@
+# T746 binder-death tap for T746 service-flight-24 ‚Äî live supervisor-side tap, written as the flight runs
+11-10 23:29:04.418 I/WindowManager( 2143): WIN DEATH: Window{ae0a70e u0 com.android.settings/com.android.settings.FallbackHome}
+11-10 23:29:04.420 W/InputManager-JNI( 2143): Input channel object 'ae0a70e com.android.settings/com.android.settings.FallbackHome (client)' was disposed without first being removed with the input manager!
+11-10 23:29:04.426 I/ActivityManager( 2143): Process com.android.settings (pid 2612) has died: fg  TOP 
+11-10 23:29:50.780 I/WindowManager( 2143): WIN DEATH: Window{86fa7c4 u0 com.android.settings/com.android.settings.FallbackHome}
+11-10 23:29:50.781 W/InputManager-JNI( 2143): Input channel object '86fa7c4 com.android.settings/com.android.settings.FallbackHome (client)' was disposed without first being removed with the input manager!
+11-10 23:29:51.286 I/ActivityManager( 2143): Process com.android.settings (pid 2957) has died: fg  TOP 
+11-10 23:31:00.871 I/WindowManager( 2143): WIN DEATH: Window{9f5156f u0 com.android.launcher3/com.android.launcher3.uioverrides.QuickstepLauncher}
+x7ê11-10 23:31:00.872 W/InputManager-JNI( 2143): Input channel object '9f5156f com.android.launcher3/com.android.launcher3.uioverrides.QuickstepLauncher (client)' was disposed without first being removed with the input manager!
+11-10 23:31:00.896 I/ActivityManager( 2143): Process com.android.launcher3 (pid 3456) has died: fg  TOP 
+    x8  0000000000000011-10 23:32:24.028 W/InputManager-JNI( 2143): Input channel object 'recents_animation_input_consumer (client)' was disposed without first being removed with the input manager!
+11-10 23:32:24.045 I/WindowManager( 2143): WIN DEATH: Window{e8ea62c u0 Taskbar}
+11-10 23:32:24.046 W/InputManager-JNI( 2143): Input channel object 'e8ea62c Taskbar (client)' was disposed without first being removed with the input manager!
+11-10 23:32:24.062 W/InputManager-JNI( 2143): Input channel object '[Gesture Monitor] swipe-up (client)' was disposed without first being removed with the input manager!
+11-10 23:32:24.102 I/ActivityManager( 2143): Process com.android.launcher3 (pid 3939) has died: fg  TOP 
+11-10 23:32:25.934 E/ActivityTaskManager( 2143): 	at com.android.server.wm.WindowState$DeathRecipient.binderDied(WindowState.java:2945)
+11-10 23:32:25.934 E/ActivityTaskManager( 2143): 	at android.os.IBinder$DeathRecipient.binderDied(IBinder.java:319)
+11-10 23:32:26.000 I/WindowManager( 2143): WIN DEATH: Window{7b6ca6e u0 com.android.launcher3/com.android.launcher3.uioverrides.QuickstepLauncher}
+11-10 23:32:26.002 W/InputManager-JNI( 2143): Input channel object '7b6ca6e com.android.launcher3/com.android.launcher3.uioverrides.QuickstepLauncher (client)' was disposed without first being removed with the input manager!
+11-10 23:33:31.720 I/ActivityManager( 2143): Process com.android.launcher3 (pid 4399) has died: fg  TOP 
+11-10 23:34:09.207 W/BinderNative( 2143): Uncaught exception from death notification
+11-10 23:34:09.207 W/BinderNative( 2143): java.lang.NullPointerException: connectionToken must not be null
+11-10 23:34:09.207 W/BinderNative( 2143): 	at com.android.server.input.InputManagerService.removeSpyWindowGestureMonitor(InputManagerService.java:739)
+11-10 23:34:09.207 W/BinderNative( 2143): 	at com.android.server.input.InputManagerService$$ExternalSyntheticLambda7.binderDied(R8$$SyntheticClass:0)
+11-10 23:34:09.207 W/BinderNative( 2143): 	at android.os.IBinder$DeathRecipient.binderDied(IBinder.java:319)
+11-10 23:34:42.030 I/ActivityManager( 2143): Process com.android.launcher3 (pid 4889) has died: fg  TOP 
+11-10 23:34:42.031 I/WindowManager( 2143): WIN DEATH: Window{f522a63 u0 com.android.launcher3/com.android.launcher3.uioverrides.QuickstepLauncher}
+11-10 23:34:42.033 W/InputManager-JNI( 2143): Input channel object 'f522a63 com.android.launcher3/com.android.launcher3.uioverrides.QuickstepLauncher (client)' was disposed without first being removed with the input manager!
+11-10 23:39:50.184 W/BinderNative( 5312): Uncaught exception from death notification
+11-10 23:39:50.184 W/BinderNative( 5312): java.lang.NullPointerException: connectionToken must not be null
+11-10 23:39:50.184 W/BinderNative( 5312): 	at com.android.server.input.InputManagerService.removeSpyWindowGestureMonitor(InputManagerService.java:739)
+11-10 23:39:50.184 W/BinderNative( 5312): 	at com.android.server.input.InputManagerService$$ExternalSyntheticLambda7.binderDied(R8$$SyntheticClass:0)
+11-10 23:39:50.184 W/BinderNative( 5312): 	at android.os.IBinder$DeathRecipient.binderDied(IBinder.java:319)
+11-10 23:39:50.196 W/InputManager-JNI( 5312): Input channel object 'recents_animation_input_consumer (client)' was disposed without first being removed with the input manager!
+11-10 23:39:52.066 I/ActivityManager( 5312): Process com.android.launcher3 (pid 5910) has died: fg  TOP 
+11-10 23:40:19.445 W/InputManager-JNI( 5312): Input channel object 'recents_animation_input_consumer (client)' was disposed without first being removed with the input manager!
+11-10 23:40:19.466 W/InputManager-JNI( 5312): Input channel object '[Gesture Monitor] swipe-up (client)' was disposed without first being removed with the input manager!
+      #01 p11-10 23:40:19.469 I/WindowManager( 5312): WIN DEATH: Window{917da3b u0 com.android.launcher3/com.android.launcher3.uioverrides.QuickstepLauncher}
+11-10 23:40:19.470 W/InputManager-JNI( 5312): Input channel object '917da3b com.android.launcher3/com.android.launcher3.uioverrides.QuickstepLauncher (client)' was disposed without first being removed with the input manager!
+11-10 23:40:19.480 I/ActivityManager( 5312): Process com.android.launcher3 (pid 6561) has died: fg  TOP 
+11-10 23:40:19.492 I/WindowManager( 5312): WIN DEATH: Window{11cb80b u0 Taskbar}
+11-10 23:40:19.493 W/InputManager-JNI( 5312): Input channel object '11cb80b Taskbar (client)' was disposed without first being removed with the input manager!

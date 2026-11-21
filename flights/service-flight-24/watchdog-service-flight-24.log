@@ -1,0 +1,375 @@
+# T746 watchdog tap for T746 service-flight-24 ‚Äî live supervisor-side tap, written as the flight runs
+01-01 00:02:37.965 W/Looper  (  670): Slow dispatch took 212ms android.fg h=android.os.Handler c=com.android.server.om.OverlayManagerService$$ExternalSyntheticLambda0@96c01fe m=0
+11-10 23:19:40.402 W/Looper  (  670): Slow dispatch took 179ms android.ui h=android.os.Handler c=android.os.Handler$BlockingRunnable@eaa4355 m=0
+11-10 23:19:41.069 W/Looper  (  670): Slow dispatch took 106ms android.ui h=android.os.Handler c=android.hardware.display.DisplayManagerGlobal$DisplayListenerDelegate$$ExternalSyntheticLambda0@d66183 m=0
+11-10 23:23:47.872 W/Looper  (  670): Slow dispatch took 166ms android.fg h=android.os.Handler c=<recycled PooledLambda@4fa2bf2> m=0
+11-10 23:23:47.873 W/Looper  (  670): Slow delivery took 284ms android.fg h=com.android.server.pm.permission.PermissionManagerServiceImpl$OnPermissionChangeListeners c=null m=1
+11-10 23:24:05.168 W/Looper  ( 1261): Slow dispatch took 1508ms BroadcastRunning h=com.android.systemui.broadcast.BroadcastDispatcher$handler$1 c=null m=0
+11-10 23:24:06.754 W/Looper  ( 1261): Slow delivery took 1311ms BroadcastRunning h=com.android.systemui.broadcast.BroadcastDispatcher$handler$1 c=null m=0
+11-10 23:24:06.754 W/Looper  ( 1261): Slow dispatch took 1492ms BroadcastRunning h=com.android.systemui.broadcast.BroadcastDispatcher$handler$1 c=null m=0
+11-10 23:24:20.330 W/Looper  (  670): Slow dispatch took 153ms android.fg h=android.os.Handler c=<recycled PooledLambda@57011e8> m=0
+11-10 23:24:20.640 W/Looper  (  670): Slow delivery took 221ms android.fg h=android.os.Handler c=<recycled PooledLambda@b9ffc1d> m=0
+11-10 23:24:20.802 W/Looper  (  670): Slow dispatch took 161ms android.fg h=android.os.Handler c=<recycled PooledLambda@c88f590> m=0
+11-10 23:24:21.062 W/Looper  (  670): Slow dispatch took 129ms android.fg h=android.os.Handler c=<recycled PooledLambda@476e94a> m=0
+11-10 23:24:22.209 W/Looper  (  670): Slow dispatch took 406ms android.fg h=android.os.Handler c=<recycled PooledLambda@8d2d899> m=0
+11-10 23:24:22.386 W/Looper  (  670): Slow dispatch took 120ms android.fg h=android.os.Handler c=<recycled PooledLambda@fecbcb1> m=0
+11-10 23:24:22.512 W/Looper  (  670): Slow dispatch took 126ms android.fg h=android.os.Handler c=<recycled PooledLambda@b307596> m=0
+11-10 23:24:22.758 W/Looper  (  670): Slow dispatch took 246ms android.fg h=android.os.Handler c=<recycled PooledLambda@6648d04> m=0
+11-10 23:24:22.867 W/Looper  (  670): Slow dispatch took 109ms android.fg h=android.os.Handler c=<recycled PooledLambda@df72ed> m=0
+11-10 23:24:23.347 W/Looper  (  670): Slow dispatch took 103ms android.fg h=android.os.Handler c=<recycled PooledLambda@98dfe2b> m=0
+11-10 23:24:23.940 W/Looper  (  670): Slow dispatch took 140ms android.fg h=android.os.Handler c=<recycled PooledLambda@fc24ad2> m=0
+11-10 23:24:24.203 W/Looper  (  670): Slow dispatch took 127ms android.fg h=android.os.Handler c=<recycled PooledLambda@8731aa0> m=0
+11-10 23:24:25.632 W/Looper  (  670): Slow dispatch took 143ms android.ui h=com.android.server.am.ActivityManagerService$UiHandler c=com.android.server.am.UidObserverController$$ExternalSyntheticLambda0@e526bd0 m=0
+11-10 23:24:25.976 W/Looper  (  670): Slow dispatch took 161ms android.ui h=com.android.server.am.ActivityManagerService$UiHandler c=com.android.server.am.UidObserverController$$ExternalSyntheticLambda0@e526bd0 m=0
+11-10 23:24:26.581 W/Looper  (  670): Slow dispatch took 2362ms android.fg h=android.os.Handler c=<recycled PooledLambda@f041383> m=0
+11-10 23:24:26.868 W/Looper  (  670): Slow dispatch took 260ms android.fg h=android.os.Handler c=<recycled PooledLambda@9498f63> m=0
+11-10 23:24:27.260 W/Looper  (  670): Slow dispatch took 371ms android.fg h=android.os.Handler c=<recycled PooledLambda@1c613fd> m=0
+11-10 23:24:27.503 W/Looper  (  670): Slow dispatch took 104ms android.fg h=android.os.Handler c=<recycled PooledLambda@648f6ee> m=0
+11-10 23:24:27.921 W/Looper  (  670): Slow dispatch took 149ms android.fg h=android.os.Handler c=<recycled PooledLambda@af08a1c> m=0
+11-10 23:24:28.113 W/Looper  (  670): Slow dispatch took 192ms android.fg h=android.os.Handler c=<recycled PooledLambda@278625> m=0
+11-10 23:24:28.714 W/Looper  (  670): Slow dispatch took 106ms android.fg h=android.os.Handler c=<recycled PooledLambda@4ff4295> m=0
+11-10 23:24:29.426 W/Looper  (  670): Slow dispatch took 296ms android.fg h=android.os.Handler c=com.android.server.location.gnss.GnssLocationProvider$$ExternalSyntheticLambda8@d4f8b0c m=0
+11-10 23:24:29.427 W/Looper  (  670): Slow delivery took 285ms android.fg h=android.os.Handler c=com.android.server.location.gnss.GnssLocationProvider$$ExternalSyntheticLambda9@8b9566a m=0
+11-10 23:24:35.953 W/Looper  (  670): Slow dispatch took 231ms android.fg h=android.os.Handler c=<recycled PooledLambda@1101227> m=0
+11-10 23:24:35.954 W/Looper  (  670): Slow delivery took 220ms android.fg h=com.android.server.pm.permission.PermissionManagerServiceImpl$OnPermissionChangeListeners c=null m=1
+11-10 23:24:44.820 W/Looper  (  670): Slow delivery took 351520ms main h=android.app.PropertyInvalidatedCache$AutoCorker$1 c=null m=0
+11-10 23:24:44.927 W/Looper  (  670): Slow dispatch took 108ms main h=com.android.server.pm.UserManagerService$MainHandler c=null m=2
+11-10 23:24:45.381 W/Looper  (  670): Slow dispatch took 453ms main h=android.app.ActivityThread$H c=null m=156
+11-10 23:24:46.031 W/Looper  (  670): Slow dispatch took 479ms main h=com.android.providers.settings.SettingsProvider$SettingsRegistry$MyHandler c=null m=2
+11-10 23:24:46.195 W/Looper  (  670): Slow dispatch took 163ms main h=android.app.ActivityThread$H c=<recycled PooledLambda@5a764a1> m=0
+11-10 23:24:46.678 W/Looper  (  670): Slow dispatch took 214ms main h=com.android.server.alarm.AlarmManagerService$AlarmHandler c=com.android.server.alarm.AlarmManagerService$3$$ExternalSyntheticLambda0@1565dd1 m=0[  492.518722] init: Service 'vendor.biometrics.fingerprint-service.ranchu' (pid 1624) received signal 6 oneshot service took 14.469000 seconds in background
+11-10 23:24:46.827 W/Looper  (  670): Slow dispatch took 142ms main h=android.database.sqlite.SQLiteConnectionPool$IdleConnectionHandler c=null m=2
+11-10 23:24:46.960 W/Looper  (  670): Slow dispatch took 133ms main h=android.service.notification.ConditionProviderService$H c=null m=1
+11-10 23:24:47.081 W/Looper  (  670): Slow dispatch took 119ms main h=com.android.providers.settings.SettingsProvider$SettingsRegistry$MyHandler c=null m=1
+11-10 23:24:48.011 W/Looper  (  670): Slow dispatch took 691ms main h=android.os.Handler c=com.android.server.biometrics.sensors.face.aidl.FaceProvider$$ExternalSyntheticLambda1@3dc83a3 m=0
+11-10 23:24:48.063 W/Looper  ( 1261): Slow dispatch took 2108ms BroadcastRunning h=com.android.systemui.broadcast.BroadcastDispatcher$handler$1 c=null m=0
+11-10 23:24:48.063 W/Looper  ( 1261): Slow delivery took 1744ms BroadcastRunning h=android.os.Handler c=android.app.LoadedApk$ReceiverDispatcher$Args$$ExternalSyntheticLambda0@bc0c477 m=0
+11-10 23:24:49.419 W/Looper  ( 1261): Slow delivery took 1353ms BroadcastRunning h=android.os.Handler c=com.android.systemui.broadcast.ActionReceiver$onReceive$1@f8b4ba m=0
+11-10 23:24:50.489 W/Looper  (  670): Slow dispatch took 564ms android.fg h=android.os.Handler c=com.android.server.wm.ActivityMetricsLogger$$ExternalSyntheticLambda0@b2fdf1d m=0
+11-10 23:24:51.709 W/Looper  (  670): Slow dispatch took 3597ms main h=android.os.Handler c=com.android.server.biometrics.sensors.fingerprint.aidl.FingerprintProvider$$ExternalSyntheticLambda2@26828d8 m=0
+11-10 23:24:52.137 W/Looper  (  670): Slow dispatch took 255ms main h=android.service.notification.ConditionProviderService$H c=null m=3
+11-10 23:24:52.649 W/Looper  (  670): Slow dispatch took 205ms main h=android.os.Handler c=null m=1
+11-10 23:24:52.901 W/Looper  (  670): Slow dispatch took 202ms main h=android.os.Handler c=null m=1
+11-10 23:24:53.010 W/Looper  ( 1261): Slow dispatch took 1358ms SysUiBg h=android.os.Handler c=com.android.systemui.statusbar.connectivity.NetworkControllerImpl$$ExternalSyntheticLambda0@e5dc307 m=0
+11-10 23:24:53.116 W/Looper  (  670): Slow dispatch took 152ms main h=android.os.Handler c=null m=1
+11-10 23:24:53.303 W/Looper  (  670): Slow dispatch took 131ms main h=android.os.Handler c=null m=1
+11-10 23:24:53.725 W/Looper  (  670): Slow delivery took 242ms android.fg h=android.os.Handler c=com.android.server.location.injector.SystemLocationPermissionsHelper$$ExternalSyntheticLambda1@1724b75 m=0
+11-10 23:24:53.725 W/Looper  (  670): Slow dispatch took 243ms main h=android.os.Handler c=null m=1
+11-10 23:24:53.988 W/Looper  (  670): Slow dispatch took 105ms main h=android.os.Handler c=null m=1
+11-10 23:24:54.356 W/Looper  (  670): Slow dispatch took 131ms main h=android.os.Handler c=null m=1
+11-10 23:24:54.431 W/Looper  ( 1261): Slow dispatch took 1420ms SysUiBg h=android.os.Handler c=com.android.systemui.statusbar.connectivity.NetworkControllerImpl$$ExternalSyntheticLambda1@c064bf6 m=0
+11-10 23:24:54.509 W/Looper  ( 1261): Slow dispatch took 2164ms BroadcastRunning h=com.android.systemui.broadcast.BroadcastDispatcher$handler$1 c=null m=0
+11-10 23:24:54.947 W/Looper  (  670): Slow dispatch took 191ms main h=android.os.Handler c=null m=1
+11-10 23:24:55.137 W/Looper  ( 1261): Slow delivery took 2281ms SysUiBg h=android.os.Handler c=com.android.systemui.statusbar.connectivity.NetworkControllerImpl$$ExternalSyntheticLambda0@f9ecf0b m=0
+11-10 23:24:55.273 W/Looper  (  670): Slow dispatch took 137ms main h=android.os.Handler c=null m=1
+11-10 23:24:55.524 W/Looper  (  670): Slow dispatch took 141ms main h=android.os.Handler c=null m=1
+11-10 23:24:55.980 W/Looper  (  670): Slow dispatch took 22527ms android.bg h=android.os.Handler c=com.android.server.stats.pull.StatsPullAtomService$$ExternalSyntheticLambda1@29b2a79 m=0
+11-10 23:24:56.580 W/Looper  ( 1261): Slow dispatch took 1366ms BroadcastRunning h=com.android.systemui.broadcast.BroadcastDispatcher$handler$1 c=null m=0
+11-10 23:24:58.409 W/Looper  (  670): Slow delivery took 369ms android.fg h=android.os.Handler c=com.android.server.location.injector.SystemLocationPermissionsHelper$$ExternalSyntheticLambda1@79d26b3 m=0
+11-10 23:24:58.410 W/Looper  (  670): Slow dispatch took 370ms main h=android.os.Handler c=null m=1
+11-10 23:25:00.257 W/Looper  (  670): Slow dispatch took 121ms main h=android.app.ActivityThread$H c=null m=114
+11-10 23:25:00.482 W/Looper  (  670): Slow dispatch took 130ms main h=android.os.Handler c=android.app.LoadedApk$ReceiverDispatcher$Args$$ExternalSyntheticLambda0@f682188 m=0
+11-10 23:25:00.657 W/Looper  (  670): Slow dispatch took 118ms main h=android.app.ActivityThread$H c=android.app.LoadedApk$ReceiverDispatcher$Args$$ExternalSyntheticLambda0@7f545ff m=0
+11-10 23:25:01.482 W/Looper  (  670): Slow dispatch took 574ms main h=com.android.server.notification.NotificationManagerService$WorkerHandler c=com.android.server.notification.NotificationManagerService$9$$ExternalSyntheticLambda0@256290b m=0
+11-10 23:25:02.332 W/Looper  (  670): Slow dispatch took 838ms main h=android.os.Handler c=null m=1
+11-10 23:25:03.416 W/Looper  (  670): Slow dispatch took 241ms main h=android.os.Handler c=null m=1
+11-10 23:25:04.251 W/Looper  (  670): Slow dispatch took 208ms main h=android.os.Handler c=null m=1
+11-10 23:25:05.116 W/Looper  (  670): Slow dispatch took 192ms main h=android.os.Handler c=null m=1
+11-10 23:25:05.727 W/Looper  (  670): Slow dispatch took 201ms main h=android.os.Handler c=null m=1
+11-10 23:25:07.064 W/Looper  (  670): Slow dispatch took 1305ms main h=android.app.ActivityThread$H c=null m=114
+11-10 23:25:07.285 W/Looper  (  670): Slow dispatch took 154ms main h=android.app.ActivityThread$H c=android.app.LoadedApk$ServiceDispatcher$RunConnection@4082178 m=0
+11-10 23:25:07.649 W/Looper  (  670): Slow dispatch took 122ms main h=android.os.Handler c=null m=1
+11-10 23:25:08.376 W/Looper  (  670): Slow dispatch took 133ms main h=android.os.Handler c=null m=1
+11-10 23:25:08.718 W/Looper  (  670): Slow dispatch took 173ms main h=android.os.Handler c=null m=1
+11-10 23:25:09.248 W/Looper  (  670): Slow dispatch took 296ms main h=android.os.Handler c=null m=1
+11-10 23:25:09.705 W/Looper  (  670): Slow dispatch took 456ms main h=android.os.Handler c=null m=1
+11-10 23:25:09.714 W/Looper  (  670): Slow delivery took 458ms android.fg h=com.android.server.DropBoxManagerService$DropBoxManagerBroadcastHandler c=null m=1
+11-10 23:25:09.957 W/Looper  (  670): Slow dispatch took 159ms main h=android.app.ActivityThread$H c=android.app.LoadedApk$ReceiverDispatcher$Args$$ExternalSyntheticLambda0@270e28f m=0
+11-10 23:25:10.255 W/Looper  (  670): Slow dispatch took 191ms main h=com.android.server.notification.NotificationManagerService$WorkerHandler c=com.android.server.notification.NotificationManagerService$PostNotificationRunnable@9789487 m=0
+  half_watchdog <
+    subject: "Blocked in handler on  on main thread (main) for 30s"
+11-10 23:25:13.069 W/Looper  (  670): Slow dispatch took 189ms main h=android.app.ActivityThread$H c=null m=122
+11-10 23:25:13.084 W/Looper  (  670): Slow dispatch took 349ms android.ui h=com.android.server.am.ActivityManagerService$UiHandler c=null m=68
+11-10 23:25:13.085 W/Looper  (  670): Slow dispatch took 288ms android.perm h=android.os.Handler c=com.android.internal.infra.ServiceConnector$Impl$$ExternalSyntheticLambda1@dc3fedd m=0
+11-10 23:25:14.537 W/Looper  (  670): Slow dispatch took 1151ms main h=android.app.ActivityThread$H c=android.app.LoadedApk$ReceiverDispatcher$Args$$ExternalSyntheticLambda0@a8a4c81 m=0
+11-10 23:25:18.209 W/Looper  (  670): Slow dispatch took 3512ms main h=android.app.ActivityThread$H c=android.app.LoadedApk$ReceiverDispatcher$Args$$ExternalSyntheticLambda0@20f98ac m=0
+11-10 23:25:18.351 W/Looper  (  670): Slow dispatch took 139ms main h=android.app.ActivityThread$H c=android.app.LoadedApk$ReceiverDispatcher$Args$$ExternalSyntheticLambda0@f822d m=0
+11-10 23:25:18.520 W/Looper  (  670): Slow dispatch took 100ms main h=android.app.ActivityThread$H c=android.app.LoadedApk$ReceiverDispatcher$Args$$ExternalSyntheticLambda0@58d3db0 m=0
+11-10 23:25:18.768 W/Looper  (  670): Slow dispatch took 114ms main h=com.android.providers.settings.SettingsProvider$SettingsRegistry$MyHandler c=null m=2
+11-10 23:25:19.099 W/Looper  (  670): Slow dispatch took 130ms main h=com.android.server.telecom.HeadsetMediaButton$2 c=null m=0
+11-10 23:25:19.745 W/Looper  (  670): Slow dispatch took 161ms main h=com.android.server.pm.UserManagerService$MainHandler c=null m=1
+11-10 23:25:20.037 W/Looper  (  670): Slow dispatch took 178ms main h=android.app.ActivityThread$H c=null m=116
+11-10 23:25:26.451 W/Looper  ( 1261): Slow dispatch took 1240ms BroadcastRunning h=com.android.systemui.broadcast.BroadcastDispatcher$handler$1 c=null m=0
+11-10 23:25:26.755 W/Looper  ( 1261): Slow delivery took 1048ms BroadcastRunning h=com.android.systemui.broadcast.BroadcastDispatcher$handler$1 c=null m=0
+11-10 23:25:29.722 W/Looper  (  670): Slow dispatch took 16999ms android.fg h=android.os.Handler c=com.android.server.am.UserController$$ExternalSyntheticLambda2@8cc6804 m=0
+11-10 23:25:29.723 W/Looper  (  670): Slow delivery took 17000ms android.fg h=android.os.Handler c=com.android.server.am.UserController$$ExternalSyntheticLambda9@baa0070 m=0
+11-10 23:25:32.109 W/Looper  (  670): Slow dispatch took 1776ms android.ui h=com.android.server.policy.PhoneWindowManager$PolicyHandler c=android.database.ContentObserver$$ExternalSyntheticLambda0@b838acf m=0
+11-10 23:25:32.110 W/Looper  (  670): Slow delivery took 1688ms android.ui h=com.android.server.wm.DisplayPolicy$PolicyHandler c=com.android.server.wm.DisplayPolicy$2$$ExternalSyntheticLambda0@6675c5c m=0
+11-10 23:25:33.838 W/Looper  ( 1261): Slow dispatch took 1613ms SysUiBg h=android.os.Handler c=com.android.systemui.shade.NotificationShadeWindowControllerImpl$$ExternalSyntheticLambda2@501b82e m=0
+11-10 23:25:34.299 W/Looper  ( 1261): Slow delivery took 1345ms SysUiBg h=android.os.Handler c=com.android.systemui.shade.NotificationShadeWindowControllerImpl$$ExternalSyntheticLambda2@5700951 m=0
+11-10 23:25:35.702 W/Looper  ( 1261): Slow dispatch took 1403ms SysUiBg h=android.os.Handler c=android.hardware.display.DisplayManagerGlobal$DisplayListenerDelegate$$ExternalSyntheticLambda0@6af39cb m=0
+11-10 23:25:37.157 W/Looper  (  670): Slow dispatch took 548ms android.fg h=android.os.Handler c=com.android.server.wm.Transition$$ExternalSyntheticLambda2@19ababe m=0
+11-10 23:25:37.590 W/Looper  ( 1261): Slow dispatch took 4919ms BroadcastRunning h=com.android.systemui.broadcast.BroadcastDispatcher$handler$1 c=null m=0
+11-10 23:25:38.359 W/Looper  (  670): Slow dispatch took 118ms main h=android.app.ActivityThread$H c=android.app.LoadedApk$ReceiverDispatcher$Args$$ExternalSyntheticLambda0@428594 m=0
+11-10 23:25:39.624 W/Looper  (  670): Slow dispatch took 114ms main h=android.app.ActivityThread$H c=android.app.LoadedApk$ReceiverDispatcher$Args$$ExternalSyntheticLambda0@1baab3a m=0
+11-10 23:25:39.852 W/Looper  (  670): Slow dispatch took 172ms main h=com.android.providers.settings.SettingsProvider$SettingsRegistry$MyHandler c=null m=1
+11-10 23:25:40.079 W/Looper  (  670): Slow dispatch took 226ms main h=android.app.ActivityThread$H c=android.app.LoadedApk$ServiceDispatcher$RunConnection@e184106 m=0
+11-10 23:25:40.541 W/Looper  (  670): Slow dispatch took 421ms main h=android.app.PropertyInvalidatedCache$AutoCorker$1 c=null m=0
+11-10 23:25:41.377 W/Looper  ( 1261): Slow delivery took 3247ms BroadcastRunning h=com.android.systemui.broadcast.BroadcastDispatcher$handler$1 c=null m=0
+11-10 23:25:41.377 W/Looper  ( 1261): Slow dispatch took 3786ms BroadcastRunning h=com.android.systemui.broadcast.BroadcastDispatcher$handler$1 c=null m=0
+11-10 23:25:42.123 W/Looper  (  670): Slow delivery took 437ms main h=com.android.server.power.Notifier$NotifierHandler c=null m=7
+11-10 23:27:34.406 W/Looper  ( 2143): Slow dispatch took 192ms android.fg h=android.os.Handler c=com.android.server.om.OverlayManagerService$$ExternalSyntheticLambda0@647a2ff m=0
+11-10 23:27:40.969 W/Looper  ( 2143): Slow dispatch took 196ms android.ui h=android.os.Handler c=android.os.Handler$BlockingRunnable@ca46e1b m=0
+11-10 23:27:41.941 W/Looper  ( 2143): Slow dispatch took 152ms android.ui h=android.os.Handler c=android.hardware.display.DisplayManagerGlobal$DisplayListenerDelegate$$ExternalSyntheticLambda0@6097bb5 m=0
+11-10 23:28:14.837 W/Looper  ( 2143): Slow dispatch took 483ms android.fg h=android.os.Handler c=<recycled PooledLambda@ef92d3b> m=0
+11-10 23:28:14.837 W/Looper  ( 2143): Slow delivery took 495ms android.fg h=android.os.Handler c=<recycled PooledLambda@2826c58> m=0
+11-10 23:28:15.107 W/Looper  ( 2143): Slow dispatch took 124ms android.fg h=android.os.Handler c=<recycled PooledLambda@bc36217> m=0
+11-10 23:28:15.322 W/Looper  ( 2143): Slow dispatch took 148ms android.fg h=android.os.Handler c=<recycled PooledLambda@ef92d3b> m=0
+11-10 23:28:15.955 W/Looper  ( 2143): Slow dispatch took 315ms android.fg h=android.os.Handler c=<recycled PooledLambda@39c31df> m=0
+11-10 23:28:16.385 W/Looper  ( 2143): Slow dispatch took 431ms android.fg h=android.os.Handler c=<recycled PooledLambda@6ace28d> m=0
+11-10 23:28:16.794 W/Looper  ( 2143): Slow dispatch took 298ms android.fg h=android.os.Handler c=<recycled PooledLambda@e413a8e> m=0
+11-10 23:28:17.369 W/Looper  ( 2143): Slow dispatch took 575ms android.fg h=android.os.Handler c=<recycled PooledLambda@67f52a8> m=0
+11-10 23:28:18.147 W/Looper  ( 2143): Slow dispatch took 274ms android.fg h=android.os.Handler c=<recycled PooledLambda@bbe7843> m=0
+11-10 23:28:18.437 W/Looper  ( 2143): Slow dispatch took 290ms android.fg h=android.os.Handler c=<recycled PooledLambda@db7633e> m=0
+11-10 23:28:18.945 W/Looper  ( 2143): Slow dispatch took 247ms android.fg h=android.os.Handler c=<recycled PooledLambda@1bc63a2> m=0
+11-10 23:28:19.097 W/Looper  ( 2143): Slow dispatch took 151ms android.fg h=android.os.Handler c=<recycled PooledLambda@dbd687> m=0
+11-10 23:28:19.432 W/Looper  ( 2143): Slow dispatch took 242ms android.fg h=android.os.Handler c=<recycled PooledLambda@bc36217> m=0
+11-10 23:28:19.623 W/Looper  ( 2143): Slow dispatch took 191ms android.fg h=android.os.Handler c=<recycled PooledLambda@2826c58> m=0
+11-10 23:28:20.041 W/Looper  ( 2143): Slow dispatch took 258ms android.fg h=android.os.Handler c=<recycled PooledLambda@bfdd00e> m=0
+11-10 23:28:20.154 W/Looper  ( 2143): Slow dispatch took 112ms android.fg h=android.os.Handler c=<recycled PooledLambda@94a0a2f> m=0
+11-10 23:28:20.337 W/Looper  ( 2143): Slow dispatch took 105ms android.fg h=android.os.Handler c=com.android.server.servicewatcher.ServiceWatcherImpl$$ExternalSyntheticLambda0@75b2c7d m=0
+11-10 23:28:23.061 W/Looper  ( 2143): Slow dispatch took 763ms android.fg h=android.os.Handler c=com.android.server.location.gnss.GnssLocationProvider$$ExternalSyntheticLambda8@8105ba1 m=0
+11-10 23:28:23.082 W/Looper  ( 2143): Slow delivery took 642ms android.fg h=android.os.Handler c=com.android.server.location.gnss.GnssVisibilityControl$$ExternalSyntheticLambda3@7c7c39e m=0
+11-10 23:28:23.450 W/Looper  ( 2143): Slow dispatch took 237ms android.fg h=android.os.Handler c=com.android.server.location.gnss.GnssLocationProvider$$ExternalSyntheticLambda22@b6c1b26 m=0
+11-10 23:28:25.062 W/Looper  ( 2400): Slow dispatch took 1229ms BroadcastRunning h=com.android.systemui.broadcast.BroadcastDispatcher$handler$1 c=null m=0
+11-10 23:28:26.137 W/Looper  ( 2400): Slow delivery took 1231ms BroadcastRunning h=com.android.systemui.broadcast.BroadcastDispatcher$handler$1 c=null m=0
+11-10 23:28:28.898 W/Looper  ( 2400): Slow dispatch took 2761ms BroadcastRunning h=com.android.systemui.broadcast.BroadcastDispatcher$handler$1 c=null m=0
+7]äÄ†£∫´Ä¿£∫´äÄ¿£∫´ÄÄƒª´äÄÄƒª´Ä¿ƒª´ (äÄ¿ƒª´Ä¿£¬´äÄ¿£¬´Ä‡£¬´ä-Ä‡£¬´Ä‡‚¬´ (:[anon:stack_and_tls:2715]äÄ‡‚¬´ÄÄ„¬´äÄÄ„¬´ÄÄ≥≈´äÄÄ≥≈´Ä¿≥≈´ (äÄ¿≥≈´ÄÄ„ ´äÄÄ„ ´Ä†„ ´ä-Ä†„ ´Ä†¢À´ (:[anon:stack_and_tls:2714]äÄ†¢À´Ä¿¢À´äSÄÄ‚À´Ä‡‚À´ :/system/lib64/libnetd_client.soB 9d2797b58d6ccf137db95f73ff1a5b03äÄ‡‚À´ÄÄÊÀ´äYÄÄÊÀ´ÄÄÁÀ´ÄÄ 0:/system/lib64/libnetd_client.soB 9d2797b58d6ccf137db95f73ff1a5b03äÄÄÁÀ´ÄÄÍÀ´äWÄÄÍÀ´Ä†ÍÀ´ÄÄ :/system/lib64/libnetd_client.soB 9d2797b58d6ccf137db95f73ff1a5b03äÄ†ÍÀ´ÄÄÓÀ´äYÄÄÓÀ´Ä†ÓÀ´ÄÄ (:/system/lib64/libnetd_client.soB 9d2797b58d6ccf137db95f73ff1a5b03ä.ÄÄ˘À´Ä†πÃ´ (:[anon:AllocatorRingBuffer]ä,Ä†πÃ´Ä†ªÃ∞:[anon:scudo:primary_reserve]ä(Ä†ªÃ∞Ä†ÀÃ∞ (:[anon:scudo:primary]ä,Ä†ÀÃ∞ÄÄªÃ±:[anon:scudo:primary_reserve]ä(ÄÄªÃ±ÄÄÀÃ± (:[anon:scudo:primary]ä,ÄÄÀÃ±Ä¿πÃ∑:[anon:scudo:primary_reserve]ä(Ä¿πÃ∑Ä¿…Ã∑ (:[anon:scudo:primary]ä,Ä¿…Ã∑ÄÄΩÃ∏:[anon:scudo:primary_reserve]ä(ÄÄΩÃ∏ÄÄÕÃ∏ (:[anon:scudo:primary]ä,ÄÄÕÃ∏Ä†∫Ãπ:[anon:scudo:primary_reserve]ä(Ä†∫ÃπÄ† Ãπ (:[anon:scudo:primary]ä,Ä† ÃπÄ¿∫Ãª:[anon:scudo:primary_reserve]ä(Ä¿∫ÃªÄ¿ Ãª (:[anon:scudo:primary]ä,Ä¿ ÃªÄÄ∫Ãº:[anon:scudo:primary_reserve]ä(ÄÄ∫ÃºÄÄ Ãº (:[anon:scudo:primary]ä,ÄÄ ÃºÄ‡∫ÃΩ:[anon:scudo:primary_reserve]ä(Ä‡∫ÃΩÄ‡ ÃΩ (:[anon:scudo:primary]ä,Ä‡ ÃΩÄÄΩÃø:[anon:scudo:primary_reserve]ä(ÄÄΩÃøÄÄÕÃø (:[anon:scudo:primary]ä,ÄÄÕÃøÄÄºÃ¿:[anon:scudo:primary_reserve]ä(ÄÄºÃ¿ÄÄÃÃ¿ (:[anon:scudo:primary]ä,ÄÄÃÃ¿Ä¿ºÃ¡:[anon:scudo:primary_reserve]ä(Ä¿ºÃ¡Ä¿ÃÃ¡ (:[anon:scudo:primary]ä,Ä¿ÃÃ¡Ä†ªÃ¬:[anon:scudo:primary_reserve]ä(Ä†ªÃ¬Ä†ÀÃ¬ (:[anon:scudo:primary]ä,Ä†ÀÃ¬ÄÄΩÃƒ:[anon:scudo:primary_reserve]ä(ÄÄΩÃƒÄÄÕÃƒ (:[anon:scudo:primary]ä,ÄÄÕÃƒÄ¿ºÃ»:[anon:scudo:primary_reserve]ä(Ä¿ºÃ»Ä¿ÃÃ» (:[anon:scudo:primary]ä,Ä¿ÃÃ»Ä†∫Ã…:[anon:scudo:primary_reserve]ä(Ä†∫Ã…Ä† Ã… (:[anon:scudo:primary]ä,Ä† Ã…Ä†πÃÃ:[anon:scudo:primary_reserve]ä!Ä†πÃÃÄ†¸ÕÃ:[anon:cfi shadow]ä#Ä†¸ÕÃÄ¿¸ÕÃ :[anon:cfi shadow]ä!Ä¿¸ÕÃÄ¿ûŒÃ:[anon:cfi shadow]ä#Ä¿ûŒÃÄ‡ûŒÃ :[anon:cfi shadow]ä!Ä‡ûŒÃÄ‡£ŒÃ:[anon:cfi shadow]ä#Ä‡£ŒÃÄÄ§ŒÃ :[anon:cfi shadow]ä!ÄÄ§ŒÃÄ†πÃ‘:[anon:cfi shadow]ä'Ä†πÃ‘Ä†“Ã‘ (:[anon:linker_alloc]ä`Ä†“Ã‘ÄÄ÷Ã‘ :,/apex/com.android.vndk.v34/lib64/libutils.soB c44cb844d3f11feaee4ffe84c0ebc757äÄÄ÷Ã‘Ä†÷Ã‘äfÄ†÷Ã‘Ä‡ŸÃ‘ÄÄ 0:,/apex/com.android.vndk.v34/lib64/libutils.soB c44cb844d3f11feaee4ffe84c0ebc757äÄ‡ŸÃ‘Ä†⁄Ã‘ädÄ†⁄Ã‘Ä¿⁄Ã‘ÄÄ :,/apex/com.android.vndk.v34/lib64/libutils.soB c44cb844d3f11feaee4ffe84c0ebc757äÄ¿⁄Ã‘Ä†ﬁÃ‘äfÄ†ﬁÃ‘Ä¿ﬁÃ‘ÄÄ (:,/apex/com.android.vndk.v34/lib64/libutils.soB c44cb844d3f11feaee4ffe84c0ebc757äaÄÄ‚Ã‘Ä¿‰Ã‘ :-/apex/com.android.vndk.v34/lib64/libcutils.soB 1c1ce2625710eb44c31dbdb1b9f190beäÄ¿‰Ã‘ÄÄÊÃ‘ägÄÄÊÃ‘Ä‡ËÃ‘ÄÄ 0:-/apex/com.android.vndk.v34/lib64/libcutils.soB 1c1ce2625710eb44c31dbdb1b9f190beäÄ‡ËÃ‘ÄÄÍÃ‘äeÄÄÍÃ‘Ä¿ÍÃ‘ÄÄ :-/apex/com.android.vndk.v34/lib64/libcutils.soB 1c1ce2625710eb44c31dbdb1b9f190beäÄ¿ÍÃ‘Ä†ÓÃ‘ägÄ†ÓÃ‘Ä¿ÓÃ‘Ä† (:-/apex/com.android.vndk.v34/lib64/libcutils.soB 1c1ce2625710eb44c31dbdb1b9f190beänÄ¿ÚÃ‘Ä‡ÛÃ‘ ::/vendor/lib64/android.hardware.biometrics.common-V3-ndk.soB c39e2c58000c2249e26e39b3eac59ee2äÄ‡ÛÃ‘Ä¿ˆÃ‘ätÄ¿ˆÃ‘Ä¿˜Ã‘ÄÄ 0::/vendor/lib64/android.hardware.biometrics.common-V3-ndk.soB c39e2c58000c2249e26e39b3eac59ee2äÄ¿˜Ã‘Ä¿˙Ã‘ärÄ¿˙Ã‘Ä‡˙Ã‘ÄÄ ::/vendor/lib64/android.hardware.biometrics.common-V3-ndk.soB c39e2c58000c2249e26e39b3eac59ee2äÄ‡˙Ã‘Ä¿˛Ã‘ätÄ¿˛Ã‘Ä‡˛Ã‘ÄÄ (::/vendor/lib64/android.hardware.biometrics.common-V3-ndk.soB c39e2c58000c2249e26e39b3eac59ee2äbÄ‡ÇÕ‘Ä¿áÕ‘ :./apex/com.android.runtime/lib64/bionic/libm.soB 4392071b5402c384f493539827bf25c0äÄ¿áÕ‘Ä‡äÕ‘ähÄ‡äÕ‘Ä‡ìÕ‘ÄÄ 0:./apex/com.android.runtime/lib64/bionic/libm.soB 439211-10 23:28:38.745 W/Looper  ( 2143): Slow dispatch took 113ms android.ui h=com.android.server.am.ActivityManagerService$UiHandler c=com.android.server.am.UidObserverController$$ExternalSyntheticLambda0@24ae846 m=0
+11-10 23:28:38.985 W/Looper  ( 2143): Slow delivery took 89820ms main h=android.app.PropertyInvalidatedCache$AutoCorker$1 c=null m=0
+11-10 23:28:39.634 W/Looper  ( 2143): Slow dispatch took 648ms main h=android.app.ActivityThread$H c=null m=156
+11-10 23:28:40.066 W/Looper  ( 2143): Slow dispatch took 431ms main h=android.app.ActivityThread$H c=null m=159
+11-10 23:28:40.262 W/Looper  ( 2143): Slow dispatch took 187ms main h=android.os.Handler c=com.android.server.BatteryService$$ExternalSyntheticLambda0@510e42e m=0
+11-10 23:28:40.487 W/Looper  ( 2143): Slow dispatch took 154ms main h=android.database.sqlite.SQLiteConnectionPool$IdleConnectionHandler c=null m=1
+    00000072b738b6e0 6f736e657320656811-10 23:28:40.791 W/Looper  ( 2143): Slow dispatch took 165ms main h=android.service.notification.ConditionProviderService$H c=null m=3
+11-10 23:28:41.049 W/Looper  ( 2143): Slow dispatch took 164ms main h=android.os.Handler c=<recycled PooledLambda@a0c94d8> m=1
+11-10 23:28:41.422 W/Looper  ( 2143): Slow dispatch took 143ms android.ui h=com.android.server.am.ActivityManagerService$UiHandler c=com.android.server.am.UidObserverController$$ExternalSyntheticLambda0@24ae846 m=0
+11-10 23:28:41.435 W/Looper  ( 2143): Slow dispatch took 385ms main h=android.os.Handler c=com.android.server.biometrics.sensors.face.aidl.FaceProvider$$ExternalSyntheticLambda1@a3db7a1 m=0
+11-10 23:28:43.434 W/Looper  ( 2400): Slow dispatch took 2730ms BroadcastRunning h=com.android.systemui.broadcast.BroadcastDispatcher$handler$1 c=null m=0
+11-10 23:28:48.272 W/Looper  ( 2143): Slow dispatch took 6838ms main h=android.os.Handler c=com.android.server.biometrics.sensors.fingerprint.aidl.FingerprintProvider$$ExternalSyntheticLambda2@dedd691 m=0
+11-10 23:28:48.564 W/Looper  ( 2143): Slow dispatch took 197ms main h=com.android.server.notification.ZenModeHelper$H c=null m=5
+11-10 23:28:49.056 W/Looper  ( 2143): Slow dispatch took 438ms main h=com.android.server.pm.UserManagerService$MainHandler c=com.android.server.pm.UserManagerService$$ExternalSyntheticLambda4@2bbcd32 m=0
+11-10 23:28:49.202 W/Looper  ( 2400): Slow dispatch took 1023ms BroadcastRunning h=com.android.systemui.broadcast.BroadcastDispatcher$handler$1 c=null m=0
+11-10 23:28:50.915 W/Looper  ( 2400): Slow dispatch took 1754ms SysUiBg h=android.os.Handler c=com.android.systemui.statusbar.connectivity.NetworkControllerImpl$$ExternalSyntheticLambda0@1256d47 m=0
+11-10 23:28:51.821 W/Looper  ( 2400): Slow delivery took 1146ms SysUiBg h=android.os.Handler c=com.android.systemui.statusbar.connectivity.NetworkControllerImpl$$ExternalSyntheticLambda0@255974 m=0
+  half_watchdog <
+    subject: "Blocked in handler on  on main thread (main) for 30s"
+  half_watchdog <
+    subject: "Blocked in handler on  on main thread (main) for 30s"
+11-10 23:28:53.318 W/Looper  ( 2400): Slow dispatch took 1496ms SysUiBg h=android.os.Handler c=com.android.systemui.statusbar.connectivity.NetworkControllerImpl$$ExternalSyntheticLambda1@3b4a3f8 m=0
+11-10 23:28:53.853 W/Looper  ( 2400): Slow dispatch took 4066ms BroadcastRunning h=com.android.systemui.broadcast.BroadcastDispatcher$handler$1 c=null m=0
+11-10 23:28:53.853 W/Looper  ( 2400): Slow delivery took 4067ms BroadcastRunning h=android.os.Handler c=com.android.systemui.broadcast.ActionReceiver$onReceive$1@a8c07a4 m=0
+11-10 23:28:55.969 W/Looper  ( 2400): Slow dispatch took 2116ms BroadcastRunning h=com.android.systemui.broadcast.BroadcastDispatcher$handler$1 c=null m=0
+11-10 23:29:01.015 W/Looper  ( 2400): Slow dispatch took 5045ms BroadcastRunning h=com.android.systemui.broadcast.BroadcastDispatcher$handler$1 c=null m=0
+11-10 23:29:03.689 W/Looper  ( 2143): Slow dispatch took 1128ms android.fg h=android.os.Handler c=com.android.server.wm.AnrController$$ExternalSyntheticLambda2@a1626ef m=0
+11-10 23:29:03.879 W/Looper  ( 2143): Slow dispatch took 5628ms main h=android.app.ActivityThread$H c=android.app.LoadedApk$ReceiverDispatcher$Args$$ExternalSyntheticLambda0@ac8430b m=0
+11-10 23:29:04.747 W/Looper  ( 2143): Slow dispatch took 539ms main h=com.android.server.telecom.HeadsetMediaButton$2 c=null m=0
+11-10 23:29:05.372 W/Looper  ( 2143): Slow dispatch took 624ms main h=com.android.server.alarm.AlarmManagerService$AlarmHandler c=null m=15
+11-10 23:29:05.997 W/Looper  ( 2143): Slow dispatch took 622ms main h=com.android.server.pm.UserManagerService$MainHandler c=com.android.server.pm.UserManagerService$3@2b091ea m=0
+11-10 23:29:06.157 W/Looper  ( 2143): Slow dispatch took 558ms android.perm h=android.os.Handler c=com.android.internal.infra.ServiceConnector$Impl$$ExternalSyntheticLambda2@b34a4bb m=0
+11-10 23:29:06.296 W/Looper  ( 2143): Slow dispatch took 141ms main h=com.android.server.pm.UserManagerService$MainHandler c=null m=1
+11-10 23:29:06.405 W/Looper  ( 2143): Slow dispatch took 109ms main h=android.app.ActivityThread$H c=android.app.LoadedApk$ServiceDispatcher$RunConnection@7b21325 m=0
+11-10 23:29:06.816 W/Looper  ( 2143): Slow dispatch took 411ms main h=com.android.server.alarm.AlarmManagerService$AlarmHandler c=com.android.server.alarm.AlarmManagerService$3$$ExternalSyntheticLambda0@4fb934c m=0
+11-10 23:29:06.946 W/Looper  ( 2143): Slow dispatch took 129ms main h=com.android.server.alarm.AlarmManagerService$AlarmHandler c=null m=5
+11-10 23:29:06.950 W/Looper  ( 2143): Slow dispatch took 123ms android.ui h=com.android.server.am.ActivityManagerService$UiHandler c=com.android.server.am.UidObserverController$$ExternalSyntheticLambda0@24ae846 m=0
+11-10 23:29:07.673 W/Looper  ( 2143): Slow dispatch took 229ms main h=android.os.Handler c=<recycled PooledLambda@1bc63a2> m=0
+11-10 23:29:07.798 W/Looper  ( 2143): Slow dispatch took 125ms main h=android.app.ActivityThread$H c=android.app.LoadedApk$ReceiverDispatcher$Args$$ExternalSyntheticLambda0@25160b2 m=0
+11-10 23:29:11.212 W/Looper  ( 2143): Slow dispatch took 796ms android.ui h=com.android.server.wm.DisplayPolicy$PolicyHandler c=com.android.server.wm.DisplayPolicy$2$$ExternalSyntheticLambda2@eddd3ba m=0
+11-10 23:29:16.787 W/Looper  ( 2143): Slow dispatch took 773ms android.ui h=com.android.server.am.ActivityManagerService$UiHandler c=com.android.server.am.UidObserverController$$ExternalSyntheticLambda0@24ae846 m=0
+11-10 23:29:30.740 W/Looper  ( 2400): Slow dispatch took 2576ms BroadcastRunning h=com.android.systemui.broadcast.BroadcastDispatcher$handler$1 c=null m=0
+11-10 23:29:35.172 W/Looper  ( 2400): Slow dispatch took 1911ms BroadcastRunning h=com.android.systemui.broadcast.BroadcastDispatcher$handler$1 c=null m=0
+11-10 23:29:40.419 W/Looper  ( 2143): Slow dispatch took 414ms android.fg h=android.os.Handler c=com.android.server.wm.ActivityMetricsLogger$$ExternalSyntheticLambda0@556ed21 m=0[  827.743206] type=1400 audit(1699659036.568:1583): avc:  denied  { read } for  comm="sleep" path="/data/tombstones/tombstone_01" dev="loop2" ino=594 scontext=u:r:toolbox:s0 tcontext=u:object_r:tombstone_data_file:s0 tclass=file permissive=1
+11-10 23:29:41.190 W/Looper  ( 2143): Slow delivery took 426ms main h=com.android.server.trust.TrustManagerService$2 c=android.os.Handler$BlockingRunnable@79b61e8 m=0
+11-10 23:29:42.201 W/Looper  ( 2400): Slow dispatch took 3161ms BroadcastRunning h=com.android.systemui.broadcast.BroadcastDispatcher$handler$1 c=null m=0
+11-10 23:29:42.572 W/Looper  ( 2400): Slow delivery took 2318ms BroadcastRunning h=com.android.systemui.broadcast.BroadcastDispatcher$handler$1 c=null m=0
+11-10 23:29:45.344 W/Looper  ( 2143): Slow delivery took 450ms main h=android.app.ActivityThread$H c=android.app.LoadedApk$ReceiverDispatcher$Args$$ExternalSyntheticLambda0@e3e5c9e m=0
+    x24 00000077866b66a8  x25 0000000000000004  x26 000000000000000c  x27 000000711-10 23:29:45.350 W/Looper  ( 2143): Slow dispatch took 1419ms main h=android.app.ActivityThread$H c=android.app.LoadedApk$ReceiverDispatcher$Args$$ExternalSyntheticLambda0@e3e5c9e m=0
+11-10 23:29:45.726 W/Looper  ( 2143): Slow dispatch took 376ms main h=android.app.ActivityThread$H c=android.app.LoadedApk$ReceiverDispatcher$Args$$ExternalSyntheticLambda0@c3b6176 m=0
+11-10 23:29:45.949 W/Looper  ( 2143): Slow dispatch took 222ms main h=com.android.server.notification.NotificationManagerService$WorkerHandler c=com.android.server.notification.NotificationManagerService$PostNotificationRunnable@69a405 m=0
+11-10 23:29:47.416 W/Looper  ( 2400): Slow dispatch took 5766ms SysUiBg h=android.os.Handler c=com.android.systemui.statusbar.policy.FlashlightControllerImpl$$ExternalSyntheticLambda0@d262786 m=0
+11-10 23:29:47.792 W/Looper  ( 2400): Slow delivery took 6086ms SysUiBg h=android.os.Handler c=com.android.systemui.qrcodescanner.controller.QRCodeScannerController$$ExternalSyntheticLambda1@977893f m=0
+  half_watchdog <
+    subject: "Blocked in handler on  on main thread (main) for 30s"
+11-10 23:29:51.248 W/Looper  ( 2143): Slow dispatch took 103ms main h=android.os.Handler c=com.android.internal.os.BinderCallsStats$1@8fabf5 m=0
+11-10 23:29:57.529 W/Looper  ( 2143): Slow delivery took 750ms android.fg h=android.os.Handler c=com.android.server.am.SameProcessApplicationThread$$ExternalSyntheticLambda1@f667fa4 m=0
+11-10 23:30:01.478 W/Looper  ( 2143): Slow dispatch took 371ms main h=android.os.Handler c=android.app.LoadedApk$ReceiverDispatcher$Args$$ExternalSyntheticLambda0@9d45782 m=0
+11-10 23:30:28.634 W/Looper  ( 3182): Slow dispatch took 3921ms BroadcastRunning h=com.android.systemui.broadcast.BroadcastDispatcher$handler$1 c=null m=0
+11-10 23:30:30.694 W/Looper  ( 3182): Slow delivery took 3922ms BroadcastRunning h=com.android.systemui.broadcast.BroadcastDispatcher$handler$1 c=null m=0
+11-10 23:30:30.694 W/Looper  ( 3182): Slow dispatch took 2060ms BroadcastRunning h=com.android.systemui.broadcast.BroadcastDispatcher$handler$1 c=null m=0
+11-10 23:30:34.617 W/Looper  ( 2143): Slow dispatch took 328ms android.fg h=com.android.server.DropBoxManagerService$DropBoxManagerBroadcastHandler c=null m=1
+    00000079'b5ab011-10 23:30:34.763 W/Looper  ( 2143): Slow delivery took 341ms android.fg h=android.os.Handler c=com.android.server.location.injector.SystemAppForegroundHelper$$ExternalSyntheticLambda1@9f5f85a m=0
+11-10 23:30:35.351 W/Looper  ( 2143): Slow dispatch took 137ms android.ui h=com.android.server.am.ActivityManagerService$UiHandler c=com.android.server.am.UidObserverController$$ExternalSyntheticLambda0@24ae846 m=0
+11-10 23:30:40.201 W/Looper  ( 2143): Slow dispatch took 565ms main h=com.android.server.notification.NotificationManagerService$WorkerHandler c=com.android.server.notification.NotificationManagerService$PostNotificationRunnable@8528e4c m=0
+11-10 23:30:40.346 W/Looper  ( 3182): Slow dispatch took 7929ms BroadcastRunning h=com.android.systemui.broadcast.BroadcastDispatcher$handler$1 c=null m=0
+11-10 23:30:41.488 W/Looper  ( 2143): Slow dispatch took 291ms main h=android.app.PropertyInvalidatedCache$AutoCorker$1 c=null m=0
+11-10 23:30:42.601 W/Looper  ( 2143): Slow dispatch took 115ms android.ui h=com.android.server.am.ActivityManagerService$UiHandler c=com.android.server.am.UidObserverController$$ExternalSyntheticLambda0@24ae846 m=0
+11-10 23:30:43.450 W/Looper  ( 3182): Slow delivery took 7941ms BroadcastRunning h=com.android.systemui.broadcast.BroadcastDispatcher$handler$1 c=null m=0
+11-10 23:30:43.450 W/Looper  ( 3182): Slow dispatch took 3103ms BroadcastRunning h=com.android.systemui.broadcast.BroadcastDispatcher$handler$1 c=null m=0
+11-10 23:30:45.366 W/Looper  ( 2143): Slow dispatch took 306ms main h=android.os.Handler c=<recycled PooledLambda@587f3fc> m=0
+11-10 23:30:45.369 W/Looper  ( 2143): Slow delivery took 351ms main h=android.app.PropertyInvalidatedCache$AutoCorker$1 c=null m=0
+11-10 23:30:45.513 W/Looper  ( 2143): Slow dispatch took 13414ms android.bg h=android.os.Handler c=com.android.server.print.PrintManagerService$PrintManagerImpl$3@65e53e8 m=0
+^’JŒ	™BîÀÁπŒ‘π=©›g`p≠wı^TÕ‚ΩuÆız‘ﬁ÷G3ènÍ”-/“˝¿c&#IòY¬ÙÂ¬å¥≤ò.Ÿ_Î-°ØÌMæÊÄÛë}so|≠˜&~(øI8ùã4e"Z⁄KÉ)˘·mD)˝uΩGë¡Å¯=oÛoÔ≠kÅ¥ór‹õ°œ¡õ∫©~ÔùÈ∆ŸT+ê9^hZcNhFû-ó^Ë€Çπvhn†BR{ÓU€ELAHÍΩ≥€87ƒ¢I.éÏU{LÅ%€ﬁŸlú´âO≤r4Æ	LIéÌù›∆9;0£ö8∂∑ûm‚ÑÄ/ΩmÛ‰≥ç.¢}√ô´ªÅ11-10 23:30:48.061 W/Looper  ( 3182): Slow dispatch took 1012ms SysUiBg h=android.os.Handler c=com.android.systemui.media.controls.pipeline.MediaSessionBasedFilter$1@7b5e3cd m=0
+11-10 23:30:55.205 W/Looper  ( 3182): Slow dispatch took 1203ms BroadcastRunning h=com.android.systemui.broadcast.BroadcastDispatcher$handler$1 c=null m=0
+11-10 23:30:57.995 W/Looper  ( 3182): Slow dispatch took 1440ms BroadcastRunning h=com.android.systemui.broadcast.BroadcastDispatcher$handler$1 c=null m=0
+11-10 23:31:01.270 W/Looper  ( 3182): Slow dispatch took 1102ms SysUiBg h=android.os.Handler c=com.android.systemui.statusbar.connectivity.NetworkControllerImpl$$ExternalSyntheticLambda1@2b4754b m=0
+11-10 23:31:01.623 W/Looper  ( 3182): Slow delivery took 1512ms SysUiBg h=android.os.Handler c=com.android.systemui.statusbar.connectivity.NetworkControllerImpl$$ExternalSyntheticLambda0@f4c42c3 m=0
+11-10 23:31:01.749 W/Looper  ( 3182): Slow dispatch took 1042ms BroadcastRunning h=com.android.systemui.broadcast.BroadcastDispatcher$handler$1 c=null m=0
+11-10 23:31:04.658 W/Looper  ( 3182): Slow delivery took 1238ms BroadcastRunning h=com.android.systemui.broadcast.BroadcastDispatcher$handler$1 c=null m=0
+11-10 23:31:04.658 W/Looper  ( 3182): Slow dispatch took 2909ms BroadcastRunning h=com.android.systemui.broadcast.BroadcastDispatcher$handler$1 c=null m=0
+11-10 23:31:08.243 W/Looper  ( 2143): Slow dispatch took 298ms android.fg h=android.os.Handler c=com.android.server.am.SameProcessApplicationThread$$ExternalSyntheticLambda1@952725d m=0
+11-10 23:31:36.144 W/Looper  ( 3728): Slow dispatch took 2261ms BroadcastRunning h=com.android.systemui.broadcast.BroadcastDispatcher$handler$1 c=null m=0
+11-10 23:31:38.361 W/Looper  ( 3728): Slow delivery took 2831ms BroadcastRunning h=com.android.systemui.broadcast.BroadcastDispatcher$handler$1 c=null m=0
+11-10 23:31:38.760 W/Looper  ( 3728): Slow dispatch took 2215ms BroadcastRunning h=com.android.systemui.broadcast.BroadcastDispatcher$handler$1 c=null m=0
+11-10 23:31:42.149 W/Looper  ( 2143): Slow dispatch took 118ms android.ui h=com.android.server.am.ActivityManagerService$UiHandler c=com.android.server.am.UidObserverController$$ExternalSyntheticLambda0@24ae846 m=0
+11-10 23:31:43.449 W/Looper  ( 2143): Slow dispatch took 328ms android.ui h=com.android.server.am.ActivityManagerService$UiHandler c=com.android.server.am.UidObserverController$$ExternalSyntheticLambda0@24ae846 m=0
+11-10 23:31:44.701 W/Looper  ( 3728): Slow dispatch took 5440ms BroadcastRunning h=com.android.systemui.broadcast.BroadcastDispatcher$handler$1 c=null m=0
+11-10 23:31:48.183 W/Looper  ( 3728): Slow dispatch took 3481ms BroadcastRunning h=com.android.systemui.broadcast.BroadcastDispatcher$handler$1 c=null m=0
+11-10 23:31:49.786 W/Looper  ( 3728): Slow dispatch took 1601ms BroadcastRunning h=com.android.systemui.broadcast.BroadcastDispatcher$handler$1 c=null m=0
+11-10 23:31:50.914 W/Looper  ( 3728): Slow dispatch took 1128ms BroadcastRunning h=android.os.Handler c=com.android.systemui.broadcast.ActionReceiver$onReceive$1@9c19cdf m=0
+11-10 23:31:56.723 W/Looper  ( 3728): Slow dispatch took 2250ms BroadcastRunning h=com.android.systemui.broadcast.BroadcastDispatcher$handler$1 c=null m=0
+11-10 23:32:00.111 W/Looper  ( 3728): Slow dispatch took 1198ms SysUiBg h=android.os.Handler c=android.hardware.display.DisplayManagerGlobal$DisplayListenerDelegate$$ExternalSyntheticLambda0@3ec0f9e m=0
+11-10 23:32:02.283 W/Looper  ( 3728): Slow dispatch took 2598ms BroadcastRunning h=com.android.systemui.broadcast.BroadcastDispatcher$handler$1 c=null m=0
+11-10 23:32:05.775 W/Looper  ( 3728): Slow delivery took 1242ms BroadcastRunning h=com.android.systemui.broadcast.BroadcastDispatcher$handler$1 c=null m=0
+11-10 23:32:05.775 W/Looper  ( 3728): Slow dispatch took 3491ms BroadcastRunning h=com.android.systemui.broadcast.BroadcastDispatcher$handler$1 c=null m=0
+11-10 23:32:07.523 W/Looper  ( 3728): Slow dispatch took 1747ms BroadcastRunning h=com.android.systemui.broadcast.BroadcastDispatcher$handler$1 c=null m=0
+11-10 23:32:09.062 W/Looper  ( 3728): Slow dispatch took 5968ms SysUiBg h=android.os.Handler c=com.android.systemui.statusbar.connectivity.NetworkControllerImpl$$ExternalSyntheticLambda0@288c61a m=0
+11-10 23:32:09.782 W/Looper  ( 3728): Slow dispatch took 2259ms BroadcastRunning h=com.android.systemui.broadcast.BroadcastDispatcher$handler$1 c=null m=0
+11-10 23:32:11.374 W/Looper  ( 3728): Slow delivery took 4907ms SysUiBg h=android.os.Handler c=com.android.systemui.statusbar.connectivity.NetworkControllerImpl$$ExternalSyntheticLambda0@a26481f m=0
+11-10 23:32:11.374 W/Looper  ( 3728): Slow dispatch took 1032ms SysUiBg h=android.os.Handler c=com.android.systemui.statusbar.connectivity.NetworkControllerImpl$$ExternalSyntheticLambda0@a26481f m=0
+11-10 23:32:12.089 W/Looper  ( 3728): Slow dispatch took 1532ms BroadcastRunning h=com.android.systemui.broadcast.BroadcastDispatcher$handler$1 c=null m=0
+11-10 23:32:13.132 W/Looper  ( 3728): Slow dispatch took 1758ms SysUiBg h=android.os.Handler c=com.android.systemui.statusbar.connectivity.NetworkControllerImpl$$ExternalSyntheticLambda1@30b9a34 m=0
+11-10 23:32:16.273 W/Looper  ( 3728): Slow dispatch took 4184ms BroadcastRunning h=com.android.systemui.broadcast.BroadcastDispatcher$handler$1 c=null m=0
+11-10 23:32:18.310 W/Looper  ( 3728): Slow dispatch took 2036ms BroadcastRunning h=com.android.systemui.broadcast.BroadcastDispatcher$handler$1 c=null m=0
+11-10 23:32:22.272 W/Looper  ( 2143): Slow dispatch took 648ms android.fg h=com.android.server.DropBoxManagerService$DropBoxManagerBroadcastHandler c=null m=1
+11-10 23:32:22.273 W/Looper  ( 2143): Slow delivery took 319ms android.fg h=com.android.server.DropBoxManagerService$DropBoxManagerBroadcastHandler c=null m=1
+11-10 23:32:23.978 W/Looper  ( 2143): Slow dispatch took 382ms android.fg h=com.android.server.DropBoxManagerService$DropBoxManagerBroadcastHandler c=null m=1
+11-10 23:32:26.622 W/Looper  ( 2143): Slow delivery took 253ms main h=android.os.Handler c=android.net.TetheringManager$4$$ExternalSyntheticLambda7@4359464 m=0
+11-10 23:32:54.008 W/Looper  ( 4201): Slow dispatch took 4349ms BroadcastRunning h=com.android.systemui.broadcast.BroadcastDispatcher$handler$1 c=null m=0
+11-10 23:32:54.853 W/Looper  ( 4201): Slow dispatch took 1305ms SysUiBg h=android.os.Handler c=com.android.keyguard.KeyguardUpdateMonitor$$ExternalSyntheticLambda1@ad82f3f m=0
+11-10 23:32:57.146 W/Looper  ( 4201): Slow delivery took 4680ms BroadcastRunning h=com.android.systemui.broadcast.BroadcastDispatcher$handler$1 c=null m=0
+11-10 23:32:57.146 W/Looper  ( 4201): Slow dispatch took 2808ms BroadcastRunning h=com.android.systemui.broadcast.BroadcastDispatcher$handler$1 c=null m=0
+11-10 23:33:10.952 W/Looper  ( 4201): Slow dispatch took 4650ms BroadcastRunning h=com.android.systemui.broadcast.BroadcastDispatcher$handler$1 c=null m=0
+11-10 23:33:16.689 W/Looper  ( 4201): Slow dispatch took 1319ms SysUiBg h=android.os.Handler c=com.android.systemui.media.controls.pipeline.MediaSessionBasedFilter$1@6874cfc m=0
+11-10 23:33:29.487 W/Looper  ( 4201): Slow dispatch took 3234ms BroadcastRunning h=com.android.systemui.broadcast.BroadcastDispatcher$handler$1 c=null m=0
+11-10 23:33:31.740 W/Looper  ( 2143): Slow dispatch took 746ms android.perm h=android.os.Handler c=com.android.internal.infra.ServiceConnector$Impl$$ExternalSyntheticLambda2@ce7dfda m=0
+11-10 23:33:32.092 W/Looper  ( 4201): Slow dispatch took 1201ms BroadcastRunning h=com.android.systemui.broadcast.BroadcastDispatcher$handler$1 c=null m=0
+11-10 23:33:35.091 W/Looper  ( 4201): Slow delivery took 1691ms BroadcastRunning h=com.android.systemui.broadcast.BroadcastDispatcher$handler$1 c=null m=0
+11-10 23:33:35.676 W/Looper  ( 2143): Slow dispatch took 12905ms android.bg h=android.os.Handler c=android.app.LoadedApk$ReceiverDispatcher$Args$$ExternalSyntheticLambda0@298f933 m=0
+11-10 23:33:36.614 W/Looper  ( 4201): Slow dispatch took 1842ms SysUiBg h=android.os.Handler c=com.android.systemui.statusbar.connectivity.NetworkControllerImpl$$ExternalSyntheticLambda0@1abe0c2 m=0
+11-10 23:33:36.616 W/Looper  ( 4201): Slow delivery took 1647ms SysUiBg h=android.os.Handler c=com.android.systemui.statusbar.connectivity.NetworkControllerImpl$$ExternalSyntheticLambda0@cb5fed3 m=0
+11-10 23:33:36.725 W/Looper  ( 4201): Slow dispatch took 1635ms BroadcastRunning h=com.android.systemui.broadcast.BroadcastDispatcher$handler$1 c=null m=0
+11-10 23:34:14.083 W/Looper  ( 4753): Slow dispatch took 3929ms BroadcastRunning h=com.android.systemui.broadcast.BroadcastDispatcher$handler$1 c=null m=0
+11-10 23:34:15.638 W/Looper  ( 2143): Slow dispatch took 1047ms main h=android.app.PropertyInvalidatedCache$AutoCorker$1 c=null m=0
+11-10 23:34:29.462 W/Looper  ( 4753): Slow dispatch took 5619ms BroadcastRunning h=com.android.systemui.broadcast.BroadcastDispatcher$handler$1 c=null m=0
+11-10 23:34:31.217 W/Looper  ( 4753): Slow dispatch took 1092ms SysUiBg h=android.os.Handler c=com.android.systemui.media.controls.pipeline.MediaSessionBasedFilter$1@901c3d0 m=0
+11-10 23:34:32.285 W/Looper  ( 2143): Slow delivery took 6514ms main h=android.app.PropertyInvalidatedCache$AutoCorker$1 c=null m=0
+11-10 23:34:32.469 W/Looper  ( 2143): Slow dispatch took 6438ms android.ui h=com.android.server.am.ActivityManagerService$UiHandler c=com.android.server.am.UidObserverController$$ExternalSyntheticLambda0@24ae846 m=0
+11-10 23:34:32.470 W/Looper  ( 2143): Slow delivery took 6426ms android.ui h=com.android.server.am.ActivityManagerService$UiHandler c=null m=32
+11-10 23:34:32.498 W/Looper  ( 2143): Slow dispatch took 210ms main h=android.os.Handler c=com.android.internal.os.BinderCallsStats$1@8fabf5 m=0
+11-10 23:34:34.795 W/Looper  ( 4753): Slow dispatch took 1387ms BroadcastRunning h=com.android.systemui.broadcast.BroadcastDispatcher$handler$1 c=null m=0
+11-10 23:34:36.972 W/Looper  ( 2143): Slow dispatch took 382ms android.ui h=com.android.server.am.ActivityManagerService$UiHandler c=com.android.server.am.UidObserverController$$ExternalSyntheticLambda0@24ae846 m=0
+11-10 23:34:36.973 W/Looper  ( 2143): Slow delivery took 350ms android.ui h=com.android.server.am.ActivityManagerService$UiHandler c=null m=32
+11-10 23:34:40.106 W/Looper  ( 4753): Slow dispatch took 2175ms BroadcastRunning h=com.android.systemui.broadcast.BroadcastDispatcher$handler$1 c=null m=0
+11-10 23:34:43.917 W/Looper  ( 4753): Slow dispatch took 1242ms BroadcastRunning h=com.android.systemui.broadcast.BroadcastDispatcher$handler$1 c=null m=0
+11-10 23:34:44.156 W/Looper  ( 4753): Slow dispatch took 1781ms SysUiBg h=android.os.Handler c=com.android.systemui.statusbar.connectivity.NetworkControllerImpl$$ExternalSyntheticLambda0@7af90d1 m=0
+11-10 23:34:44.451 W/Looper  ( 4753): Slow delivery took 1589ms SysUiBg h=android.os.Handler c=com.android.systemui.statusbar.connectivity.NetworkControllerImpl$$ExternalSyntheticLambda0@4cb690d m=0
+11-10 23:34:45.961 W/Looper  ( 4753): Slow dispatch took 1509ms SysUiBg h=android.os.Handler c=com.android.systemui.statusbar.connectivity.NetworkControllerImpl$$ExternalSyntheticLambda1@fc1fe72 m=0
+11-10 23:34:46.482 W/Looper  ( 4753): Slow delivery took 1350ms BroadcastRunning h=com.android.systemui.broadcast.BroadcastDispatcher$handler$1 c=null m=0
+11-10 23:34:46.482 W/Looper  ( 4753): Slow dispatch took 2564ms BroadcastRunning h=com.android.systemui.broadcast.BroadcastDispatcher$handler$1 c=null m=0
+11-10 23:34:47.290 W/Looper  ( 4753): Slow dispatch took 1329ms SysUiBg h=android.os.Handler c=com.android.systemui.statusbar.connectivity.NetworkControllerImpl$$ExternalSyntheticLambda0@b81cbb1 m=0
+11-10 23:34:47.799 W/Looper  ( 4753): Slow dispatch took 1317ms BroadcastRunning h=com.android.systemui.broadcast.BroadcastDispatcher$handler$1 c=null m=0
+11-10 23:36:50.026 W/Looper  ( 5312): Slow dispatch took 172ms android.fg h=android.os.Handler c=com.android.server.om.OverlayManagerService$$ExternalSyntheticLambda0@53fc0d1 m=0
+11-10 23:36:57.683 W/Looper  ( 5312): Slow dispatch took 216ms android.ui h=android.os.Handler c=android.os.Handler$BlockingRunnable@e34a709 m=0
+11-10 23:36:58.756 W/Looper  ( 5312): Slow dispatch took 127ms android.ui h=android.os.Handler c=android.hardware.display.DisplayManagerGlobal$DisplayListenerDelegate$$ExternalSyntheticLambda0@792eec4 m=0
+11-10 23:37:35.300 W/Looper  ( 5312): Slow dispatch took 126ms android.fg h=android.os.Handler c=<recycled PooledLambda@a12f2f1> m=0
+11-10 23:37:35.650 W/Looper  ( 5312): Slow delivery took 219ms android.fg h=android.os.Handler c=<recycled PooledLambda@7fe844> m=0
+11-10 23:37:35.650 W/Looper  ( 5312): Slow dispatch took 109ms android.fg h=android.os.Handler c=<recycled PooledLambda@7fe844> m=0
+11-10 23:37:35.784 W/Looper  ( 5312): Slow dispatch took 134ms android.fg h=android.os.Handler c=<recycled PooledLambda@d134262> m=0
+11-10 23:37:36.441 W/Looper  ( 5312): Slow dispatch took 272ms android.fg h=android.os.Handler c=<recycled PooledLambda@bb8886c> m=0
+11-10 23:37:36.843 W/Looper  ( 5312): Slow dispatch took 401ms android.fg h=android.os.Handler c=<recycled PooledLambda@69a16d2> m=0
+11-10 23:37:37.033 W/Looper  ( 5312): Slow dispatch took 103ms android.fg h=android.os.Handler c=<recycled PooledLambda@5e8face> m=0
+11-10 23:37:37.726 W/Looper  ( 5312): Slow dispatch took 518ms android.fg h=android.os.Handler c=<recycled PooledLambda@a12f2f1> m=0
+11-10 23:37:38.405 W/Looper  ( 5312): Slow dispatch took 674ms android.fg h=android.os.Handler c=<recycled PooledLambda@c81cbfb> m=0
+11-10 23:37:38.843 W/Looper  ( 5312): Slow dispatch took 136ms android.fg h=android.os.Handler c=<recycled PooledLambda@64fbfe2> m=0
+11-10 23:37:39.076 W/Looper  ( 5312): Slow dispatch took 129ms android.fg h=android.os.Handler c=<recycled PooledLambda@c1e8d5c> m=0
+11-10 23:37:39.712 W/Looper  ( 5312): Slow dispatch took 569ms android.fg h=android.os.Handler c=<recycled PooledLambda@cf0df06> m=0
+11-10 23:37:39.741 W/Looper  ( 5312): Slow dispatch took 147ms android.ui h=com.android.server.am.ActivityManagerService$UiHandler c=com.android.server.am.UidObserverController$$ExternalSyntheticLambda0@b26f9c7 m=0
+11-10 23:37:39.898 W/Looper  ( 5312): Slow dispatch took 186ms android.fg h=android.os.Handler c=<recycled PooledLambda@7fe844> m=0
+11-10 23:37:40.109 W/Looper  ( 5312): Slow dispatch took 113ms android.fg h=android.os.Handler c=<recycled PooledLambda@d134262> m=0
+11-10 23:37:44.267 W/Looper  ( 5312): Slow dispatch took 1155ms android.fg h=android.os.Handler c=com.android.server.location.gnss.GnssLocationProvider$$ExternalSyntheticLambda8@c26e88c m=0
+11-10 23:37:44.293 W/Looper  ( 5312): Slow delivery took 1144ms android.fg h=android.os.Handler c=com.android.server.location.gnss.GnssLocationProvider$$ExternalSyntheticLambda9@84dafea m=0
+11-10 23:37:44.397 W/Looper  ( 5312): Slow dispatch took 103ms android.fg h=android.os.Handler c=com.android.server.location.gnss.GnssVisibilityControl$$ExternalSyntheticLambda3@7c0c889 m=0
+11-10 23:37:48.918 W/Looper  ( 5580): Slow dispatch took 2519ms BroadcastRunning h=com.android.systemui.broadcast.BroadcastDispatcher$handler$1 c=null m=0
+11-10 23:37:53.451 W/Looper  ( 5580): Slow dispatch took 4532ms BroadcastRunning h=com.android.systemui.broadcast.BroadcastDispatcher$handler$1 c=null m=0
+11-10 23:37:54.532 W/Looper  ( 5580): Slow delivery took 4870ms BroadcastRunning h=com.android.systemui.broadcast.BroadcastDispatcher$handler$1 c=null m=0
+11-10 23:37:54.533 W/Looper  ( 5580): Slow dispatch took 1081ms BroadcastRunning h=com.android.systemui.broadcast.BroadcastDispatcher$handler$1 c=null m=0
+11-10 23:37:57.691 W/Looper  ( 5580): Slow dispatch took 1124ms SysUiBg h=android.os.Handler c=com.android.systemui.media.controls.pipeline.MediaSessionBasedFilter$1@cc82e87 m=0
+11-10 23:38:14.466 W/Looper  ( 5312): Slow dispatch took 271ms main h=android.app.ActivityThread$H c=null m=156
+11-10 23:38:16.137 W/Looper  ( 5312): Slow dispatch took 973ms main h=android.service.notification.ConditionProviderService$H c=null m=3
+  half_watchdog <
+    subject: "Blocked in handler on  on main thread (main) for 30s"
+11-10 23:38:17.261 W/Looper  ( 5312): Slow dispatch took 666ms main h=android.os.Handler c=com.android.server.biometrics.sensors.face.aidl.FaceProvider$$ExternalSyntheticLambda1@d332a76 m=0
+11-10 23:38:17.590 W/Looper  ( 5580): Slow dispatch took 2586ms BroadcastRunning h=com.android.systemui.broadcast.BroadcastDispatcher$handler$1 c=null m=0
+11-10 23:38:17.591 W/Looper  ( 5580): Slow delivery took 2586ms BroadcastRunning h=android.os.Handler c=com.android.systemui.broadcast.ActionReceiver$onReceive$1@ebbb39d m=0
+11-10 23:38:23.961 W/Looper  ( 5312): Slow dispatch took 273ms main h=com.android.server.pm.UserManagerService$MainHandler c=com.android.server.pm.UserManagerService$$ExternalSyntheticLambda4@7557c15 m=0
+11-10 23:38:23.999 W/Looper  ( 5580): Slow dispatch took 1332ms BroadcastRunning h=com.android.systemui.broadcast.BroadcastDispatcher$handler$1 c=null m=0
+11-10 23:38:24.446 W/Looper  ( 5312): Slow dispatch took 240ms main h=android.app.ActivityThread$H c=null m=114
+11-10 23:38:24.454 W/Looper  ( 5580): Slow dispatch took 1903ms SysUiBg h=android.os.Handler c=com.android.systemui.statusbar.connectivity.NetworkControllerImpl$$ExternalSyntheticLambda0@a6f81c4 m=0
+11-10 23:38:24.456 W/Looper  ( 5580): Slow delivery took 1006ms SysUiBg h=android.os.Handler c=com.android.systemui.statusbar.connectivity.NetworkControllerImpl$$ExternalSyntheticLambda0@c9c28ad m=0
+11-10 23:38:26.921 W/Looper  ( 5580): Slow dispatch took 2923ms BroadcastRunning h=com.android.systemui.broadcast.BroadcastDispatcher$handler$1 c=null m=0
+11-10 23:38:26.932 W/Looper  ( 5580): Slow dispatch took 1560ms SysUiBg h=android.os.Handler c=com.android.systemui.statusbar.connectivity.NetworkControllerImpl$$ExternalSyntheticLambda1@888bd8c m=0
+11-10 23:38:27.338 W/Looper  ( 5580): Slow delivery took 2724ms BroadcastRunning h=android.os.Handler c=android.app.LoadedApk$ReceiverDispatcher$Args$$ExternalSyntheticLambda0@c97ab7 m=0
+11-10 23:38:28.342 W/Looper  ( 5580): Slow dispatch took 1003ms BroadcastRunning h=com.android.systemui.broadcast.BroadcastDispatcher$handler$1 c=null m=0
+11-10 23:38:30.495 W/Looper  ( 5312): Slow dispatch took 2453ms main h=android.app.ActivityThread$H c=android.app.LoadedApk$ServiceDispatcher$RunConnection@2c0e9af m=0
+11-10 23:38:31.139 W/Looper  ( 5580): Slow dispatch took 2798ms BroadcastRunning h=com.android.systemui.broadcast.BroadcastDispatcher$handler$1 c=null m=0
+11-10 23:38:33.434 W/Looper  ( 5312): Slow dispatch took 44868ms android.bg h=android.os.Handler c=com.android.server.stats.pull.StatsPullAtomService$$ExternalSyntheticLambda1@6f0bbe9 m=0
+11-10 23:38:36.905 W/Looper  ( 5312): Slow dispatch took 5405ms main h=android.app.ActivityThread$H c=android.app.LoadedApk$ReceiverDispatcher$Args$$ExternalSyntheticLambda0@b771dff m=0
+11-10 23:38:37.132 W/Looper  ( 5312): Slow dispatch took 113ms main h=android.app.ActivityThread$H c=android.app.LoadedApk$ReceiverDispatcher$Args$$ExternalSyntheticLambda0@9ec22d0 m=0
+11-10 23:38:37.938 W/Looper  ( 5312): Slow dispatch took 158ms main h=android.app.ActivityThread$H c=android.app.LoadedApk$ReceiverDispatcher$Args$$ExternalSyntheticLambda0@90662c9 m=0
+11-10 23:38:56.349 W/Looper  ( 5312): Slow dispatch took 298ms android.ui h=com.android.server.am.ActivityManagerService$UiHandler c=com.android.server.am.UidObserverController$$ExternalSyntheticLambda0@b26f9c7 m=0
+11-10 23:38:56.559 W/Looper  ( 5312): Slow dispatch took 120ms android.ui h=com.android.server.am.ActivityManagerService$UiHandler c=null m=68
+11-10 23:39:02.868 W/Looper  ( 6104): Slow dispatch took 1792ms BroadcastRunning h=com.android.systemui.broadcast.BroadcastDispatcher$handler$1 c=null m=0
+11-10 23:39:04.054 W/Looper  ( 5312): Slow dispatch took 352ms android.perm h=android.os.Handler c=com.android.internal.infra.ServiceConnector$Impl$$ExternalSyntheticLambda1@fc3ed56 m=0
+11-10 23:39:04.148 W/Looper  ( 5312): Slow dispatch took 23218ms android.bg h=com.android.server.am.AppProfiler$BgHandler c=null m=1
+11-10 23:39:05.490 W/Looper  ( 6104): Slow delivery took 2881ms BroadcastRunning h=com.android.systemui.broadcast.BroadcastDispatcher$handler$1 c=null m=0
+11-10 23:39:05.490 W/Looper  ( 6104): Slow dispatch took 1535ms BroadcastRunning h=com.android.systemui.broadcast.BroadcastDispatcher$handler$1 c=null m=0
+11-10 23:39:08.058 W/Looper  ( 5312): Slow dispatch took 565ms android.fg h=android.os.Handler c=com.android.server.wm.ActivityMetricsLogger$$ExternalSyntheticLambda0@c2d9288 m=0
+11-10 23:39:10.409 W/Looper  ( 5312): Slow dispatch took 1192ms android.fg h=android.os.Handler c=<recycled PooledLambda@80f9174> m=0
+11-10 23:39:10.427 W/Looper  ( 5312): Slow dispatch took 1084ms main h=android.os.Handler c=<recycled PooledLambda@c27d63f> m=1
+11-10 23:39:10.893 W/Looper  ( 5312): Slow dispatch took 466ms main h=android.os.Handler c=<recycled PooledLambda@7fe844> m=0
+11-10 23:39:12.818 W/Looper  ( 6104): Slow dispatch took 7327ms BroadcastRunning h=com.android.systemui.broadcast.BroadcastDispatcher$handler$1 c=null m=0
+11-10 23:39:15.740 W/Looper  ( 5312): Slow delivery took 273ms main h=com.android.server.power.Notifier$NotifierHandler c=null m=7
+11-10 23:39:17.047 W/Looper  ( 6104): Slow dispatch took 4228ms BroadcastRunning h=com.android.systemui.broadcast.BroadcastDispatcher$handler$1 c=null m=0
+  half_watchdog <
+    subject: "Blocked in handler on  on main thread (main) for 30s"
+11-10 23:39:18.077 W/Looper  ( 6104): Slow dispatch took 1030ms BroadcastRunning h=android.os.Handler c=android.app.LoadedApk$ReceiverDispatcher$Args$$ExternalSyntheticLambda0@bb6eec6 m=0
+11-10 23:39:19.714 W/Looper  ( 6104): Slow dispatch took 1638ms BroadcastRunning h=com.android.systemui.broadcast.BroadcastDispatcher$handler$1 c=null m=0
+11-10 23:39:21.170 W/Looper  ( 6104): Slow dispatch took 1455ms BroadcastRunning h=com.android.systemui.broadcast.BroadcastDispatcher$handler$1 c=null m=0
+11-10 23:39:24.039 W/Looper  ( 6104): Slow dispatch took 2011ms BroadcastRunning h=com.android.systemui.broadcast.BroadcastDispatcher$handler$1 c=null m=0
+11-10 23:39:28.704 W/Looper  ( 6104): Slow dispatch took 1615ms BroadcastRunning h=com.android.systemui.broadcast.BroadcastDispatcher$handler$1 c=null m=0
+/system/lib64/libstagefright_framecapture_utils.soB 4bd30da6db61a616a055ac20a9c3b200äÄ‡ÁÈÒÄ¿ÎÈÒälÄ¿ÎÈÒÄ‡ÎÈÒÄ† (:2/system/lib64/libstagefright_framecapture_utils.soB 4bd30da6db61a616a055ac20a9c3b200äÄ‡ÎÈÒÄÄÏÈÒä*ÄÄÏÈÒÄ†ÛÈÒ (:[anon:scudo:secondary]äÄ†ÛÈÒÄ¿ÛÈÒäSÄ¿ÛÈÒÄ‡ÛÈÒ :/system/lib64/libshmemcompat.soB 6f8cb2ed29f6dccb9dc5645995d24645äÄ‡ÛÈÒÄ¿˜ÈÒäYÄ¿˜ÈÒÄÄ¯ÈÒÄÄ 0:/system/lib64/libshmemcompat.soB 6f8cb2ed29f6dccb9dc5645995d24645äÄÄ¯ÈÒÄ¿˚ÈÒäWÄ¿˚ÈÒÄ‡˚ÈÒÄÄ :/system/lib64/libshmemcompat.soB 6f8cb2ed29f6dccb9dc5645995d24645äÄÄ˝ÈÒÄ†˝ÈÒä*Ä†˝ÈÒÄÄÉÍÒ (:[anon:scudo:secondary]äÄÄÉÍÒÄ†ÉÍÒäGÄ†ÉÍÒÄ†ãÍÒ :5/dev/__properties__/u:object_r:surfaceflinger_prop:s0äMÄ†ãÍÒÄ†èÍÒ :/system/lib64/libincfs.soB 9000d3238e6218a9d8e8b02fa1d2a225äSÄ†èÍÒÄ†ñÍÒÄÄ 0:/system/lib64/libincfs.soB 9000d3238e6218a9d8e8b02fa1d2a225äÄ†ñÍÒÄ†óÍÒäQÄ†óÍÒÄ¿óÍÒÄÄ :/system/lib64/libincfs.soB 9000d3238e6218a9d8e8b02fa1d2a225äÄ¿óÍÒÄ†õÍÒäSÄ†õÍÒÄ¿õÍÒÄÄ (:/system/lib64/libincfs.soB 9000d3238e6218a9d8e8b02fa1d2a225ä-Ä¿õÍÒÄ¿£ÍÒ (:[anon:dalvik-LinearAlloc]äSÄ¿£ÍÒÄ†≤ÍÒ :/system/lib64/libharfbuzz_ng.soB b74c286d46cec195c03f7e4244e0a94cäÄ†≤ÍÒÄ¿≥ÍÒäYÄ¿≥ÍÒÄ†€ÍÒÄÄ 0:/system/lib64/libharfbuzz_ng.soB b74c286d46cec195c03f7e4244e0a94cäÄ†€ÍÒÄ¿€ÍÒäWÄ¿€ÍÒÄ‡€ÍÒÄÄ8 :/system/lib64/libharfbuzz_ng.soB b74c286d46cec195c03f7e4244e0a94cäÄ‡€ÍÒÄ¿ﬂÍÒäYÄ¿ﬂÍÒÄÄ‡ÍÒÄÄ8 (:/system/lib64/libharfbuzz_ng.soB b74c286d46cec195c03f7e4244e0a94cäZÄÄ·ÍÒÄ¿ÁÍÒ :&/system/lib64/audioflinger-aidl-cpp.soB a30f6180560fe3d7ff8df04679fb54b1äÄ¿ÁÍÒÄÄÈÍÒä`ÄÄÈÍÒÄ†ˆÍÒÄÄ 0:&/system/lib64/audioflinger-aidl-cpp.soB a30f6180560fe3d7ff8df04679fb54b1äÄ†ˆÍÒÄÄ˘ÍÒä^ÄÄ˘ÍÒÄÄ˚ÍÒÄÄ :&/system/lib64/audioflinger-aidl-cpp.soB a30f6180560fe3d7ff8df04679fb54b1äÄÄ˚ÍÒÄ‡˛ÍÒä`Ä‡˛ÍÒÄÄˇÍÒÄ‡ (:&/system/lib64/audioflinger-aidl-cpp.soB a30f6180560fe3d7ff8df04679fb54b1äbÄ†ÄÎÒÄ†ÖÎÒ :./system/lib64/android.hardware.media.c2@1.1.soB bd1e36566cec33b49b8bba7d72e7734eäÄ†ÖÎÒÄ†àÎÒähÄ†àÎÒÄ‡åÎÒÄÄ 0:./system/lib64/android.hardware.media.c2@1.1.soB bd1e36566cec33b49b8bba7d72e7734eäÄ‡åÎÒÄ†êÎÒäfÄ†êÎÒÄ†ëÎÒÄÄ :./system/lib64/android.hardware.media.c2@1.1.soB bd1e36566cec33b49b8bba7d72e7734eäÄ†ëÎÒÄÄïÎÒähÄÄïÎÒÄ†ïÎÒÄ‡ (:./system/lib64/android.hardware.media.c2@1.1.soB bd1e36566cec33b49b8bba7d72e7734eä5ÄÄñÎÒÄ†óÎÒ :#/system/usr/hyphen-data/hyph-uk.hybä8Ä†óÎÒÄÄõÎÒ :&/system/usr/hyphen-data/hyph-en-us.hybä-ÄÄõÎÒÄÄ´ÎÒ (:[anon:dalvik-LinearAlloc]äSÄÄ´ÎÒÄ¿∫ÎÒ :/system/lib64/libunwindstack.soB 7cf520d77bcab3f859d479895499950aäÄ¿∫ÎÒÄÄªÎÒäYÄÄªÎÒÄ‡÷ÎÒÄÄ 0:/system/lib64/libunwindstack.soB 7cf520d77bcab3f859d479895499950aäÄ‡÷ÎÒÄÄ◊ÎÒäWÄÄ◊ÎÒÄ†ŸÎÒÄÄ, :/system/lib64/libunwindstack.soB 7cf520d77bcab3f859d479895499950aäÄ†ŸÎÒÄÄ›ÎÒäYÄÄ›ÎÒÄ†›ÎÒÄÄ. (:/system/lib64/libunwindstack.soB 7cf520d77bcab3f859d479895499950aä5Ä¿›ÎÒÄ‡ﬂÎÒ :#/system/usr/hyphen-data/hyph-ga.hybä5Ä‡ﬂÎÒÄÄ„ÎÒ :#/system/usr/hyphen-data/hyph-cu.hybäBÄÄ„ÎÒÄÄÎÎÒ :0/dev/__properties__/u:object_r:build_odm_prop:s0ä-ÄÄÎÎÒÄÄÛÎÒ (:[anon:dalvik-LinearAlloc]ä`ÄÄÛÎÒÄ†ÛÎÒ :,/system/lib64/android.hidl.safe_union@1.0.soB 3f997d987a3219314fba073d18512482äÄ†ÛÎÒÄÄ˜ÎÒäfÄÄ˜ÎÒÄ†˜ÎÒÄÄ 0:,/system/lib64/android.hidl.safe_union@1.0.soB 3f997d987a3219314fba073d18512482äÄ†˜ÎÒÄÄ˚ÎÒädÄÄ˚ÎÒÄ†˚ÎÒÄÄ :,/system/lib64/android.hidl.safe_union@1.0.soB 3f997d987a3219314fba073d18512482ä5ÄÄ¸ÎÒÄÄÄÏÒ :#/system/usr/hyphen-data/hyph-cs.hybäÄÄÄÏÒÄÄÄÔÒä-Ä†ÄÔÒÄ†àÔÒ (:[anon:dalvik-LinearAlloc]äIÄ†àÔÒÄ†êÔÒ :7/dev/__properties__/u:object_r:framework_status_prop:s0ä=Ä†êÔÒÄÄñÔÒÄ†É :&/system/framework/telephony-common.jarä0ÄÄñÔÒÄ¿ùÔÒÄÄÖ :/system/framework/ext.jaräOÄ¿ùÔÒÄÄØÔÒ :/system/lib64/libdng_sdk.soB 8ec5d30ada9fb968d4220bd6fc87c793äÄÄØÔÒÄ¿±ÔÒäUÄ¿±ÔÒÄ‡–ÔÒÄÄ 0:/system/lib64/libdng_sdk.soB 11-10 23:39:42.582 W/Looper  ( 6104): Slow dispatch took 1341ms BroadcastRunning h=com.android.systemui.broadcast.BroadcastDispatcher$handler$1 c=null m=0
+11-10 23:39:44.534 W/Looper  ( 6104): Slow dispatch took 1768ms SysUiBg h=android.os.Handler c=com.android.systemui.statusbar.connectivity.NetworkControllerImpl$$ExternalSyntheticLambda0@2288363 m=0
+11-10 23:39:44.980 W/Looper  ( 6104): Slow dispatch took 1947ms BroadcastRunning h=com.android.systemui.broadcast.BroadcastDispatcher$handler$1 c=null m=0
+11-10 23:39:45.734 W/Looper  ( 6104): Slow delivery took 1551ms SysUiBg h=android.os.Handler c=com.android.systemui.statusbar.connectivity.NetworkControllerImpl$$ExternalSyntheticLambda0@4da4b60 m=0
+11-10 23:39:45.735 W/Looper  ( 6104): Slow dispatch took 1200ms SysUiBg h=android.os.Handler c=com.android.systemui.statusbar.connectivity.NetworkControllerImpl$$ExternalSyntheticLambda0@4da4b60 m=0
+11-10 23:39:47.009 W/Looper  ( 6104): Slow dispatch took 1274ms SysUiBg h=android.os.Handler c=com.android.systemui.statusbar.connectivity.NetworkControllerImpl$$ExternalSyntheticLambda1@c501da8 m=0
+statsd/lib64/libstatssocket.soB 3315860168d49db771caf43f156db1d8äÄÄŸµÛÄ‡‹µÛämÄ‡‹µÛÄÄ›µÛÄÄ (:3/apex/com.android.os.statsd/lib64/libstatssocket.soB 3315860168d49db771caf43f156db1d8ä:ÄÄ›µÛÄ†›µÛ :(/system/framework/framework-graphics.jaräLÄ†›µÛÄ‡›µÛ (:8[anon:dalvik-concurrent copying sweep array free buffer]äKÄ‡›µÛÄ‡‡µÛÄ†a :5/system/framework/arm64/boot-framework-adservices.artäFÄ‡‡µÛÄ‡ËµÛ :4/dev/__properties__/u:object_r:persist_debug_prop:s0ä@Ä‡ËµÛÄ‡µÛ :./dev/__properties__/u:object_r:default_prop:s0ä5Ä‡µÛÄÄÒµÛ (:![anon:bionic_alloc_small_objects]ä?ÄÄÒµÛÄÄ˘µÛ :-/dev/__properties__/u:object_r:system_prop:s0ä?ÄÄ˘µÛÄÄÅ∂Û :-/dev/__properties__/u:object_r:locale_prop:s0äNÄÄÅ∂ÛÄÄâ∂Û :</dev/__properties__/u:object_r:dalvik_dynamic_config_prop:s0äHÄÄâ∂ÛÄÄë∂Û :6/dev/__properties__/u:object_r:exported_config_prop:s0äbÄÄë∂ÛÄ‡ë∂Û :./apex/com.android.art/lib64/libnativehelper.soB 4dade245efe7dd56146c7bc24ddfc3e4äÄ‡ë∂ÛÄÄï∂ÛähÄÄï∂ÛÄ‡ï∂ÛÄÄ 0:./apex/com.android.art/lib64/libnativehelper.soB 4dade245efe7dd56146c7bc24ddfc3e4äÄ‡ï∂ÛÄÄô∂ÛäfÄÄô∂ÛÄ†ô∂ÛÄÄ :./apex/com.android.art/lib64/libnativehelper.soB 4dade245efe7dd56146c7bc24ddfc3e4äÄ†ô∂ÛÄÄù∂ÛähÄÄù∂ÛÄ†ù∂ÛÄÄ (:./apex/com.android.art/lib64/libnativehelper.soB 4dade245efe7dd56146c7bc24ddfc3e4äNÄ†ù∂ÛÄ‡ù∂Û :</apex/com.android.sdkext/javalib/framework-sdkextensions.jaräOÄ‡ù∂ÛÄ‡û∂Û :=/apex/com.android.scheduling/javalib/framework-scheduling.jarä?Ä‡û∂ÛÄ‡¶∂Û :-/dev/__properties__/u:object_r:odsign_prop:s0äZÄ‡¶∂ÛÄ‡Æ∂Û :H/dev/__properties__/u:object_r:device_config_runtime_native_boot_prop:s0äFÄ‡Æ∂ÛÄ‡∂∂Û :4/dev/__properties__/u:object_r:dalvik_config_prop:s0äGÄ‡∂∂ÛÄ‡æ∂Û :5/dev/__properties__/u:object_r:dalvik_runtime_prop:s0äHÄ‡æ∂ÛÄ‡∆∂Û :6/dev/__properties__/u:object_r:log_file_logger_prop:s0ä5Ä‡∆∂ÛÄÄ«∂Û (:![anon:bionic_alloc_small_objects]äOÄÄ«∂ÛÄ†«∂Û :=/apex/com.android.permission/javalib/framework-permission.jar11-10 23:39:47.951 W/Looper  ( 6104): Slow delivery took 3081ms BroadcastRunning h=com.android.systemui.broadcast.BroadcastDispatcher$handler$1 c=null m=0
+11-10 23:39:47.952 W/Looper  ( 6104): Slow dispatch took 1887ms BroadcastRunning h=com.android.systemui.broadcast.BroadcastDispatcher$handler$1 c=null m=0
+11-10 23:39:49.225 W/Looper  ( 6104): Slow dispatch took 1273ms BroadcastRunning h=com.android.systemui.broadcast.BroadcastDispatcher$handler$1 c=null m=0
+11-10 23:39:52.887 W/Looper  ( 6104): Slow dispatch took 3661ms BroadcastRunning h=com.android.systemui.broadcast.BroadcastDispatcher$handler$1 c=null m=0
+11-10 23:39:55.235 W/Looper  ( 5312): Slow dispatch took 284ms android.ui h=com.android.server.am.ActivityManagerService$UiHandler c=com.android.server.am.UidObserverController$$ExternalSyntheticLambda0@b26f9c7 m=0
+11-10 23:40:05.137 W/Looper  ( 5312): Slow dispatch took 232ms android.ui h=com.android.server.am.ActivityManagerService$UiHandler c=com.android.server.am.UidObserverController$$ExternalSyntheticLambda0@b26f9c7 m=0
+11-10 23:40:08.211 W/Looper  ( 5312): Slow dispatch took 527ms android.ui h=com.android.server.am.ActivityManagerService$UiHandler c=com.android.server.am.UidObserverController$$ExternalSyntheticLambda0@b26f9c7 m=0
+11-10 23:40:08.223 W/Looper  ( 5312): Slow dispatch took 222ms main h=android.content.res.ResourceTimer$1 c=null m=0
+11-10 23:40:11.935 W/Looper  ( 5312): Slow dispatch took 978ms main h=android.os.Handler c=com.android.internal.os.BinderCallsStats$1@a6dd697 m=0
+11-10 23:40:11.935 W/Looper  ( 5312): Slow delivery took 940ms main h=android.os.Handler c=com.android.server.inputmethod.ImeTrackerService$$ExternalSyntheticLambda1@7f09084 m=0
+11-10 23:40:13.609 W/Looper  ( 5312): Slow dispatch took 180ms android.ui h=com.android.server.am.ActivityManagerService$UiHandler c=null m=68

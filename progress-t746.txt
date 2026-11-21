@@ -1,0 +1,30 @@
+T746 progress — zygote-signal-9 sender hunt (launched 19:23 AEDT 21 Nov, wedge 22:23 AEDT)
+Step 1: 7/7 input SHAs verified on the Mac worktree (t733 af40403a, vendor fe0bc359, cpio c1203336, dtb 4ecab141, ramdisk 6804341a, analyze_t745 00518114, supervisor_t745 2e14b280). Disk 40,591,932 KiB free (81%) — flight gate OPEN.
+
+Step 2 mining COMPLETE (flights 22-23, mining output t746-mining-output.txt, 917 lines):
+- 3 events, sender UNNAMED in every stream. f22: 537 @ guest 1090.914 (L15094); f23: 505 @ 504.272 (L16605), 2001 @ 952.368 (L57062).
+- SELF-KILL HYPOTHESIS REFUTED in all 3 instances on guest-timeline ordering (tight kernel brackets): f22 event precedes 731 death (1145.270) by 54.356 s with no system_server death between; f23-505 event precedes 667 death (518.219) by 13.947 s; f23-2001 event precedes 2118 death (971.469) by 19.101 s (667 died 434 s earlier, 2001 never served 667).
+- GROUP-KILL HYPOTHESIS REFUTED: 0 lines place system_server in zygote group/cgroup (both flights); deaths do not coincide with events (54.4/13.9/19.1 s gaps).
+- PARADOX (new, line-numbered): init reap + group-kill + onrestart did NOT kill the zygote. 537 forked 2223 @ wall 23:29:57 + 2281 @ 23:30:23 and logged the exit line L16112 @ 23:30:38; 505 forked 1949 @ guest 515.342 and logged exit L17440 @ 518.233; 2001 forked children after its event and logged exit L58608 @ 971.469. New zygotes started: 2329 (f22, after 731 death), 2001 @ 507.097 + 4634 (f23).
+- SENDER: no "Sending signal" line targets 537/505/2001 (f22: 35 lines, 32 init group-kills of other services + 3 child self-kills; f23: 45 lines). Init group-kill follows the reap (cleanup, not cause). API self-kill lines are all children self-killing after their system_server died (f23: 667 + 1232/1565/1889/1949/2484/4437).
+- INIT ENUMERATION COMPLETE: f22 10 lines, f23 9 lines naming zygote; no "Service zygote died", no "stopping service zygote". Onrestart ran after f22 event (1094-1097) + f23 event 2 (954.9) but NOT after f23 event 1; restarts lagged the reap by 54 s (f22), 2.8 s (f23-505), ~20 s (f23-2001) — unresolved, for flight-24 tap.
+- KMSG (box taps): no zygote+signal-9 sender line; kmsg carries the same init reap/group-kill lines as the UART (f22: 7 zygote lines; f23: 9). "received signal" form is init standard service-death reap (odsign/idmap2d/fingerprint show the same form and DO die+restart — zygote is the exception).
+- Kill-verb grep: f22 exactly 1 line (L15411 Killing 1885 BY 731); f23 20 lines, all routine AM kills by 667/2118/4778. "Killing 731": 0 both flights.
+
+Step 3 COMPLETE — supervisor_t746.py (21,255 B) + analyze_t746.py (63,581 B, gen. dying windows + sender section, padded-pid fix kept).
+REGRESSION REPRODUCES EXACTLY (both flights):
+- f23: 113,348 lines / 15,519,744 B; boot 464.019 s; sys.boot_completed 14; T723_PROBE 27; dup-fail 0 (rate 0.000); 0xd1008403 L57125; 0x8893 incl. L56133; NPE 0; Sending-signal 38 init + 7 API; last-667 L17305; last-2118 L58582.
+- f22: 27,606 lines / 3,740,533 B; boot 1044.345 s; sys.boot_completed 22; T723_PROBE 27; dup-fail 0; 0xd1008403 0; 0x8893 0; NPE 0; Sending-signal 32 init + 3 API; last-731 L15668.
+- NEW sections verified: dying windows — 667 (signal 9, death L17440 g=518.233), 2118 (SIGSEGV fault L57125 g=953.852 -> death L58608 g=971.469, 17.6 s, 50 tombstoned, 4 intercepts), 731 (signal 9, death L16112 g=1145.278); sender — f22 1 event (537, group-kill L15095 + cgroup L15099), f23 2 events (505 L16606/L16607, 2001 L57063/L57065). Interpolation matches the mining script to <0.01 s (two analyzer defects found + fixed during regression: fault-line guest time, +-300-line bracket window too narrow for sparse kernel regions — now 2000).
+
+Step 4 LAUNCH: disk gate OPEN (40,559,896 KiB free, 81%; gate 9,769,216 KiB). Launching service-flight-24 (supervisor_t746.py, full 1500 s, host cap 1800 s).
+Flight-24 IN AIR: launched 2026-11-21T08:47:53Z (19:47:53 AEDT). Supervisor PID 38488, QEMU PID 38493 alive. Preflight OK (QEMU 11.1.2, cortex-a57, 8 GB, 4 SMP). Expected end ~09:13 UTC (20:13 AEDT).
+Flight in progress (service-flight-24): host=300s guest=173.0s pid=38493. 2026-11-21T08:52:56Z
+Flight in progress (service-flight-24): host=601s guest=566.5s pid=38493. 2026-11-21T08:57:56Z
+Flight in progress (service-flight-24): host=901s guest=900.8s pid=38493. 2026-11-21T09:02:57Z
+Flight in progress (service-flight-24): host=1202s guest=1200.0s pid=38493. 2026-11-21T09:07:57Z
+
+Step 4 COMPLETE — flight-24 flown full 1500 s: launched 08:47:55Z, ended 09:12:58Z; guest 1501.937 s; host 1503.0 s; QEMU exit 0; UART 94,908 lines / 12,990,410 B, SHA 8a554c38. Boot first firing 502.087 s; sys.boot_completed 11; T723_PROBE 27; dup-fail 0 (999.8 s presenting, rate 0.000). All holds met.
+Step 5 ADJUDICATION — Verdict: FAIL. 731 killer STILL UNIDENTIFIED (4th flight). Zygote event RECURRED (2009 @ guest 1090.410 s, L61549) — sender UNNAMED in the live sender tap (89 lines). 670 died by SIGKILL with NO named killer (NEW 731-class instance; GateKeeper/Watchdog/OOM/init/AM/API all ruled out). 2143 died by SIGSEGV, killer NAMED (T744 trigger 3rd recurrence: 12x 0x8893, NPE 2 lines incl. L64005 in 2143, fault 0xd1008403 L64161, death L65764). NPE link BACK (present 2/3 recurrences). Deliverables: findings 9cf58f9f, outcome 4f8e9e45 (FAIL), TIMELINE fdc99dc5, DEATH_NOTE 82e6c816, analysis 6e33344d, regressions f23 2eca1c21 / f22 491c83f0, mining d04f0865, supervisor ab3119e1, analyzer 15abb9ff. Box sync next.
+
+Box sync DONE + SHA-VERIFIED: 28 files, 30 MB in /mnt/sdc3/muse/kernel-primary/t746/ (root 10 + scripts/ 2 + flights/service-flight-24/ 16). All 11 SHAs match the Mac exactly (findings 9cf58f9f, outcome 4f8e9e45, TIMELINE fdc99dc5, DEATH_NOTE 82e6c816, analysis 6e33344d, regressions 2eca1c21/491c83f0, mining d04f0865, supervisor ab3119e1, analyzer 15abb9ff, UART 8a554c38). T746 lane COMPLETE. Verdict: FAIL. Heartbeat CLOSED.
