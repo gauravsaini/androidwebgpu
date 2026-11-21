@@ -1,0 +1,60 @@
+# T743 meminfo-pressure tap for T743 service-flight-21 — live supervisor-side tap, written as the flight runs
+01-01 00:00:27.309 I/lowmemorykiller(  284): Using psi monitors for memory pressure detection
+01-01 00:00:27.372 I/lowmemorykiller(  284): Process polling is supported
+01-01 00:00:27.426 I/lowmemorykiller(  284): Process reaping is not supported
+01-01 00:00:57.372 I/auditd  (  476): type=1400 audit(0.0:307): avc:  denied  { open } for  comm="odrefresh" path="/dev/__properties__/u:object_r:device_config_lmkd_native_prop:s0" dev="tmpfs" ino=10204 scontext=u:r:odrefresh:s0 tcontext=u:object_r:device_config_lmkd_native_prop:s0 tclass=file permissive=1
+01-01 00:00:57.372 I/odrefresh(  476): type=1400 audit(0.0:307): avc:  denied  { open } for  path="/dev/__properties__/u:object_r:device_config_lmkd_native_prop:s0" dev="tmpfs" ino=10204 scontext=u:r:odrefresh:s0 tcontext=u:object_r:device_config_lmkd_native_prop:s0 tclass=file permissive=1
+01-01 00:00:57.372 I/auditd  (  476): type=1400 audit(0.0:308): avc:  denied  { getattr } for  comm="odrefresh" path="/dev/__properties__/u:object_r:device_config_lmkd_native_prop:s0" dev="tmpfs" ino=10204 scontext=u:r:odrefresh:s0 tcontext=u:object_r:device_config_lmkd_native_prop:s0 tclass=file permissive=1
+01-01 00:00:57.372 I/odrefresh(  476): type=1400 audit(0.0:308): avc:  denied  { getattr } for  path="/dev/__properties__/u:object_r:device_config_lmkd_native_prop:s0" dev="tmpfs" ino=10204 scontext=u:r:odrefresh:s0 tcontext=u:object_r:device_config_lmkd_native_prop:s0 tclass=file permissive=1
+01-01 00:00:57.372 I/auditd  (  476): type=1400 audit(0.0:309): avc:  denied  { map } for  comm="odrefresh" path="/dev/__properties__/u:object_r:device_config_lmkd_native_prop:s0" dev="tmpfs" ino=10204 scontext=u:r:odrefresh:s0 tcontext=u:object_r:device_config_lmkd_native_prop:s0 tclass=file permissive=1
+01-01 00:00:57.372 I/odrefresh(  476): type=1400 audit(0.0:309): avc:  denied  { map } for  path="/dev/__properties__/u:object_r:device_config_lmkd_native_prop:s0" dev="tmpfs" ino=10204 scontext=u:r:odrefresh:s0 tcontext=u:object_r:device_config_lmkd_native_prop:s0 tclass=file permissive=1
+01-01 00:00:57.440 I/auditd  (  476): type=1400 audit(0.0:372): avc:  denied  { open } for  comm="odrefresh" path="/dev/__properties__/u:object_r:lmkd_prop:s0" dev="tmpfs" ino=10278 scontext=u:r:odrefresh:s0 tcontext=u:object_r:lmkd_prop:s0 tclass=file permissive=1
+01-01 00:00:57.440 I/odrefresh(  476): type=1400 audit(0.0:372): avc:  denied  { open } for  path="/dev/__properties__/u:object_r:lmkd_prop:s0" dev="tmpfs" ino=10278 scontext=u:r:odrefresh:s0 tcontext=u:object_r:lmkd_prop:s0 tclass=file permissive=1
+01-01 00:00:58.148 I/auditd  (  477): type=1400 audit(0.0:430): avc:  denied  { open } for  comm="odrefresh" path="/dev/__properties__/u:object_r:device_config_lmkd_native_prop:s0" dev="tmpfs" ino=10204 scontext=u:r:odrefresh:s0 tcontext=u:object_r:device_config_lmkd_native_prop:s0 tclass=file permissive=1
+01-01 00:00:58.148 I/odrefresh(  477): type=1400 audit(0.0:430): avc:  denied  { open } for  path="/dev/__properties__/u:object_r:device_config_lmkd_native_prop:s0" dev="tmpfs" ino=10204 scontext=u:r:odrefresh:s0 tcontext=u:object_r:device_config_lmkd_native_prop:s0 tclass=file permissive=1
+01-01 00:00:58.148 I/auditd  (  477): type=1400 audit(0.0:431): avc:  denied  { getattr } for  comm="odrefresh" path="/dev/__properties__/u:object_r:device_config_lmkd_native_prop:s0" dev="tmpfs" ino=10204 scontext=u:r:odrefresh:s0 tcontext=u:object_r:device_config_lmkd_native_prop:s0 tclass=file permissive=1
+01-01 00:00:58.148 I/odrefresh(  477): type=1400 audit(0.0:431): avc:  denied  { getattr } for  path="/dev/__properties__/u:object_r:device_config_lmkd_native_prop:s0" dev="tmpfs" ino=10204 scontext=u:r:odrefresh:s0 tcontext=u:object_r:device_config_lmkd_native_prop:s0 tclass=file permissive=1
+01-01 00:00:58.148 I/auditd  (  477): type=1400 audit(0.0:432): avc:  denied  { map } for  comm="odrefresh" path="/dev/__properties__/u:object_r:device_config_lmkd_native_prop:s0" dev="tmpfs" ino=10204 scontext=u:r:odrefresh:s0 tcontext=u:object_r:device_config_lmkd_native_prop:s0 tclass=file permissive=1
+01-01 00:00:58.148 I/odrefresh(  477): type=1400 audit(0.0:432): avc:  denied  { map } for  path="/dev/__properties__/u:object_r:device_config_lmkd_native_prop:s0" dev="tmpfs" ino=10204 scontext=u:r:odrefresh:s0 tcontext=u:object_r:device_config_lmkd_native_prop:s0 tclass=file permissive=1[   61.370784] bpfloader: write('/proc/sys/kernel/unprivileged_bpf_disabled', '0
+[   82.954276] init: service 'lmkd' requested start, but it is already running (flags: 36)
+01-01 00:02:35.169 D/OomAdjuster(  683): Not killing cached processes
+01-01 00:03:09.991 D/OomAdjuster(  683): Not killing cached processes
+01-01 00:03:10.088 I/lowmemorykiller(  284): lmkd data connection established
+01-01 00:03:10.138 I/ActivityManager(  683): Connection with lmkd established
+11-10 23:19:32.201 D/OomAdjuster(  683): Not killing cached processes
+  0% 284/lmkd: 0% user + 0% kernel
+11-10 23:25:55.503 D/OomAdjuster(  683): Not killing cached processes
+11-10 23:26:04.828 D/OomAdjuster(  683): Not killing cached processes
+11-10 23:26:33.108 D/OomAdjuster(  683): Not killing cached processes
+11-10 23:26:37.394 I/lowmemorykiller(  284): lmkd data connection dropped
+11-10 23:26:37.394 I/lowmemorykiller(  284): closing lmkd data connection
+11-10 23:28:12.891 D/OomAdjuster( 1970): Not killing cached processes
+11-10 23:28:40.821 D/OomAdjuster( 1970): Not killing cached processes
+11-10 23:28:41.161 I/lowmemorykiller(  284): lmkd data connection established
+11-10 23:28:41.244 I/ActivityManager( 1970): Connection with lmkd established
+11-10 23:30:09.657 D/OomAdjuster( 1970): Not killing cached processes
+11-10 23:30:16.152 D/OomAdjuster( 1970): Not killing cached processes
+11-10 23:30:28.618 D/OomAdjuster( 1970): Not killing cached processes
+11-10 23:31:16.988 D/OomAdjuster( 1970): Not killing cached processes
+11-10 23:31:37.553 D/OomAdjuster( 1970): Not killing cached processes
+11-10 23:31:43.345 D/OomAdjuster( 1970): Not killing cached processes
+11-10 23:31:50.919 I/lowmemorykiller(  284): lmkd data connection dropped
+11-10 23:31:50.920 I/lowmemorykiller(  284): closing lmkd data connection
+11-10 23:33:29.985 D/OomAdjuster( 3235): Not killing cached processes
+11-10 23:33:53.347 D/OomAdjuster( 3235): Not killing cached processes
+11-10 23:33:53.357 I/lowmemorykiller(  284): lmkd data connection established
+11-10 23:33:53.437 I/ActivityManager( 3235): Connection with lmkd established
+11-10 23:34:53.971 D/OomAdjuster( 3235): Not killing cached processes
+11-10 23:35:40.673 D/OomAdjuster( 3235): Not killing cached processes
+11-10 23:36:00.698 D/OomAdjuster( 3235): Not killing cached processes
+11-10 23:36:15.901 D/OomAdjuster( 3235): Not killing cached processes
+11-10 23:36:35.921 D/OomAdjuster( 3235): Not killing cached processes
+11-10 23:36:51.218 D/OomAdjuster( 3235): Not killing cached processes
+11-10 23:37:04.017 D/OomAdjuster( 3235): Not killing cached processes
+11-10 23:37:18.312 D/OomAdjuster( 3235): Not killing cached processes
+11-10 23:37:49.281 D/OomAdjuster( 3235): Not killing cached processes
+11-10 23:38:13.733 D/OomAdjuster( 3235): Not killing cached processes
+11-10 23:38:24.229 D/OomAdjuster( 3235): Not killing cached processes
+11-10 23:38:40.527 D/OomAdjuster( 3235): Not killing cached processes
+11-10 23:39:17.934 I/lowmemorykiller(  284): lmkd data connection dropped
+11-10 23:39:17.934 I/lowmemorykiller(  284): closing lmkd data connection

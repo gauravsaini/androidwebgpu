@@ -1,1 +1,16 @@
-{"current_step":"Complete","flight":"service-flight-20","guest_log_max_seconds":1516.766,"host_elapsed_seconds":1519.31,"note":"T742 Recovery 1 lane agent 70f6b424; verdict FAIL certified by recovery lane 11:24 AEDT 21 Nov; system_server SIGKILL recurred twice (pid 705 watchdog-named, pid 1960 killer unidentified); flight-19 VOID; flight-20 evidence flight","qemu_pid":null,"status":"CLOSED","supervisor_pid":null,"target_guest_seconds":1500,"target_host_seconds":1800,"timestamp_utc":"2026-11-21T00:24:00Z","track":"T742","verdict":"FAIL","wall":"SYSTEM_SERVER-SIGKILL-KILLER-UNIDENTIFIED"}
+{
+  "timestamp_utc": "2026-11-21T01:24:40Z",
+  "status": "CLOSED",
+  "track": "T743",
+  "flight": "service-flight-21",
+  "current_step": "Adjudicated \u2014 findings written, sync to box pending",
+  "verdict": "PASS",
+  "wall": "SYSTEM_SERVER-SIGKILL-KILLER-UNIDENTIFIED (guest) \u2014 CLOSED; new open wall SYSTEM_SERVER-SIGSEGV-BINDER-THREAD (guest)",
+  "host_elapsed_seconds": 1527.76,
+  "guest_log_max_seconds": 1523.924,
+  "target_host_seconds": 1800,
+  "target_guest_seconds": 1500,
+  "supervisor_pid": 96645,
+  "qemu_pid": null,
+  "note": "1960 killer NAMED (GateKeeper-NPE self-kill via KillApplicationHandler) and confirmed recurring in flight-21 as pid 1970. Dup 0 in 641.6s presenting. All holds intact."
+}
